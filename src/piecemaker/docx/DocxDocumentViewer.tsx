@@ -611,6 +611,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           onCommentsSidebarOpenChange={handleCommentsSidebarOpenChange}
           onCommentsChange={(comments) => setCommentCount(countThreads(comments))}
           onCommentAdd={commentQuestions.askComment}
+          onCommentReply={(reply, parent) => { markUserEditing(); scheduleSave(); commentQuestions.askReply(reply, parent); }}
           onCommentDelete={commentQuestions.forgetComment}
           renderLogo={() => (
             <div className="flex items-center gap-1">

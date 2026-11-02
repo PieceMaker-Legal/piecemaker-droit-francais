@@ -58,6 +58,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
         onChange: () => void;
         onCommentsChange: (comments: { id: number; parentId?: number }[]) => void;
         onCommentsSidebarOpenChange?: (open: boolean) => void;
+        onCommentReply?: (reply: { id: number; parentId: number; content: [] }, parent: { id: number; content: [] }) => void;
         renderLogo: () => React.ReactNode;
         renderTitleBarRight: () => React.ReactNode;
       }
@@ -78,6 +79,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
           {props.renderTitleBarRight()}
           <button type="button" onClick={props.onChange}>{props.documentName}</button>
           <button type="button" onClick={() => props.onCommentsChange([{ id: 1 }, { id: 2 }, { id: 3, parentId: 1 }])}>emit-comments</button>
+          <button type="button" onClick={() => props.onCommentReply?.({ id: 2, parentId: 1, content: [] }, { id: 1, content: [] })}>reply-comment</button>
           <span
             className="docx-insertion"
             data-revision-id="7"
@@ -301,6 +303,16 @@ test('closing before the debounce saves before closing the document', async () =
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fermer' })); });
   assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
   assert.equal(onClose.mock.calls.length, 1);
+});
+
+test('a reply in a comment thread is saved', async () => {
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version: 1 }), { status: 200 }));
+  render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={() => undefined} />);
+  await screen.findByRole('button', { name: 'sample.docx' });
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole('button', { name: 'reply-comment' }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
 });
 
 test('unmounting with a pending edit still saves its snapshot', async () => {

@@ -31,8 +31,12 @@ function jsonResponse(data: unknown) {
   return { ok: true, status: 200, json: async () => ({ data }) };
 }
 
-function renderQuestions() {
-  const editor = { getComments: () => [COMMENT], replyToComment, getEditorRef: () => null } as unknown as DocxEditorRef;
+function commentOf(id: number, text: string, extra: Partial<Comment> = {}) {
+  return { id, content: [{ type: 'paragraph', content: [{ type: 'run', content: [{ type: 'text', text }] }] }], ...extra } as unknown as Comment;
+}
+
+function renderQuestions(comments: Comment[] = [COMMENT]) {
+  const editor = { getComments: () => comments, replyToComment, getEditorRef: () => null } as unknown as DocxEditorRef;
   return renderHook(() => useCommentQuestions({
     projectId: 'projet-1',
     filePath: '/dossier/acte.docx',
@@ -126,4 +130,24 @@ test('asks the provider chosen for a new conversation, then follows the session 
 test('offers no question for a document of another case', () => {
   mainState.current = { selectedProject: { projectId: 'projet-2' }, selectedSession: null };
   assert.equal(renderQuestions().result.current.providerLabel, null);
+});
+
+test('sends a reply in the thread with the earlier exchange and answers under the same comment', async () => {
+  const parent = commentOf(7, 'Ce délai est-il exact ?', { author: 'Jean Dupont' });
+  const answer = commentOf(8, 'Oui, huit jours.', { author: 'Claude', parentId: 7 });
+  const reply = commentOf(9, 'Et en appel ?', { author: 'Jean Dupont', parentId: 7 });
+  followTranscript('Quinze jours.');
+  const { result } = renderQuestions([parent, answer, reply]);
+  act(() => result.current.askReply(reply, parent));
+  const prompt = String((askOpenChat.mock.calls[0] as unknown[])[2]);
+  assert.match(prompt, /^Réponse dans le fil du commentaire c7/);
+  assert.match(prompt, /Fil du commentaire :\n> Jean Dupont : Ce délai est-il exact \?\n>\n> Claude : Oui, huit jours\.\n\nEt en appel \?/);
+  await waitFor(() => assert.deepEqual(replyToComment.mock.calls[0], [7, 'Quinze jours.', 'Claude']));
+});
+
+test('keeps a reply in the thread when sending to the assistant is off', () => {
+  writeAskMode(false);
+  const { result } = renderQuestions();
+  act(() => result.current.askReply(commentOf(9, 'Merci.', { parentId: 7 }), COMMENT));
+  assert.equal(askOpenChat.mock.calls.length, 0);
 });

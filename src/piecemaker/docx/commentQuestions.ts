@@ -83,19 +83,25 @@ function quote(text: string) {
   return text.trim().split(/\r?\n/).map((line) => `> ${line}`).join('\n');
 }
 
-export function buildQuestionPrompt({ documentName, filePath, commentId, passage, paragraphs, question }: {
+export type ThreadMessage = { author: string; text: string };
+
+export function buildQuestionPrompt({ documentName, filePath, commentId, passage, paragraphs, thread = [], question }: {
   documentName: string;
   filePath: string;
   commentId: number;
   passage: string;
   paragraphs: string;
+  thread?: ThreadMessage[];
   question: string;
 }) {
   const hasContext = paragraphs.trim() && paragraphs.trim() !== passage.trim();
   return [
-    `Question posée en commentaire du document « ${documentName} » (${filePath}), commentaire c${commentId}.`,
+    thread.length > 0
+      ? `Réponse dans le fil du commentaire c${commentId} du document « ${documentName} » (${filePath}).`
+      : `Question posée en commentaire du document « ${documentName} » (${filePath}), commentaire c${commentId}.`,
     ...(passage.trim() ? [`Passage commenté :\n${quote(passage)}`] : []),
     ...(hasContext ? [`Paragraphe du passage :\n${quote(paragraphs)}`] : []),
+    ...(thread.length > 0 ? [`Fil du commentaire :\n${thread.map(({ author, text }) => quote(`${author} : ${text}`)).join('\n>\n')}`] : []),
     question.trim(),
     `Ta réponse dans ce chat est copiée telle quelle en réponse au commentaire : réponds directement, sans décrire ta démarche. Ne modifie le document que si la question le demande, en suivi des modifications, au passage commenté (\`docx comments list\` donne l’ancre de c${commentId}).`,
   ].join('\n\n');

@@ -32,17 +32,21 @@ export function CommentQuestionSlots({ containerRef, providerLabel, askEnabled, 
   useNodeTick(containerRef);
   const container = containerRef.current;
   if (!container) return null;
-  const form = container.querySelector('.docx-unified-sidebar textarea')?.parentElement;
+  const forms = [
+    container.querySelector('.docx-unified-sidebar textarea')?.parentElement,
+    container.querySelector('.docx-unified-sidebar .docx-comment-card input:not([readonly])')?.parentElement,
+  ];
   return (
     <>
       {commentTextHosts(container).map(({ text, host }, index) => createPortal(<CommentMarkdown>{text}</CommentMarkdown>, host, `markdown-${index}`))}
-      {form && providerLabel && createPortal(
+      {providerLabel && forms.map((form, index) => form && createPortal(
         <label className="docx-comment-ask" onMouseDown={(event) => event.preventDefault()}>
           <input type="checkbox" checked={askEnabled} onChange={(event) => onAskEnabledChange(event.target.checked)} />
           Envoyer à {providerLabel}
         </label>,
         form,
-      )}
+        `ask-${index}`,
+      ))}
       {questions.map((question) => {
         const card = container.querySelector(`.docx-comment-card[data-comment-id="${question.commentId}"]`);
         if (!card) return null;

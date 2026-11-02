@@ -117,8 +117,10 @@ et la session créée est rattachée à la question au sondage suivant.
 - Une bannière signale un envoi refusé, une question non reçue après 10 min, une
   réponse vide ou une copie impossible. Le chat refuse aussi l'envoi pendant un
   travail en arrière-plan, pour ne pas ouvrir son dialogue à la place de l'avocat.
-- Limites : pas de case sur une réponse dans un fil ; seul le texte de
-  l'assistant est repris, sans les outils.
+- La même case s'ajoute au champ de réponse d'un fil. La réponse part avec le
+  passage et les messages précédents du fil ; l'assistant répond dans ce fil.
+  Toute réponse manuelle déclenche l'enregistrement du `.docx`.
+- Limite : seul le texte de l'assistant est repris, sans les outils.
 - La skill `docx-cli` demande de signer avec `DOCX_AUTHOR` (nom du fournisseur).
   Elle signale aussi que `docx edit` sur un intervalle vide n'est jamais suivi
   (docx 0.28.0, même avec `--track`) : l'assistant remplace le mot voisin.

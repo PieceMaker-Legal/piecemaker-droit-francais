@@ -17,7 +17,7 @@ import {
   storeQuestion,
   writeAskMode,
 } from '@/piecemaker/docx/commentQuestions';
-import type { CommentQuestion } from '@/piecemaker/docx/commentQuestions';
+import type { CommentQuestion, ThreadMessage } from '@/piecemaker/docx/commentQuestions';
 import { api } from '@/shared/api';
 import { MCP_PROVIDER_NAMES } from '@/shared/constants';
 import { useSelectedProvider } from '@/shared/hooks/useSelectedProvider';
@@ -95,18 +95,19 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
     setQuestions((current) => current.filter((question) => question.token !== token));
   }, []);
 
-  const askComment = useCallback((comment: Comment) => {
+  const ask = useCallback((commentId: number, text: string, thread: ThreadMessage[]) => {
     if (!askEnabled || !providerLabel || !projectId || !filePath) return;
     setNotice(null);
     const token = createQuestionToken();
     const prompt = buildQuestionPrompt({
       documentName,
       filePath,
-      commentId: comment.id,
-      ...commentedPassage(editorRef.current, comment.id),
-      question: getCommentText(comment.content),
+      commentId,
+      ...commentedPassage(editorRef.current, commentId),
+      thread,
+      question: text,
     });
-    const question = { token, sessionId, providerLabel, projectId, filePath, commentId: comment.id, prompt, askedAt: Date.now() };
+    const question = { token, sessionId, providerLabel, projectId, filePath, commentId, prompt, askedAt: Date.now() };
     storeQuestion(question);
     if (!askOpenChat(projectId, sessionId, prompt)) {
       removeQuestion(token);
@@ -115,6 +116,16 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
     }
     setQuestions((current) => [...current, question]);
   }, [askEnabled, documentName, editorRef, filePath, projectId, providerLabel, sessionId]);
+
+  const askComment = useCallback((comment: Comment) => {
+    ask(comment.id, getCommentText(comment.content), []);
+  }, [ask]);
+
+  const askReply = useCallback((reply: Comment, parent: Comment) => {
+    const earlier = (editorRef.current?.getComments() ?? []).filter((comment) => comment.parentId === parent.id && comment.id !== reply.id);
+    const thread = [parent, ...earlier].map((comment) => ({ author: comment.author || 'Inconnu', text: getCommentText(comment.content) }));
+    ask(parent.id, getCommentText(reply.content), thread);
+  }, [ask, editorRef]);
 
   const forgetComment = useCallback((comment: Comment) => {
     setQuestions((current) => {
@@ -189,5 +200,5 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
     return () => window.clearInterval(timer);
   }, [editorRef, finish, questions, sessionId]);
 
-  return { providerLabel, askEnabled, changeAskEnabled, askComment, forgetComment, questions, partialAnswers, notice };
+  return { providerLabel, askEnabled, changeAskEnabled, askComment, askReply, forgetComment, questions, partialAnswers, notice };
 }
