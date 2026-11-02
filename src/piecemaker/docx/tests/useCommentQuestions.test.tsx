@@ -5,21 +5,25 @@ import { afterEach, beforeEach, test, vi } from 'vitest';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import type { DocxEditorRef } from '@eigenpal/docx-editor-react';
 
-const { askOpenChat, runningSessions, sessionMessages } = vi.hoisted(() => ({
+const { askOpenChat, mainState, runningSessions, sessionMessages } = vi.hoisted(() => ({
   askOpenChat: vi.fn(),
+  mainState: { current: {} as Record<string, unknown> },
   runningSessions: vi.fn(),
   sessionMessages: vi.fn(),
 }));
 
 vi.mock('@/modules/project-workspace/context/ProjectsStateContext', () => ({
-  useOptionalProjectMainState: () => ({ selectedSession: { id: 'session-1', __provider: 'claude', __projectId: 'projet-1' } }),
+  useOptionalProjectMainState: () => mainState.current,
 }));
+vi.mock('@/shared/hooks/useSelectedProvider', () => ({ useSelectedProvider: () => 'mistral' }));
 vi.mock('@/piecemaker/chat/useDocxCommentQuestions', () => ({ askOpenChat }));
 vi.mock('@/shared/api', () => ({ api: { runningSessions, providers: { sessionMessages } } }));
 
 import { writeAskMode } from '@/piecemaker/docx/commentQuestions';
 import { useCommentQuestions } from '@/piecemaker/docx/useCommentQuestions';
 
+const PROJECT = { projectId: 'projet-1' };
+const SESSION = { id: 'session-1', __provider: 'claude', __projectId: 'projet-1' };
 const COMMENT = { id: 7, content: [{ type: 'paragraph', content: [{ type: 'run', content: [{ type: 'text', text: 'Ce délai est-il exact ?' }] }] }] } as unknown as Comment;
 const replyToComment = vi.fn();
 
@@ -40,7 +44,7 @@ function renderQuestions() {
 
 function followTranscript(answer: string) {
   sessionMessages.mockImplementation(async () => {
-    const prompt = String((askOpenChat.mock.calls[0] as unknown[])[1]);
+    const prompt = String((askOpenChat.mock.calls[0] as unknown[])[2]);
     return jsonResponse({
       messages: [
         { kind: 'text', role: 'user', content: prompt, timestamp: new Date(Date.now() + 1000).toISOString() },
@@ -52,6 +56,7 @@ function followTranscript(answer: string) {
 
 beforeEach(() => {
   localStorage.clear();
+  mainState.current = { selectedProject: PROJECT, selectedSession: SESSION };
   writeAskMode(true);
   askOpenChat.mockReset().mockReturnValue(true);
   replyToComment.mockReset().mockReturnValue({ id: 8 });
@@ -101,4 +106,24 @@ test('warns when the question never reaches the chat after ten minutes', async (
   const { result: reopened } = renderQuestions();
   await waitFor(() => assert.match(reopened.current.notice ?? '', /n’a pas reçu la question/));
   assert.equal(reopened.current.questions.length, 0);
+});
+
+test('asks the provider chosen for a new conversation, then follows the session it opens', async () => {
+  mainState.current = { selectedProject: PROJECT, selectedSession: null };
+  followTranscript('Le délai est exact.');
+  const { result, rerender } = renderQuestions();
+  assert.equal(result.current.providerLabel, 'Mistral');
+  act(() => result.current.askComment(COMMENT));
+  assert.deepEqual((askOpenChat.mock.calls[0] as unknown[]).slice(0, 2), ['projet-1', null]);
+  assert.equal(sessionMessages.mock.calls.length, 0);
+
+  mainState.current = { selectedProject: PROJECT, selectedSession: { ...SESSION, id: 'session-2', __provider: 'mistral' } };
+  rerender();
+  await waitFor(() => assert.deepEqual(replyToComment.mock.calls[0], [7, 'Le délai est exact.', 'Mistral']), { timeout: 5000 });
+  assert.equal(sessionMessages.mock.calls[0][0], 'session-2');
+});
+
+test('offers no question for a document of another case', () => {
+  mainState.current = { selectedProject: { projectId: 'projet-2' }, selectedSession: null };
+  assert.equal(renderQuestions().result.current.providerLabel, null);
 });

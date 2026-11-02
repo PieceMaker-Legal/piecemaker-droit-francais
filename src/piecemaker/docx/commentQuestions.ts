@@ -4,7 +4,7 @@ const QUESTION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type CommentQuestion = {
   token: string;
-  sessionId: string;
+  sessionId: string | null;
   providerLabel: string;
   projectId: string;
   filePath: string;
@@ -46,6 +46,10 @@ export function readDocumentQuestions(projectId: string, filePath: string) {
 
 export function storeQuestion(question: CommentQuestion) {
   writeStored([...readStored(), question]);
+}
+
+export function bindQuestionSession(token: string, sessionId: string) {
+  writeStored(readStored().map((question) => question.token === token ? { ...question, sessionId } : question));
 }
 
 export function removeQuestion(token: string): boolean {

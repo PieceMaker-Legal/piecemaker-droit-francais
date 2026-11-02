@@ -70,7 +70,10 @@ Fonctionnement :
 ### Question à l'assistant depuis un commentaire
 
 Une case « Envoyer à Claude / Codex / Mistral » s'ajoute au formulaire de
-commentaire quand un chat du même dossier est ouvert. Le choix est mémorisé.
+commentaire quand le chat affiche le même dossier. Le choix est mémorisé.
+Le fournisseur est celui de la session ouverte ; sans session, celui choisi
+pour la nouvelle conversation. La question démarre alors cette conversation,
+et la session créée est rattachée à la question au sondage suivant.
 
 | Fichier | Rôle |
 | --- | --- |
