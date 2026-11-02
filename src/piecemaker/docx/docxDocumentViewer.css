@@ -33,11 +33,6 @@
   padding-left: 16px !important;
 }
 
-.piecemaker-docx-viewer .docx-editor__scroll-container > div > div > button {
-  left: auto !important;
-  right: 4px;
-}
-
 .piecemaker-docx-viewer .docx-unified-sidebar {
   left: auto !important;
   right: 0;

@@ -44,7 +44,13 @@ Fonctionnement :
 
 - Lecture des octets par l'API CloudCLI existante (`api.readFileBlob`).
 - Toutes les secondes, comparaison du `mtime` : si le fichier a changé sur
-  disque (par exemple `docx-cli` côté assistant), l'éditeur se recharge.
+  disque (par exemple `docx-cli` côté assistant), le document est mis à jour
+  sur place, sans rechargement : `loadDocument` remplace le modèle, puis une
+  transaction ProseMirror n'applique que la différence. Le défilement et le
+  panneau des commentaires sont conservés.
+- Le bouton d'ajout de commentaire de la bibliothèque est repositionné
+  au-dessus du début de la sélection. Un clic ouvre directement le panneau
+  des commentaires.
 - Après une frappe ou un clic de l'utilisateur, chaque `onChange` programme un
   enregistrement 800 ms plus tard. `save()` est sélectif par défaut : seules
   les parties modifiées de l'archive sont repackagées. Les sauvegardes sont
