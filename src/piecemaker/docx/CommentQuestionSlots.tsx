@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { CommentQuestion } from '@/piecemaker/docx/commentQuestions';
+import { CommentMarkdown, commentTextHosts } from '@/piecemaker/docx/CommentMarkdown';
 
 type CommentQuestionSlotsProps = {
   containerRef: RefObject<HTMLDivElement>;
@@ -19,7 +20,7 @@ function useNodeTick(containerRef: RefObject<HTMLDivElement>) {
     const container = containerRef.current;
     if (!container) return undefined;
     const observer = new MutationObserver((records) => {
-      if (records.every((record) => (record.target as Element).closest?.('.docx-comment-ask, .docx-comment-pending'))) return;
+      if (records.every((record) => (record.target as Element).closest?.('.docx-comment-ask, .docx-comment-pending, .docx-comment-markdown'))) return;
       setTick((tick) => tick + 1);
     });
     observer.observe(container, { childList: true, subtree: true });
@@ -34,6 +35,7 @@ export function CommentQuestionSlots({ containerRef, providerLabel, askEnabled, 
   const form = container.querySelector('.docx-unified-sidebar textarea')?.parentElement;
   return (
     <>
+      {commentTextHosts(container).map(({ text, host }, index) => createPortal(<CommentMarkdown>{text}</CommentMarkdown>, host, `markdown-${index}`))}
       {form && providerLabel && createPortal(
         <label className="docx-comment-ask" onMouseDown={(event) => event.preventDefault()}>
           <input type="checkbox" checked={askEnabled} onChange={(event) => onAskEnabledChange(event.target.checked)} />
@@ -47,7 +49,7 @@ export function CommentQuestionSlots({ containerRef, providerLabel, askEnabled, 
         return createPortal(
           <div key={question.token} className="docx-comment-pending" role="status" onClick={(event) => event.stopPropagation()}>
             <strong>{question.providerLabel} répond…</strong>
-            {partialAnswers[question.token] && <p>{partialAnswers[question.token]}</p>}
+            {partialAnswers[question.token] && <div className="docx-comment-pending-answer"><CommentMarkdown>{partialAnswers[question.token]}</CommentMarkdown></div>}
           </div>,
           card,
           question.token,

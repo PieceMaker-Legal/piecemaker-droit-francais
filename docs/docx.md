@@ -51,6 +51,9 @@ Fonctionnement :
 - Le bouton d'ajout de commentaire de la bibliothèque est repositionné
   au-dessus du début de la sélection. Un clic ouvre directement le panneau
   des commentaires.
+- Le texte des commentaires et la réponse en cours de l'assistant sont rendus
+  en Markdown (`CommentMarkdown.tsx`, `react-markdown` avec GFM). Le texte
+  brut de la bibliothèque reste dans le DOM, masqué.
 - Après une frappe ou un clic de l'utilisateur, chaque `onChange` programme un
   enregistrement 800 ms plus tard. `save()` est sélectif par défaut : seules
   les parties modifiées de l'archive sont repackagées. Les sauvegardes sont

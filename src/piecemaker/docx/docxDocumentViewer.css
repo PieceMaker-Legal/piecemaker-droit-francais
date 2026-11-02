@@ -103,11 +103,46 @@
   font-weight: 500;
 }
 
-.piecemaker-docx-viewer .docx-comment-pending p {
+.piecemaker-docx-viewer .docx-comment-pending-answer {
   max-height: 12rem;
   margin-top: 4px;
   overflow-y: auto;
-  white-space: pre-wrap;
+}
+
+.piecemaker-docx-viewer .docx-comment-text-source {
+  display: none !important;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) > * + * {
+  margin-top: 6px;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) :is(ul, ol) {
+  padding-left: 18px;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) ul {
+  list-style: disc;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) ol {
+  list-style: decimal;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) :is(h1, h2, h3, h4, strong) {
+  font-weight: 600;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background-color: var(--doc-bg-hover);
+  font-size: 12px;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) a {
+  color: var(--doc-primary);
+  text-decoration: underline;
 }
 
 .piecemaker-docx-viewer div[style*="transform-origin: center top"] {

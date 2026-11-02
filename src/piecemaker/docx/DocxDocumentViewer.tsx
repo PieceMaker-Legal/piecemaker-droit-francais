@@ -274,7 +274,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       const buffer = await response.arrayBuffer();
       const editor = editorRef.current;
       const inPlace = editor !== null && shownPathRef.current === filePath;
-      const parsed = inPlace ? await parseDocx(buffer) : null;
+      const parsed = inPlace ? await parseDocx(buffer).catch(() => null) : null;
       if (epoch !== documentEpochRef.current) return;
       if (!discardChanges && editVersionRef.current !== savedEditVersionRef.current) {
         setConflict(true);
