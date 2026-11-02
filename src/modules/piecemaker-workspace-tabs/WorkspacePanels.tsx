@@ -148,7 +148,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       setExpandedCompanion(null);
       setViewerWidth(null);
     }, [props.selectedProject?.projectId]);
-    useEffect(() => open(props.activeTab), [props.activeTab, props.selectedProject?.projectId, open]);
+    const openRef = useRef(open);
+    openRef.current = open;
+    useEffect(() => openRef.current(props.activeTab), [props.activeTab, props.selectedProject?.projectId]);
 
     const select: Dispatch<SetStateAction<AppTab>> = useCallback((action) => {
       const tab = typeof action === 'function' ? action(activeTab) : action;

@@ -1,4 +1,4 @@
-import { useContext, useEffect } from 'react';
+import { useContext, useEffect, useRef } from 'react';
 import type { ComponentProps } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -11,10 +11,12 @@ export function WorkspaceViewer(props: ComponentProps<typeof EditorSidebar>) {
   const viewer = useContext(WorkspaceViewerContext);
   const register = viewer?.register;
   const open = Boolean(props.editingFile);
+  const registerRef = useRef(register);
+  registerRef.current = register;
   useEffect(() => {
     register?.(open);
-    return () => register?.(false);
   }, [register, open]);
+  useEffect(() => () => registerRef.current?.(false), []);
 
   if (!viewer) return <EditorSidebar {...props} />;
   if (!props.editingFile || !viewer.target) return null;
