@@ -217,3 +217,17 @@
   line-height: 1.25rem;
   white-space: nowrap;
 }
+
+.piecemaker-docx-viewer .docx-comment-avatar-ai {
+  position: relative;
+  overflow: hidden;
+  font-size: 0 !important;
+  background-color: var(--doc-surface, #fff) !important;
+  color: var(--doc-text, #000) !important;
+  box-shadow: inset 0 0 0 1px var(--doc-border-light, rgba(0, 0, 0, 0.1));
+}
+
+.piecemaker-docx-viewer .docx-comment-avatar-logo {
+  width: 70%;
+  height: 70%;
+}

@@ -3,7 +3,9 @@ import type { RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { CommentQuestion } from '@/piecemaker/docx/commentQuestions';
+import { aiAvatarHosts } from '@/piecemaker/docx/CommentAuthorLogo';
 import { CommentMarkdown, commentTextHosts } from '@/piecemaker/docx/CommentMarkdown';
+import { LLMProviderLogo } from '@/shared/ui/LLMProviderLogo';
 
 type CommentQuestionSlotsProps = {
   containerRef: RefObject<HTMLDivElement>;
@@ -20,7 +22,7 @@ function useNodeTick(containerRef: RefObject<HTMLDivElement>) {
     const container = containerRef.current;
     if (!container) return undefined;
     const observer = new MutationObserver((records) => {
-      if (records.every((record) => (record.target as Element).closest?.('.docx-comment-ask, .docx-comment-pending, .docx-comment-markdown'))) return;
+      if (records.every((record) => (record.target as Element).closest?.('.docx-comment-ask, .docx-comment-pending, .docx-comment-markdown, .docx-comment-avatar-ai'))) return;
       setTick((tick) => tick + 1);
     });
     observer.observe(container, { childList: true, subtree: true });
@@ -38,6 +40,7 @@ export function CommentQuestionSlots({ containerRef, providerLabel, askEnabled, 
   ];
   return (
     <>
+      {aiAvatarHosts(container).map(({ provider, host }, index) => createPortal(<LLMProviderLogo provider={provider} className="docx-comment-avatar-logo" />, host, `avatar-${index}`))}
       {commentTextHosts(container).map(({ text, host }, index) => createPortal(<CommentMarkdown>{text}</CommentMarkdown>, host, `markdown-${index}`))}
       {providerLabel && forms.map((form, index) => form && createPortal(
         <label className="docx-comment-ask" onMouseDown={(event) => event.preventDefault()}>
