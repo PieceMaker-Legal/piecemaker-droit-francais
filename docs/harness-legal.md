@@ -65,7 +65,8 @@ Deux points de branchement distincts :
   par `flattenPromptForWindowsShell` que Vibe stocke sous Windows, et en CRLF,
   ainsi que des titres de session (`normalizeSessionName`) et de la recherche
   (`session-conversations-search.service.ts`). Les commandes slash sont
-  préservées.
+  préservées. Une question posée en commentaire d'un `.docx` part sans le
+  bloc (`docs/docx.md`).
 - Liste **Sources** en fin de réponse (`finish` de `citation-turn.ts`), une
   ligne par citation, dérivée de la seule sortie du vérifieur (inchangé) :
   `[n]`, titre lié au panneau, extraits vérifiés entre guillemets. Titre d'une

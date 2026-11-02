@@ -42,6 +42,15 @@ sans attendre qu’on vous le demande. Après le succès de la commande `docx` :
 
 `FICHIER` est le même chemin que celui que vous venez d’écrire.
 
+## PieceMaker — auteur et suivi des modifications
+
+- Signez chaque commande d’écriture du nom de votre fournisseur :
+  `DOCX_AUTHOR="Claude" docx …` (ou `Codex`, `Mistral`). Sans lui, l’auteur
+  est « Reviewer ».
+- `docx edit --at pN:S-S` (intervalle vide, insertion pure) n’est jamais
+  suivi, même avec `--track`. Pour insérer du texte en suivi, remplacez le
+  mot voisin : `docx replace FICHIER "mot" "mot ajouté"`.
+
 ## 1. The contract is `--help` — start there
 
 The help text is authoritative and versioned with the binary. This skill is thin

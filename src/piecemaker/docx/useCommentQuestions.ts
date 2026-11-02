@@ -97,6 +97,7 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
     const prompt = buildQuestionPrompt({
       documentName,
       filePath,
+      commentId: comment.id,
       ...commentedPassage(editorRef.current, comment.id),
       question: getCommentText(comment.content),
     });

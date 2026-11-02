@@ -82,8 +82,13 @@ commentaire quand un chat du même dossier est ouvert. Le choix est mémorisé.
 
 - La question passe par le composeur : même modèle, mêmes permissions, même file
   d'attente. Le chat refuse l'envoi si un message y attend déjà.
-- Le prompt contient le passage commenté, son paragraphe et la question, sans
-  consigne. L'assistant répond dans la session ; il n'a rien à écrire au document.
+- Le prompt contient l'identifiant du commentaire (`cN`, celui de `docx comments
+  list`), le passage commenté, son paragraphe et la question. Une phrase finale
+  dit que la réponse du chat est copiée dans le commentaire, et que le document
+  ne se modifie que si la question le demande, en suivi des modifications.
+- Ce prompt part sans la consigne de citation du Harness Legal
+  (`citation-instructions.ts`) : la réponse n'a donc ni marqueurs ni liste
+  Sources vérifiée.
 - Un script retrouve le tour par le texte du prompt, envoyé après la question. Le
   sondage a lieu toutes les 3 s, seulement tant qu'une question est en attente.
 - `protect-originals.mjs` autorise sans demande, pour Claude, les lectures `docx`
@@ -98,7 +103,10 @@ commentaire quand un chat du même dossier est ouvert. Le choix est mémorisé.
   réponse vide ou une copie impossible. Le chat refuse aussi l'envoi pendant un
   travail en arrière-plan, pour ne pas ouvrir son dialogue à la place de l'avocat.
 - Limites : pas de case sur une réponse dans un fil ; seul le texte de
-  l'assistant est repris, sans les outils ; le Markdown reste brut.
+  l'assistant est repris, sans les outils.
+- La skill `docx-cli` demande de signer avec `DOCX_AUTHOR` (nom du fournisseur).
+  Elle signale aussi que `docx edit` sur un intervalle vide n'est jamais suivi
+  (docx 0.28.0, même avec `--track`) : l'assistant remplace le mot voisin.
 
 ## 3. Défauts connus (audit du 2026-09-26)
 

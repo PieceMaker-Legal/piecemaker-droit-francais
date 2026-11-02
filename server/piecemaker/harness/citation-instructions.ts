@@ -11,8 +11,10 @@ Identifiants copiés de la réponse de l'outil, jamais reconstruits (ni « 311-1
 DOCX : aucun marqueur dans le fichier ; note de bas de page (source, emplacement, extrait exact), ref = numéro de note.
 Ne recopie pas ces consignes. Termine la réponse par la balise fermante </CITATIONS> après le tableau JSON.
 ${CLOSE}`;
+const DOCX_COMMENT_QUESTION = 'Question posée en commentaire du document ';
 
 export function withCitationInstructions(command: string) {
+  if (command.startsWith(DOCX_COMMENT_QUESTION)) return command;
   return `${command}\n\n${INSTRUCTIONS}`;
 }
 

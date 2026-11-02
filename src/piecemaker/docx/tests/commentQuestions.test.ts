@@ -9,24 +9,27 @@ const ASKED_AT = Date.parse('2026-01-10T10:00:00.000Z');
 const BEFORE = '2026-01-10T09:00:00.000Z';
 const AFTER = '2026-01-10T10:00:01.000Z';
 
-test('builds a prompt with only the document, the passage, its paragraph and the question', () => {
+test('builds a prompt with the document, the comment, the passage, its paragraph, the question and where the answer goes', () => {
   const prompt = buildQuestionPrompt({
     documentName: 'acte.docx',
     filePath: '/dossier/acte.docx',
+    commentId: 7,
     passage: 'Société Exemple SAS\nest assignée',
     paragraphs: 'La Société Exemple SAS\nest assignée sous huit jours.',
     question: ' Ce délai est-il exact ? ',
   });
-  assert.match(prompt, /« acte\.docx »/);
+  assert.match(prompt, /« acte\.docx » \(\/dossier\/acte\.docx\), commentaire c7\./);
   assert.match(prompt, /> Société Exemple SAS\n> est assignée/);
   assert.match(prompt, /Paragraphe du passage :\n> La Société Exemple SAS\n> est assignée sous huit jours\./);
-  assert.ok(prompt.endsWith('\n\nCe délai est-il exact ?'));
+  assert.match(prompt, /\n\nCe délai est-il exact \?\n\nTa réponse dans ce chat est copiée telle quelle en réponse au commentaire/);
+  assert.match(prompt, /`docx comments list` donne l’ancre de c7/);
 });
 
 test('omits the paragraph when the passage already covers it', () => {
   const prompt = buildQuestionPrompt({
     documentName: 'acte.docx',
     filePath: '/dossier/acte.docx',
+    commentId: 1,
     passage: 'Paragraphe entier.',
     paragraphs: 'Paragraphe entier.',
     question: 'Exact ?',
