@@ -708,6 +708,11 @@ body.win .titlebar {
   padding-right: 150px;
 }
 
+body.win .tb-tab[data-cc-tab="home"],
+body.win .tb-tab[data-cc-tab="local"] {
+  display: none;
+}
+
 .titlebar .brand {
   margin-right: 6px;
 }
