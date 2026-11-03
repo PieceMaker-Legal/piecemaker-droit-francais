@@ -38,7 +38,9 @@ const SHIM = `(() => {
   const col = (p, q) => ({ path: p, where: (f, o, v) => col(p, { ...q, where: [...q.where, [f, o, v]] }), orderBy: (f, d) => col(p, { ...q, orderBy: [f, d] }), limit: (n) => col(p, { ...q, limit: n }), get: async () => { await pull(); return list(p, q); }, onSnapshot: (next) => listen(() => next(list(p, q))), doc: (id) => doc(p + '/' + id) });
   const db = { doc, collection: (p) => col(p, { where: [] }) };
   const ready = pull();
-  setInterval(() => { if (document.visibilityState === 'visible') pull().catch(() => undefined); }, POLL_MS);
+  const shown = () => document.visibilityState === 'visible' && (!frameElement || frameElement.getClientRects().length > 0);
+  let pulling = false;
+  setInterval(() => { if (pulling || !shown()) return; pulling = true; pull().catch(() => undefined).finally(() => { pulling = false; }); }, POLL_MS);
   window.claude = { use: async (name) => { if (name !== 'db') return null; await ready; return db; } };
 })();`;
 

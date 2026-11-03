@@ -136,6 +136,8 @@ const etapes = createEtapesService({
     },
   },
 });
+folderHistory.onChange(etapes.invalider);
+for (const { project_path: projectPath } of suivi.projects()) etapes.invalider(projectPath);
 installCodexPlanRuntime(providerRuntimeService);
 installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });

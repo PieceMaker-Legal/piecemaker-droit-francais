@@ -17,6 +17,7 @@ const LIBELLE = Object.fromEntries(COLONNES) as Record<Etape, string>;
 const LIGNES: Record<string, string> = { anonymisation: 'Anonymisation', mapping: 'Mapping', index: 'Index', conversion: 'Conversion', lecture: 'Vérification' };
 const OBJECTIFS = 'Objectif(s) du raisonnement. Exemple : déterminer si le licenciement de Jean Dupont est fondé ; chiffrer les indemnités dues.';
 const NOUVEAU_TYPE = '__nouveau';
+const CACHE = 'pme-tableau';
 
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
 const sansStatut = (documents: DocumentRedige[] = []) => documents.map(({ type, nom, chemin }) => ({ type, nom, chemin }));
@@ -104,18 +105,20 @@ const carteHtml = (carte: Carte, index: number, ouvertes: Set<string>) => `<arti
 export function createTableau(root: HTMLElement, currentProject: () => string | null) {
   const element = document.createElement('div');
   element.className = 'pme-view';
-  element.innerHTML = '<div class="pme-toolbar"><label class="ptr-check"><input type="checkbox" data-excluded>Afficher les exclus</label><span class="pme-spacer"></span><button type="button" class="ptr-button" data-refresh>Actualiser</button></div><div class="pme-board" data-board></div>';
+  element.innerHTML = '<div class="pme-board" data-board></div>';
   const board = element.querySelector<HTMLElement>('[data-board]')!;
-  const excluded = element.querySelector<HTMLInputElement>('[data-excluded]')!;
+  let afficherExclus = false;
   const ouvertes = new Set<string>();
   let cartes: Carte[] = [];
   let signature = '';
 
   const paint = () => {
-    const visibles = cartes.filter((carte) => excluded.checked || !carte.exclu);
-    const colonnes = COLONNES.map(([etape, libelle]) => [libelle, visibles.filter((carte) => carte.etape === etape)] as const).filter(([, liste]) => liste.length);
+    const exclus = cartes.some((carte) => carte.exclu);
+    const visibles = cartes.filter((carte) => afficherExclus === Boolean(carte.exclu) || carte.etape !== 'preparation');
+    const colonnes = COLONNES.map(([etape, libelle]) => [etape, libelle, visibles.filter((carte) => carte.etape === etape)] as const).filter(([etape, , liste]) => liste.length || (etape === 'preparation' && exclus));
+    const caseExclus = `<label class="ptr-check"><input type="checkbox" data-excluded${afficherExclus ? ' checked' : ''}>Afficher les exclus</label>`;
     board.innerHTML = colonnes.length
-      ? colonnes.map(([libelle, liste]) => `<section class="pme-col"><h3>${escape(libelle)} <span class="pme-muted">${liste.length}</span></h3>${liste.map((carte) => carteHtml(carte, cartes.indexOf(carte), ouvertes)).join('')}</section>`).join('')
+      ? colonnes.map(([etape, libelle, liste]) => `<section class="pme-col"><h3>${escape(libelle)} <span class="pme-muted">${liste.length}</span></h3>${etape === 'preparation' && exclus ? caseExclus : ''}${liste.map((carte) => carteHtml(carte, cartes.indexOf(carte), ouvertes)).join('')}</section>`).join('')
       : '<p class="pme-muted pme-empty">Aucun dossier.</p>';
   };
   const refresh = async (frais = false) => {
@@ -125,6 +128,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     if (next === signature) return;
     signature = next;
     cartes = data.cartes;
+    try { localStorage.setItem(CACHE, next); } catch {}
     paint();
   };
   const reload = () => refresh(true).catch((error: unknown) => toast(root, errorMessage(error), 'error'));
@@ -261,8 +265,14 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     else if ('integrate' in data) void integrerPiece(carte);
   });
 
-  excluded.addEventListener('change', paint);
-  element.querySelector('[data-refresh]')!.addEventListener('click', () => void reload());
+  board.addEventListener('change', (event) => {
+    const input = event.target as HTMLInputElement;
+    if (!input.matches('[data-excluded]')) return;
+    afficherExclus = input.checked;
+    paint();
+  });
+  try { cartes = JSON.parse(localStorage.getItem(CACHE) ?? '[]') as Carte[]; } catch { cartes = []; }
+  if (cartes.length) paint();
 
   return { element, refresh };
 }

@@ -34,10 +34,17 @@ export type EtapesDependencies = {
   bibliotheque: { skills(): Array<{ id: string; name: string }>; activer(projectPath: string, id: string): void };
 };
 
-const ETAT_TTL_MS = 15_000;
+const ETAT_MAX_AGE_MS = 300_000;
+const ETAT_DELAI_MS = 2_000;
+const PIECES_AFFICHEES = 10;
 const QUESTION_CONSIGNE = '\n\nTu travailles sans l’avocat devant l’écran. S’il doit décider ou valider quelque chose, arrête-toi et termine ta réponse par une ligne « Question : … ». Il te répondra dans l’onglet Tâches.';
 const VERSION = /-v(\d+)$/;
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
+const EN_COURS: Etat = { pret: false, lignes: [{ nom: 'lecture', texte: 'Vérification en cours…', ok: false }] };
+const abrege = (ligne: Ligne) => {
+  const [titre, ...pieces] = ligne.texte.split('\n');
+  return pieces.length > PIECES_AFFICHEES ? { ...ligne, texte: [titre, ...pieces.slice(0, PIECES_AFFICHEES), `  … et ${pieces.length - PIECES_AFFICHEES} autre(s)`].join('\n') } : ligne;
+};
 const exists = (file: string) => stat(file).then(() => true, () => false);
 const carteId = (root: string, nom = '') => `${root}::${nom}`;
 const slug = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -69,7 +76,10 @@ const freeName = async (root: string, folder: string, name: string) => {
 
 export function createEtapesService(deps: EtapesDependencies) {
   const locks = new Map<string, Promise<unknown>>();
-  const etats = new Map<string, { at: number; value: Promise<Etat> }>();
+  const etats = new Map<string, { at: number; value: Etat }>();
+  const perimes = new Set<string>();
+  const delais = new Map<string, NodeJS.Timeout>();
+  let calculs: Promise<void> | null = null;
   const typesFile = path.join(deps.home, TYPES_FILE);
 
   const lastScan = async (root: string) => {
@@ -97,12 +107,30 @@ export function createEtapesService(deps: EtapesDependencies) {
     if (!found) throw new TypeError('Dossier non enregistré.');
     return { root: found.project_path, nom: found.custom_project_name || path.basename(found.project_path) };
   };
-  const etat = (root: string, fresh = false) => {
-    const cached = etats.get(root);
-    if (!fresh && cached && Date.now() - cached.at < ETAT_TTL_MS) return cached.value;
-    const value = deps.etat(root).catch((error: unknown) => ({ pret: false, lignes: [{ nom: 'lecture', texte: error instanceof Error ? error.message : 'Vérification impossible.', ok: false }] }));
+  const calculer = async (root: string) => {
+    perimes.delete(root);
+    if ((await read(root)).nonJuridique) { etats.delete(root); return EN_COURS; }
+    const value = await deps.etat(root).then((etat) => ({ ...etat, lignes: etat.lignes.map(abrege) }), (error: unknown) => ({ pret: false, lignes: [{ nom: 'lecture', texte: error instanceof Error ? error.message : 'Vérification impossible.', ok: false }] }));
     etats.set(root, { at: Date.now(), value });
     return value;
+  };
+  const recalculer = () => {
+    calculs ??= (async () => { for (let [root] = perimes; root; [root] = perimes) await calculer(root); })().finally(() => { calculs = null; });
+  };
+  const perimer = (root: string) => { perimes.add(root); recalculer(); };
+  const invalider = (projectPath: string) => {
+    const root = path.resolve(projectPath);
+    if (delais.has(root)) return;
+    const timer = setTimeout(() => { delais.delete(root); perimer(root); }, ETAT_DELAI_MS);
+    timer.unref();
+    delais.set(root, timer);
+  };
+  const etat = (root: string, fresh = false) => {
+    const cached = etats.get(root);
+    if (fresh && (!cached || perimes.has(root))) return calculer(root);
+    if (!cached) { perimer(root); return EN_COURS; }
+    if (Date.now() - cached.at > ETAT_MAX_AGE_MS) perimer(root);
+    return cached.value;
   };
   const types = () => readJson<TypeDocument[]>(typesFile, []);
   const typesOf = async (projectPath: unknown) => {
@@ -154,7 +182,7 @@ export function createEtapesService(deps: EtapesDependencies) {
       if (etapes.nonJuridique) { cartes.push({ ...base, id: carteId(root), etape: 'preparation', exclu: true }); continue; }
       const suites = etapes.raisonnements ?? {};
       const names = (await listReasoningFiles(root).catch(() => [] as string[])).filter((nom) => !suites[nom]?.remplacePar);
-      const state = names.length ? null : await etat(root, fresh);
+      const state = names.length ? null : await etat(path.resolve(root), fresh);
       if (state && !state.pret && !etapes.preparationForcee) cartes.push({ ...base, id: carteId(root), etape: 'preparation', preparation: state.lignes, mappingValide: etapes.mappingValide ?? null, tache: tacheOf(deps.taches.active(root, null)) });
       else if (!names.length) cartes.push({ ...base, id: carteId(root), etape: 'raisonnement', aDemarrer: true, tache: tacheOf(deps.taches.active(root, null)) });
       for (const nom of names) {
@@ -193,7 +221,7 @@ export function createEtapesService(deps: EtapesDependencies) {
       if (body.mappingValide === false) delete etapes.mappingValide;
       if (typeof body.preparationForcee === 'boolean') etapes.preparationForcee = body.preparationForcee || undefined;
     });
-    etats.delete(root);
+    perimer(path.resolve(root));
     return read(root);
   };
 
@@ -327,13 +355,13 @@ export function createEtapesService(deps: EtapesDependencies) {
     const { titre, prompt: content } = await prompt(root, body);
     const raisonnementNom = typeof body.raisonnement === 'string' && body.type !== 'raisonnement' ? body.raisonnement : null;
     const created = deps.taches.add({ projectPath: root, dossier: nom, raisonnement: raisonnementNom, type: String(body.type), titre, provider: text(body.provider, 'provider'), model: text(body.model, 'model'), prompt: `${content}${QUESTION_CONSIGNE}`, auto: body.auto !== false, userId });
-    etats.delete(root);
+    perimer(path.resolve(root));
     return created;
   };
 
   const lire = (projectPath: unknown) => read(project(projectPath).root);
 
-  return { tableau, lire, dossier, raisonnement, piece, modele, ajouterType, reprise, tache, types: typesOf };
+  return { tableau, invalider, lire, dossier, raisonnement, piece, modele, ajouterType, reprise, tache, types: typesOf };
 }
 
 export function createEtapesRouter(service: ReturnType<typeof createEtapesService>, taches: ReturnType<typeof createTachesService>) {

@@ -107,7 +107,12 @@ export function mount(container: HTMLElement, api: Host) {
     if (button.dataset.open) ouvrirSession(button.dataset.open);
   });
   const unsubscribe = api.onContextChange((context) => applyTheme(context.theme));
-  function poll() { if (document.visibilityState === 'visible') void refresh().catch(() => undefined); }
+  let polling = false;
+  function poll() {
+    if (polling || document.visibilityState !== 'visible') return;
+    polling = true;
+    void refresh().catch(() => undefined).finally(() => { polling = false; });
+  }
   const timer = window.setInterval(poll, REFRESH_MS);
   document.addEventListener('visibilitychange', poll);
   applyTheme(api.context.theme);
