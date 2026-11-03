@@ -51,7 +51,7 @@ export function mount(container: HTMLElement, api: Host) {
   tabs.className = 'pme-tabs';
   tabs.setAttribute('role', 'tablist');
   tabs.innerHTML = `<div class="pme-segmented">${VUES.map(([vue, libelle]) => `<button type="button" role="tab" class="pme-tab" data-vue="${vue}">${libelle}</button>`).join('')}</div>`;
-  const tableau = createTableau(root, () => api.context.project?.path ?? null, () => pageUrl);
+  const tableau = createTableau(root, () => api.context.project?.path ?? null);
   const taches = createTaches(root, tableau.ouvrirDossier);
   const echeances = document.createElement('div');
   echeances.className = 'pme-view pme-view--frame';

@@ -58,7 +58,7 @@ Service `server/modules/piecemaker-reasoning/etapes.ts`, routes `/api/piecemaker
   - En haut, les étapes dans l'ordre, à partir de Préparation dossier : bulle verte cochée si faite, vide sinon. Les étapes après l'étape courante ne s'affichent pas.
   - Une étape faite propose « Ouvrir le raisonnement » et ses documents ; l'étape courante garde ses actions.
   - Après « Intégrer une pièce », chaque version précédente du raisonnement s'affiche avec ses étapes et ses documents.
-  - En dessous, quand le dossier a un suivi, la fiche Matter (fiche, dates clés, modifications) dans une iframe du board réduite à son panneau. Le serveur donne l'identifiant de fiche de chaque carte (`matter`).
+  - En dessous, quand le dossier a un suivi, la fiche du dossier en lecture seule : résumé, client, domaine, responsable, parties, prochaine action, dates clés. Elle vient de `GET /api/piecemaker/suivi/board` (relu avec `?rev=`, seulement quand le panneau est ouvert), sans charger le Matter board. Le serveur donne l'identifiant de fiche de chaque carte (`matter`). La fiche se modifie dans la vue Échéances.
 - « Ouvrir le raisonnement » pose `window.__piecemakerRaisonnementShow` et ouvre le volet Raisonnement, qui affiche ce raisonnement. Un autre dossier s'ouvre via sa dernière conversation.
 
 ## Page du tableau

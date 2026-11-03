@@ -42,11 +42,25 @@ export type Tache = {
   question?: string | null;
   demandes?: Demande[];
 };
+export type Fiche = {
+  summary?: string;
+  client?: string;
+  practiceArea?: string;
+  responsible?: string;
+  openedOn?: string;
+  parties?: { name?: string; role?: string }[];
+  nextStep?: { text?: string; due?: string; owner?: string } | null;
+  keyDates?: { label?: string; date?: string; done?: boolean; source?: string; quote?: string }[];
+};
 export type TypeDocument = { nom: string; skill: string; modele?: string };
 export type NouvelleTache = { type: string; projectPath: string; raisonnement?: string; document?: number; piece?: string; provider: string; model: string; instructions: string; auto: boolean };
 
 export function loadAll(): Promise<SuiviDossier[]> {
   return request<SuiviDossier[]>('/api/piecemaker/suivi/tous');
+}
+
+export function loadBoard(rev: string): Promise<{ rev: string; docs?: Record<string, unknown> }> {
+  return request(`/api/piecemaker/suivi/board${rev ? `?${query({ rev })}` : ''}`);
 }
 
 export function verifySuivi(projectPath: string, suivi: string): Promise<SuiviSnapshot> {

@@ -1,7 +1,7 @@
 import { confirmDialog, errorMessage, escapeHtml as escape, openModal, toast } from '../../piecemaker-tabular-review/src/client/dom.js';
 import { INDEX_MODEL } from '../../piecemaker-tabular-review/src/shared.js';
-import { etapes } from './api.js';
-import type { Carte, DocumentRedige, Etape } from './api.js';
+import { etapes, loadBoard } from './api.js';
+import type { Carte, DocumentRedige, Etape, Fiche } from './api.js';
 import { lancer } from './lancer.js';
 import { ouvrirRaisonnement, ouvrirSession, ouvrirVolet } from './navigation.js';
 
@@ -122,16 +122,25 @@ const etapesHtml = (carte: Carte, ouvertes: Set<string>) => {
     `<section class="pme-version"><h4>Version ${versions.length + 1}</h4><ol class="pme-steps">${actuelle}</ol></section>`].join('');
 };
 
-const PANNEAU_MATTER = `html,body{background:transparent!important}.app,#agenda-panel,#p-close,#p-eyebrow,#p-title{display:none!important}
-#panel{position:static!important;transform:none!important;visibility:visible!important;width:100%!important;height:100vh!important;border:0!important;box-shadow:none!important;background:transparent!important}
-#panel .drawer__header{padding:0 20px;border:0;min-height:0}#panel .drawer__body{padding:12px 20px 20px}`;
+const MATTERS = 'projects/cabinet/matters/';
+const CHAMPS: ['client' | 'practiceArea' | 'responsible' | 'openedOn', string][] = [['client', 'Client'], ['practiceArea', 'Domaine'], ['responsible', 'Responsable'], ['openedOn', 'Ouvert le']];
+const jour = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00`).toLocaleDateString('fr-FR') : date;
+
+const ficheHtml = (fiche?: Fiche) => {
+  if (!fiche) return '';
+  const champs = CHAMPS.filter(([cle]) => fiche[cle]).map(([cle, libelle]) => `<dt>${libelle}</dt><dd>${escape(cle === 'openedOn' ? jour(fiche[cle]!) : fiche[cle])}</dd>`).join('');
+  const parties = (fiche.parties ?? []).filter((partie) => partie.name).map((partie) => `<li>${escape(partie.name)}${partie.role ? ` <span class="pme-muted">${escape(partie.role)}</span>` : ''}</li>`).join('');
+  const suite = fiche.nextStep?.text ? `<p>${escape(fiche.nextStep.text)}${[fiche.nextStep.due ? jour(fiche.nextStep.due) : '', fiche.nextStep.owner ?? ''].filter(Boolean).map((detail) => ` <span class="pme-muted">${escape(detail)}</span>`).join('')}</p>` : '';
+  const dates = (fiche.keyDates ?? []).filter((date) => date.date).sort((a, b) => a.date!.localeCompare(b.date!)).map((date) => `<li class="${date.done ? 'is-done' : ''}"${date.quote ? ` title="${escape(date.quote)}"` : ''}><span class="pme-fiche-date">${escape(jour(date.date!))}</span><span>${date.done ? '✓ ' : ''}${escape(date.label)}${date.source ? `<span class="pme-muted pme-small">${escape(date.source)}</span>` : ''}</span></li>`).join('');
+  return `<section class="pme-fiche"><h4>Fiche du dossier</h4>${fiche.summary ? `<p>${escape(fiche.summary)}</p>` : ''}${champs ? `<dl>${champs}</dl>` : ''}${parties ? `<h5>Parties</h5><ul>${parties}</ul>` : ''}${suite ? `<h5>Prochaine action</h5>${suite}` : ''}${dates ? `<h5>Dates clés</h5><ul class="pme-fiche-dates">${dates}</ul>` : ''}</section>`;
+};
 
 const carteHtml = (carte: Carte, index: number, ouvertes: Set<string>) => `<article class="pme-card${carte.exclu ? ' is-excluded' : ''}" data-card="${index}">
     <header class="pme-card-head"><div class="pme-card-title"><strong>${escape(carte.dossier)}</strong>${carte.raisonnement ? `<span class="pme-muted">${escape(carte.raisonnement.titre)}</span>` : ''}</div>${menuHtml(carte)}</header>
     ${tacheHtml(carte)}${corpsHtml(carte, ouvertes)}
   </article>`;
 
-export function createTableau(root: HTMLElement, currentProject: () => string | null, pageUrl: () => string) {
+export function createTableau(root: HTMLElement, currentProject: () => string | null) {
   const element = document.createElement('div');
   element.className = 'pme-view';
   element.innerHTML = '<div class="pme-board" data-board></div>';
@@ -139,12 +148,11 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
   const drawer = document.createElement('aside');
   drawer.className = 'pme-drawer';
   drawer.setAttribute('aria-label', 'Dossier');
-  drawer.innerHTML = '<header class="pme-drawer-head"><div class="pme-drawer-titles"><span class="pme-drawer-eyebrow" data-eyebrow></span><span class="pme-drawer-title" data-title></span></div><button type="button" class="ptr-button ptr-icon-button" data-close aria-label="Fermer">✕</button></header><div class="pme-drawer-body" data-steps></div><iframe class="pme-drawer-matter" title="Fiche du dossier" hidden></iframe>';
+  drawer.innerHTML = '<header class="pme-drawer-head"><div class="pme-drawer-titles"><span class="pme-drawer-eyebrow" data-eyebrow></span><span class="pme-drawer-title" data-title></span></div><button type="button" class="ptr-button ptr-icon-button" data-close aria-label="Fermer">✕</button></header><div class="pme-drawer-body" data-steps></div>';
   const etapesZone = drawer.querySelector<HTMLElement>('[data-steps]')!;
-  const cadre = drawer.querySelector<HTMLIFrameElement>('iframe')!;
   let afficherExclus = false;
   let ouverte: { carte: string | null; matter: string | null } | null = null;
-  let matterAffiche = '';
+  let fiches: { rev: string; docs: Record<string, Fiche> } = { rev: '', docs: {} };
   const ouvertes = new Set<string>();
   let cartes: Carte[] = [];
   let signature = '';
@@ -159,41 +167,29 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
       : '<p class="pme-muted pme-empty">Aucun dossier.</p>';
     peindrePanneau();
   };
-  const ouvrirMatter = (id: string, essais = 40) => {
-    const page = cadre.contentDocument;
-    const cible = page?.getElementById(`card-${id}`) ?? page?.getElementById(`row-${id}`);
-    if (cible && page) {
-      if (!page.getElementById('pme-panneau')) page.head.insertAdjacentHTML('beforeend', `<style id="pme-panneau">${PANNEAU_MATTER}</style>`);
-      page.documentElement.dataset.theme = root.dataset.theme ?? 'light';
-      cible.click();
-    } else if (essais && ouverte?.matter === id) window.setTimeout(() => ouvrirMatter(id, essais - 1), 250);
-  };
-  const montrerMatter = (id: string | null) => {
-    cadre.hidden = !id;
-    etapesZone.classList.toggle('has-matter', Boolean(id));
-    if (!id || id === matterAffiche) return;
-    matterAffiche = id;
-    const url = pageUrl();
-    if (!url) return;
-    if (!cadre.src) cadre.src = `${url}#/p/cabinet`;
-    ouvrirMatter(id);
-  };
   const peindrePanneau = () => {
     drawer.classList.toggle('is-open', Boolean(ouverte));
-    if (!ouverte) { matterAffiche = ''; return; }
+    if (!ouverte) return;
     const index = cartes.findIndex((carte) => carte.id === ouverte!.carte);
     const carte = cartes[index];
     drawer.querySelector('[data-eyebrow]')!.textContent = carte?.dossier ?? '';
     drawer.querySelector('[data-title]')!.textContent = carte ? carte.raisonnement?.titre ?? carte.dossier : 'Dossier';
     etapesZone.dataset.card = String(index);
-    etapesZone.innerHTML = carte ? `${tacheHtml(carte)}${etapesHtml(carte, ouvertes)}` : '';
-    etapesZone.hidden = !carte;
-    montrerMatter(ouverte.matter);
+    const fiche = ouverte.matter ? fiches.docs[`${MATTERS}${ouverte.matter}`] : undefined;
+    etapesZone.innerHTML = `${carte ? `${tacheHtml(carte)}${etapesHtml(carte, ouvertes)}` : ''}${ficheHtml(fiche)}`;
+    etapesZone.hidden = !carte && !fiche;
   };
-  const ouvrir = (carte: Carte | null) => { ouverte = carte ? { carte: carte.id, matter: carte.matter ?? null } : null; peindrePanneau(); };
+  const chargerFiches = async () => {
+    if (!ouverte?.matter) return;
+    const data = await loadBoard(fiches.rev);
+    if (!data.docs) return;
+    fiches = { rev: data.rev, docs: data.docs as Record<string, Fiche> };
+    peindrePanneau();
+  };
+  const ouvrir = (carte: Carte | null) => { ouverte = carte ? { carte: carte.id, matter: carte.matter ?? null } : null; peindrePanneau(); void chargerFiches().catch(() => undefined); };
   const refresh = async (frais = false) => {
     if (!frais && (element.querySelector('details.ptr-menu[open]') || drawer.querySelector('details.ptr-menu[open]'))) return;
-    const data = await etapes.tableau(frais);
+    const [data] = await Promise.all([etapes.tableau(frais), chargerFiches().catch(() => undefined)]);
     const next = JSON.stringify(data.cartes);
     if (next === signature) return;
     signature = next;
@@ -350,7 +346,6 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
   try { cartes = JSON.parse(localStorage.getItem(CACHE) ?? '[]') as Carte[]; } catch { cartes = []; }
   if (cartes.length) paint();
 
-  cadre.addEventListener('load', () => { if (ouverte?.matter) ouvrirMatter(ouverte.matter); });
   const ouvrirDossier = (projectPath: string, raisonnement: string | null) => {
     const carte = cartes.find((entry) => entry.projectPath === projectPath && (entry.raisonnement?.nom ?? null) === raisonnement) ?? cartes.find((entry) => entry.projectPath === projectPath);
     if (carte) ouvrir(carte);
@@ -359,6 +354,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     const carte = cartes.find((entry) => entry.matter === matter && entry.raisonnement) ?? cartes.find((entry) => entry.matter === matter);
     ouverte = { carte: carte?.id ?? null, matter };
     peindrePanneau();
+    void chargerFiches().catch(() => undefined);
   };
 
   return { element, drawer, refresh, ouvrirDossier, ouvrirFiche, panneauOuvert: () => Boolean(ouverte) };
