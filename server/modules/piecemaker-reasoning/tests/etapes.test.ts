@@ -106,6 +106,16 @@ test('la prochaine action du suivi reste disponible en Attente', async () => {
   assert.equal((await etapes.tableau(true)).cartes[0].etape, 'attente');
 });
 
+test('un scan postérieur périme la validation du mapping sans perdre l’étape enregistrée', async () => {
+  const { root, etapes } = service(async () => ({ pret: true, lignes: [] }));
+  const validated = await etapes.dossier({ projectPath: root, mappingValide: true, etape: 'attente' });
+  assert.ok(validated.mappingValide);
+  fs.writeFileSync(path.join(root, '.piecemaker', 'anonymization-state.json'), JSON.stringify({ files: { 'piece-fictive.pdf': { scanned: { updatedAt: new Date(Date.now() + 60_000).toISOString() } } } }));
+  const current = await etapes.lire(root);
+  assert.equal(current.mappingValide, undefined);
+  assert.equal(current.etape, 'attente');
+});
+
 test('chaque nouveau document évite fichiers existants et chemins réservés par toutes les versions', async () => {
   const { root, etapes } = service(async () => ({ pret: true, lignes: [] }));
   ajouterRaisonnement(root);

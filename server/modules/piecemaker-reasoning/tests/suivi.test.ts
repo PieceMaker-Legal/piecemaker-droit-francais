@@ -5,11 +5,12 @@ import path from 'node:path';
 import test from 'node:test';
 
 import Database from 'better-sqlite3';
+import express from 'express';
 import { parse } from 'yaml';
 
 import { closed, shift } from '../calendar.js';
 import type { ReasoningConnectors, SourceInfo } from '../program.js';
-import { createBoardService, dossierMatterId } from '../suivi-board.js';
+import { createBoardRouter, createBoardService, dossierMatterId } from '../suivi-board.js';
 import { createSuiviService } from '../suivi-service.js';
 import { mentionsDate, suiviDateId, verifySuivi } from '../suivi.js';
 
@@ -372,6 +373,40 @@ test('une date saisie à la main est conservée et signalée à justifier', asyn
   await board.write('update', matterPath, { keyDates: [...dates, { id: 'manuelle-1', label: 'Rendez-vous', date: '2026-12-01', kind: 'other' }] }, dates.map((date) => date.id));
   assert.ok((await matter()).keyDates.some((date) => date.id === 'manuelle-1' && date.label === 'Rendez-vous'));
   assert.ok((await service.read(root)).issues.some((issue) => issue.kind === 'manque' && issue.path.startsWith('matter.keyDates')));
+});
+
+test('POST board conserve preuves, sources et dates manuelles puis recharge les échéances faites', async (context) => {
+  const { root, db, file, board, matterPath, raw } = boardFixture();
+  const input = JSON.parse(toJson(CONTENTIEUX));
+  input.echeances.rendez_vous = { date: '2026-11-20', preuve: input.evenements.signification_du_jugement.preuve, selon: input.echeances.appel.selon };
+  input.matter = { keyDates: [{ id: 'manuelle', label: 'Réunion fictive', date: '2026-12-01', confirmed: true, page: 7 }] };
+  fs.writeFileSync(file, JSON.stringify(input));
+  const app = express();
+  app.use('/suivi/board', createBoardRouter(board));
+  const server = app.listen(0, '127.0.0.1');
+  context.after(async () => { await new Promise<void>((resolve) => server.close(() => resolve())); db.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  await new Promise<void>((resolve) => server.once('listening', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const url = `http://127.0.0.1:${address.port}/suivi/board`;
+  const before = await (await fetch(url)).json() as { docs: Record<string, { keyDates: Array<Record<string, unknown>> }> };
+  const keyDates = before.docs[matterPath].keyDates.map((entry) => entry.id === suiviDateId('rendez_vous') ? { ...entry, label: 'Rendez-vous déplacé', date: '2026-11-21', done: true } : entry);
+  const response = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ op: 'update', path: matterPath, data: { keyDates } }) });
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true });
+  assert.deepEqual(raw().echeances.rendez_vous.preuve, input.echeances.rendez_vous.preuve);
+  assert.deepEqual(raw().echeances.rendez_vous.selon, input.echeances.rendez_vous.selon);
+  assert.deepEqual(raw().matter.keyDates.find((entry: { id: string }) => entry.id === 'manuelle'), input.matter.keyDates[0]);
+  assert.deepEqual(raw().echeances.appel, input.echeances.appel);
+  const service = createSuiviService(() => db, connectors);
+  const snapshot = await service.read(root);
+  const updated = snapshot.echeances.find((entry) => entry.nom === 'rendez_vous')!;
+  assert.equal(updated.date, '2026-11-21');
+  assert.equal(updated.intitule, 'Rendez-vous déplacé');
+  assert.equal(updated.fait?.par, 'avocat');
+  const rebuilt = createBoardService(() => db, service);
+  const dates = (await rebuilt.current()).docs[matterPath].keyDates as Array<Record<string, unknown>>;
+  assert.equal(dates.find((entry) => entry.id === suiviDateId('rendez_vous'))?.done, true);
 });
 
 test('supprimer le dossier du board met le fichier de côté et un set le restaure', async () => {

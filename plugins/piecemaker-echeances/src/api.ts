@@ -1,6 +1,5 @@
 import type { SuiviDossier, SuiviSnapshot } from '../../../shared/piecemaker-suivi.js';
 
-const BOARD_PAGE = '/api/plugins/piecemaker-echeances/assets/board/index.html';
 const ETAPES = '/api/piecemaker/etapes';
 
 export type Etape = 'preparation' | 'raisonnement' | 'redaction' | 'finalisation' | 'attente' | 'clos';
@@ -63,21 +62,19 @@ export function loadBoard(rev: string): Promise<{ rev: string; docs?: Record<str
   return request(`/api/piecemaker/suivi/board${rev ? `?${query({ rev })}` : ''}`);
 }
 
-export function verifySuivi(projectPath: string, suivi: string): Promise<SuiviSnapshot> {
-  return request<SuiviSnapshot>('/api/piecemaker/suivi/verify', { projectPath, suivi });
+export function updateBoard(path: string, keyDates: object[]): Promise<unknown> {
+  return request('/api/piecemaker/suivi/board', { op: 'update', path, data: { keyDates } });
 }
 
-export async function loadBoardPage(): Promise<string> {
-  const response = await send(BOARD_PAGE);
-  if (!response.ok) throw new Error(`Erreur ${response.status}`);
-  return response.text();
+export function verifySuivi(projectPath: string, suivi: string): Promise<SuiviSnapshot> {
+  return request<SuiviSnapshot>('/api/piecemaker/suivi/verify', { projectPath, suivi });
 }
 
 const query = (values: Record<string, string>) => new URLSearchParams(values).toString();
 
 export const etapes = {
   tableau: (frais = false) => request<{ cartes: Carte[] }>(`${ETAPES}${frais ? '?frais=1' : ''}`),
-  dossier: (body: { projectPath: string; nonJuridique?: boolean; preparationForcee?: boolean }) => request(`${ETAPES}/dossier`, body),
+  dossier: (body: { projectPath: string; nonJuridique?: boolean; etape?: Etape }) => request(`${ETAPES}/dossier`, body),
   raisonnement: (body: { projectPath: string; raisonnement: string; etape?: Etape; documents?: DocumentRedige[]; action?: Partial<Action> }) => request(`${ETAPES}/raisonnement`, body),
   reprise: (projectPath: string, raisonnement: string) => request<{ raisonnement: string }>(`${ETAPES}/reprise`, { projectPath, raisonnement }),
   piece: (projectPath: string, file: File) => request<{ chemin: string }>(`${ETAPES}/piece?${query({ projectPath, nom: file.name })}`, file),

@@ -1,0 +1,200 @@
+import { createHash, webcrypto } from 'node:crypto';
+import { TextEncoder } from 'node:util';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { loadModels } from '../../../piecemaker-tabular-review/src/client/host.js';
+import { etapes, loadAll, loadBoard, updateBoard } from '../api.js';
+import type { Carte } from '../api.js';
+import { mount, unmount } from '../client.js';
+import { createTableau } from '../tableau.js';
+import { createDates } from '../dates.js';
+
+vi.mock('../api.js', () => ({
+  etapes: { tableau: vi.fn(), dossier: vi.fn(), raisonnement: vi.fn(), volet: vi.fn(), taches: vi.fn(), piece: vi.fn(), reprise: vi.fn(), ajouterTache: vi.fn() },
+  loadBoardPage: vi.fn(() => new Promise(() => {})), loadAll: vi.fn(), updateBoard: vi.fn(), loadBoard: vi.fn().mockResolvedValue({ rev: '' }), verifySuivi: vi.fn(),
+}));
+
+vi.mock('../../../piecemaker-tabular-review/src/client/host.js', () => ({ loadModels: vi.fn().mockResolvedValue({ options: [{ value: 'modele-exemple', label: 'Modèle exemple' }], cheapest: 'modele-exemple' }) }));
+
+const raisonnement = { nom: 'analyse', titre: 'Analyse exemple', verifie: true, erreurs: 0, manques: 0, alertes: [] };
+const carte = (extra: Partial<Carte> = {}): Carte => ({ id: 'exemple', projectPath: '/exemple', dossier: 'Dossier exemple', session: 'exemple-session', etape: 'raisonnement', ...extra });
+const click = (selector: string) => {
+  const element = document.querySelector<HTMLElement>(selector);
+  expect(element, selector).not.toBeNull();
+  element!.click();
+};
+const flush = async () => { for (let index = 0; index < 10; index++) await Promise.resolve(); };
+let root: HTMLElement;
+
+beforeEach(() => {
+  vi.stubGlobal('crypto', webcrypto);
+  vi.stubGlobal('TextEncoder', TextEncoder);
+  vi.mocked(loadModels).mockResolvedValue({ options: [{ value: 'modele-exemple', label: 'Modèle exemple' }], cheapest: 'modele-exemple' });
+  localStorage.clear();
+  document.body.innerHTML = '';
+  root = document.createElement('div');
+  document.body.append(root);
+  vi.mocked(etapes.dossier).mockResolvedValue({});
+  vi.mocked(etapes.raisonnement).mockResolvedValue({});
+  vi.mocked(etapes.volet).mockResolvedValue({});
+  vi.mocked(etapes.taches).mockResolvedValue([]);
+});
+afterEach(() => { unmount(root); vi.clearAllMocks(); vi.unstubAllGlobals(); });
+
+async function tableau(c: Carte) {
+  vi.mocked(etapes.tableau).mockResolvedValue({ cartes: [c] });
+  const view = createTableau(root, () => '/exemple');
+  root.append(view.element, view.drawer);
+  await view.refresh();
+  return view;
+}
+
+it('déplace une carte à démarrer sans YAML après confirmation et permet son exclusion', async () => {
+  await tableau(carte({ aDemarrer: true }));
+  expect(document.querySelectorAll('[data-move]')).toHaveLength(5);
+  click('[data-move="redaction"]');
+  expect(etapes.dossier).not.toHaveBeenCalled();
+  click('[data-modal-action="cancel"]');
+  await flush();
+  expect(etapes.dossier).not.toHaveBeenCalled();
+  click('[data-move="redaction"]');
+  click('[data-modal-action="confirm"]');
+  await flush();
+  expect(etapes.dossier).toHaveBeenCalledWith({ projectPath: '/exemple', etape: 'redaction' });
+  click('[data-exclude]');
+  click('[data-modal-action="confirm"]');
+  await flush();
+  expect(etapes.dossier).toHaveBeenCalledWith({ projectPath: '/exemple', nonJuridique: true });
+  click('[data-move="clos"]');
+  expect(root.querySelector('[role="dialog"]')?.textContent).toContain('Plus d’étape ni d’attente : clore');
+  click('[data-modal-action="clos"]');
+  await flush();
+  expect(etapes.dossier).toHaveBeenLastCalledWith({ projectPath: '/exemple', etape: 'clos' });
+});
+
+it('ouvre le mapping et l’index en Préparation même avec un raisonnement', async () => {
+  await tableau(carte({ etape: 'preparation', raisonnement, preparation: [
+    { nom: 'conversion', texte: '', ok: true }, { nom: 'anonymisation', texte: '', ok: true },
+    { nom: 'mapping', texte: '', ok: false }, { nom: 'index', texte: '', ok: true },
+  ] }));
+  click('[data-mapping]');
+  await flush();
+  expect(etapes.volet).toHaveBeenCalledWith('/exemple', 'plugin:piecemaker-dossier');
+  click('[data-volet="plugin:piecemaker-tabular-review"]');
+  await flush();
+  expect(etapes.volet).toHaveBeenCalledWith('/exemple', 'plugin:piecemaker-tabular-review');
+});
+
+it('ouvre le premier document et garde une décision explicite pour clore une action restante', async () => {
+  await tableau(carte({ etape: 'finalisation', raisonnement, action: { texte: 'Attendre une réponse', fait: false }, documents: [{ type: 'Courrier', nom: 'Projet exemple', chemin: 'Projets/exemple.docx', statut: 'en cours' }] }));
+  click('[data-open-doc="0"]');
+  await flush();
+  expect(etapes.volet).toHaveBeenCalledWith('/exemple', 'files', '/exemple/Projets/exemple.docx');
+  click('[data-finish]');
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Une prochaine action reste à faire');
+  expect(etapes.raisonnement).not.toHaveBeenCalled();
+  click('[data-modal-action="attente"]');
+  await flush();
+  expect(etapes.raisonnement).toHaveBeenCalledWith({ projectPath: '/exemple', raisonnement: 'analyse', etape: 'attente' });
+});
+
+it('affiche seulement les dates et préserve les autres dates lors d’une édition ou validation', async () => {
+  vi.mocked(etapes.tableau).mockResolvedValue({ cartes: [carte({ raisonnement })] });
+  vi.mocked(loadAll).mockResolvedValue([{
+    projectPath: '/exemple', fichier: 'analyse-suivi.json', nom: 'Dossier exemple', session: 'exemple-session',
+    snapshot: { revision: 1, updatedAt: null, code: '{}', hash: null, issues: [],
+      evenements: [{ nom: 'signature', intitule: 'Signature exemple', date: '2026-10-01', suppose: false, preuve: [{ piece: '1', citation: 'Signé le 1 octobre' }], selon: [] }],
+      echeances: [{ nom: 'reponse', intitule: 'Réponse exemple', kind: 'other', date: null, calcul: [], fixe: false, suppose: false, preuve: [], selon: [], decompte: [], fait: null, erreurs: 0, manques: 1 }],
+    },
+  }]);
+  mount(root, { context: { theme: 'light', project: { name: 'Exemple', path: '/exemple' } }, onContextChange: () => () => {} });
+  await flush();
+  click('[data-vue="echeances"]');
+  await flush();
+  expect(root.querySelector('iframe')).toBeNull();
+  expect(root.textContent).toContain('Signature exemple');
+  expect(root.textContent).toContain('Date à établir');
+  const hash = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 16);
+  const matter = `dossier-${hash('/exemple\0analyse-suivi.json')}`;
+  const path = `projects/cabinet/matters/${matter}`;
+  const autre = { id: 'date-manuelle', label: 'Autre date', date: '2026-12-01' };
+  vi.mocked(loadBoard).mockResolvedValue({ rev: '1', docs: { [path]: { keyDates: [autre] } } });
+  vi.mocked(updateBoard).mockResolvedValue({});
+  click('[data-dossier]');
+  await vi.waitFor(() => expect(root.querySelector('.pme-drawer.is-open')).not.toBeNull());
+  click('[data-date="1"] [data-edit-date]');
+  const label = root.querySelector<HTMLInputElement>('[data-label]')!;
+  label.value = 'Réponse modifiée';
+  label.dispatchEvent(new Event('input', { bubbles: true }));
+  const date = root.querySelector<HTMLInputElement>('[data-date-value]')!;
+  date.value = '2026-11-20';
+  date.dispatchEvent(new Event('input', { bubbles: true }));
+  click('[data-modal-action="save"]');
+  await vi.waitFor(() => expect(updateBoard).toHaveBeenCalledWith(path, [autre, { id: `d-${hash('reponse')}`, label: 'Réponse modifiée', date: '2026-11-20', done: false }]));
+  const dossiers = await loadAll();
+  dossiers[0].snapshot.echeances[0].date = '2026-11-20';
+  click('[data-vue="tableau"]');
+  click('[data-vue="echeances"]');
+  await flush();
+  click('[data-done]');
+  await vi.waitFor(() => expect(updateBoard).toHaveBeenLastCalledWith(path, [autre, { id: `d-${hash('reponse')}`, label: 'Réponse exemple', date: '2026-11-20', done: true }]));
+});
+
+it('modifie et valide une action sans clôturer le dossier automatiquement', async () => {
+  await tableau(carte({ etape: 'attente', raisonnement, action: { texte: 'Relancer', fait: false } }));
+  click('[data-edit-action]');
+  const champ = document.querySelector<HTMLTextAreaElement>('[data-action]')!;
+  champ.value = 'Envoyer le courrier';
+  champ.dispatchEvent(new Event('input', { bubbles: true }));
+  click('[data-modal-action="save"]');
+  await flush();
+  expect(etapes.raisonnement).toHaveBeenLastCalledWith({ projectPath: '/exemple', raisonnement: 'analyse', action: { texte: 'Envoyer le courrier' } });
+  vi.mocked(etapes.raisonnement).mockClear();
+  click('[data-toggle-action]');
+  expect(etapes.raisonnement).not.toHaveBeenCalled();
+  click('[data-modal-action="confirm"]');
+  await flush();
+  expect(etapes.raisonnement).toHaveBeenCalledExactlyOnceWith({ projectPath: '/exemple', raisonnement: 'analyse', action: { fait: true } });
+});
+
+it('montre les dates manuelles à justifier et protège les dates calculées avec accès au suivi source', async () => {
+  const view = createDates(root, vi.fn(), vi.fn());
+  root.append(view.element);
+  view.update([{ projectPath: '/exemple', fichier: 'suivi.json', nom: 'Dossier exemple', session: null, snapshot: {
+    revision: 1, updatedAt: null, hash: null, issues: [], evenements: [],
+    code: JSON.stringify({ matter: { keyDates: [{ id: 'manuelle', label: 'Réunion fictive', date: '2026-12-01' }] } }),
+    echeances: [{ nom: 'reponse', intitule: 'Réponse calculée', kind: 'other', date: '2026-11-20', calcul: [], fixe: false, suppose: false, preuve: [], selon: [], decompte: [], fait: null, erreurs: 0, manques: 0 }],
+  } }]);
+  expect(root.textContent).toContain('Réunion fictive');
+  expect(root.textContent).toContain('Date saisie à la main : à justifier.');
+  click('[data-date="0"] [data-edit-date]');
+  expect(root.querySelector<HTMLInputElement>('[data-date-value]')!.disabled).toBe(true);
+  expect(root.textContent).toContain('Date calculée');
+  click('[data-modal-action="source"]');
+  await flush();
+  expect(etapes.volet).toHaveBeenCalledWith('/exemple', 'files', '/exemple/.piecemaker/suivi.json');
+  expect(updateBoard).not.toHaveBeenCalled();
+});
+
+it('intègre une pièce avec une tâche manuelle facultative et ouvre les anciennes versions', async () => {
+  vi.mocked(etapes.piece).mockResolvedValue({ chemin: 'Pièces/exemple.txt' });
+  vi.mocked(etapes.reprise).mockResolvedValue({ raisonnement: 'analyse-v2' });
+  vi.mocked(etapes.ajouterTache).mockResolvedValue({} as never);
+  const view = await tableau(carte({ etape: 'attente', raisonnement, historique: [{ nom: 'analyse-v0', documents: [{ nom: 'Ancien projet', type: 'Courrier', chemin: 'Projets/ancien.docx' }] }] }));
+  view.ouvrirDossier('/exemple', 'analyse');
+  click('[data-open-doc="0"][data-version="analyse-v0"]');
+  await flush();
+  expect(etapes.volet).toHaveBeenCalledWith('/exemple', 'files', '/exemple/Projets/ancien.docx');
+  click('[data-integrate]');
+  await flush();
+  const auto = document.querySelector<HTMLInputElement>('[data-auto]')!;
+  expect(auto.checked).toBe(true);
+  auto.checked = false;
+  const instructions = document.querySelector<HTMLTextAreaElement>('[data-instructions]')!;
+  instructions.value = 'Comparer les versions';
+  const file = document.querySelector<HTMLInputElement>('[data-piece]')!;
+  Object.defineProperty(file, 'files', { value: [new File(['exemple'], 'exemple.txt')] });
+  click('[data-modal-action="launch"]');
+  await flush();
+  expect(etapes.reprise).toHaveBeenCalledWith('/exemple', 'analyse');
+  expect(etapes.ajouterTache).toHaveBeenCalledWith({ type: 'reprise', projectPath: '/exemple', raisonnement: 'analyse-v2', piece: 'Pièces/exemple.txt', provider: 'mistral', model: 'modele-exemple', instructions: 'Comparer les versions', auto: false });
+});

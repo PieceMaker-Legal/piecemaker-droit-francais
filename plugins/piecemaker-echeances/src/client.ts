@@ -1,8 +1,8 @@
 import { PLUGIN_STYLES } from '../../piecemaker-tabular-review/src/client/styles.js';
 import type { SuiviDossier } from '../../../shared/piecemaker-suivi.js';
-import { loadAll, loadBoardPage, verifySuivi } from './api.js';
-import { withBoardShim } from './board-shim.js';
+import { loadAll, verifySuivi } from './api.js';
 import { ouvrirSession } from './navigation.js';
+import { createDates } from './dates.js';
 import { STYLES } from './styles.js';
 import { createTableau } from './tableau.js';
 import { createTaches } from './taches.js';
@@ -54,14 +54,11 @@ export function mount(container: HTMLElement, api: Host) {
   const tableau = createTableau(root, () => api.context.project?.path ?? null);
   const taches = createTaches(root, tableau.ouvrirDossier);
   const echeances = document.createElement('div');
-  echeances.className = 'pme-view pme-view--frame';
+  echeances.className = 'pme-view';
   const band = document.createElement('div');
   band.className = 'pme-band';
-  const frame = document.createElement('iframe');
-  frame.className = 'pme-frame';
-  frame.title = 'Matter board';
-  frame.allow = 'clipboard-write';
-  echeances.append(band, frame);
+  const dates = createDates(root, tableau.ouvrirFiche, () => refreshEcheances());
+  echeances.append(band, dates.element);
   const zone = document.createElement('div');
   zone.className = 'pme-zone';
   zone.append(tableau.element, taches.element, echeances, tableau.drawer);
@@ -71,13 +68,13 @@ export function mount(container: HTMLElement, api: Host) {
   let vue: Vue = 'tableau';
   let last = '';
   let open = false;
-  let pageUrl = '';
   const refreshEcheances = async () => {
     const dossiers = await loadAll();
-    const signature = JSON.stringify(dossiers.map((dossier) => [dossier.projectPath, dossier.fichier, dossier.nom, dossier.session, dossier.snapshot.issues, undated(dossier).map((deadline) => deadline.intitule)]));
+    const signature = JSON.stringify(dossiers);
     if (signature === last) return;
     last = signature;
     band.innerHTML = dossiers.length ? bandHtml(dossiers, open) : '';
+    dates.update(dossiers);
   };
   const refreshVue = () => vue === 'taches' ? taches.refresh() : vue === 'echeances' ? refreshEcheances() : null;
   const refresh = () => Promise.all([vue === 'tableau' || tableau.panneauOuvert() ? tableau.refresh() : null, refreshVue()]);
@@ -92,26 +89,10 @@ export function mount(container: HTMLElement, api: Host) {
   };
   const applyTheme = (theme: Context['theme']) => {
     root.dataset.theme = theme;
-    root.querySelectorAll('iframe').forEach((cadre) => {
-      const page = cadre.contentDocument?.documentElement;
-      if (page) page.dataset.theme = theme;
-    });
-  };
-  const intercepter = (event: MouseEvent) => {
-    const cible = event.target as HTMLElement;
-    const id = cible.closest<HTMLElement>('.mcard[data-id]')?.dataset.id ?? cible.closest<HTMLElement>('[id^="row-"]')?.id.slice(4);
-    if (!id || cible.closest('button, input, select, a[href^="http"]')) return;
-    event.preventDefault();
-    event.stopPropagation();
-    tableau.ouvrirFiche(id);
   };
   tabs.addEventListener('click', (event) => {
     const tab = (event.target as HTMLElement).closest<HTMLElement>('[data-vue]');
     if (tab) show(tab.dataset.vue as Vue);
-  });
-  frame.addEventListener('load', () => {
-    applyTheme(api.context.theme);
-    frame.contentDocument?.addEventListener('click', intercepter, true);
   });
   band.addEventListener('toggle', (event) => { open = (event.target as HTMLDetailsElement).open; }, true);
   band.addEventListener('click', (event) => {
@@ -135,15 +116,10 @@ export function mount(container: HTMLElement, api: Host) {
   document.addEventListener('visibilitychange', poll);
   applyTheme(api.context.theme);
   show('tableau');
-  void loadBoardPage().then((html) => {
-    pageUrl = URL.createObjectURL(new Blob([withBoardShim(html)], { type: 'text/html' }));
-    frame.src = `${pageUrl}#/p/cabinet`;
-  }).catch((error: unknown) => { band.textContent = error instanceof Error ? error.message : 'Tableau indisponible.'; });
   cleanups.set(container, () => {
     unsubscribe();
     window.clearInterval(timer);
     document.removeEventListener('visibilitychange', poll);
-    if (pageUrl) URL.revokeObjectURL(pageUrl);
     container.replaceChildren();
   });
 }

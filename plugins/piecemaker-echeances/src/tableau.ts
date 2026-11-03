@@ -31,9 +31,10 @@ const tacheHtml = (carte: Carte) => {
 };
 
 const menuHtml = (carte: Carte) => {
-  const items = carte.exclu || carte.aDemarrer ? []
-    : carte.raisonnement ? COLONNES.filter(([etape]) => etape !== carte.etape).map(([etape, libelle]) => `<button type="button" class="ptr-menu-item" data-move="${etape}">Déplacer vers ${escape(libelle)}</button>`)
-      : ['<button type="button" class="ptr-menu-item" data-move="raisonnement">Déplacer vers Raisonnements</button>', '<button type="button" class="ptr-menu-item" data-exclude>Non juridique : retirer du tableau</button>'];
+  const items = carte.exclu ? [] : [
+    ...COLONNES.filter(([etape]) => etape !== carte.etape).map(([etape, libelle]) => `<button type="button" class="ptr-menu-item" data-move="${etape}">Déplacer vers ${escape(libelle)}</button>`),
+    '<button type="button" class="ptr-menu-item" data-exclude>Non juridique : retirer du tableau</button>',
+  ];
   if (!items.length) return '';
   return `<details class="ptr-menu pme-move"><summary class="ptr-icon-button" aria-label="Actions de la carte" title="Déplacer">⋯</summary><div class="ptr-menu-list">${items.join('')}</div></details>`;
 };
@@ -80,7 +81,8 @@ const historiqueHtml = (carte: Carte) => carte.historique?.length
 const corpsHtml = (carte: Carte, ouvertes: Set<string>) => {
   if (carte.exclu) return '<div class="pme-actions"><span class="pme-muted">Non juridique</span><button type="button" class="ptr-button" data-include>Réintégrer</button></div>';
   if (carte.aDemarrer) return '<p class="pme-muted">À démarrer : aucun raisonnement.</p><div class="pme-actions"><button type="button" class="ptr-button ptr-button-primary" data-launch="raisonnement">Démarrer le raisonnement</button></div>';
-  if (!carte.raisonnement) return preparationHtml(carte);
+  if (carte.etape === 'preparation') return preparationHtml(carte);
+  if (!carte.raisonnement) return '<button type="button" class="ptr-button" data-launch="raisonnement">Démarrer le raisonnement</button>';
   const issues = carte.raisonnement.erreurs + carte.raisonnement.manques;
   switch (carte.etape) {
     case 'raisonnement':
@@ -88,9 +90,9 @@ const corpsHtml = (carte: Carte, ouvertes: Set<string>) => {
     case 'redaction':
       return `${documentsHtml(carte, true)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span><button type="button" class="ptr-button" data-add-doc>+ Document</button><button type="button" class="ptr-button ptr-button-primary" data-validate="finalisation">Valider</button></div>`;
     case 'finalisation':
-      return `${actionHtml(carte)}${documentsHtml(carte, false)}<div class="pme-actions">${lienRaisonnement}</div>`;
+      return `${actionHtml(carte)}${documentsHtml(carte, false)}<div class="pme-actions">${lienRaisonnement}<button type="button" class="ptr-button ptr-button-primary" data-finish>Valider la finalisation</button></div>`;
     case 'attente':
-      return `${actionHtml(carte)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span><button type="button" class="ptr-button ptr-button-primary" data-integrate>Intégrer une pièce</button></div>`;
+      return `${actionHtml(carte)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span><button type="button" class="ptr-button" data-finish>Valider la suite</button><button type="button" class="ptr-button ptr-button-primary" data-integrate>Intégrer une pièce</button></div>`;
     default:
       return `${documentsHtml(carte, false)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}</div>`;
   }
@@ -281,11 +283,24 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     }, 'Pièce intégrée : nouvelle version du raisonnement créée.');
   };
 
+  const finaliser = async (carte: Carte) => {
+    const reste = Boolean(carte.action?.texte && !carte.action.fait);
+    const answer = await openModal(root, {
+      title: 'Valider la suite du dossier',
+      body: `${sujet(carte)}<p>${reste ? 'Une prochaine action reste à faire. Conservez le dossier en attente ou confirmez sa clôture.' : 'Le dossier attend-il un tiers ou une autre action ? Choisissez Attente. Sinon, confirmez sa clôture.'}</p>`,
+      actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'En attente de tiers', value: 'attente' }, { label: 'Plus d’étape ni d’attente : clore', value: 'clos', kind: 'primary' }],
+    });
+    if (answer === 'attente' || answer === 'clos') await run(() => carte.raisonnement
+      ? etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement.nom, etape: answer })
+      : etapes.dossier({ projectPath: carte.projectPath, etape: answer }));
+  };
+
   const deplacer = async (carte: Carte, etape: Etape) => {
+    if (etape === 'clos') return finaliser(carte);
     if (!(await confirmDialog(root, `Déplacer vers « ${LIBELLE[etape]} » ?`, sujet(carte), 'Déplacer'))) return;
     await run(() => carte.raisonnement
       ? etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement.nom, etape })
-      : etapes.dossier({ projectPath: carte.projectPath, preparationForcee: true }));
+      : etapes.dossier({ projectPath: carte.projectPath, etape }));
   };
 
   const ecouter = (type: string, listener: (event: Event) => void, capture = false) => [element, drawer].forEach((zone) => zone.addEventListener(type, listener, capture));
@@ -315,7 +330,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     else if (data.openDoc) void ouvrirRaisonnement(version, current, documents?.[Number(data.openDoc)]?.chemin).catch(failed);
     else if (data.move) void deplacer(carte, data.move as Etape);
     else if ('exclude' in data) void confirmDialog(root, 'Retirer ce dossier du tableau ?', `${sujet(carte)}<p>Le dossier est marqué non juridique. Cochez « Afficher les exclus » pour le retrouver.</p>`, 'Retirer').then((ok) => { if (ok) void run(() => etapes.dossier({ projectPath: carte.projectPath, nonJuridique: true })); });
-    else if ('include' in data) void run(() => etapes.dossier({ projectPath: carte.projectPath, nonJuridique: false }));
+    else if ('include' in data) void confirmDialog(root, 'Réintégrer ce dossier ?', sujet(carte), 'Réintégrer').then((ok) => { if (ok) void run(() => etapes.dossier({ projectPath: carte.projectPath, nonJuridique: false })); });
     else if ('mapping' in data) void ouvrirMapping(carte, current).catch(failed);
     else if (data.volet) void ouvrirVolet(carte, current, data.volet).catch(failed);
     else if (data.launch) void ajouterTache(carte, data.launch, data.doc === undefined ? {} : { document: Number(data.doc) });
@@ -328,8 +343,9 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
       const documents = sansStatut(carte.documents);
       const [retire] = documents.splice(Number(data.removeDoc), 1);
       void confirmDialog(root, 'Retirer ce document de la carte ?', `<p>${escape(retire?.nom)}</p><p class="pme-muted">Le fichier n’est pas supprimé.</p>`, 'Retirer', true).then((ok) => { if (ok) void run(() => etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement!.nom, documents })); });
-    } else if ('toggleAction' in data) void run(() => etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement!.nom, action: { fait: !carte.action?.fait } }));
+    } else if ('toggleAction' in data) void confirmDialog(root, carte.action?.fait ? 'Marquer cette action à faire ?' : 'Valider cette action effectuée ?', sujet(carte), 'Valider').then((ok) => { if (ok) void run(() => etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement!.nom, action: { fait: !carte.action?.fait } })); });
     else if ('editAction' in data) void modifierAction(carte);
+    else if ('finish' in data) void finaliser(carte);
     else if ('integrate' in data) void integrerPiece(carte);
   });
 
