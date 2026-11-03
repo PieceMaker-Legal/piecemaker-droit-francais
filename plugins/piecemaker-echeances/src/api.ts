@@ -14,6 +14,7 @@ export type Carte = {
   projectPath: string;
   dossier: string;
   session: string | null;
+  matter?: string | null;
   etape: Etape;
   exclu?: boolean;
   preparation?: Ligne[];

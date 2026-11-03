@@ -54,6 +54,11 @@ Service `server/modules/piecemaker-reasoning/etapes.ts`, routes `/api/piecemaker
 - Fenêtre de lancement commune (`src/lancer.ts`) : IA, modèle, consignes, case « automatique » cochée par défaut. Le modèle préféré est retrouvé par famille (`matchModel`, `mistral-medium-latest` ↔ `mistral-medium-3.5`).
 - Vue Tâches (`src/taches.ts`) : Automatiques (une à la fois), Manuelles, Terminées. « Lancer immédiatement » passe la file.
 - Questions des tâches : le prompt demande à l'IA de finir par une ligne « Question : … » quand l'avocat doit décider. La tâche passe alors au statut `question`, en colonne Questions : « Répondre » relance un tour dans la même session, « Terminer » la clôt. Pendant un tour, les demandes en attente de la session (AskUserQuestion, ExitPlanMode, autorisation d'outil) s'affichent sur la carte et se règlent depuis la vue (routes `repondre`, `decision`, `terminer`).
+- Panneau du dossier, commun aux trois vues : un clic sur une carte du Tableau, une tâche ou une carte du Matter board (Échéances) ouvre le même tiroir à droite. Le clic sur le Matter board est intercepté : son propre panneau ne s'ouvre plus.
+  - En haut, les étapes dans l'ordre, à partir de Préparation dossier : bulle verte cochée si faite, vide sinon. Les étapes après l'étape courante ne s'affichent pas.
+  - Une étape faite propose « Ouvrir le raisonnement » et ses documents ; l'étape courante garde ses actions.
+  - Après « Intégrer une pièce », chaque version précédente du raisonnement s'affiche avec ses étapes et ses documents.
+  - En dessous, quand le dossier a un suivi, la fiche Matter (fiche, dates clés, modifications) dans une iframe du board réduite à son panneau. Le serveur donne l'identifiant de fiche de chaque carte (`matter`).
 - « Ouvrir le raisonnement » pose `window.__piecemakerRaisonnementShow` et ouvre le volet Raisonnement, qui affiche ce raisonnement. Un autre dossier s'ouvre via sa dernière conversation.
 
 ## Page du tableau

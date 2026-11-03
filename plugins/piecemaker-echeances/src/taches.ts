@@ -38,7 +38,7 @@ const tacheHtml = (tache: Tache) => {
 
 const colonneHtml = (titre: string, aide: string, taches: Tache[]) => `<section class="pme-col"><h3>${titre} <span class="pme-muted">${taches.length}</span></h3><p class="pme-muted pme-small">${aide}</p>${taches.map(tacheHtml).join('') || '<p class="pme-muted">Aucune tâche.</p>'}</section>`;
 
-export function createTaches(root: HTMLElement) {
+export function createTaches(root: HTMLElement, ouvrirDossier: (projectPath: string, raisonnement: string | null) => void) {
   const element = document.createElement('div');
   element.className = 'pme-view';
   let taches: Tache[] = [];
@@ -90,7 +90,8 @@ export function createTaches(root: HTMLElement) {
   });
   element.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement).closest<HTMLElement>('button');
-    const tache = taches.find((entry) => entry.id === button?.closest<HTMLElement>('[data-task]')?.dataset.task);
+    const tache = taches.find((entry) => entry.id === (event.target as HTMLElement).closest<HTMLElement>('[data-task]')?.dataset.task);
+    if (tache && !button && !(event.target as HTMLElement).closest('textarea, input, label, summary')) return ouvrirDossier(tache.projectPath, tache.raisonnement ?? null);
     if (!button || !tache) return;
     const data = button.dataset;
     const card = button.closest<HTMLElement>('[data-task]')!;

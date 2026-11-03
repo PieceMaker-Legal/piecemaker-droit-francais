@@ -51,8 +51,8 @@ export function mount(container: HTMLElement, api: Host) {
   tabs.className = 'pme-tabs';
   tabs.setAttribute('role', 'tablist');
   tabs.innerHTML = `<div class="pme-segmented">${VUES.map(([vue, libelle]) => `<button type="button" role="tab" class="pme-tab" data-vue="${vue}">${libelle}</button>`).join('')}</div>`;
-  const tableau = createTableau(root, () => api.context.project?.path ?? null);
-  const taches = createTaches(root);
+  const tableau = createTableau(root, () => api.context.project?.path ?? null, () => pageUrl);
+  const taches = createTaches(root, tableau.ouvrirDossier);
   const echeances = document.createElement('div');
   echeances.className = 'pme-view pme-view--frame';
   const band = document.createElement('div');
@@ -62,7 +62,10 @@ export function mount(container: HTMLElement, api: Host) {
   frame.title = 'Matter board';
   frame.allow = 'clipboard-write';
   echeances.append(band, frame);
-  root.append(tabs, tableau.element, taches.element, echeances);
+  const zone = document.createElement('div');
+  zone.className = 'pme-zone';
+  zone.append(tableau.element, taches.element, echeances, tableau.drawer);
+  root.append(tabs, zone);
   container.replaceChildren(style, root);
 
   let vue: Vue = 'tableau';
@@ -76,7 +79,7 @@ export function mount(container: HTMLElement, api: Host) {
     last = signature;
     band.innerHTML = dossiers.length ? bandHtml(dossiers, open) : '';
   };
-  const refresh = () => vue === 'tableau' ? tableau.refresh() : vue === 'taches' ? taches.refresh() : refreshEcheances();
+  const refresh = () => Promise.all([vue === 'tableau' || tableau.panneauOuvert() ? tableau.refresh() : null, vue === 'taches' ? taches.refresh() : vue === 'echeances' ? refreshEcheances() : null]);
   const show = (next: Vue) => {
     vue = next;
     tabs.querySelectorAll<HTMLElement>('[data-vue]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.vue === vue)));
@@ -87,14 +90,27 @@ export function mount(container: HTMLElement, api: Host) {
   };
   const applyTheme = (theme: Context['theme']) => {
     root.dataset.theme = theme;
-    const page = frame.contentDocument?.documentElement;
-    if (page) page.dataset.theme = theme;
+    root.querySelectorAll('iframe').forEach((cadre) => {
+      const page = cadre.contentDocument?.documentElement;
+      if (page) page.dataset.theme = theme;
+    });
+  };
+  const intercepter = (event: MouseEvent) => {
+    const cible = event.target as HTMLElement;
+    const id = cible.closest<HTMLElement>('.mcard[data-id]')?.dataset.id ?? cible.closest<HTMLElement>('[id^="row-"]')?.id.slice(4);
+    if (!id || cible.closest('button, input, select, a[href^="http"]')) return;
+    event.preventDefault();
+    event.stopPropagation();
+    tableau.ouvrirFiche(id);
   };
   tabs.addEventListener('click', (event) => {
     const tab = (event.target as HTMLElement).closest<HTMLElement>('[data-vue]');
     if (tab) show(tab.dataset.vue as Vue);
   });
-  frame.addEventListener('load', () => applyTheme(api.context.theme));
+  frame.addEventListener('load', () => {
+    applyTheme(api.context.theme);
+    frame.contentDocument?.addEventListener('click', intercepter, true);
+  });
   band.addEventListener('toggle', (event) => { open = (event.target as HTMLDetailsElement).open; }, true);
   band.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement).closest('button');

@@ -6,6 +6,7 @@ import express from 'express';
 import { listReasoningFiles, REASONING_DIR } from './document.js';
 import type { createReasoningService } from './program.js';
 import { SUIVI_NAME, suiviPath } from './suivi.js';
+import { dossierMatterId } from './suivi-board.js';
 import type { createSuiviService } from './suivi-service.js';
 import type { createTachesService, Tache } from './taches.js';
 
@@ -144,6 +145,11 @@ export function createEtapesService(deps: EtapesDependencies) {
     const files = await deps.suivi.files(root);
     return files.includes(`${nom}-${SUIVI_NAME}`) ? `${nom}-${SUIVI_NAME}` : files.includes(SUIVI_NAME) ? SUIVI_NAME : null;
   };
+  const matterOf = async (root: string, nom?: string) => {
+    const files = await deps.suivi.files(root).catch(() => [] as string[]);
+    const fichier = (nom && files.includes(`${nom}-${SUIVI_NAME}`) ? `${nom}-${SUIVI_NAME}` : null) ?? (files.includes(SUIVI_NAME) ? SUIVI_NAME : files.length === 1 ? files[0] : null);
+    return fichier ? dossierMatterId(root, fichier) : null;
+  };
   const nextAction = async (root: string, nom: string): Promise<Action | null> => {
     const fichier = await suiviOf(root, nom);
     if (!fichier) return null;
@@ -180,16 +186,18 @@ export function createEtapesService(deps: EtapesDependencies) {
       const etapes = await read(root);
       const base = { projectPath: root, dossier, session: deps.sessionOf(root) };
       if (etapes.nonJuridique) { cartes.push({ ...base, id: carteId(root), etape: 'preparation', exclu: true }); continue; }
+      const matter = await matterOf(root);
       const suites = etapes.raisonnements ?? {};
       const names = (await listReasoningFiles(root).catch(() => [] as string[])).filter((nom) => !suites[nom]?.remplacePar);
       const state = names.length ? null : await etat(path.resolve(root), fresh);
-      if (state && !state.pret && !etapes.preparationForcee) cartes.push({ ...base, id: carteId(root), etape: 'preparation', preparation: state.lignes, mappingValide: etapes.mappingValide ?? null, tache: tacheOf(deps.taches.active(root, null)) });
-      else if (!names.length) cartes.push({ ...base, id: carteId(root), etape: 'raisonnement', aDemarrer: true, tache: tacheOf(deps.taches.active(root, null)) });
+      if (state && !state.pret && !etapes.preparationForcee) cartes.push({ ...base, matter, id: carteId(root), etape: 'preparation', preparation: state.lignes, mappingValide: etapes.mappingValide ?? null, tache: tacheOf(deps.taches.active(root, null)) });
+      else if (!names.length) cartes.push({ ...base, matter, id: carteId(root), etape: 'raisonnement', aDemarrer: true, tache: tacheOf(deps.taches.active(root, null)) });
       for (const nom of names) {
         const suite = suites[nom] ?? { etape: 'raisonnement' };
         cartes.push({
           ...base,
           id: carteId(root, nom),
+          matter: await matterOf(root, nom),
           etape: suite.etape,
           raisonnement: await reasoningOf(root, nom),
           documents: await documentsOf(root, suite.documents),
