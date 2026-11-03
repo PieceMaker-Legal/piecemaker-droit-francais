@@ -150,10 +150,11 @@ button.pme-pill:hover{filter:brightness(.96)}
 .pme-choix{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;border:0}
 .pme-choix legend{margin-bottom:4px;font:var(--text-footnote);font-weight:580}
 .pme-done summary{cursor:pointer;font:var(--text-footnote);font-weight:580;color:var(--text-secondary)}
-.pme-zone{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden}
+.pme-zone{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;container-type:inline-size}
 .pme-drawer-matter{flex:1;min-height:0;width:100%;border:0}
 .pme-drawer-body.has-matter{flex:none;max-height:45%;border-bottom:1px solid var(--border)}
-.pme-drawer{position:absolute;inset-block:0;right:0;z-index:20;width:min(460px,100%);display:flex;flex-direction:column;background:var(--surface-2);border-left:1px solid var(--border);box-shadow:var(--shadow-popover);transform:translateX(100%);visibility:hidden;transition:transform 300ms cubic-bezier(.165,.84,.44,1),visibility 0s linear 300ms}
+.pme-drawer{position:absolute;inset-block:0;right:0;z-index:40;width:min(500px,100%);display:flex;flex-direction:column;background:var(--surface-2);border-left:1px solid var(--border);box-shadow:var(--shadow-popover);transform:translateX(100%);visibility:hidden;transition:transform 300ms cubic-bezier(.32,.72,0,1),visibility 0s linear 300ms}
+@container (max-width:760px){.pme-drawer{width:100%}}
 .pme-drawer.is-open{transform:none;visibility:visible;transition-delay:0s}
 .pme-drawer-head{display:flex;align-items:flex-start;gap:8px;padding:20px 20px 16px;border-bottom:1px solid var(--border)}
 .pme-drawer-titles{display:flex;flex-direction:column;gap:4px;flex:1;min-width:0}
