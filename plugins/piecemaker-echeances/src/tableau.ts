@@ -45,10 +45,9 @@ const preparationHtml = (carte: Carte) => {
   const lecture = ligne('lecture');
   if (lecture) return `<p class="pme-muted">${escape(lecture.texte)}</p>`;
   const ok = (nom: string) => ligne(nom)?.ok ?? false;
-  const pieces = ok('conversion') && ok('anonymisation');
   const etape = (libelle: string, fait: boolean, onglet: string, lancement: string, valider = '') => `<li>${valider || bulle(fait)}${fait ? `<button type="button" class="pme-link pme-prep-title" data-volet="${onglet}">${libelle}</button>` : `<strong>${libelle}</strong>`}${fait || valider ? '' : `<span class="pme-spacer"></span><button type="button" class="pme-link" data-launch="${lancement}">Lancer</button>`}</li>`;
   const valider = ok('anonymisation') && !ok('mapping') ? '<button type="button" class="ptr-button ptr-button-primary pme-prep-button" data-mapping>Valider le mapping</button>' : '';
-  return `<ul class="pme-prep">${etape('Anonymisation', pieces && ok('mapping'), 'plugin:piecemaker-dossier', 'conversion', valider)}${etape('Index', ok('index'), 'plugin:piecemaker-tabular-review', 'index')}</ul>`;
+  return `<ul class="pme-prep">${etape('Anonymisation', ok('anonymisation') && ok('mapping'), 'plugin:piecemaker-dossier', 'conversion', valider)}${etape('Index', ok('index'), 'plugin:piecemaker-tabular-review', 'index')}</ul>`;
 };
 
 const alertesHtml = (carte: Carte, ouvertes: Set<string>) => {
