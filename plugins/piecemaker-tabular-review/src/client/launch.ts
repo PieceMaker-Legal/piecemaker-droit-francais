@@ -1,5 +1,5 @@
 import type { Draft, Provider, ReviewDetail, RowRequest, TemplateColumn } from '../shared.js';
-import { COLUMN_FORMATS, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, REVIEW_FOLDER } from '../shared.js';
+import { COLUMN_FORMATS, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, matchModel, REVIEW_FOLDER } from '../shared.js';
 import type { App, View } from './app.js';
 import { basename, confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
 import { openDocumentsDrawer } from './documents-drawer.js';
@@ -129,7 +129,7 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
       models = { options: requestedProvider === 'claude' ? [{ value: 'haiku', label: 'Haiku' }] : [], cheapest: requestedProvider === 'claude' ? 'haiku' : '' };
     }
     if (provider !== requestedProvider) return;
-    model = models.options.some((option) => option.value === preferredModel) ? preferredModel : models.cheapest;
+    model = matchModel(models.options, preferredModel, models.cheapest);
     preferredModel = '';
     renderProviderMenus();
     renderFooter();

@@ -25,6 +25,7 @@ import { createPieceTitleResolver } from './harness/piece-title.js';
 import { locateSourcePassages } from './harness/source-passages.js';
 import { installLegalCodeHarness } from './legal-code/legal-code-harness.js';
 import { openLibrary, installLibraryRuntime, installLibrarySkillVisibility } from './library/index.js';
+import { applyWorkspaceSkillVisibility } from './library/skill-visibility.js';
 import { createKnowledgeBackend } from './knowledge/index.js';
 import { declarePieceMakerServer } from './mcp-declaration.js';
 import { declareBundledSkills } from './skill-declaration.js';
@@ -104,11 +105,18 @@ const board = createBoardService(getConnection, suivi);
 const pmScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')).href;
 const taches = createTachesService(piecemakerHome(), {
   open: (tache) => sessionsService.createAppSession(tache.provider as never, tache.projectPath, tache.titre).sessionId,
-  run: (tache, sessionId) => {
+  run: (tache, sessionId, content) => {
     const preferences = tache.userId === null ? {} : userPreferencesDb.getPreferences(tache.userId);
     const toolsSettings = (preferences[`${tache.provider}Permissions`] ?? { allowedTools: [], disallowedTools: [], skipPermissions: false }) as { skipPermissions?: boolean };
-    return runDetachedChatTurn({ sessionId, userId: tache.userId, content: tache.prompt, options: { model: tache.model, permissionMode: 'acceptEdits', toolsSettings, skipPermissions: toolsSettings.skipPermissions || false } }, { runtime: providerRuntimeService });
+    const turn = runDetachedChatTurn({ sessionId, userId: tache.userId, content, options: { model: tache.model, permissionMode: 'acceptEdits', toolsSettings, skipPermissions: toolsSettings.skipPermissions || false } }, { runtime: providerRuntimeService });
+    return tache.type === 'redaction' ? turn.finally(() => library.refresh().catch(() => undefined)) : turn;
   },
+  lastAnswer: async (sessionId) => {
+    const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
+    return history.messages.filter((message) => message.kind === 'text' && message.role === 'assistant' && !message.parentToolUseId).at(-1)?.content ?? '';
+  },
+  pending: (sessionId) => providerRuntimeService.getPendingApprovalsForSession(sessionId) as Array<{ requestId: string; toolName: string; input: unknown }>,
+  resolve: (requestId, decision) => providerRuntimeService.resolveToolApproval(requestId, decision),
 });
 const lastSession = (projectPath: string) => {
   try { return (getConnection().prepare('SELECT session_id FROM sessions WHERE project_path=? AND (isArchived IS NULL OR isArchived = 0) ORDER BY updated_at DESC LIMIT 1').get(projectPath) as { session_id: string } | undefined)?.session_id ?? null; } catch { return null; }
@@ -120,7 +128,13 @@ const etapes = createEtapesService({
   taches,
   etat: async (projectPath) => (await import(pmScript) as { etatDossier(project: string): Promise<{ lignes: Array<{ nom: string; texte: string; ok: boolean }>; pret: boolean }> }).etatDossier(projectPath),
   sessionOf: lastSession,
-  skills: async (projectPath, provider) => (await providerSkillsService.listProviderSkills(provider, { workspacePath: projectPath })).map((skill) => skill.name),
+  bibliotheque: {
+    skills: () => library.store.list().filter((entry) => entry.kind === 'skill'),
+    activer: (projectPath, id) => {
+      library.store.setEnabled(projectPath, id, true);
+      applyWorkspaceSkillVisibility(library.store, projectPath);
+    },
+  },
 });
 installCodexPlanRuntime(providerRuntimeService);
 installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());

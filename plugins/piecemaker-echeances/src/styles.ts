@@ -68,6 +68,10 @@ button.pme-pill{cursor:pointer}
 .pme-menus{display:flex;gap:8px;flex-wrap:wrap}
 .pme-new-type{display:flex;flex-direction:column;gap:10px}
 .pme-empty{margin:24px 0;text-align:center}
+.pme-question{margin:0;white-space:pre-wrap;font:inherit;max-height:240px;overflow:auto}
+.pme-demande{display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px solid var(--ptr-border)}
+.pme-choix{display:flex;flex-direction:column;gap:4px;margin:0;padding:0;border:0}
+.pme-choix legend{margin-bottom:4px;font-weight:600}
 .pme-done summary{cursor:pointer;color:var(--muted);font-weight:600}
 .pme-done-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px;margin-top:10px}
 `;

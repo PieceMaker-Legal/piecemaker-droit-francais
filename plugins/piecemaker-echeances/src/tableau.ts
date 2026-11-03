@@ -26,7 +26,7 @@ const lienRaisonnement = '<button type="button" class="pme-link" data-open-reaso
 const tacheHtml = (carte: Carte) => {
   const tache = carte.tache;
   if (!tache) return '';
-  const statut = tache.statut === 'en-cours' ? 'En cours' : 'En file';
+  const statut = tache.statut === 'en-cours' ? 'En cours' : tache.statut === 'question' ? 'Question' : 'En file';
   return `<p class="pme-task"><span class="pme-pill pme-pill--run">${statut}</span>${escape(tache.titre)}${tache.sessionId ? ' <button type="button" class="pme-link" data-session="' + escape(tache.sessionId) + '">Voir</button>' : ''}</p>`;
 };
 

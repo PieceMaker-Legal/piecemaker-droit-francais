@@ -7,7 +7,8 @@ export type Etape = 'preparation' | 'raisonnement' | 'redaction' | 'finalisation
 export type Ligne = { nom: string; texte: string; ok: boolean };
 export type DocumentRedige = { type: string; nom: string; chemin: string; statut?: 'en cours' | 'non commencé' };
 export type Action = { texte: string; fait: boolean; echeance?: string; suivi?: string };
-export type TacheStatut = 'attente' | 'en-cours' | 'terminee' | 'echec';
+export type TacheStatut = 'attente' | 'en-cours' | 'question' | 'terminee' | 'echec';
+export type Demande = { requestId: string; toolName: string; input: Record<string, unknown> };
 export type Carte = {
   id: string;
   projectPath: string;
@@ -37,6 +38,8 @@ export type Tache = {
   sessionId: string | null;
   creeLe: string;
   erreur: string | null;
+  question?: string | null;
+  demandes?: Demande[];
 };
 export type TypeDocument = { nom: string; skill: string; modele?: string };
 export type NouvelleTache = { type: string; projectPath: string; raisonnement?: string; document?: number; piece?: string; provider: string; model: string; instructions: string; auto: boolean };
@@ -70,6 +73,9 @@ export const etapes = {
   ajouterTache: (body: NouvelleTache) => request<Tache>(`${ETAPES}/taches`, body),
   lancer: (id: string) => request<Tache>(`${ETAPES}/taches/${encodeURIComponent(id)}/lancer`, {}),
   auto: (id: string, auto: boolean) => request<Tache>(`${ETAPES}/taches/${encodeURIComponent(id)}/auto`, { auto }),
+  repondre: (id: string, texte: string) => request<Tache>(`${ETAPES}/taches/${encodeURIComponent(id)}/repondre`, { texte }),
+  decision: (id: string, body: { requestId: string; allow: boolean; updatedInput?: unknown }) => request<Tache>(`${ETAPES}/taches/${encodeURIComponent(id)}/decision`, body),
+  terminer: (id: string) => request<Tache>(`${ETAPES}/taches/${encodeURIComponent(id)}/terminer`, {}),
   retirer: (id: string) => request(`${ETAPES}/taches/${encodeURIComponent(id)}`, undefined, 'DELETE'),
   volet: (project: string, tab: string, document?: string) => request('/api/piecemaker/local/open-panel', { project, tab, ...(document ? { document } : {}) }),
 };

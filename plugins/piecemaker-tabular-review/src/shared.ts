@@ -151,6 +151,15 @@ export const DEFAULT_PROVIDER: Provider = 'mistral';
 
 export const DEFAULT_MODEL: Record<Provider, string> = { claude: 'haiku', codex: '', mistral: 'mistral-small' };
 
+const modelFamily = (value: string) => value.replace(/-(latest|\d[\d.]*)$/, '');
+
+export function matchModel(options: { value: string }[], preferred: string | null | undefined, fallback: string) {
+  if (!preferred) return fallback;
+  return options.find((option) => option.value === preferred)?.value
+    ?? options.find((option) => modelFamily(option.value) === modelFamily(preferred))?.value
+    ?? fallback;
+}
+
 export const INDEX_MODEL: Record<Provider, string> = { claude: 'sonnet', codex: '', mistral: 'mistral-medium-3.5' };
 
 export type ReviewStatus = 'running' | 'done' | 'partial' | 'cancelled' | 'interrupted';

@@ -35,5 +35,5 @@ export async function openLibrary(home: string, applicationRoot: string, listPro
   router.use(createLibraryRouter(store));
   router.use(createMikeRouter(store, os.homedir()));
   router.use(createLibraryMarketplaceRouter(store, applicationRoot, os.homedir(), listProjectPaths, reader));
-  return { store, router };
+  return { store, router, refresh: () => scanLibrarySources(store, os.homedir(), listProjectPaths, reader) };
 }

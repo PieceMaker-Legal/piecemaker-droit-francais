@@ -11,6 +11,7 @@ import type { createTachesService, Tache } from './taches.js';
 
 export const ETAPES_FILE = path.join('.piecemaker', 'etapes.json');
 export const TYPES_FILE = 'types-documents.json';
+export const SCAN_STATE_FILE = path.join('.piecemaker', 'anonymization-state.json');
 export const ETAPES = ['preparation', 'raisonnement', 'redaction', 'finalisation', 'attente', 'clos'] as const;
 
 type Etape = typeof ETAPES[number];
@@ -30,13 +31,15 @@ export type EtapesDependencies = {
   taches: ReturnType<typeof createTachesService>;
   etat(projectPath: string): Promise<Etat>;
   sessionOf(projectPath: string): string | null;
-  skills(projectPath: string, provider: string): Promise<string[]>;
+  bibliotheque: { skills(): Array<{ id: string; name: string }>; activer(projectPath: string, id: string): void };
 };
 
 const ETAT_TTL_MS = 15_000;
+const QUESTION_CONSIGNE = '\n\nTu travailles sans l’avocat devant l’écran. S’il doit décider ou valider quelque chose, arrête-toi et termine ta réponse par une ligne « Question : … ». Il te répondra dans l’onglet Tâches.';
 const VERSION = /-v(\d+)$/;
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
 const exists = (file: string) => stat(file).then(() => true, () => false);
+const carteId = (root: string, nom = '') => `${root}::${nom}`;
 const slug = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 const text = (value: unknown, name: string) => {
   if (typeof value !== 'string' || !value.trim()) throw new TypeError(`${name} requis.`);
@@ -69,7 +72,15 @@ export function createEtapesService(deps: EtapesDependencies) {
   const etats = new Map<string, { at: number; value: Promise<Etat> }>();
   const typesFile = path.join(deps.home, TYPES_FILE);
 
-  const read = (root: string) => readJson<Etapes>(path.join(root, ETAPES_FILE), {});
+  const lastScan = async (root: string) => {
+    const state = await readJson<{ files?: Record<string, { scanned?: { updatedAt?: string } }> }>(path.join(root, SCAN_STATE_FILE), {});
+    return Object.values(state.files ?? {}).map((entry) => entry.scanned?.updatedAt ?? '').sort().at(-1) ?? '';
+  };
+  const read = async (root: string) => {
+    const etapes = await readJson<Etapes>(path.join(root, ETAPES_FILE), {});
+    if (etapes.mappingValide && new Date(await lastScan(root)) > new Date(etapes.mappingValide)) delete etapes.mappingValide;
+    return etapes;
+  };
   const change = <T>(root: string, run: (etapes: Etapes) => T | Promise<T>) => {
     const next = (locks.get(root) ?? Promise.resolve()).then(async () => {
       const etapes = await read(root);
@@ -96,7 +107,8 @@ export function createEtapesService(deps: EtapesDependencies) {
   const types = () => readJson<TypeDocument[]>(typesFile, []);
   const typesOf = async (projectPath: unknown) => {
     const known = await types();
-    const skills = (await deps.skills(project(projectPath).root, 'claude').catch(() => [] as string[])).filter((skill) => skill.startsWith('redaction-') && !known.some((entry) => entry.skill === skill));
+    project(projectPath);
+    const skills = deps.bibliotheque.skills().map((entry) => entry.name).filter((skill) => skill.startsWith('redaction-') && !known.some((entry) => entry.skill === skill));
     return [...known, ...skills.map((skill) => ({ nom: skill.slice('redaction-'.length).replace(/-/g, ' ').replace(/^./, (first) => first.toUpperCase()), skill }))];
   };
 
@@ -139,17 +151,17 @@ export function createEtapesService(deps: EtapesDependencies) {
       const dossier = entry.custom_project_name || path.basename(root);
       const etapes = await read(root);
       const base = { projectPath: root, dossier, session: deps.sessionOf(root) };
-      if (etapes.nonJuridique) { cartes.push({ ...base, id: `${root}\0`, etape: 'preparation', exclu: true }); continue; }
+      if (etapes.nonJuridique) { cartes.push({ ...base, id: carteId(root), etape: 'preparation', exclu: true }); continue; }
       const suites = etapes.raisonnements ?? {};
       const names = (await listReasoningFiles(root).catch(() => [] as string[])).filter((nom) => !suites[nom]?.remplacePar);
-      const state = await etat(root, fresh);
-      if (!state.pret && !etapes.preparationForcee) cartes.push({ ...base, id: `${root}\0`, etape: 'preparation', preparation: state.lignes, mappingValide: etapes.mappingValide ?? null, tache: tacheOf(deps.taches.active(root, null)) });
-      else if (!names.length) cartes.push({ ...base, id: `${root}\0`, etape: 'raisonnement', aDemarrer: true, tache: tacheOf(deps.taches.active(root, null)) });
+      const state = names.length ? null : await etat(root, fresh);
+      if (state && !state.pret && !etapes.preparationForcee) cartes.push({ ...base, id: carteId(root), etape: 'preparation', preparation: state.lignes, mappingValide: etapes.mappingValide ?? null, tache: tacheOf(deps.taches.active(root, null)) });
+      else if (!names.length) cartes.push({ ...base, id: carteId(root), etape: 'raisonnement', aDemarrer: true, tache: tacheOf(deps.taches.active(root, null)) });
       for (const nom of names) {
         const suite = suites[nom] ?? { etape: 'raisonnement' };
         cartes.push({
           ...base,
-          id: `${root}\0${nom}`,
+          id: carteId(root, nom),
           etape: suite.etape,
           raisonnement: await reasoningOf(root, nom),
           documents: await documentsOf(root, suite.documents),
@@ -264,11 +276,15 @@ export function createEtapesService(deps: EtapesDependencies) {
     return { raisonnement: next };
   };
 
-  const skillLine = async (root: string, provider: string, type: TypeDocument | undefined, nomType: string) => {
+  const skillLine = (root: string, type: TypeDocument | undefined, nomType: string) => {
     const skill = type?.skill ?? `redaction-${slug(nomType)}`;
     const modele = type?.modele ? ` Modèle ou document exemple : ${type.modele}.` : '';
-    if ((await deps.skills(root, provider)).includes(skill)) return `Utilise le skill \`${skill}\`.${modele}`;
-    return `Aucun skill n’existe pour ce type de document.${modele} À la fin de la conversation, demande à un sous-agent de créer le skill \`${skill}\` dans .claude/skills/${skill}/SKILL.md, à partir du document produit${type?.modele ? ' et du modèle' : ''}, pour les prochains documents de ce type.`;
+    const found = deps.bibliotheque.skills().find((entry) => entry.name === skill);
+    if (found) {
+      deps.bibliotheque.activer(root, found.id);
+      return `Utilise le skill \`${skill}\`.${modele}`;
+    }
+    return `Aucun skill n’existe pour ce type de document.${modele} À la fin de la conversation, demande à un sous-agent de créer le skill \`${skill}\` dans .claude/skills/${skill}/SKILL.md (frontmatter name: ${skill}), à partir du document produit${type?.modele ? ' et du modèle' : ''}. PieceMaker l’ajoute ensuite à la Bibliothèque, commune à toutes les IA.`;
   };
 
   const consignes = (instructions: string) => instructions ? `\n\nConsignes de l’avocat : ${instructions}` : '';
@@ -292,7 +308,7 @@ export function createEtapesService(deps: EtapesDependencies) {
         const document = ((await read(root)).raisonnements?.[nom]?.documents ?? [])[Number(body.document)];
         if (!document) throw new TypeError('Document introuvable : ajoutez-le à la carte.');
         const type = (await typesOf(root)).find((entry) => entry.nom === document.type);
-        return { titre: `Rédaction — ${document.nom}`, prompt: `Rédige « ${document.nom} » (${document.type}) à partir du raisonnement .piecemaker/raisonnements/${nom}.yaml. Enregistre-le sous ${document.chemin}.\n${await skillLine(root, provider, type, document.type)}\nÀ la fin, inscris la prochaine action (par exemple : envoyer le projet à l’autre partie) dans matter.nextStep du suivi .piecemaker/${nom}-suivi.json, avec ses échéances, puis lance pm suivi_dossiers verifier --suivi ${nom}-suivi.json.${consignes(instructions)}` };
+        return { titre: `Rédaction — ${document.nom}`, prompt: `Rédige « ${document.nom} » (${document.type}) à partir du raisonnement .piecemaker/raisonnements/${nom}.yaml. Enregistre-le sous ${document.chemin}.\n${skillLine(root, type, document.type)}\nÀ la fin, inscris la prochaine action (par exemple : envoyer le projet à l’autre partie) dans matter.nextStep du suivi .piecemaker/${nom}-suivi.json, avec ses échéances, puis lance pm suivi_dossiers verifier --suivi ${nom}-suivi.json.${consignes(instructions)}` };
       }
       case 'reprise': {
         const nom = await assertReasoning(root, body.raisonnement);
@@ -310,7 +326,7 @@ export function createEtapesService(deps: EtapesDependencies) {
     const { root, nom } = project(body.projectPath);
     const { titre, prompt: content } = await prompt(root, body);
     const raisonnementNom = typeof body.raisonnement === 'string' && body.type !== 'raisonnement' ? body.raisonnement : null;
-    const created = deps.taches.add({ projectPath: root, dossier: nom, raisonnement: raisonnementNom, type: String(body.type), titre, provider: text(body.provider, 'provider'), model: text(body.model, 'model'), prompt: content, auto: body.auto !== false, userId });
+    const created = deps.taches.add({ projectPath: root, dossier: nom, raisonnement: raisonnementNom, type: String(body.type), titre, provider: text(body.provider, 'provider'), model: text(body.model, 'model'), prompt: `${content}${QUESTION_CONSIGNE}`, auto: body.auto !== false, userId });
     etats.delete(root);
     return created;
   };
@@ -345,6 +361,9 @@ export function createEtapesRouter(service: ReturnType<typeof createEtapesServic
   router.post('/taches', express.json(), handle((body, request) => service.tache(body, userId(request))));
   router.post('/taches/:id/lancer', handle((_body, request) => taches.launch(String(request.params.id))));
   router.post('/taches/:id/auto', express.json(), handle((body, request) => taches.setAuto(String(request.params.id), body.auto === true)));
+  router.post('/taches/:id/repondre', express.json(), handle((body, request) => taches.reply(String(request.params.id), text(body.texte, 'texte'))));
+  router.post('/taches/:id/decision', express.json(), handle((body, request) => taches.decide(String(request.params.id), text(body.requestId, 'requestId'), { allow: body.allow === true, ...(body.updatedInput !== undefined ? { updatedInput: body.updatedInput } : {}), ...(typeof body.message === 'string' ? { message: body.message } : {}) })));
+  router.post('/taches/:id/terminer', handle((_body, request) => taches.finish(String(request.params.id))));
   router.delete('/taches/:id', handle((_body, request) => { taches.remove(String(request.params.id)); return { ok: true }; }));
   return router;
 }

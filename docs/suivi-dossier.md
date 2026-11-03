@@ -41,13 +41,14 @@ Les sources passent par les mêmes connecteurs que le raisonnement (Légifrance,
 Service `server/modules/piecemaker-reasoning/etapes.ts`, routes `/api/piecemaker/etapes`. État par dossier dans `.piecemaker/etapes.json` ; types de documents dans `<data root>/types-documents.json`, modèles dans `<data root>/modeles-documents/` ; file de tâches centrale dans `<data root>/todo.json` (`taches.ts`).
 
 - Vue Tableau (`src/tableau.ts`), une carte par raisonnement, colonnes vides masquées :
-  - Préparation dossier : dossiers en échec à `pm dossier verifier` ou au mapping non validé. Boutons Mapping (pastille « À valider ») et Index. Menu « Non juridique » ; case « Afficher les exclus ».
+  - Préparation dossier : dossiers sans raisonnement, en échec à `pm dossier verifier` ou au mapping non validé. Un scan postérieur à la validation (`scanned.updatedAt` de `.piecemaker/anonymization-state.json`) l'annule, côté serveur comme dans `pm`. Boutons Mapping (pastille « À valider ») et Index. Menu « Non juridique » ; case « Afficher les exclus ».
   - Raisonnements : « N erreurs · M manques » dépliable, « Lever manques et erreurs », « Valider le raisonnement ». Un dossier prêt sans raisonnement donne une carte « À démarrer ».
-  - Rédaction : documents choisis parmi les types (skills `redaction-*` et types ajoutés avec modèle), « Lancer rédaction », « Ouvrir » quand le document est en cours, « Valider ».
+  - Rédaction : documents choisis parmi les types (skills `redaction-*` de la Bibliothèque et types ajoutés avec modèle). Le skill est activé dans le dossier pour toutes les IA ; s'il manque, l'IA le crée et la Bibliothèque est rescannée en fin de tâche. « Lancer rédaction », « Ouvrir » quand le document est en cours, « Valider ».
   - Finalisation et En attente de tiers : prochaine action (« À faire » / « Effectué »), modifiable. « Intégrer une pièce » copie la pièce dans `Pièces/`, crée une nouvelle version du raisonnement (l'ancienne et ses documents restent) et relance l'IA.
   - Clos. Le menu « ⋯ » déplace une carte vers toute étape, après confirmation.
-- Fenêtre de lancement commune (`src/lancer.ts`) : IA, modèle, consignes, case « automatique » cochée par défaut.
+- Fenêtre de lancement commune (`src/lancer.ts`) : IA, modèle, consignes, case « automatique » cochée par défaut. Le modèle préféré est retrouvé par famille (`matchModel`, `mistral-medium-latest` ↔ `mistral-medium-3.5`).
 - Vue Tâches (`src/taches.ts`) : Automatiques (une à la fois), Manuelles, Terminées. « Lancer immédiatement » passe la file.
+- Questions des tâches : le prompt demande à l'IA de finir par une ligne « Question : … » quand l'avocat doit décider. La tâche passe alors au statut `question`, en colonne Questions : « Répondre » relance un tour dans la même session, « Terminer » la clôt. Pendant un tour, les demandes en attente de la session (AskUserQuestion, ExitPlanMode, autorisation d'outil) s'affichent sur la carte et se règlent depuis la vue (routes `repondre`, `decision`, `terminer`).
 - « Ouvrir le raisonnement » pose `window.__piecemakerRaisonnementShow` et ouvre le volet Raisonnement, qui affiche ce raisonnement. Un autre dossier s'ouvre via sa dernière conversation.
 
 ## Page du tableau

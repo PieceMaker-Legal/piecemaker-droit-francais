@@ -4,7 +4,9 @@ import path from 'node:path';
 
 export const TACHES_FILE = 'todo.json';
 
-export type TacheStatut = 'attente' | 'en-cours' | 'terminee' | 'echec';
+export type TacheStatut = 'attente' | 'en-cours' | 'question' | 'terminee' | 'echec';
+export type Demande = { requestId: string; toolName: string; input: unknown };
+export type Decision = { allow: boolean; updatedInput?: unknown; message?: string };
 
 export type Tache = {
   id: string;
@@ -24,14 +26,20 @@ export type Tache = {
   lanceLe: string | null;
   finLe: string | null;
   erreur: string | null;
+  question?: string | null;
 };
 
 export type TacheInput = Pick<Tache, 'projectPath' | 'dossier' | 'raisonnement' | 'type' | 'titre' | 'provider' | 'model' | 'prompt' | 'auto' | 'userId'>;
 
 export type TacheLauncher = {
   open(tache: Tache): string;
-  run(tache: Tache, sessionId: string): Promise<{ started: boolean; error: string | null }>;
+  run(tache: Tache, sessionId: string, content: string): Promise<{ started: boolean; error: string | null }>;
+  lastAnswer(sessionId: string): Promise<string>;
+  pending(sessionId: string): Demande[];
+  resolve(requestId: string, decision: Decision): void;
 };
+
+const QUESTION = /^[\s*_>#-]*question\s*:/im;
 
 const KEPT_DONE = 30;
 const TICK_MS = 3000;
@@ -65,17 +73,32 @@ export function createTachesService(home: string, launcher: TacheLauncher) {
     return tache;
   };
 
+  const turn = (tache: Tache, sessionId: string, content: string) => {
+    update(tache.id, { statut: 'en-cours', sessionId, question: null, lanceLe: tache.lanceLe ?? new Date().toISOString() });
+    const failed = (error: unknown) => update(tache.id, { statut: 'echec', erreur: error instanceof Error ? error.message : String(error), finLe: new Date().toISOString() });
+    void launcher.run(tache, sessionId, content).then(async (result) => {
+      if (!result.started || result.error) return update(tache.id, { statut: 'echec', erreur: result.error, finLe: new Date().toISOString() });
+      const answer = await launcher.lastAnswer(sessionId).catch(() => '');
+      if (QUESTION.test(answer)) update(tache.id, { statut: 'question', question: answer });
+      else update(tache.id, { statut: 'terminee', erreur: null, finLe: new Date().toISOString() });
+    }, failed).catch(failed);
+    return find(tache.id);
+  };
+
   const launch = (id: string) => {
     const tache = find(id);
     if (tache.statut !== 'attente') throw new TypeError('Tâche déjà lancée.');
-    const sessionId = launcher.open(tache);
-    update(id, { statut: 'en-cours', sessionId, lanceLe: new Date().toISOString() });
-    void launcher.run(tache, sessionId).then(
-      (result) => update(id, { statut: result.started && !result.error ? 'terminee' : 'echec', erreur: result.error, finLe: new Date().toISOString() }),
-      (error: unknown) => update(id, { statut: 'echec', erreur: error instanceof Error ? error.message : String(error), finLe: new Date().toISOString() }),
-    );
-    return find(id);
+    return turn(tache, launcher.open(tache), tache.prompt);
   };
+
+  const reply = (id: string, texte: string) => {
+    const tache = find(id);
+    if (tache.statut !== 'question' || !tache.sessionId) throw new TypeError('Aucune question en attente.');
+    if (!texte.trim()) throw new TypeError('Réponse requise.');
+    return turn(tache, tache.sessionId, texte.trim());
+  };
+
+  const withDemandes = (tache: Tache) => tache.statut === 'en-cours' && tache.sessionId ? { ...tache, demandes: launcher.pending(tache.sessionId) } : tache;
 
   const tick = () => {
     if (taches.some((tache) => tache.statut === 'en-cours')) return;
@@ -86,7 +109,7 @@ export function createTachesService(home: string, launcher: TacheLauncher) {
   timer.unref?.();
 
   return {
-    list: () => taches,
+    list: () => taches.map(withDemandes),
     add(input: TacheInput) {
       const tache: Tache = { ...input, id: randomUUID(), statut: 'attente', sessionId: null, creeLe: new Date().toISOString(), lanceLe: null, finLe: null, erreur: null };
       taches = [...taches, tache];
@@ -94,6 +117,18 @@ export function createTachesService(home: string, launcher: TacheLauncher) {
       return tache;
     },
     launch,
+    reply,
+    decide(id: string, requestId: string, decision: Decision) {
+      const tache = find(id);
+      if (!tache.sessionId || !launcher.pending(tache.sessionId).some((demande) => demande.requestId === requestId)) throw new TypeError('Demande introuvable ou déjà traitée.');
+      launcher.resolve(requestId, decision);
+      return withDemandes(find(id));
+    },
+    finish(id: string) {
+      if (find(id).statut !== 'question') throw new TypeError('Aucune question en attente.');
+      update(id, { statut: 'terminee', finLe: new Date().toISOString() });
+      return find(id);
+    },
     remove(id: string) {
       if (find(id).statut === 'en-cours') throw new TypeError('Tâche en cours : arrêtez la session d’abord.');
       taches = taches.filter((tache) => tache.id !== id);
@@ -104,7 +139,7 @@ export function createTachesService(home: string, launcher: TacheLauncher) {
       update(id, { auto });
       return find(id);
     },
-    active: (projectPath: string, raisonnement: string | null) => taches.find((tache) => tache.projectPath === projectPath && tache.raisonnement === raisonnement && (tache.statut === 'attente' || tache.statut === 'en-cours')) ?? null,
+    active: (projectPath: string, raisonnement: string | null) => taches.find((tache) => tache.projectPath === projectPath && tache.raisonnement === raisonnement && (tache.statut === 'attente' || tache.statut === 'en-cours' || tache.statut === 'question')) ?? null,
     stop: () => clearInterval(timer),
   };
 }

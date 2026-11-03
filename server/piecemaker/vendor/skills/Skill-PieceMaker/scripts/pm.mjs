@@ -238,7 +238,10 @@ async function defaultDeps(cwd) {
       return { anonymized: Boolean(found?.anonymized), lifted: protection.isProtectionBypassed(found?.caseRoot ?? dir) };
     },
     mappingValidated: (dir) => {
-      try { return Boolean(JSON.parse(fs.readFileSync(path.join(dir, '.piecemaker', 'etapes.json'), 'utf8')).mappingValide); } catch { return false; }
+      const read = (file) => { try { return JSON.parse(fs.readFileSync(path.join(dir, '.piecemaker', file), 'utf8')); } catch { return {}; } };
+      const validated = read('etapes.json').mappingValide;
+      const scanned = Object.values(read('anonymization-state.json').files ?? {}).map((entry) => entry?.scanned?.updatedAt ?? '').sort().at(-1);
+      return Boolean(validated) && !(scanned && new Date(scanned) > new Date(validated));
     },
     tabularIndex: volets.tabularIndex,
     refuseIndex: volets.refuseIndex,

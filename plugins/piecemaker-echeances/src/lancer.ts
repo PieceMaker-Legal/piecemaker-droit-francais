@@ -3,7 +3,7 @@ import { loadModels } from '../../piecemaker-tabular-review/src/client/host.js';
 import type { ModelOption } from '../../piecemaker-tabular-review/src/client/host.js';
 import { PROVIDERS } from '../../piecemaker-tabular-review/src/client/launch.js';
 import { selectMenu } from '../../piecemaker-tabular-review/src/client/select-menu.js';
-import { DEFAULT_PROVIDER } from '../../piecemaker-tabular-review/src/shared.js';
+import { DEFAULT_PROVIDER, matchModel } from '../../piecemaker-tabular-review/src/shared.js';
 import type { Provider } from '../../piecemaker-tabular-review/src/shared.js';
 
 export type Lancement = { provider: Provider; model: string; instructions: string; auto: boolean; dialog: HTMLElement };
@@ -38,8 +38,7 @@ export async function lancer(root: HTMLElement, options: Options): Promise<Lance
     const loaded = await loadModels(requested).catch(() => ({ options: [] as ModelOption[], cheapest: '' }));
     if (requested !== provider) return;
     models = loaded;
-    const preferred = options.modele?.[provider];
-    model = preferred && loaded.options.some((option) => option.value === preferred) ? preferred : loaded.cheapest;
+    model = matchModel(loaded.options, options.modele?.[provider], loaded.cheapest);
     paintMenus();
   };
 
