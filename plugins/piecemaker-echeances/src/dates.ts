@@ -9,7 +9,7 @@ const hash = async (value: string) => Array.from(new Uint8Array(await crypto.sub
 
 export function createDates(root: HTMLElement, ouvrirFiche: (matter: string) => void, refresh: () => Promise<void>) {
   const element = document.createElement('div');
-  element.className = 'pme-dossiers';
+  element.className = 'pme-dates';
   let dossiers: SuiviDossier[] = [];
   let lignes: DateSuivi[] = [];
   const matterOf = async (dossier: SuiviDossier) => `dossier-${await hash(dossier.fichier === 'suivi.json' ? dossier.projectPath : `${dossier.projectPath}\0${dossier.fichier}`)}`;
@@ -27,7 +27,7 @@ export function createDates(root: HTMLElement, ouvrirFiche: (matter: string) => 
       for (const date of dates) if (date?.label && date.id) lignes.push({ nom: date.id, id: date.id, label: date.label, date: date.date ?? null, fait: Boolean(date.done), echeance: true, index, sources: ['Date saisie à la main : à justifier.'] });
     });
     lignes.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
-    element.innerHTML = lignes.length ? `<ul class="pme-fiche-dates">${lignes.map((ligne, index) => `<li data-date="${index}"><span class="pme-fiche-date">${escape(ligne.date || 'Date à établir')}</span><span>${escape(ligne.label)}<span class="pme-muted pme-small">${escape(dossiers[ligne.index].nom)}</span>${ligne.sources.map((source) => `<span class="pme-muted pme-small">${escape(source)}</span>`).join('')}</span>${ligne.echeance && ligne.date ? `<button type="button" class="pme-pill ${ligne.fait ? 'pme-pill--done' : 'pme-pill--todo'}" data-done>${ligne.fait ? 'Effectué' : 'À faire'}</button>` : ''}<button type="button" class="pme-link" data-dossier>Ouvrir le dossier</button><button type="button" class="pme-link" data-edit-date>Modifier</button></li>`).join('')}</ul>` : '<p class="pme-muted">Aucune date dans les suivis.</p>';
+    element.innerHTML = lignes.length ? `<ul class="pme-dates-list">${lignes.map((ligne, index) => `<li data-date="${index}"><span class="pme-fiche-date">${escape(ligne.date || 'Date à établir')}</span><span class="pme-date-detail"><strong>${escape(ligne.label)}</strong><span class="pme-muted pme-small">${escape(dossiers[ligne.index].nom)}</span>${ligne.sources.map((source) => `<span class="pme-muted pme-small">${escape(source)}</span>`).join('')}</span><span class="pme-actions pme-date-actions">${ligne.echeance && ligne.date ? `<button type="button" class="pme-pill ${ligne.fait ? 'pme-pill--done' : 'pme-pill--todo'}" data-done>${ligne.fait ? 'Effectué' : 'À faire'}</button>` : ''}<button type="button" class="pme-link" data-dossier>Ouvrir le dossier</button><button type="button" class="pme-link" data-edit-date>Modifier</button></span></li>`).join('')}</ul>` : '<p class="pme-muted">Aucune date dans les suivis.</p>';
   };
   const enregistrer = async (ligne: DateSuivi, patch: Partial<DateBoard>) => {
     const path = `projects/cabinet/matters/${await matterOf(dossiers[ligne.index])}`;
