@@ -12,6 +12,7 @@ import type { createTachesService, Tache } from './taches.js';
 
 export const ETAPES_FILE = path.join('.piecemaker', 'etapes.json');
 export const TYPES_FILE = 'types-documents.json';
+export const ETATS_FILE = 'etats-dossiers.json';
 export const SCAN_STATE_FILE = path.join('.piecemaker', 'anonymization-state.json');
 export const ETAPES = ['preparation', 'raisonnement', 'redaction', 'finalisation', 'attente', 'clos'] as const;
 
@@ -41,7 +42,7 @@ const PIECES_AFFICHEES = 10;
 const QUESTION_CONSIGNE = '\n\nTu travailles sans l’avocat devant l’écran. S’il doit décider ou valider quelque chose, arrête-toi et termine ta réponse par une ligne « Question : … ». Il te répondra dans l’onglet Tâches.';
 const VERSION = /-v(\d+)$/;
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
-const EN_COURS: Etat = { pret: false, lignes: [{ nom: 'lecture', texte: 'Vérification en cours…', ok: false }] };
+const EN_COURS: Etat = { pret: false, lignes: [] };
 const abrege = (ligne: Ligne) => {
   const [titre, ...pieces] = ligne.texte.split('\n');
   return pieces.length > PIECES_AFFICHEES ? { ...ligne, texte: [titre, ...pieces.slice(0, PIECES_AFFICHEES), `  … et ${pieces.length - PIECES_AFFICHEES} autre(s)`].join('\n') } : ligne;
@@ -82,6 +83,17 @@ export function createEtapesService(deps: EtapesDependencies) {
   const delais = new Map<string, NodeJS.Timeout>();
   let calculs: Promise<void> | null = null;
   const typesFile = path.join(deps.home, TYPES_FILE);
+  const etatsFile = path.join(deps.home, ETATS_FILE);
+  let enregistres: Promise<Record<string, Etat>> | null = null;
+  let ecriture: Promise<void> = Promise.resolve();
+  const enregistre = () => (enregistres ??= readJson<Record<string, Etat>>(etatsFile, {}));
+  const enregistrer = (root: string, value: Etat) => {
+    ecriture = ecriture.then(async () => {
+      const tous = await enregistre();
+      tous[root] = value;
+      await writeJson(etatsFile, tous);
+    }).catch(() => undefined);
+  };
 
   const lastScan = async (root: string) => {
     const state = await readJson<{ files?: Record<string, { scanned?: { updatedAt?: string } }> }>(path.join(root, SCAN_STATE_FILE), {});
@@ -111,8 +123,14 @@ export function createEtapesService(deps: EtapesDependencies) {
   const calculer = async (root: string) => {
     perimes.delete(root);
     if ((await read(root)).nonJuridique) { etats.delete(root); return EN_COURS; }
-    const value = await deps.etat(root).then((etat) => ({ ...etat, lignes: etat.lignes.map(abrege) }), (error: unknown) => ({ pret: false, lignes: [{ nom: 'lecture', texte: error instanceof Error ? error.message : 'Vérification impossible.', ok: false }] }));
+    const value = await deps.etat(root).then((etat) => ({ ...etat, lignes: etat.lignes.map(abrege) }), () => null);
+    if (!value) {
+      const precedent = etats.get(root)?.value ?? (await enregistre())[root] ?? EN_COURS;
+      etats.set(root, { at: 0, value: precedent });
+      return precedent;
+    }
     etats.set(root, { at: Date.now(), value });
+    enregistrer(root, value);
     return value;
   };
   const recalculer = () => {
@@ -126,10 +144,10 @@ export function createEtapesService(deps: EtapesDependencies) {
     timer.unref();
     delais.set(root, timer);
   };
-  const etat = (root: string, fresh = false) => {
+  const etat = async (root: string, fresh = false) => {
     const cached = etats.get(root);
     if (fresh && (!cached || perimes.has(root))) return calculer(root);
-    if (!cached) { perimer(root); return EN_COURS; }
+    if (!cached) { perimer(root); return (await enregistre())[root] ?? EN_COURS; }
     if (Date.now() - cached.at > ETAT_MAX_AGE_MS) perimer(root);
     return cached.value;
   };

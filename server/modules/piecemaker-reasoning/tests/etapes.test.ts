@@ -26,7 +26,7 @@ test('le tableau répond sans attendre le calcul de l’état du dossier', async
   let calculs = 0;
   const { etapes } = service(async () => { calculs += 1; await attendre(50); return { pret: false, lignes: [{ nom: 'index', texte: 'absent', ok: false }] }; });
   const premier = await etapes.tableau();
-  assert.equal((premier.cartes[0] as { preparation: { texte: string }[] }).preparation[0].texte, 'Vérification en cours…');
+  assert.deepEqual((premier.cartes[0] as { preparation: unknown[] }).preparation, []);
   await attendre(100);
   const second = await etapes.tableau();
   assert.equal((second.cartes[0] as { preparation: { texte: string }[] }).preparation[0].texte, 'absent');
@@ -62,4 +62,30 @@ test('un dossier exclu n’est plus vérifié', async () => {
   etapes.invalider(root);
   await attendre(2_100);
   assert.equal(calculs, 0);
+});
+
+test('une vérification en échec garde le dernier état valide, même après un redémarrage', async () => {
+  let echec = false;
+  const etat: EtapesDependencies['etat'] = async () => {
+    if (echec) throw new Error('Tabular Review indisponible');
+    return { pret: false, lignes: [{ nom: 'index', texte: 'absent', ok: false }] };
+  };
+  const { root, etapes } = service(etat);
+  await etapes.tableau(true);
+  echec = true;
+  etapes.invalider(root);
+  await attendre(2_100);
+  const apres = await etapes.tableau(true);
+  assert.equal((apres.cartes[0] as { preparation: { texte: string }[] }).preparation[0].texte, 'absent');
+  const redemarre = createEtapesService({
+    home: root,
+    reasoning: { read: async () => ({}) },
+    suivi: { projects: () => [{ project_id: '1', project_path: root, custom_project_name: 'Dossier Dupont' }], files: async () => [] },
+    taches: { active: () => null },
+    etat,
+    sessionOf: () => null,
+    bibliotheque: { skills: () => [], activer: () => undefined },
+  } as unknown as EtapesDependencies);
+  const { cartes } = await redemarre.tableau(true);
+  assert.equal((cartes[0] as { preparation: { texte: string }[] }).preparation[0].texte, 'absent');
 });

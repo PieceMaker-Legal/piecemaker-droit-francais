@@ -42,10 +42,8 @@ const bulle = (fait: boolean) => `<span class="pme-bulle${fait ? ' is-done' : ''
 const preparationHtml = (carte: Carte) => {
   const lignes = carte.preparation ?? [];
   const ligne = (nom: string) => lignes.find((entree) => entree.nom === nom);
-  const lecture = ligne('lecture');
-  if (lecture) return `<p class="pme-muted">${escape(lecture.texte)}</p>`;
   const ok = (nom: string) => ligne(nom)?.ok ?? false;
-  const etape = (libelle: string, fait: boolean, onglet: string, lancement: string, valider = '') => `<li>${valider || bulle(fait)}${fait ? `<button type="button" class="pme-link pme-prep-title" data-volet="${onglet}">${libelle}</button>` : `<strong>${libelle}</strong>`}${fait || valider ? '' : `<span class="pme-spacer"></span><button type="button" class="pme-link" data-launch="${lancement}">Lancer</button>`}</li>`;
+  const etape = (libelle: string, fait: boolean, onglet: string, lancement: string, valider = '') => `<li>${valider || bulle(fait)}${fait ? `<button type="button" class="pme-link pme-prep-title" data-volet="${onglet}">${libelle}</button>` : `<strong>${libelle}</strong>`}${fait || valider || !lignes.length ? '' : `<span class="pme-spacer"></span><button type="button" class="pme-link" data-launch="${lancement}">Lancer</button>`}</li>`;
   const pieces = ok('conversion') && ok('anonymisation');
   const valider = ok('anonymisation') && !ok('mapping') ? '<button type="button" class="ptr-button ptr-button-primary pme-prep-button" data-mapping>Valider le mapping</button>' : '';
   return `<ul class="pme-prep">${etape('Anonymisation', pieces && ok('mapping'), 'plugin:piecemaker-dossier', 'conversion', valider)}${etape('Index', ok('index'), 'plugin:piecemaker-tabular-review', 'index')}</ul>`;
