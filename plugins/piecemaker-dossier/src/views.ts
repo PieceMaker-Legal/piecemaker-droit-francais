@@ -144,10 +144,11 @@ export function scanPercentLabel(job: ScanJob): string {
   return `${Math.round(Math.max(0, Math.min(100, job.percent || 0)))} %`;
 }
 
-export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null, scanned = false): string {
+export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null, scanned = false, mappingValidated = true): string {
   const scanning = Boolean(job && job.state === 'running');
   const ready = scanned || mappingCount > 0;
-  return `<button type="button" class="pmd-status-icon" data-action="mapping" aria-label="Ouvrir le mapping">${shieldCheckIcon}</button>
+  const pending = ready && !scanning && !mappingValidated;
+  return `<button type="button" class="pmd-status-icon" data-action="mapping" aria-label="${pending ? 'Mapping à valider' : 'Ouvrir le mapping'}" ${pending ? 'title="Mapping à valider"' : ''}>${shieldCheckIcon}${pending ? '<span class="pmd-mapping-pill">À valider</span>' : ''}</button>
         ${scanning && job ? scanProgress(job) : `<button type="button" class="pmd-status-label" data-action="mapping">${mappingCount} anonymisé(s)</button>`}
         <button class="pmd-scan-button piecemaker-button piecemaker-button--black piecemaker-button--xs" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : ready ? 'Relancer' : 'Lancer'}</span></button>`;
 }
@@ -259,14 +260,14 @@ function companySearchStateMarkup(state: BodaccScanState, companyId: string): st
   return `<p class="pmd-bodacc-summary">${state.companySearchResults.length} résultat${state.companySearchResults.length > 1 ? 's' : ''} Registre Public.</p><div class="pmd-company-search-results">${state.companySearchResults.map((result, index) => companySearchResultMarkup(result, companyId, index)).join('')}</div>`;
 }
 
-export function mappingView(data: ViewData): string {
+export function mappingView(data: ViewData, mappingValidated: string | null = null): string {
   const entries = data.graph.nodes.filter((node) => node.kind !== 'document');
   const categories = entityKinds.map((kind) => ({ kind, label: labels[kind], entries: entries.filter((node) => node.kind === kind) })).filter((category) => category.entries.length);
   return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2 class="piecemaker-display">Mapping de pseudonymisation</h2><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div><div class="pmd-mapping-body"><p>Le code est ce que voit l’IA. Le nom principal et les autres écritures sont rétablis à l’affichage. Toutes les variantes détectées par GLiNER apparaissent ici.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button type="button" class="piecemaker-button piecemaker-button--glass piecemaker-button--xs" data-action="add-node">＋ Ajouter</button></header><div class="pmd-mapping-legend"><span>Code</span><span>Nom principal</span><span>Autres écritures</span></div><div>${category.entries.map((node) => {
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
     const variants = nodeVariants(node, data.graph.mappings);
     return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Nom principal" value="${escapeHtml(node.label)}" required>${aliasEditorMarkup(variants)}<div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
-  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-save-mapping>✓ Enregistrer le mapping</button></div></div>`;
+  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-save-mapping>Enregistrer</button>${mappingValidated ? `<span class="pmd-mapping-validated">✓ Validé le ${escapeHtml(new Date(mappingValidated).toLocaleDateString('fr-FR'))}</span>` : '<button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-validate-mapping>✓ Valider le mapping</button>'}</div></div>`;
 }
 
 export const PIECE_NATURES = ['assignation', 'conclusions', 'requête', 'courrier', 'courriel', 'mise en demeure', 'contrat', 'facture', 'devis', 'attestation', 'jugement', 'arrêt', 'ordonnance', 'procès-verbal', 'constat', 'expertise', 'statuts de société', 'extrait Kbis', 'relevé bancaire', 'acte notarié', 'bordereau de pièces'];

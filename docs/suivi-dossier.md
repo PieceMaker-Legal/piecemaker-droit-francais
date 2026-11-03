@@ -33,8 +33,22 @@ Les sources passent par les mêmes connecteurs que le raisonnement (Légifrance,
 - `suivi-board.ts` : présente chaque fichier de suivi au tableau unique « Dossiers » comme `projects/cabinet/matters/dossier-<sha16>`. Un dossier sans fichier de suivi n'y figure pas. La page ouvre directement ce tableau et affiche ses actions en boutons. Le serveur et la page refusent tout ajout manuel de dossier. Les autres documents (tableau, étapes, activité, demandes, documents déposés) vont dans la table `pm_board_docs(path, data_json)`.
 - Écriture depuis le tableau : `matter` va dans le fichier. Une date vérifiée va dans `evenements` ou `echeances`. Une case cochée va dans `pm_suivi_faits`. Une suppression de carte renomme le fichier en `<fichier>.supprime`.
 - Routes `/api/piecemaker/suivi` (`GET /`, `GET /tous`, `POST /verify`), `/api/piecemaker/suivi/board` (`GET ?rev=`, `POST { op, path, data, base }`) et route locale `/suivi` pour `pm suivi_dossiers verifier|lire|ecrire` et l'outil MCP `suivi`.
-- Onglet Suivi des dossiers (`plugins/piecemaker-echeances`) : un bandeau (erreurs, manques, dates à établir, Revérifier, Ouvrir le dossier) et le Matter board dans une iframe Blob. `src/board-shim.ts` remplace `window.claude.use('db')` par ces routes, avec relecture toutes les 2 s tant que la page est visible.
+- Onglet Suivi des dossiers (`plugins/piecemaker-echeances`), trois vues : Tableau, Tâches, Échéances (voir « Tableau et tâches »). Échéances : un bandeau (erreurs, manques, dates à établir, Revérifier, Ouvrir le dossier) et le Matter board dans une iframe Blob. `src/board-shim.ts` remplace `window.claude.use('db')` par ces routes, avec relecture toutes les 2 s tant que la page est visible.
 - État des dossiers : le bouton « Rédiger un état des dossiers » du bandeau insère la consigne dans le chat, sans l'envoyer (événement `piecemaker:composer-insert`, écouté par `piecemaker-context-suggestions`). La skill piecemaker en donne la méthode. La page n'affiche plus de ligne d'attente pour une demande ouverte.
+
+## Tableau et tâches
+
+Service `server/modules/piecemaker-reasoning/etapes.ts`, routes `/api/piecemaker/etapes`. État par dossier dans `.piecemaker/etapes.json` ; types de documents dans `<data root>/types-documents.json`, modèles dans `<data root>/modeles-documents/` ; file de tâches centrale dans `<data root>/todo.json` (`taches.ts`).
+
+- Vue Tableau (`src/tableau.ts`), une carte par raisonnement, colonnes vides masquées :
+  - Préparation dossier : dossiers en échec à `pm dossier verifier` ou au mapping non validé. Boutons Mapping (pastille « À valider ») et Index. Menu « Non juridique » ; case « Afficher les exclus ».
+  - Raisonnements : « N erreurs · M manques » dépliable, « Lever manques et erreurs », « Valider le raisonnement ». Un dossier prêt sans raisonnement donne une carte « À démarrer ».
+  - Rédaction : documents choisis parmi les types (skills `redaction-*` et types ajoutés avec modèle), « Lancer rédaction », « Ouvrir » quand le document est en cours, « Valider ».
+  - Finalisation et En attente de tiers : prochaine action (« À faire » / « Effectué »), modifiable. « Intégrer une pièce » copie la pièce dans `Pièces/`, crée une nouvelle version du raisonnement (l'ancienne et ses documents restent) et relance l'IA.
+  - Clos. Le menu « ⋯ » déplace une carte vers toute étape, après confirmation.
+- Fenêtre de lancement commune (`src/lancer.ts`) : IA, modèle, consignes, case « automatique » cochée par défaut.
+- Vue Tâches (`src/taches.ts`) : Automatiques (une à la fois), Manuelles, Terminées. « Lancer immédiatement » passe la file.
+- « Ouvrir le raisonnement » pose `window.__piecemakerRaisonnementShow` et ouvre le volet Raisonnement, qui affiche ce raisonnement. Un autre dossier s'ouvre via sa dernière conversation.
 
 ## Page du tableau
 

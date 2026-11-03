@@ -12,7 +12,7 @@ pm dossier index colonnes --questions JSON
 
 ## verifier
 
-Trois lignes : anonymisation, index, conversion. Chaque défaut donne la commande qui le corrige. Lancez-la en début de travail sur un dossier.
+Quatre lignes : anonymisation, mapping, index, conversion. Chaque défaut donne la commande qui le corrige. Le mapping se valide par l’avocat seul, dans l’onglet Dossier : ne le validez pas à sa place. Lancez la commande en début de travail sur un dossier.
 
 ## conversion
 

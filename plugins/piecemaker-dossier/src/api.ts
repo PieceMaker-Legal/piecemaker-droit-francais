@@ -83,6 +83,13 @@ async function request<T>(base: string, path: string, init: RequestInit = {}): P
   return data;
 }
 
+const ETAPES_BASE = '/api/piecemaker/etapes';
+
+export const etapesApi = {
+  read: (projectPath: string) => request<{ mappingValide?: string }>(ETAPES_BASE, `/dossier?projectPath=${encodeURIComponent(projectPath)}`),
+  validateMapping: (projectPath: string) => request<{ mappingValide?: string }>(ETAPES_BASE, '/dossier', { method: 'POST', body: JSON.stringify({ projectPath, mappingValide: true }) }),
+};
+
 export type ClassificationFolder = { name: string; explanation: string };
 
 const CLASSIFICATION_BASE = '/api/plugins/piecemaker-tabular-review/rpc';

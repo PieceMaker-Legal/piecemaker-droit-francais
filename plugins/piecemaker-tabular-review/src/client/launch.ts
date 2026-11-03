@@ -10,7 +10,7 @@ import type { SortState } from './ordering.js';
 import { openQuestionsDrawer } from './questions-drawer.js';
 import { selectMenu } from './select-menu.js';
 
-const PROVIDERS: { value: Provider; label: string }[] = [
+export const PROVIDERS: { value: Provider; label: string }[] = [
   { value: 'claude', label: 'Claude' },
   { value: 'codex', label: 'Codex' },
   { value: 'mistral', label: 'Mistral' },

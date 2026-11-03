@@ -1,6 +1,6 @@
 import { openIndexAnalysis } from './index-analysis.js';
 import { editClassification } from './classification.js';
-import { knowledgeApi } from './api.js';
+import { etapesApi, knowledgeApi } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { removedAliasOperations } from './exclusions.js';
@@ -53,6 +53,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
+  let mappingValidated: string | null = null;
   const bodaccStates = new Map<string, BodaccScanState>();
   let draggedNodeId = '';
   const compactWorkspace = window.matchMedia('(max-width: 1024px)');
@@ -189,6 +190,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       render();
     }
     try {
+      void etapesApi.read(context.project.path).then((etapes) => {
+        if (sequence !== loadSequence) return;
+        mappingValidated = etapes.mappingValide ?? null;
+        paintScanStatus();
+      }, () => undefined);
       const graph = await knowledgeApi.graph(projectId);
       if (sequence !== loadSequence) return;
       data = { graph };
@@ -230,7 +236,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const openMapping = () => {
     if (!data) return;
     const mappingData = data;
-    const layer = modal(root, mappingView(mappingData));
+    const layer = modal(root, mappingView(mappingData, mappingValidated));
     bindAliasEditors(layer);
     const operationsFromRow = (row: HTMLFormElement): KnowledgeUpdateOperation[] => {
       const node = mappingData.graph.nodes.find((candidate) => candidate.id === row.dataset.nodeId);
@@ -264,6 +270,18 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       try {
         await save(operations);
         layer.remove();
+      } catch (error) {
+        showError(error);
+      }
+    });
+    layer.querySelector<HTMLElement>('[data-validate-mapping]')?.addEventListener('click', async () => {
+      if (!context.project || !await askConfirm(root, 'Valider le mapping de pseudonymisation ?', 'Valider')) return;
+      try {
+        const operations = Array.from(layer.querySelectorAll<HTMLFormElement>('[data-mapping-row]')).flatMap(operationsFromRow);
+        if (operations.length) await save(operations);
+        mappingValidated = (await etapesApi.validateMapping(context.project.path)).mappingValide ?? null;
+        layer.remove();
+        paintScanStatus();
       } catch (error) {
         showError(error);
       }
@@ -330,7 +348,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const scanning = Boolean(scanJob && scanJob.state === 'running');
     status.dataset.ready = String(scanned || mappingCount > 0);
     status.dataset.scanning = String(scanning);
-    status.innerHTML = scanStatusMarkup(mappingCount, scanJob, scanned);
+    status.innerHTML = scanStatusMarkup(mappingCount, scanJob, scanned, Boolean(mappingValidated));
   };
 
   const paintContent = () => {
@@ -644,8 +662,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       bindOnce();
     } else {
       paintTabs();
-      paintScanStatus();
     }
+    paintScanStatus();
     paintContent();
   };
 

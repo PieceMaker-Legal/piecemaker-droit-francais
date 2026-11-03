@@ -1,6 +1,45 @@
 import type { SuiviDossier, SuiviSnapshot } from '../../../shared/piecemaker-suivi.js';
 
 const BOARD_PAGE = '/api/plugins/piecemaker-echeances/assets/board/index.html';
+const ETAPES = '/api/piecemaker/etapes';
+
+export type Etape = 'preparation' | 'raisonnement' | 'redaction' | 'finalisation' | 'attente' | 'clos';
+export type Ligne = { nom: string; texte: string; ok: boolean };
+export type DocumentRedige = { type: string; nom: string; chemin: string; statut?: 'en cours' | 'non commencé' };
+export type Action = { texte: string; fait: boolean; echeance?: string; suivi?: string };
+export type TacheStatut = 'attente' | 'en-cours' | 'terminee' | 'echec';
+export type Carte = {
+  id: string;
+  projectPath: string;
+  dossier: string;
+  session: string | null;
+  etape: Etape;
+  exclu?: boolean;
+  preparation?: Ligne[];
+  mappingValide?: string | null;
+  aDemarrer?: boolean;
+  raisonnement?: { nom: string; titre: string; verifie: boolean; erreurs: number; manques: number; alertes: { kind: 'erreur' | 'manque'; texte: string }[] };
+  documents?: DocumentRedige[];
+  action?: Action | null;
+  historique?: { nom: string; documents: DocumentRedige[] }[];
+  tache?: { id: string; statut: TacheStatut; titre: string; sessionId: string | null } | null;
+};
+export type Tache = {
+  id: string;
+  projectPath: string;
+  dossier: string;
+  raisonnement: string | null;
+  titre: string;
+  provider: string;
+  model: string;
+  auto: boolean;
+  statut: TacheStatut;
+  sessionId: string | null;
+  creeLe: string;
+  erreur: string | null;
+};
+export type TypeDocument = { nom: string; skill: string; modele?: string };
+export type NouvelleTache = { type: string; projectPath: string; raisonnement?: string; document?: number; piece?: string; provider: string; model: string; instructions: string; auto: boolean };
 
 export function loadAll(): Promise<SuiviDossier[]> {
   return request<SuiviDossier[]>('/api/piecemaker/suivi/tous');
@@ -16,9 +55,33 @@ export async function loadBoardPage(): Promise<string> {
   return response.text();
 }
 
-async function send(url: string, body?: object) {
+const query = (values: Record<string, string>) => new URLSearchParams(values).toString();
+
+export const etapes = {
+  tableau: (frais = false) => request<{ cartes: Carte[] }>(`${ETAPES}${frais ? '?frais=1' : ''}`),
+  dossier: (body: { projectPath: string; nonJuridique?: boolean; preparationForcee?: boolean }) => request(`${ETAPES}/dossier`, body),
+  raisonnement: (body: { projectPath: string; raisonnement: string; etape?: Etape; documents?: DocumentRedige[]; action?: Partial<Action> }) => request(`${ETAPES}/raisonnement`, body),
+  reprise: (projectPath: string, raisonnement: string) => request<{ raisonnement: string }>(`${ETAPES}/reprise`, { projectPath, raisonnement }),
+  piece: (projectPath: string, file: File) => request<{ chemin: string }>(`${ETAPES}/piece?${query({ projectPath, nom: file.name })}`, file),
+  modele: (file: File) => request<{ chemin: string }>(`${ETAPES}/modele?${query({ nom: file.name })}`, file),
+  types: (projectPath: string) => request<TypeDocument[]>(`${ETAPES}/types?${query({ projectPath })}`),
+  ajouterType: (body: { nom: string; modele?: string }) => request<TypeDocument[]>(`${ETAPES}/types`, body),
+  taches: () => request<Tache[]>(`${ETAPES}/taches`),
+  ajouterTache: (body: NouvelleTache) => request<Tache>(`${ETAPES}/taches`, body),
+  lancer: (id: string) => request<Tache>(`${ETAPES}/taches/${encodeURIComponent(id)}/lancer`, {}),
+  auto: (id: string, auto: boolean) => request<Tache>(`${ETAPES}/taches/${encodeURIComponent(id)}/auto`, { auto }),
+  retirer: (id: string) => request(`${ETAPES}/taches/${encodeURIComponent(id)}`, undefined, 'DELETE'),
+  volet: (project: string, tab: string, document?: string) => request('/api/piecemaker/local/open-panel', { project, tab, ...(document ? { document } : {}) }),
+};
+
+async function send(url: string, body?: object | Blob, method?: string) {
   const token = localStorage.getItem('auth-token');
-  const response = await fetch(url, { ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}), headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) } });
+  const raw = body instanceof Blob;
+  const response = await fetch(url, {
+    ...(body || method ? { method: method ?? 'POST' } : {}),
+    ...(body ? { body: raw ? body : JSON.stringify(body) } : {}),
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': raw ? 'application/octet-stream' : 'application/json' } : {}) },
+  });
   const refreshed = response.headers.get('X-Refreshed-Token');
   if (refreshed) {
     localStorage.setItem('auth-token', refreshed);
@@ -27,8 +90,8 @@ async function send(url: string, body?: object) {
   return response;
 }
 
-async function request<T>(url: string, body?: object): Promise<T> {
-  const response = await send(url, body);
+async function request<T>(url: string, body?: object | Blob, method?: string): Promise<T> {
+  const response = await send(url, body, method);
   const data = await response.json() as T & { error?: string };
   if (!response.ok) throw new Error(data.error || `Erreur ${response.status}`);
   return data;

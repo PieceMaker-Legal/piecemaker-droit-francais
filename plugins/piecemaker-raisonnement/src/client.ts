@@ -911,15 +911,26 @@ export function mount(container: HTMLElement, api: Host) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = next.project?.path !== context.project?.path;
     context = next;
-    if (changed) { sequence++; snapshot = null; reasoning = undefined; serialized = ''; scope = 0; selected = ''; selectedCell = ''; shape = ''; void load(); }
+    if (changed) { sequence++; snapshot = null; reasoning = undefined; serialized = ''; scope = 0; selected = ''; selectedCell = ''; shape = ''; pending(); void load(); }
     paint();
   });
+  const pending = () => {
+    const holder = window as Window & { __piecemakerRaisonnementShow?: { project: string; nom: string } };
+    const request = holder.__piecemakerRaisonnementShow;
+    if (!request || request.project !== context.project?.path) return false;
+    delete holder.__piecemakerRaisonnementShow;
+    reasoning = request.nom;
+    return true;
+  };
+  const showRequested = () => { if (pending()) { snapshot = null; serialized = ''; scope = 0; selected = ''; selectedCell = ''; shape = ''; paint(); void load(); } };
+  window.addEventListener('piecemaker:raisonnement-show', showRequested);
   const poll = () => { if (!stopped) { if (!snapshot?.demo && !busy) void load(); timer = window.setTimeout(poll, 2500); } };
+  pending();
   paint();
   void load();
   timer = window.setTimeout(poll, 2500);
   window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: 'plugin:piecemaker-raisonnement' } }));
-  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(pacing); resize.disconnect(); unsubscribe(); container.replaceChildren(); });
+  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(pacing); resize.disconnect(); unsubscribe(); window.removeEventListener('piecemaker:raisonnement-show', showRequested); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {

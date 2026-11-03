@@ -1,11 +1,13 @@
 import { createRequire } from 'module';
 import express from 'express';
 import path from 'path';
+import { pathToFileURL } from 'url';
 
 import type { Router } from 'express';
 
-import { getConnection, projectsDb, sessionsDb } from '@/modules/database/index.js';
-import { createBoardRouter, createBoardService, createReasoningLocalRouter, createReasoningRouter, createReasoningService, createSuiviLocalRouter, createSuiviRouter, createSuiviService } from '@/modules/piecemaker-reasoning/index.js';
+import { getConnection, projectsDb, sessionsDb, userPreferencesDb } from '@/modules/database/index.js';
+import { runDetachedChatTurn } from '@/modules/websocket/index.js';
+import { createBoardRouter, createBoardService, createEtapesRouter, createEtapesService, createReasoningLocalRouter, createReasoningRouter, createReasoningService, createSuiviLocalRouter, createSuiviRouter, createSuiviService, createTachesService } from '@/modules/piecemaker-reasoning/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
@@ -99,6 +101,27 @@ const reasoningConnectors = { ...createReasoningConnectors(), review: citationRe
 const reasoning = createReasoningService(getConnection, reasoningConnectors);
 const suivi = createSuiviService(getConnection, reasoningConnectors);
 const board = createBoardService(getConnection, suivi);
+const pmScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')).href;
+const taches = createTachesService(piecemakerHome(), {
+  open: (tache) => sessionsService.createAppSession(tache.provider as never, tache.projectPath, tache.titre).sessionId,
+  run: (tache, sessionId) => {
+    const preferences = tache.userId === null ? {} : userPreferencesDb.getPreferences(tache.userId);
+    const toolsSettings = (preferences[`${tache.provider}Permissions`] ?? { allowedTools: [], disallowedTools: [], skipPermissions: false }) as { skipPermissions?: boolean };
+    return runDetachedChatTurn({ sessionId, userId: tache.userId, content: tache.prompt, options: { model: tache.model, permissionMode: 'acceptEdits', toolsSettings, skipPermissions: toolsSettings.skipPermissions || false } }, { runtime: providerRuntimeService });
+  },
+});
+const lastSession = (projectPath: string) => {
+  try { return (getConnection().prepare('SELECT session_id FROM sessions WHERE project_path=? AND (isArchived IS NULL OR isArchived = 0) ORDER BY updated_at DESC LIMIT 1').get(projectPath) as { session_id: string } | undefined)?.session_id ?? null; } catch { return null; }
+};
+const etapes = createEtapesService({
+  home: piecemakerHome(),
+  reasoning,
+  suivi,
+  taches,
+  etat: async (projectPath) => (await import(pmScript) as { etatDossier(project: string): Promise<{ lignes: Array<{ nom: string; texte: string; ok: boolean }>; pret: boolean }> }).etatDossier(projectPath),
+  sessionOf: lastSession,
+  skills: async (projectPath, provider) => (await providerSkillsService.listProviderSkills(provider, { workspacePath: projectPath })).map((skill) => skill.name),
+});
 installCodexPlanRuntime(providerRuntimeService);
 installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
@@ -155,6 +178,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
     const reference = info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id };
     return citations.save({ sessionId: `raisonnement:${cwd}`, title: info.title, source: info.text, citation: { ref: 1, ...reference, verified: true, quotes }, ranges: locateSourcePassages(info.text, quotes) });
   }));
+  router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));
   router.use('/library', library.router);

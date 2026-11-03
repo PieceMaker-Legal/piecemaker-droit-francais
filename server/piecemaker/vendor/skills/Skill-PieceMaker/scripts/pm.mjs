@@ -237,6 +237,9 @@ async function defaultDeps(cwd) {
       const found = caseFolders.locateProjectCase(dir);
       return { anonymized: Boolean(found?.anonymized), lifted: protection.isProtectionBypassed(found?.caseRoot ?? dir) };
     },
+    mappingValidated: (dir) => {
+      try { return Boolean(JSON.parse(fs.readFileSync(path.join(dir, '.piecemaker', 'etapes.json'), 'utf8')).mappingValide); } catch { return false; }
+    },
     tabularIndex: volets.tabularIndex,
     refuseIndex: volets.refuseIndex,
     describePanels: (dir) => panels.describeOpenPanels(dir, panelsPath),
@@ -446,14 +449,18 @@ async function conversion(api, project, pieces, force) {
   return result.stdout;
 }
 
-async function verifyDossier(api, project) {
+async function dossierState(api, project) {
   const state = api.caseState(project);
   const anonymisation = state.lifted ? 'levée par l’avocat (pièces lisibles par l’IA)'
     : state.anonymized ? 'faite' : 'à faire : pm dossier conversion';
+  const mappingOk = state.lifted || Boolean(api.mappingValidated?.(project));
+  const mapping = state.lifted ? 'sans objet (anonymisation levée)' : mappingOk ? 'validé par l’avocat' : 'à valider par l’avocat (onglet Dossier, Mapping)';
   const { analyses = [], projets = [] } = await api.tabularFn({ action: 'lister', project });
   let index = projets.some((entry) => entry.index) ? 'préparé, pas lancé : pm dossier index lancer' : 'absent : pm dossier index lancer';
+  let indexOk = false;
   if (analyses.some((entry) => entry.index)) {
     const { absentes = 0 } = await api.tabularFn({ action: 'index', project });
+    indexOk = !absentes;
     index = absentes ? `${absentes} pièce(s) absente(s) de l’index : pm dossier index lancer` : 'à jour';
   }
   const { pieces = [] } = await api.piecesFn({ folder: project });
@@ -462,7 +469,25 @@ async function verifyDossier(api, project) {
   const conversionLine = job ? progress(job)
     : pending.length ? `${pending.length} pièce(s) non convertie(s) : pm dossier conversion\n${pending.map((piece) => `  - ${piece.path} (${PIECE_STATES[piece.status] ?? piece.status})`).join('\n')}`
       : `${pieces.length} pièce(s), toutes converties`;
-  return [`Anonymisation : ${anonymisation}`, `Index : ${index}`, `Conversion : ${conversionLine}`].join('\n');
+  const lignes = [
+    { nom: 'anonymisation', texte: anonymisation, ok: state.anonymized || state.lifted },
+    { nom: 'mapping', texte: mapping, ok: mappingOk },
+    { nom: 'index', texte: index, ok: indexOk },
+    { nom: 'conversion', texte: conversionLine, ok: !job && !pending.length },
+  ];
+  return { lignes, pret: lignes.every((ligne) => ligne.ok) };
+}
+
+const DOSSIER_LABELS = { anonymisation: 'Anonymisation', mapping: 'Mapping', index: 'Index', conversion: 'Conversion' };
+
+async function verifyDossier(api, project) {
+  const { lignes } = await dossierState(api, project);
+  return lignes.map((ligne) => `${DOSSIER_LABELS[ligne.nom]} : ${ligne.texte}`).join('\n');
+}
+
+export async function etatDossier(project, { deps } = {}) {
+  const resolved = path.resolve(project);
+  return dossierState(deps || await defaultDeps(resolved), resolved);
 }
 
 async function dossier(api, positional, flags, resolved) {

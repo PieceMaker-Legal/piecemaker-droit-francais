@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as volets from '../../../mcp/piecemaker/volets.mjs';
 import { CASSATION_MATIERES, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_SOURCES } from '../../../mcp/piecemaker/volets.mjs';
-import { findVendor, parseArgv, run, sessionDossier } from './pm.mjs';
+import { etatDossier, findVendor, parseArgv, run, sessionDossier } from './pm.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -204,7 +204,7 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
-test('dossier verifier résume anonymisation, index et conversion', async () => {
+test('dossier verifier résume anonymisation, mapping, index et conversion', async () => {
   const deps = {
     caseState: () => ({ anonymized: true, lifted: false }),
     tabularFn: async ({ action }) => (action === 'lister' ? { analyses: [{ fichier: 'index.json', index: true }] } : { fichier: 'index.json', absentes: 2 }),
@@ -213,6 +213,7 @@ test('dossier verifier résume anonymisation, index et conversion', async () => 
   };
   assert.equal(await run(['dossier', 'verifier', '--dossier', '/dossiers/Dupont'], { deps }), [
     'Anonymisation : faite',
+    'Mapping : à valider par l’avocat (onglet Dossier, Mapping)',
     'Index : 2 pièce(s) absente(s) de l’index : pm dossier index lancer',
     'Conversion : 1 pièce(s) non convertie(s) : pm dossier conversion',
     '  - Pièces/lettre.pdf (échec)',
@@ -225,9 +226,24 @@ test('dossier verifier résume anonymisation, index et conversion', async () => 
   };
   assert.equal(await run(['dossier', 'verifier', '--dossier', '/dossiers/Dupont'], { deps: fresh }), [
     'Anonymisation : levée par l’avocat (pièces lisibles par l’IA)',
+    'Mapping : sans objet (anonymisation levée)',
     'Index : absent : pm dossier index lancer',
     'Conversion : Conversion en cours : phase convert, 40 %, 2/5 pièce(s).',
   ].join('\n'));
+});
+
+test('etatDossier est prêt quand mapping validé, index à jour et pièces converties', async () => {
+  const deps = {
+    caseState: () => ({ anonymized: true, lifted: false }),
+    mappingValidated: () => true,
+    tabularFn: async ({ action }) => (action === 'lister' ? { analyses: [{ fichier: 'index.json', index: true }] } : { fichier: 'index.json', absentes: 0 }),
+    piecesFn: async () => ({ pieces: [{ path: 'Pièces/bail.pdf', status: 'ready' }] }),
+    conversionJob: async () => ({ job: null }),
+  };
+  assert.equal((await etatDossier('/dossiers/Dupont', { deps })).pret, true);
+  const etat = await etatDossier('/dossiers/Dupont', { deps: { ...deps, mappingValidated: () => false } });
+  assert.equal(etat.pret, false);
+  assert.deepEqual(etat.lignes.filter((ligne) => !ligne.ok).map((ligne) => ligne.nom), ['mapping']);
 });
 
 test('dossier conversion lance le CLI, ou renvoie l’avancée d’un travail en cours', async () => {
