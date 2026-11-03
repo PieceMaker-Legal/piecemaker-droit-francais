@@ -79,13 +79,15 @@ export function mount(container: HTMLElement, api: Host) {
     last = signature;
     band.innerHTML = dossiers.length ? bandHtml(dossiers, open) : '';
   };
-  const refresh = () => Promise.all([vue === 'tableau' || tableau.panneauOuvert() ? tableau.refresh() : null, vue === 'taches' ? taches.refresh() : vue === 'echeances' ? refreshEcheances() : null]);
+  const refreshVue = () => vue === 'taches' ? taches.refresh() : vue === 'echeances' ? refreshEcheances() : null;
+  const refresh = () => Promise.all([vue === 'tableau' || tableau.panneauOuvert() ? tableau.refresh() : null, refreshVue()]);
   const show = (next: Vue) => {
     vue = next;
     tabs.querySelectorAll<HTMLElement>('[data-vue]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.vue === vue)));
     tableau.element.hidden = vue !== 'tableau';
     taches.element.hidden = vue !== 'taches';
     echeances.hidden = vue !== 'echeances';
+    if (polling) void Promise.resolve(refreshVue()).catch(() => undefined);
     poll();
   };
   const applyTheme = (theme: Context['theme']) => {
