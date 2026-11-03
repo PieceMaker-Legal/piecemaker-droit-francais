@@ -101,7 +101,8 @@ export const STYLES = `
 .pme-board--two .pme-col{flex-basis:280px;max-width:none}
 .pme-col h3{display:flex;align-items:center;gap:8px;min-height:var(--h-control-sm);margin:0;padding:0 4px;font:var(--text-footnote);font-weight:580;color:var(--text-primary);text-transform:none;letter-spacing:0}
 .pme-col h3 .pme-muted{font-weight:400;font-variant-numeric:tabular-nums}
-.pme-col>p,.pme-col>.ptr-check{margin:0;padding:0 4px}
+.pme-col>p{margin:0;padding:0 4px}
+.pme-col h3 .ptr-check{margin-left:auto;cursor:pointer}
 .pme-card{display:flex;flex-direction:column;gap:8px;padding:12px;border:0;border-radius:var(--radius);background:var(--surface-1);box-shadow:var(--ring);transition:box-shadow 120ms cubic-bezier(.165,.84,.44,1)}
 .pme-card:hover{box-shadow:0 0 0 1px var(--border-stronger)}
 .pme-card.is-excluded{opacity:.6}

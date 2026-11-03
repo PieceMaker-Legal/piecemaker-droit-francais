@@ -116,9 +116,9 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     const exclus = cartes.some((carte) => carte.exclu);
     const visibles = cartes.filter((carte) => afficherExclus === Boolean(carte.exclu) || carte.etape !== 'preparation');
     const colonnes = COLONNES.map(([etape, libelle]) => [etape, libelle, visibles.filter((carte) => carte.etape === etape)] as const).filter(([etape, , liste]) => liste.length || (etape === 'preparation' && exclus));
-    const caseExclus = `<label class="ptr-check"><input type="checkbox" data-excluded${afficherExclus ? ' checked' : ''}>Afficher les exclus</label>`;
+    const caseExclus = `<label class="ptr-check" title="Afficher les exclus"><input type="checkbox" data-excluded${afficherExclus ? ' checked' : ''} aria-label="Afficher les exclus"></label>`;
     board.innerHTML = colonnes.length
-      ? colonnes.map(([etape, libelle, liste]) => `<section class="pme-col"><h3>${escape(libelle)} <span class="pme-muted">${liste.length}</span></h3>${etape === 'preparation' && exclus ? caseExclus : ''}${liste.map((carte) => carteHtml(carte, cartes.indexOf(carte), ouvertes)).join('')}</section>`).join('')
+      ? colonnes.map(([etape, libelle, liste]) => `<section class="pme-col"><h3>${escape(libelle)} <span class="pme-muted">${liste.length}</span>${etape === 'preparation' && exclus ? caseExclus : ''}</h3>${liste.map((carte) => carteHtml(carte, cartes.indexOf(carte), ouvertes)).join('')}</section>`).join('')
       : '<p class="pme-muted pme-empty">Aucun dossier.</p>';
   };
   const refresh = async (frais = false) => {
