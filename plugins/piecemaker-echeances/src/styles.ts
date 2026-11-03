@@ -118,11 +118,10 @@ export const STYLES = `
 .pme-ok{color:var(--text-success)}
 .pme-erreur{color:var(--text-danger)}
 .pme-manque{color:var(--text-warning)}
-.pme-checks{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px;font:var(--text-footnote)}
-.pme-checks .is-ok{color:var(--text-muted)}
-.pme-checks .is-ko{color:var(--text-primary)}
-.pme-badged{position:relative}
-.pme-badge{position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);height:18px;padding:0 6px;border-radius:var(--radius-sm);background:var(--bg-danger);color:var(--text-danger);font:var(--text-caption);font-weight:500;line-height:18px;white-space:nowrap;pointer-events:none}
+.pme-prep{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+.pme-prep li{display:flex;align-items:center;gap:8px;min-height:24px}
+.pme-prep strong,.pme-prep .pme-prep-title{font:var(--text-body);font-weight:580;line-height:20px}
+.pme-prep-button{height:24px;padding:0 8px;font:var(--text-caption);font-weight:500}
 .pme-alertes{font:var(--text-footnote)}
 .pme-alertes summary{cursor:pointer;font-weight:500}
 .pme-alertes ul{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:4px}

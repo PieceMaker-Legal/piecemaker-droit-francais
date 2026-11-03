@@ -19,6 +19,13 @@ export async function ouvrirVolet(carte: Carte, current: string | null, tab: str
   await etapes.volet(carte.projectPath, tab);
 }
 
+export async function ouvrirMapping(carte: Carte, current: string | null) {
+  allerAuDossier(carte, current);
+  (window as Window & { __piecemakerMappingShow?: string }).__piecemakerMappingShow = carte.projectPath;
+  window.dispatchEvent(new CustomEvent('piecemaker:mapping-show'));
+  await etapes.volet(carte.projectPath, 'plugin:piecemaker-dossier');
+}
+
 export async function ouvrirRaisonnement(carte: Carte, current: string | null, chemin?: string) {
   allerAuDossier(carte, current);
   if (carte.raisonnement) {

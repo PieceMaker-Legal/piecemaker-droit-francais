@@ -3,7 +3,7 @@ import { INDEX_MODEL } from '../../piecemaker-tabular-review/src/shared.js';
 import { etapes, loadBoard } from './api.js';
 import type { Carte, DocumentRedige, Etape, Fiche } from './api.js';
 import { lancer } from './lancer.js';
-import { ouvrirRaisonnement, ouvrirSession, ouvrirVolet } from './navigation.js';
+import { ouvrirMapping, ouvrirRaisonnement, ouvrirSession, ouvrirVolet } from './navigation.js';
 
 const COLONNES: [Etape, string][] = [
   ['preparation', 'Préparation dossier'],
@@ -14,7 +14,6 @@ const COLONNES: [Etape, string][] = [
   ['clos', 'Clos'],
 ];
 const LIBELLE = Object.fromEntries(COLONNES) as Record<Etape, string>;
-const LIGNES: Record<string, string> = { anonymisation: 'Anonymisation', mapping: 'Mapping', index: 'Index', conversion: 'Conversion', lecture: 'Vérification' };
 const OBJECTIFS = 'Objectif(s) du raisonnement. Exemple : déterminer si le licenciement de Jean Dupont est fondé ; chiffrer les indemnités dues.';
 const NOUVEAU_TYPE = '__nouveau';
 const CACHE = 'pme-tableau';
@@ -39,15 +38,17 @@ const menuHtml = (carte: Carte) => {
   return `<details class="ptr-menu pme-move"><summary class="ptr-icon-button" aria-label="Actions de la carte" title="Déplacer">⋯</summary><div class="ptr-menu-list">${items.join('')}</div></details>`;
 };
 
+const bulle = (fait: boolean) => `<span class="pme-bulle${fait ? ' is-done' : ''}" aria-label="${fait ? 'Fait' : 'À faire'}">${fait ? '✓' : ''}</span>`;
 const preparationHtml = (carte: Carte) => {
   const lignes = carte.preparation ?? [];
-  const ok = (nom: string) => lignes.find((ligne) => ligne.nom === nom)?.ok ?? false;
-  const aValider = ok('anonymisation') && !ok('mapping');
-  return `<ul class="pme-checks">${lignes.map((ligne) => `<li class="${ligne.ok ? 'is-ok' : 'is-ko'}" title="${escape(ligne.texte)}">${ligne.ok ? '✓' : '•'} ${escape(LIGNES[ligne.nom] ?? ligne.nom)}${ligne.ok ? '' : ` <span class="pme-muted">${escape(ligne.texte.split('\n')[0])}</span>`}</li>`).join('')}</ul>
-    <div class="pme-actions">
-      <button type="button" class="ptr-button pme-badged" data-mapping>${aValider ? '<span class="pme-badge">À valider</span>' : ''}Mapping</button>
-      <button type="button" class="ptr-button" data-launch="index">Index</button>
-    </div>`;
+  const ligne = (nom: string) => lignes.find((entree) => entree.nom === nom);
+  const lecture = ligne('lecture');
+  if (lecture) return `<p class="pme-muted">${escape(lecture.texte)}</p>`;
+  const ok = (nom: string) => ligne(nom)?.ok ?? false;
+  const pieces = ok('conversion') && ok('anonymisation');
+  const etape = (libelle: string, fait: boolean, onglet: string, lancement: string, valider = '') => `<li>${valider || bulle(fait)}${fait ? `<button type="button" class="pme-link pme-prep-title" data-volet="${onglet}">${libelle}</button>` : `<strong>${libelle}</strong>`}${fait || valider ? '' : `<span class="pme-spacer"></span><button type="button" class="pme-link" data-launch="${lancement}">Lancer</button>`}</li>`;
+  const valider = ok('anonymisation') && !ok('mapping') ? '<button type="button" class="ptr-button ptr-button-primary pme-prep-button" data-mapping>Valider le mapping</button>' : '';
+  return `<ul class="pme-prep">${etape('Anonymisation', pieces && ok('mapping'), 'plugin:piecemaker-dossier', 'conversion', valider)}${etape('Index', ok('index'), 'plugin:piecemaker-tabular-review', 'index')}</ul>`;
 };
 
 const alertesHtml = (carte: Carte, ouvertes: Set<string>) => {
@@ -97,7 +98,6 @@ const corpsHtml = (carte: Carte, ouvertes: Set<string>) => {
   }
 };
 
-const bulle = (fait: boolean) => `<span class="pme-bulle${fait ? ' is-done' : ''}" aria-label="${fait ? 'Fait' : 'À faire'}">${fait ? '✓' : ''}</span>`;
 const etapeHtml = (libelle: string, fait: boolean, contenu: string) => `<li class="pme-step">${bulle(fait)}<div class="pme-step-body"><strong>${escape(libelle)}</strong>${contenu}</div></li>`;
 const ouvrirVersion = (nom: string) => `<button type="button" class="pme-link" data-open-reasoning data-version="${escape(nom)}">Ouvrir le raisonnement</button>`;
 const documentsVersion = (nom: string, documents: DocumentRedige[]) => documents.length
@@ -318,11 +318,9 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     else if (data.move) void deplacer(carte, data.move as Etape);
     else if ('exclude' in data) void confirmDialog(root, 'Retirer ce dossier du tableau ?', `${sujet(carte)}<p>Le dossier est marqué non juridique. Cochez « Afficher les exclus » pour le retrouver.</p>`, 'Retirer').then((ok) => { if (ok) void run(() => etapes.dossier({ projectPath: carte.projectPath, nonJuridique: true })); });
     else if ('include' in data) void run(() => etapes.dossier({ projectPath: carte.projectPath, nonJuridique: false }));
-    else if ('mapping' in data) {
-      const anonymise = carte.preparation?.find((ligne) => ligne.nom === 'anonymisation')?.ok;
-      if (anonymise) void ouvrirVolet(carte, current, 'plugin:piecemaker-dossier').catch(failed);
-      else void ajouterTache(carte, 'conversion');
-    } else if (data.launch) void ajouterTache(carte, data.launch, data.doc === undefined ? {} : { document: Number(data.doc) });
+    else if ('mapping' in data) void ouvrirMapping(carte, current).catch(failed);
+    else if (data.volet) void ouvrirVolet(carte, current, data.volet).catch(failed);
+    else if (data.launch) void ajouterTache(carte, data.launch, data.doc === undefined ? {} : { document: Number(data.doc) });
     else if (data.validate) {
       const etape = data.validate as Etape;
       const titre = etape === 'redaction' ? 'Valider le raisonnement ?' : 'Valider la rédaction ?';

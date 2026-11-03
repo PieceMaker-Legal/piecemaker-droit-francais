@@ -28,6 +28,8 @@ const PANEL_FOCUS_EVENT = 'piecemaker:panel-focus';
 const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
 const VIEW_EVENT = 'piecemaker:dossier-view';
 const VIEW_KEY = '__piecemakerDossierView';
+const MAPPING_EVENT = 'piecemaker:mapping-show';
+const MAPPING_KEY = '__piecemakerMappingShow';
 const SCAN_POLL_INTERVAL_MS = 1000;
 const VERSION_POLL_INTERVAL_MS = 5000;
 const viewCache = new Map<string, ViewData>();
@@ -37,6 +39,13 @@ function takeRequestedView(): Tab | null {
   const view = pending[VIEW_KEY];
   delete pending[VIEW_KEY];
   return view === 'general' || view === 'chronology' ? view : null;
+}
+
+function takeRequestedMapping(): string | null {
+  const pending = window as Window & { [MAPPING_KEY]?: unknown };
+  const project = pending[MAPPING_KEY];
+  delete pending[MAPPING_KEY];
+  return typeof project === 'string' ? project : null;
 }
 
 export function mount(container: HTMLElement, api: PluginApi): void {
@@ -54,6 +63,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
   let mappingValidated: string | null = null;
+  let mappingRequested = takeRequestedMapping();
   const bodaccStates = new Map<string, BodaccScanState>();
   let draggedNodeId = '';
   const compactWorkspace = window.matchMedia('(max-width: 1024px)');
@@ -186,6 +196,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (cached) {
       data = cached;
       render();
+      openRequestedMapping();
     } else if (!data) {
       render();
     }
@@ -200,6 +211,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       data = { graph };
       viewCache.set(projectId, data);
       render();
+      openRequestedMapping();
     } catch (error) {
       if (sequence !== loadSequence) return;
       showError(error);
@@ -231,6 +243,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const node = data?.graph.nodes.find((candidate) => candidate.id === nodeId);
     if (!node) return false;
     return deleteEntity(root, node, nodeVariants(node, data?.graph.mappings || []), save);
+  };
+
+  const openRequestedMapping = () => {
+    if (!mappingRequested || !data || mappingRequested !== context.project?.path || root.querySelector('.pmd-modal')) return;
+    mappingRequested = null;
+    openMapping();
   };
 
   const openMapping = () => {
@@ -701,6 +719,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     render();
   };
   window.addEventListener(VIEW_EVENT, showRequestedView);
+  const showRequestedMapping = () => {
+    mappingRequested = takeRequestedMapping();
+    openRequestedMapping();
+  };
+  window.addEventListener(MAPPING_EVENT, showRequestedMapping);
 
   render();
   void load();
@@ -727,6 +750,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     compactWorkspace.removeEventListener('change', syncTiersWithWorkspaceWidth);
     window.clearInterval(versionTimer);
     window.removeEventListener(VIEW_EVENT, showRequestedView);
+    window.removeEventListener(MAPPING_EVENT, showRequestedMapping);
   };
 }
 
