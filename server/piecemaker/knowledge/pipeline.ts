@@ -24,13 +24,13 @@ type PipelineOptions = {
   pythonPath?: string;
 };
 
-type OriginalFile = { path: string; resource?: boolean };
+type OriginalFile = { path: string; resource?: boolean; protected?: boolean };
 
 type RenamedPiece = { previous: string; current: string; markdown: string | null };
 
 type ConversionFailure = { reason: string; failedAt: string };
 
-type CasePiece = { path: string; status: string; markdown: string | null; conversionFailure: ConversionFailure | null };
+type CasePiece = { path: string; status: string; protected: boolean; markdown: string | null; conversionFailure: ConversionFailure | null };
 
 type OriginalsPipeline = {
   listOriginals(caseRoot: string): Promise<Array<OriginalFile & { status: string; conversionFailure: ConversionFailure | null }>>;
@@ -313,6 +313,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         return {
           path: file.path,
           status: file.status,
+          protected: Boolean(file.protected),
           markdown: markdown.exists ? path.relative(projectPath, markdown.path).split(path.sep).join('/') : null,
           conversionFailure: file.conversionFailure,
         };

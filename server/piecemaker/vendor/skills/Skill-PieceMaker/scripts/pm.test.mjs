@@ -208,7 +208,7 @@ test('dossier verifier résume anonymisation, mapping, index et conversion', asy
   const deps = {
     caseState: () => ({ anonymized: true, lifted: false }),
     tabularFn: async ({ action }) => (action === 'lister' ? { analyses: [{ fichier: 'index.json', index: true }] } : { fichier: 'index.json', absentes: 2 }),
-    piecesFn: async () => ({ pieces: [{ path: 'Pièces/bail.pdf', status: 'ready' }, { path: 'Pièces/lettre.pdf', status: 'conversion-failed' }] }),
+    piecesFn: async () => ({ pieces: [{ path: 'Pièces/bail.pdf', status: 'ready', protected: true }, { path: 'Pièces/lettre.pdf', status: 'conversion-failed', protected: true }, { path: 'Notes/calcul.py', status: 'not-converted', protected: false }] }),
     conversionJob: async () => ({ job: null }),
   };
   assert.equal(await run(['dossier', 'verifier', '--dossier', '/dossiers/Dupont'], { deps }), [

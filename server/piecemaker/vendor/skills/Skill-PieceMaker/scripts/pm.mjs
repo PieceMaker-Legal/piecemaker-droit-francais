@@ -467,7 +467,7 @@ async function dossierState(api, project) {
     index = absentes ? `${absentes} pièce(s) absente(s) de l’index : pm dossier index lancer` : 'à jour';
   }
   const { pieces = [] } = await api.piecesFn({ folder: project });
-  const pending = pieces.filter((piece) => piece.status !== 'ready');
+  const pending = pieces.filter((piece) => piece.protected && piece.status !== 'ready');
   const job = await runningJob(api, project);
   const conversionLine = job ? progress(job)
     : pending.length ? `${pending.length} pièce(s) non convertie(s) : pm dossier conversion\n${pending.map((piece) => `  - ${piece.path} (${PIECE_STATES[piece.status] ?? piece.status})`).join('\n')}`
