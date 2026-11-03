@@ -12,14 +12,14 @@ const service = (etat: EtapesDependencies['etat']) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-etapes-'));
   const deps = {
     home: root,
-    reasoning: { read: async () => ({}) },
+    reasoning: { read: async () => ({ dismissed: [], issues: [] }) },
     suivi: { projects: () => [{ project_id: '1', project_path: root, custom_project_name: 'Dossier Dupont' }], files: async () => [] },
     taches: { active: () => null },
     etat,
     sessionOf: () => null,
     bibliotheque: { skills: () => [], activer: () => undefined },
   } as unknown as EtapesDependencies;
-  return { root, etapes: createEtapesService(deps) };
+  return { root, deps, etapes: createEtapesService(deps) };
 };
 
 test('le tableau répond sans attendre le calcul de l’état du dossier', async () => {
@@ -79,7 +79,7 @@ test('une vérification en échec garde le dernier état valide, même après un
   assert.equal((apres.cartes[0] as { preparation: { texte: string }[] }).preparation[0].texte, 'absent');
   const redemarre = createEtapesService({
     home: root,
-    reasoning: { read: async () => ({}) },
+    reasoning: { read: async () => ({ dismissed: [], issues: [] }) },
     suivi: { projects: () => [{ project_id: '1', project_path: root, custom_project_name: 'Dossier Dupont' }], files: async () => [] },
     taches: { active: () => null },
     etat,
@@ -88,4 +88,98 @@ test('une vérification en échec garde le dernier état valide, même après un
   } as unknown as EtapesDependencies);
   const { cartes } = await redemarre.tableau(true);
   assert.equal((cartes[0] as { preparation: { texte: string }[] }).preparation[0].texte, 'absent');
+});
+
+const ajouterRaisonnement = (root: string, nom = 'demande') => {
+  fs.mkdirSync(path.join(root, '.piecemaker', 'raisonnements'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.piecemaker', 'raisonnements', `${nom}.yaml`), 'qualification: consultation\n');
+};
+
+test('la prochaine action du suivi reste disponible en Attente', async () => {
+  const { root, deps, etapes } = service(async () => ({ pret: true, lignes: [] }));
+  ajouterRaisonnement(root);
+  deps.suivi.files = async () => ['suivi.json'];
+  deps.suivi.read = async () => ({ echeances: [], code: JSON.stringify({ matter: { nextStep: 'Attendre la réponse' } }) }) as never;
+  await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', etape: 'attente' });
+  assert.deepEqual((await etapes.tableau(true)).cartes[0].action, { texte: 'Attendre la réponse', fait: false });
+  await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', action: { fait: true } });
+  assert.equal((await etapes.tableau(true)).cartes[0].etape, 'attente');
+});
+
+test('chaque nouveau document évite fichiers existants et chemins réservés par toutes les versions', async () => {
+  const { root, etapes } = service(async () => ({ pret: true, lignes: [] }));
+  ajouterRaisonnement(root);
+  fs.mkdirSync(path.join(root, 'Projets'));
+  fs.writeFileSync(path.join(root, 'Projets', 'Projet.docx'), 'octets antérieurs');
+  const premier = await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', documents: [{ type: 'Courrier', nom: 'Projet' }, { type: 'Courrier', nom: 'Projet' }] });
+  const ancien = premier.documents![0].chemin;
+  assert.notEqual(ancien, 'Projets/Projet.docx');
+  assert.notEqual(premier.documents![1].chemin, ancien);
+  fs.writeFileSync(path.join(root, ancien), 'version finalisée');
+  const next = await etapes.reprise({ projectPath: root, raisonnement: 'demande' });
+  const nouveau = await etapes.raisonnement({ projectPath: root, raisonnement: next.raisonnement, documents: [{ type: 'Courrier', nom: 'Projet', chemin: ancien }] });
+  assert.notEqual(nouveau.documents![0].chemin, ancien);
+  fs.writeFileSync(path.join(root, nouveau.documents![0].chemin), 'nouvelle version');
+  assert.equal(fs.readFileSync(path.join(root, ancien), 'utf8'), 'version finalisée');
+  assert.equal(fs.readFileSync(path.join(root, 'Projets', 'Projet.docx'), 'utf8'), 'octets antérieurs');
+});
+
+test('deux reprises concurrentes gardent deux versions distinctes et leur historique', async () => {
+  const { root, deps, etapes } = service(async () => ({ pret: true, lignes: [] }));
+  ajouterRaisonnement(root);
+  const suivi = JSON.stringify({ matter: { nextStep: 'Attendre la réponse' } });
+  fs.writeFileSync(path.join(root, '.piecemaker', 'demande-suivi.json'), suivi);
+  deps.suivi.files = async () => fs.readdirSync(path.join(root, '.piecemaker')).filter((file) => file.endsWith('-suivi.json'));
+  const versions = await Promise.all([etapes.reprise({ projectPath: root, raisonnement: 'demande' }), etapes.reprise({ projectPath: root, raisonnement: 'demande' })]);
+  assert.deepEqual(versions.map((entry) => entry.raisonnement).sort(), ['demande-v2', 'demande-v3']);
+  for (const nom of ['demande', 'demande-v2', 'demande-v3']) assert.equal(fs.readFileSync(path.join(root, '.piecemaker', `${nom}-suivi.json`), 'utf8'), suivi);
+  const etat = await etapes.lire(root);
+  assert.equal(etat.raisonnements?.['demande-v3'].precedent, 'demande-v2');
+  assert.equal(fs.readFileSync(path.join(root, '.piecemaker', 'raisonnements', 'demande.yaml'), 'utf8'), 'qualification: consultation\n');
+});
+
+test('la préparation garde les outils et restaure l’étape choisie après vérification', async () => {
+  let pret = false;
+  const { root, etapes } = service(async () => ({ pret, lignes: [{ nom: 'index', texte: 'Index', ok: pret }] }));
+  ajouterRaisonnement(root);
+  await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', etape: 'attente' });
+  let carte = (await etapes.tableau(true)).cartes[0];
+  assert.equal((await etapes.lire(root)).raisonnements?.demande.etape, 'attente');
+  assert.equal(carte.etape, 'preparation');
+  assert.equal((carte.preparation as unknown[]).length, 1);
+  pret = true;
+  etapes.invalider(root);
+  await attendre(2100);
+  carte = (await etapes.tableau(true)).cartes[0];
+  assert.equal(carte.etape, 'attente');
+  await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', etape: 'preparation' });
+  assert.equal(((await etapes.tableau(true)).cartes[0].preparation as unknown[]).length, 1);
+});
+
+test('un dossier sans raisonnement peut être déplacé partout et exclu sans créer de YAML', async () => {
+  let pret = true;
+  const { root, etapes } = service(async () => ({ pret, lignes: [] }));
+  for (const etape of ['preparation', 'raisonnement', 'redaction', 'finalisation', 'attente', 'clos']) {
+    await etapes.dossier({ projectPath: root, etape });
+    assert.equal((await etapes.tableau(true)).cartes[0].etape, etape);
+  }
+  pret = false;
+  etapes.invalider(root);
+  await attendre(2100);
+  assert.equal((await etapes.tableau(true)).cartes[0].etape, 'preparation');
+  assert.equal((await etapes.lire(root)).etape, 'clos');
+  await etapes.dossier({ projectPath: root, nonJuridique: true });
+  assert.equal((await etapes.tableau(true)).cartes[0].exclu, true);
+  assert.equal(fs.existsSync(path.join(root, '.piecemaker', 'raisonnements')), false);
+});
+
+test('une reprise dont la persistance échoue retire ses nouvelles copies et permet de réessayer', async () => {
+  const { root, etapes } = service(async () => ({ pret: true, lignes: [] }));
+  ajouterRaisonnement(root);
+  const temporaire = path.join(root, '.piecemaker', 'etapes.json.tmp');
+  fs.mkdirSync(temporaire);
+  await assert.rejects(etapes.reprise({ projectPath: root, raisonnement: 'demande' }));
+  assert.equal(fs.existsSync(path.join(root, '.piecemaker', 'raisonnements', 'demande-v2.yaml')), false);
+  fs.rmdirSync(temporaire);
+  assert.deepEqual(await etapes.reprise({ projectPath: root, raisonnement: 'demande' }), { raisonnement: 'demande-v2' });
 });

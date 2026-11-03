@@ -1,4 +1,5 @@
-import { copyFile, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { copyFile, mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import express from 'express';
@@ -21,7 +22,7 @@ type Json = Record<string, unknown>;
 type Document = { type: string; nom: string; chemin: string };
 type Action = { texte: string; fait: boolean; echeance?: string; suivi?: string };
 type Suite = { etape: Etape; documents?: Document[]; action?: Action; precedent?: string; remplacePar?: string };
-type Etapes = { nonJuridique?: boolean; mappingValide?: string; preparationForcee?: boolean; raisonnements?: Record<string, Suite> };
+type Etapes = { etape?: Etape; nonJuridique?: boolean; mappingValide?: string; preparationForcee?: boolean; raisonnements?: Record<string, Suite> };
 type TypeDocument = { nom: string; skill: string; modele?: string };
 type Ligne = { nom: string; texte: string; ok: boolean };
 type Etat = { lignes: Ligne[]; pret: boolean };
@@ -104,16 +105,17 @@ export function createEtapesService(deps: EtapesDependencies) {
     if (etapes.mappingValide && new Date(await lastScan(root)) > new Date(etapes.mappingValide)) delete etapes.mappingValide;
     return etapes;
   };
-  const change = <T>(root: string, run: (etapes: Etapes) => T | Promise<T>) => {
-    const next = (locks.get(root) ?? Promise.resolve()).then(async () => {
-      const etapes = await read(root);
-      const result = await run(etapes);
-      await writeJson(path.join(root, ETAPES_FILE), etapes);
-      return result;
-    });
+  const serialiser = <T>(root: string, run: () => T | Promise<T>) => {
+    const next = (locks.get(root) ?? Promise.resolve()).then(run);
     locks.set(root, next.catch(() => undefined));
     return next;
   };
+  const change = <T>(root: string, run: (etapes: Etapes) => T | Promise<T>) => serialiser(root, async () => {
+    const etapes = await read(root);
+    const result = await run(etapes);
+    await writeJson(path.join(root, ETAPES_FILE), etapes);
+    return result;
+  });
   const project = (projectPath: unknown) => {
     const root = text(projectPath, 'projectPath');
     const found = deps.suivi.projects().find((entry) => path.resolve(entry.project_path) === path.resolve(root));
@@ -207,19 +209,23 @@ export function createEtapesService(deps: EtapesDependencies) {
       const matter = await matterOf(root);
       const suites = etapes.raisonnements ?? {};
       const names = (await listReasoningFiles(root).catch(() => [] as string[])).filter((nom) => !suites[nom]?.remplacePar);
-      const state = names.length ? null : await etat(path.resolve(root), fresh);
-      if (state && !state.pret && !etapes.preparationForcee) cartes.push({ ...base, matter, id: carteId(root), etape: 'preparation', preparation: state.lignes, mappingValide: etapes.mappingValide ?? null, tache: tacheOf(deps.taches.active(root, null)) });
-      else if (!names.length) cartes.push({ ...base, matter, id: carteId(root), etape: 'raisonnement', aDemarrer: true, tache: tacheOf(deps.taches.active(root, null)) });
+      const state = await etat(path.resolve(root), fresh);
+      const preparation = { preparation: state.lignes, mappingValide: etapes.mappingValide ?? null };
+      if (!names.length) {
+        const etape = !state.pret ? 'preparation' : etapes.etape ?? 'raisonnement';
+        cartes.push({ ...base, matter, id: carteId(root), etape, ...(etape === 'preparation' ? preparation : {}), aDemarrer: etape === 'raisonnement', tache: tacheOf(deps.taches.active(root, null)) });
+      }
       for (const nom of names) {
         const suite = suites[nom] ?? { etape: 'raisonnement' };
         cartes.push({
           ...base,
           id: carteId(root, nom),
           matter: await matterOf(root, nom),
-          etape: suite.etape,
+          etape: !state.pret ? 'preparation' : suite.etape,
+          ...(!state.pret || suite.etape === 'preparation' ? preparation : {}),
           raisonnement: await reasoningOf(root, nom),
           documents: await documentsOf(root, suite.documents),
-          action: suite.action ?? (suite.etape === 'finalisation' ? await nextAction(root, nom) : null),
+          action: suite.action ?? (['finalisation', 'attente'].includes(suite.etape) ? await nextAction(root, nom) : null),
           historique: history(suites, nom).map((step) => ({ ...step, documents: step.documents })),
           tache: tacheOf(deps.taches.active(root, nom)),
         });
@@ -242,6 +248,10 @@ export function createEtapesService(deps: EtapesDependencies) {
   const dossier = async (body: Json) => {
     const { root } = project(body.projectPath);
     await change(root, (etapes) => {
+      if (body.etape !== undefined) {
+        if (!ETAPES.includes(body.etape as Etape)) throw new TypeError(`etape : ${ETAPES.join(', ')}.`);
+        etapes.etape = body.etape as Etape;
+      }
       if (typeof body.nonJuridique === 'boolean') etapes.nonJuridique = body.nonJuridique || undefined;
       if (body.mappingValide === true) etapes.mappingValide = new Date().toISOString();
       if (body.mappingValide === false) delete etapes.mappingValide;
@@ -263,13 +273,23 @@ export function createEtapesService(deps: EtapesDependencies) {
       }
       if (body.documents !== undefined) {
         if (!Array.isArray(body.documents)) throw new TypeError('documents : liste.');
-        entry.documents = body.documents.map((document) => {
+        const precedents = entry.documents ?? [];
+        const reserves = new Set(Object.values(etapes.raisonnements ?? {}).flatMap((item) => item.documents ?? []).map((document) => path.resolve(root, document.chemin)));
+        const documents: Document[] = [];
+        for (const document of body.documents) {
           if (!isObject(document)) throw new TypeError('document : { type, nom }.');
           const type = text(document.type, 'type'), name = text(document.nom, 'nom');
-          const chemin = typeof document.chemin === 'string' && document.chemin.trim() ? document.chemin.trim() : path.join('Projets', `${safeName(name)}.docx`);
-          inside(root, chemin);
-          return { type, nom: name, chemin };
-        });
+          let chemin = typeof document.chemin === 'string' && document.chemin.trim() ? document.chemin.trim() : path.join('Projets', `${safeName(name)}.docx`);
+          const target = inside(root, chemin);
+          const conserve = precedents.some((previous) => path.resolve(root, previous.chemin) === target) && !documents.some((previous) => path.resolve(root, previous.chemin) === target);
+          if (!conserve) {
+            const { dir, name: stem, ext } = path.parse(chemin);
+            for (let index = 2; reserves.has(path.resolve(root, chemin)) || await exists(path.resolve(root, chemin)); index += 1) chemin = path.join(dir, `${stem} (${index})${ext}`);
+          }
+          reserves.add(path.resolve(root, chemin));
+          documents.push({ type, nom: name, chemin });
+        }
+        entry.documents = documents;
       }
       if (body.action !== undefined) {
         if (body.action === null) delete entry.action;
@@ -314,20 +334,35 @@ export function createEtapesService(deps: EtapesDependencies) {
   const reprise = async (body: Json) => {
     const { root } = project(body.projectPath);
     const nom = await assertReasoning(root, body.raisonnement);
-    const stem = nom.replace(VERSION, '');
-    const names = await listReasoningFiles(root);
-    let version = Number(VERSION.exec(nom)?.[1] ?? 1) + 1;
-    while (names.includes(`${stem}-v${version}`)) version += 1;
-    const next = `${stem}-v${version}`;
-    await copyFile(path.join(root, REASONING_DIR, `${nom}.yaml`), path.join(root, REASONING_DIR, `${next}.yaml`));
-    const fichier = await suiviOf(root, nom);
-    if (fichier && fichier !== SUIVI_NAME) await copyFile(path.join(root, suiviPath(fichier)), path.join(root, suiviPath(`${next}-${SUIVI_NAME}`)));
-    await change(root, (etapes) => {
-      const old = suite(etapes, nom);
-      old.remplacePar = next;
-      etapes.raisonnements![next] = { etape: 'raisonnement', precedent: nom };
+    return serialiser(root, async () => {
+      const etapes = await read(root);
+      let precedent = nom;
+      while (etapes.raisonnements?.[precedent]?.remplacePar) precedent = etapes.raisonnements[precedent].remplacePar!;
+      const stem = precedent.replace(VERSION, '');
+      const names = await listReasoningFiles(root);
+      let version = Number(VERSION.exec(precedent)?.[1] ?? 1) + 1;
+      while (names.includes(`${stem}-v${version}`) || await exists(path.join(root, suiviPath(`${stem}-v${version}-${SUIVI_NAME}`)))) version += 1;
+      const next = `${stem}-v${version}`;
+      const copies: string[] = [];
+      try {
+        const destination = path.join(root, REASONING_DIR, `${next}.yaml`);
+        await copyFile(path.join(root, REASONING_DIR, `${precedent}.yaml`), destination, constants.COPYFILE_EXCL);
+        copies.push(destination);
+        const fichier = await suiviOf(root, precedent);
+        if (fichier && fichier !== SUIVI_NAME) {
+          const destinationSuivi = path.join(root, suiviPath(`${next}-${SUIVI_NAME}`));
+          await copyFile(path.join(root, suiviPath(fichier)), destinationSuivi, constants.COPYFILE_EXCL);
+          copies.push(destinationSuivi);
+        }
+        suite(etapes, precedent).remplacePar = next;
+        etapes.raisonnements![next] = { etape: 'raisonnement', precedent };
+        await writeJson(path.join(root, ETAPES_FILE), etapes);
+        return { raisonnement: next };
+      } catch (error) {
+        await Promise.all(copies.map((file) => unlink(file)));
+        throw error;
+      }
     });
-    return { raisonnement: next };
   };
 
   const skillLine = (root: string, type: TypeDocument | undefined, nomType: string) => {
