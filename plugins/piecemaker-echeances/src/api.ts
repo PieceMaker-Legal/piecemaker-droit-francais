@@ -1,5 +1,6 @@
 import type { SuiviDossier, SuiviSnapshot } from '../../../shared/piecemaker-suivi.js';
 
+const BOARD_PAGE = '/api/plugins/piecemaker-echeances/assets/board/index.html';
 const ETAPES = '/api/piecemaker/etapes';
 
 export type Etape = 'preparation' | 'raisonnement' | 'redaction' | 'finalisation' | 'attente' | 'clos';
@@ -49,7 +50,12 @@ export type Fiche = {
   openedOn?: string;
   parties?: { name?: string; role?: string }[];
   nextStep?: { text?: string; due?: string; owner?: string } | null;
-  keyDates?: { label?: string; date?: string; done?: boolean; source?: string; quote?: string }[];
+  keyDates?: { label?: string; date?: string; done?: boolean; source?: string; quote?: string; kind?: string }[];
+  status?: string;
+  lastActivityOn?: string;
+  origin?: string;
+  checked?: unknown;
+  proposedDates?: unknown;
 };
 export type TypeDocument = { nom: string; skill: string; modele?: string };
 export type NouvelleTache = { type: string; projectPath: string; raisonnement?: string; document?: number; piece?: string; provider: string; model: string; instructions: string; auto: boolean };
@@ -62,12 +68,14 @@ export function loadBoard(rev: string): Promise<{ rev: string; docs?: Record<str
   return request(`/api/piecemaker/suivi/board${rev ? `?${query({ rev })}` : ''}`);
 }
 
-export function updateBoard(path: string, keyDates: object[]): Promise<unknown> {
-  return request('/api/piecemaker/suivi/board', { op: 'update', path, data: { keyDates } });
-}
-
 export function verifySuivi(projectPath: string, suivi: string): Promise<SuiviSnapshot> {
   return request<SuiviSnapshot>('/api/piecemaker/suivi/verify', { projectPath, suivi });
+}
+
+export async function loadBoardPage(): Promise<string> {
+  const response = await send(BOARD_PAGE);
+  if (!response.ok) throw new Error(`Erreur ${response.status}`);
+  return response.text();
 }
 
 const query = (values: Record<string, string>) => new URLSearchParams(values).toString();

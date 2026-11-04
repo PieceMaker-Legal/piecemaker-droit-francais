@@ -2,6 +2,7 @@ import { confirmDialog, errorMessage, escapeHtml as escape, openModal, toast } f
 import { INDEX_MODEL } from '../../piecemaker-tabular-review/src/shared.js';
 import { etapes, loadBoard } from './api.js';
 import type { Carte, DocumentRedige, Etape, Fiche } from './api.js';
+import { alertes } from './attention.js';
 import { lancer } from './lancer.js';
 import { ouvrirMapping, ouvrirRaisonnement, ouvrirSession, ouvrirVolet } from './navigation.js';
 
@@ -135,10 +136,14 @@ const ficheHtml = (fiche?: Fiche) => {
   return `<section class="pme-fiche"><h4>Fiche du dossier</h4>${fiche.summary ? `<p>${escape(fiche.summary)}</p>` : ''}${champs ? `<dl>${champs}</dl>` : ''}${parties ? `<h5>Parties</h5><ul>${parties}</ul>` : ''}${suite ? `<h5>Prochaine action</h5>${suite}` : ''}${dates ? `<h5>Dates clés</h5><ul class="pme-fiche-dates">${dates}</ul>` : ''}</section>`;
 };
 
-const carteHtml = (carte: Carte, index: number, ouvertes: Set<string>) => `<article class="pme-card${carte.exclu ? ' is-excluded' : ''}" data-card="${index}">
+const carteHtml = (carte: Carte, index: number, ouvertes: Set<string>, fiche?: Fiche) => {
+  const liste = carte.exclu ? [] : alertes(fiche);
+  const ton = liste.some((alerte) => alerte.ton === 'danger') ? ' is-flagged is-danger' : liste.length ? ' is-flagged' : '';
+  return `<article class="pme-card${carte.exclu ? ' is-excluded' : ''}${ton}" data-card="${index}">
     <header class="pme-card-head"><div class="pme-card-title"><strong>${escape(carte.dossier)}</strong>${carte.raisonnement ? `<span class="pme-muted">${escape(carte.raisonnement.titre)}</span>` : ''}</div>${menuHtml(carte)}</header>
-    ${tacheHtml(carte)}${corpsHtml(carte, ouvertes)}
+    ${liste.length ? `<p class="pme-attention pme-attention--${liste[0].ton}">${escape(liste[0].texte)}</p>` : ''}${tacheHtml(carte)}${corpsHtml(carte, ouvertes)}
   </article>`;
+};
 
 export function createTableau(root: HTMLElement, currentProject: () => string | null) {
   const element = document.createElement('div');
@@ -163,7 +168,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     const colonnes = COLONNES.map(([etape, libelle]) => [etape, libelle, visibles.filter((carte) => carte.etape === etape)] as const).filter(([etape, , liste]) => liste.length || (etape === 'preparation' && exclus));
     const caseExclus = `<label class="ptr-check" title="Afficher les exclus"><input type="checkbox" data-excluded${afficherExclus ? ' checked' : ''} aria-label="Afficher les exclus"></label>`;
     board.innerHTML = colonnes.length
-      ? colonnes.map(([etape, libelle, liste]) => `<section class="pme-col"><h3>${escape(libelle)} <span class="pme-muted">${liste.length}</span>${etape === 'preparation' && exclus ? caseExclus : ''}</h3>${liste.map((carte) => carteHtml(carte, cartes.indexOf(carte), ouvertes)).join('')}</section>`).join('')
+      ? colonnes.map(([etape, libelle, liste]) => `<section class="pme-col"><h3>${escape(libelle)} <span class="pme-muted">${liste.length}</span>${etape === 'preparation' && exclus ? caseExclus : ''}</h3>${liste.map((carte) => carteHtml(carte, cartes.indexOf(carte), ouvertes, carte.matter ? fiches.docs[`${MATTERS}${carte.matter}`] : undefined)).join('')}</section>`).join('')
       : '<p class="pme-muted pme-empty">Aucun dossier.</p>';
     peindrePanneau();
   };
@@ -180,18 +185,18 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     etapesZone.hidden = !carte && !fiche;
   };
   const chargerFiches = async () => {
-    if (!ouverte?.matter) return;
     const data = await loadBoard(fiches.rev);
-    if (!data.docs) return;
+    if (!data.docs) return false;
     fiches = { rev: data.rev, docs: data.docs as Record<string, Fiche> };
     peindrePanneau();
+    return true;
   };
   const ouvrir = (carte: Carte | null) => { ouverte = carte ? { carte: carte.id, matter: carte.matter ?? null } : null; peindrePanneau(); void chargerFiches().catch(() => undefined); };
   const refresh = async (frais = false) => {
     if (!frais && (element.querySelector('details.ptr-menu[open]') || drawer.querySelector('details.ptr-menu[open]'))) return;
-    const [data] = await Promise.all([etapes.tableau(frais), chargerFiches().catch(() => undefined)]);
+    const [data, nouvellesFiches] = await Promise.all([etapes.tableau(frais), chargerFiches().catch(() => false)]);
     const next = JSON.stringify(data.cartes);
-    if (next === signature) return;
+    if (next === signature) { if (nouvellesFiches) paint(); return; }
     signature = next;
     cartes = data.cartes;
     try { localStorage.setItem(CACHE, next); } catch {}

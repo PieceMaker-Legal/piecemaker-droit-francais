@@ -107,6 +107,12 @@ export const STYLES = `
 .pme-card{cursor:pointer}
 .pme-card:hover{box-shadow:0 0 0 1px var(--border-stronger)}
 .pme-card.is-excluded{opacity:.6}
+.pme-card.is-flagged{border-inline-start:3px solid var(--fill-warning)}
+.pme-card.is-danger{border-inline-start-color:var(--fill-danger)}
+.pme-card p.pme-attention{align-self:flex-start;padding:1px 8px;border-radius:999px;font:var(--text-caption);font-weight:600}
+.pme-attention--warning{background:var(--bg-warning);color:var(--text-warning)}
+.pme-attention--danger{background:var(--bg-danger);color:var(--text-danger)}
+.pme-attention--accent{background:var(--bg-accent);color:var(--text-accent)}
 .pme-card-head{display:flex;align-items:flex-start;gap:8px}
 .pme-card-title{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
 .pme-card-title strong{font:var(--text-body);font-weight:580}
