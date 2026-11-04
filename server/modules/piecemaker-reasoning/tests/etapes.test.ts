@@ -148,20 +148,11 @@ test('deux reprises concurrentes gardent deux versions distinctes et leur histor
   assert.equal(fs.readFileSync(path.join(root, '.piecemaker', 'raisonnements', 'demande.yaml'), 'utf8'), 'qualification: consultation\n');
 });
 
-test('la préparation garde les outils et restaure l’étape choisie après vérification', async () => {
-  let pret = false;
-  const { root, etapes } = service(async () => ({ pret, lignes: [{ nom: 'index', texte: 'Index', ok: pret }] }));
+test('une préparation incomplète ne bloque pas l’étape choisie', async () => {
+  const { root, etapes } = service(async () => ({ pret: false, lignes: [{ nom: 'index', texte: 'Index', ok: false }] }));
   ajouterRaisonnement(root);
   await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', etape: 'attente' });
-  let carte = (await etapes.tableau(true)).cartes[0];
-  assert.equal((await etapes.lire(root)).raisonnements?.demande.etape, 'attente');
-  assert.equal(carte.etape, 'preparation');
-  assert.equal((carte.preparation as unknown[]).length, 1);
-  pret = true;
-  etapes.invalider(root);
-  await attendre(2100);
-  carte = (await etapes.tableau(true)).cartes[0];
-  assert.equal(carte.etape, 'attente');
+  assert.equal((await etapes.tableau(true)).cartes[0].etape, 'attente');
   await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', etape: 'preparation' });
   assert.equal(((await etapes.tableau(true)).cartes[0].preparation as unknown[]).length, 1);
 });
@@ -176,8 +167,7 @@ test('un dossier sans raisonnement peut être déplacé partout et exclu sans cr
   pret = false;
   etapes.invalider(root);
   await attendre(2100);
-  assert.equal((await etapes.tableau(true)).cartes[0].etape, 'preparation');
-  assert.equal((await etapes.lire(root)).etape, 'clos');
+  assert.equal((await etapes.tableau(true)).cartes[0].etape, 'clos');
   await etapes.dossier({ projectPath: root, nonJuridique: true });
   assert.equal((await etapes.tableau(true)).cartes[0].exclu, true);
   assert.equal(fs.existsSync(path.join(root, '.piecemaker', 'raisonnements')), false);

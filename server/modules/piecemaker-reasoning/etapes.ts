@@ -212,7 +212,7 @@ export function createEtapesService(deps: EtapesDependencies) {
       const state = await etat(path.resolve(root), fresh);
       const preparation = { preparation: state.lignes, mappingValide: etapes.mappingValide ?? null };
       if (!names.length) {
-        const etape = !state.pret ? 'preparation' : etapes.etape ?? 'raisonnement';
+        const etape = etapes.etape ?? (state.pret ? 'raisonnement' : 'preparation');
         cartes.push({ ...base, matter, id: carteId(root), etape, ...(etape === 'preparation' ? preparation : {}), aDemarrer: etape === 'raisonnement', tache: tacheOf(deps.taches.active(root, null)) });
       }
       for (const nom of names) {
@@ -221,8 +221,8 @@ export function createEtapesService(deps: EtapesDependencies) {
           ...base,
           id: carteId(root, nom),
           matter: await matterOf(root, nom),
-          etape: !state.pret ? 'preparation' : suite.etape,
-          ...(!state.pret || suite.etape === 'preparation' ? preparation : {}),
+          etape: suite.etape,
+          ...(suite.etape === 'preparation' ? preparation : {}),
           raisonnement: await reasoningOf(root, nom),
           documents: await documentsOf(root, suite.documents),
           action: suite.action ?? (['finalisation', 'attente'].includes(suite.etape) ? await nextAction(root, nom) : null),

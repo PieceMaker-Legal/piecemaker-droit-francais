@@ -81,7 +81,7 @@ const historiqueHtml = (carte: Carte) => carte.historique?.length
 const corpsHtml = (carte: Carte, ouvertes: Set<string>) => {
   if (carte.exclu) return '<div class="pme-actions"><span class="pme-muted">Non juridique</span><button type="button" class="ptr-button" data-include>Réintégrer</button></div>';
   if (carte.aDemarrer) return '<p class="pme-muted">À démarrer : aucun raisonnement.</p><div class="pme-actions"><button type="button" class="ptr-button ptr-button-primary" data-launch="raisonnement">Démarrer le raisonnement</button></div>';
-  if (carte.etape === 'preparation') return preparationHtml(carte);
+  if (carte.etape === 'preparation') return `${preparationHtml(carte)}${carte.raisonnement ? '' : '<div class="pme-actions"><button type="button" class="ptr-button" data-launch="raisonnement">Démarrer le raisonnement</button></div>'}`;
   if (!carte.raisonnement) return '<button type="button" class="ptr-button" data-launch="raisonnement">Démarrer le raisonnement</button>';
   const issues = carte.raisonnement.erreurs + carte.raisonnement.manques;
   switch (carte.etape) {
