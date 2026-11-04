@@ -44,9 +44,10 @@ const FALLBACK_DEFAULT_MODEL: Record<LLMProvider, string> = {
   codex: 'gpt-5.6-sol',
   mistral: 'mistral-medium-3.5',
   opencode: 'anthropic/claude-sonnet-4-5',
+  hermes: '__hermes_configured_model__',
 };
 
-const PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'mistral', 'opencode'];
+const PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'mistral', 'opencode', 'hermes'];
 
 /** localStorage key holding the user's default model for one provider. */
 const providerModelStorageKey = (provider: LLMProvider): string => `${provider}-model`;
@@ -63,6 +64,7 @@ const FALLBACK_PERMISSION_MODES: Record<LLMProvider, PermissionMode[]> = {
   codex: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
   mistral: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
   opencode: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
+  hermes: ['default'],
 };
 
 type ProviderCapabilities = {
@@ -603,7 +605,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     setStoredProviderModel(targetProvider, model);
 
     const normalizedSessionId = typeof sessionId === 'string' ? sessionId.trim() : '';
-    if (!normalizedSessionId) {
+    if (!normalizedSessionId || targetProvider === 'hermes') {
       return { scope: 'default' as const, model };
     }
 

@@ -557,7 +557,7 @@ export function useChatComposerState({
           projectId: selectedProject.projectId,
           sessionId: currentSessionId || selectedSession?.id || null,
           provider,
-          model: currentProviderModel,
+          model: provider === 'hermes' ? undefined : currentProviderModel,
           tokenUsage: tokenBudget,
         };
 
@@ -769,7 +769,7 @@ export function useChatComposerState({
     const toolsSettings = getToolsSettings();
 
     return {
-      model: currentProviderModel,
+      model: provider === 'hermes' ? undefined : currentProviderModel,
       effort: currentProviderEffort,
       permissionMode: resolvePermissionModeForProvider(provider, permissionMode),
       toolsSettings,
