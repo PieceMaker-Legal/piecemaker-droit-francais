@@ -44,8 +44,26 @@ async function tableau(c: Carte) {
   const view = createTableau(root, () => '/exemple');
   root.append(view.element, view.drawer);
   await view.refresh();
+  view.ouvrirDossier(c.projectPath, c.raisonnement?.nom ?? null);
   return view;
 }
+
+it('affiche une carte minimaliste et détaille parties, acte, objectifs et étapes dans le panneau', async () => {
+  vi.mocked(loadBoard).mockResolvedValue({ rev: '1', docs: { 'projects/cabinet/matters/exemple': { status: 'open', origin: 'page', nextStep: { text: 'Relancer' }, parties: [{ name: 'Jean Dupont', role: 'Demandeur' }, { name: 'Société Exemple SAS', role: 'Défendeur' }] } } });
+  await tableau(carte({ matter: 'exemple', raisonnement: { ...raisonnement, qualification: 'contentieux', acte: 'Conclusions en défense', objectifs: ['Écarter la demande de Jean Dupont', 'Obtenir des frais irrépétibles'] } }));
+  await flush();
+  const card = root.querySelector('.pme-card')!;
+  expect(card.querySelector('.pme-nature--contentieux')?.textContent).toBe('Contentieux');
+  expect(card.textContent).toContain('Conclusions en défense');
+  expect(card.querySelector('[data-validate]')).toBeNull();
+  const panneau = root.querySelector('.pme-drawer')!;
+  expect(panneau.querySelector('[data-title]')?.textContent).toBe('Conclusions en défense');
+  expect(panneau.textContent).toContain('Société Exemple SAS');
+  expect(panneau.querySelectorAll('.pme-objectifs li')).toHaveLength(2);
+  expect(panneau.querySelectorAll('.pme-step')).toHaveLength(6);
+  expect(panneau.querySelectorAll('.pme-step.is-todo')).toHaveLength(4);
+  vi.mocked(loadBoard).mockResolvedValue({ rev: '' });
+});
 
 it('déplace une carte à démarrer sans YAML après confirmation et permet son exclusion', async () => {
   await tableau(carte({ aDemarrer: true }));

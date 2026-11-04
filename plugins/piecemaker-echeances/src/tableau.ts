@@ -99,7 +99,7 @@ const corpsHtml = (carte: Carte, ouvertes: Set<string>) => {
   }
 };
 
-const etapeHtml = (libelle: string, fait: boolean, contenu: string) => `<li class="pme-step">${bulle(fait)}<div class="pme-step-body"><strong>${escape(libelle)}</strong>${contenu}</div></li>`;
+const etapeHtml = (libelle: string, fait: boolean, contenu: string, etat = '') => `<li class="pme-step${etat ? ` is-${etat}` : ''}">${bulle(fait)}<div class="pme-step-body"><strong>${escape(libelle)}${etat === 'current' ? '<span class="pme-pill pme-pill--run">En cours</span>' : ''}</strong>${contenu}</div></li>`;
 const ouvrirVersion = (nom: string) => `<button type="button" class="pme-link" data-open-reasoning data-version="${escape(nom)}">Ouvrir le raisonnement</button>`;
 const documentsVersion = (nom: string, documents: DocumentRedige[]) => documents.length
   ? `<ul class="pme-docs">${documents.map((document, index) => `<li><div class="pme-doc-head"><strong>${escape(document.nom)}</strong></div><div class="pme-doc-foot"><span class="pme-muted">${escape(document.type)}</span>${document.chemin ? `<button type="button" class="pme-link" data-open-doc="${index}" data-version="${escape(nom)}">Ouvrir</button>` : ''}</div></li>`).join('')}</ul>` : '';
@@ -111,8 +111,9 @@ const etapesHtml = (carte: Carte, ouvertes: Set<string>) => {
   if (carte.exclu) return corpsHtml(carte, ouvertes);
   const courante = COLONNES.findIndex(([etape]) => etape === carte.etape);
   const clos = carte.etape === 'clos';
-  const actuelle = COLONNES.slice(0, courante + 1).map(([etape, libelle], index) => {
-    if (index === courante) return etapeHtml(libelle, clos, corpsHtml(carte, ouvertes));
+  const actuelle = COLONNES.map(([etape, libelle], index) => {
+    if (index > courante) return etapeHtml(libelle, false, '', 'todo');
+    if (index === courante) return etapeHtml(libelle, clos, corpsHtml(carte, ouvertes), clos ? '' : 'current');
     if (etape === 'preparation') return etapeHtml(libelle, true, '');
     const documents = etape === 'redaction' || etape === 'finalisation' ? documentsHtml(carte, false) : '';
     return etapeHtml(libelle, true, `${documents}<div class="pme-actions">${lienRaisonnement}</div>`);
@@ -127,21 +128,49 @@ const MATTERS = 'projects/cabinet/matters/';
 const CHAMPS: ['client' | 'practiceArea' | 'responsible' | 'openedOn', string][] = [['client', 'Client'], ['practiceArea', 'Domaine'], ['responsible', 'Responsable'], ['openedOn', 'Ouvert le']];
 const jour = (date: string) => /^\d{4}-\d{2}-\d{2}$/.test(date) ? new Date(`${date}T00:00:00`).toLocaleDateString('fr-FR') : date;
 
+const NATURES: Record<string, [string, string]> = { contentieux: ['Contentieux', 'contentieux'], drafting: ['Contrat', 'contrat'], consultation: ['Consultation', 'consultation'] };
+const natureHtml = (carte?: Carte) => {
+  const nature = NATURES[carte?.raisonnement?.qualification ?? ''];
+  return nature ? `<span class="pme-nature pme-nature--${nature[1]}">${nature[0]}</span>` : '';
+};
+const vide = (texte: string) => `<p class="pme-muted">${texte}</p>`;
+
+const resumeHtml = (carte?: Carte, fiche?: Fiche) => {
+  const reasoning = carte?.raisonnement;
+  const parties = (fiche?.parties ?? []).filter((partie) => partie.name).map((partie) => `<li><strong>${escape(partie.name)}</strong>${partie.role ? `<span class="pme-muted">${escape(partie.role)}</span>` : ''}</li>`).join('');
+  const objectifs = (reasoning?.objectifs ?? []).map((objectif) => `<li>${escape(objectif)}</li>`).join('');
+  return `<section class="pme-section"><h4>Parties</h4>${parties ? `<ul class="pme-parties">${parties}</ul>` : vide('Non renseignées.')}</section>
+    <section class="pme-section"><h4>Document à produire</h4>${reasoning?.acte ? `<p>${escape(reasoning.acte)}</p>` : vide('Non indiqué.')}</section>
+    <section class="pme-section"><h4>Objectifs</h4>${objectifs ? `<ol class="pme-objectifs">${objectifs}</ol>` : vide('Aucun objectif.')}</section>`;
+};
+
 const ficheHtml = (fiche?: Fiche) => {
   if (!fiche) return '';
   const champs = CHAMPS.filter(([cle]) => fiche[cle]).map(([cle, libelle]) => `<dt>${libelle}</dt><dd>${escape(cle === 'openedOn' ? jour(fiche[cle]!) : fiche[cle])}</dd>`).join('');
-  const parties = (fiche.parties ?? []).filter((partie) => partie.name).map((partie) => `<li>${escape(partie.name)}${partie.role ? ` <span class="pme-muted">${escape(partie.role)}</span>` : ''}</li>`).join('');
   const suite = fiche.nextStep?.text ? `<p>${escape(fiche.nextStep.text)}${[fiche.nextStep.due ? jour(fiche.nextStep.due) : '', fiche.nextStep.owner ?? ''].filter(Boolean).map((detail) => ` <span class="pme-muted">${escape(detail)}</span>`).join('')}</p>` : '';
   const dates = (fiche.keyDates ?? []).filter((date) => date.date).sort((a, b) => a.date!.localeCompare(b.date!)).map((date) => `<li class="${date.done ? 'is-done' : ''}"${date.quote ? ` title="${escape(date.quote)}"` : ''}><span class="pme-fiche-date">${escape(jour(date.date!))}</span><span>${date.done ? '✓ ' : ''}${escape(date.label)}${date.source ? `<span class="pme-muted pme-small">${escape(date.source)}</span>` : ''}</span></li>`).join('');
-  return `<section class="pme-fiche"><h4>Fiche du dossier</h4>${fiche.summary ? `<p>${escape(fiche.summary)}</p>` : ''}${champs ? `<dl>${champs}</dl>` : ''}${parties ? `<h5>Parties</h5><ul>${parties}</ul>` : ''}${suite ? `<h5>Prochaine action</h5>${suite}` : ''}${dates ? `<h5>Dates clés</h5><ul class="pme-fiche-dates">${dates}</ul>` : ''}</section>`;
+  return `<section class="pme-section pme-fiche"><h4>Fiche du dossier</h4>${fiche.summary ? `<p>${escape(fiche.summary)}</p>` : ''}${champs ? `<dl>${champs}</dl>` : ''}${suite ? `<h5>Prochaine action</h5>${suite}` : ''}${dates ? `<h5>Dates clés</h5><ul class="pme-fiche-dates">${dates}</ul>` : ''}</section>`;
 };
 
-const carteHtml = (carte: Carte, index: number, ouvertes: Set<string>, fiche?: Fiche) => {
+const etatHtml = (carte: Carte) => {
+  const reasoning = carte.raisonnement;
+  if (carte.exclu) return vide('Non juridique');
+  if (carte.aDemarrer || !reasoning) return vide('Aucun raisonnement');
+  if (!reasoning.erreurs && !reasoning.manques) return '';
+  return `<p class="${reasoning.erreurs ? 'pme-erreur' : 'pme-manque'}">${[reasoning.erreurs ? plural(reasoning.erreurs, 'erreur') : '', reasoning.manques ? plural(reasoning.manques, 'manque') : ''].filter(Boolean).join(' · ')}</p>`;
+};
+
+const carteHtml = (carte: Carte, index: number, fiche?: Fiche) => {
   const liste = carte.exclu ? [] : alertes(fiche);
   const ton = liste.some((alerte) => alerte.ton === 'danger') ? ' is-flagged is-danger' : liste.length ? ' is-flagged' : '';
+  const reasoning = carte.raisonnement;
+  const nature = natureHtml(carte);
+  const autres = (reasoning?.objectifs?.length ?? 0) - 1;
   return `<article class="pme-card${carte.exclu ? ' is-excluded' : ''}${ton}" data-card="${index}">
-    <header class="pme-card-head"><div class="pme-card-title"><strong>${escape(carte.dossier)}</strong>${carte.raisonnement ? `<span class="pme-muted">${escape(carte.raisonnement.titre)}</span>` : ''}</div>${menuHtml(carte)}</header>
-    ${liste.length ? `<p class="pme-attention pme-attention--${liste[0].ton}">${escape(liste[0].texte)}</p>` : ''}${tacheHtml(carte)}${corpsHtml(carte, ouvertes)}
+    <header class="pme-card-head"><div class="pme-card-title"><strong>${escape(carte.dossier)}</strong></div>${menuHtml(carte)}</header>
+    ${nature || reasoning?.acte ? `<div class="pme-card-meta">${nature}${reasoning?.acte ? `<span>${escape(reasoning.acte)}</span>` : ''}</div>` : ''}
+    ${reasoning ? `<p class="pme-card-goal">${escape(reasoning.titre)}${autres > 0 ? ` <span class="pme-muted">+${autres}</span>` : ''}</p>` : ''}
+    ${liste.length ? `<p class="pme-attention pme-attention--${liste[0].ton}">${escape(liste[0].texte)}</p>` : ''}${tacheHtml(carte)}${etatHtml(carte)}
   </article>`;
 };
 
@@ -153,7 +182,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
   const drawer = document.createElement('aside');
   drawer.className = 'pme-drawer';
   drawer.setAttribute('aria-label', 'Dossier');
-  drawer.innerHTML = '<header class="pme-drawer-head"><div class="pme-drawer-titles"><span class="pme-drawer-eyebrow" data-eyebrow></span><span class="pme-drawer-title" data-title></span></div><button type="button" class="ptr-button ptr-icon-button" data-close aria-label="Fermer">✕</button></header><div class="pme-drawer-body" data-steps></div>';
+  drawer.innerHTML = '<header class="pme-drawer-head"><div class="pme-drawer-titles"><span class="pme-drawer-eyebrow" data-eyebrow></span><span class="pme-drawer-title" data-title></span><span class="pme-drawer-tags" data-tags></span></div><button type="button" class="ptr-button ptr-icon-button" data-close aria-label="Fermer">✕</button></header><div class="pme-drawer-body" data-steps></div>';
   const etapesZone = drawer.querySelector<HTMLElement>('[data-steps]')!;
   let afficherExclus = false;
   let ouverte: { carte: string | null; matter: string | null } | null = null;
@@ -168,7 +197,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     const colonnes = COLONNES.map(([etape, libelle]) => [etape, libelle, visibles.filter((carte) => carte.etape === etape)] as const).filter(([etape, , liste]) => liste.length || (etape === 'preparation' && exclus));
     const caseExclus = `<label class="ptr-check" title="Afficher les exclus"><input type="checkbox" data-excluded${afficherExclus ? ' checked' : ''} aria-label="Afficher les exclus"></label>`;
     board.innerHTML = colonnes.length
-      ? colonnes.map(([etape, libelle, liste]) => `<section class="pme-col"><h3>${escape(libelle)} <span class="pme-muted">${liste.length}</span>${etape === 'preparation' && exclus ? caseExclus : ''}</h3>${liste.map((carte) => carteHtml(carte, cartes.indexOf(carte), ouvertes, carte.matter ? fiches.docs[`${MATTERS}${carte.matter}`] : undefined)).join('')}</section>`).join('')
+      ? colonnes.map(([etape, libelle, liste]) => `<section class="pme-col"><h3>${escape(libelle)} <span class="pme-muted">${liste.length}</span>${etape === 'preparation' && exclus ? caseExclus : ''}</h3>${liste.map((carte) => carteHtml(carte, cartes.indexOf(carte), carte.matter ? fiches.docs[`${MATTERS}${carte.matter}`] : undefined)).join('')}</section>`).join('')
       : '<p class="pme-muted pme-empty">Aucun dossier.</p>';
     peindrePanneau();
   };
@@ -178,10 +207,11 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     const index = cartes.findIndex((carte) => carte.id === ouverte!.carte);
     const carte = cartes[index];
     drawer.querySelector('[data-eyebrow]')!.textContent = carte?.dossier ?? '';
-    drawer.querySelector('[data-title]')!.textContent = carte ? carte.raisonnement?.titre ?? carte.dossier : 'Dossier';
+    drawer.querySelector('[data-title]')!.textContent = carte ? carte.raisonnement?.acte ?? carte.raisonnement?.titre ?? carte.dossier : 'Dossier';
+    drawer.querySelector('[data-tags]')!.innerHTML = natureHtml(carte);
     etapesZone.dataset.card = String(index);
     const fiche = ouverte.matter ? fiches.docs[`${MATTERS}${ouverte.matter}`] : undefined;
-    etapesZone.innerHTML = `${carte ? `${tacheHtml(carte)}${etapesHtml(carte, ouvertes)}` : ''}${ficheHtml(fiche)}`;
+    etapesZone.innerHTML = `${carte ? tacheHtml(carte) : ''}${resumeHtml(carte, fiche)}${carte ? `<section class="pme-section"><h4>Étapes</h4>${etapesHtml(carte, ouvertes)}</section>` : ''}${ficheHtml(fiche)}`;
     etapesZone.hidden = !carte && !fiche;
   };
   const chargerFiches = async () => {

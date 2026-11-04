@@ -29,13 +29,13 @@ export const VERBS = { obtenir: 'terme', écarter: 'terme', réduire: 'montant',
 export type Verb = keyof typeof VERBS;
 export type Objective = { objectif: string; effet: string; verbe: Verb; validite?: string; prescription?: string };
 export type Trial = { nom: string; faits: Record<string, boolean | number | string>; attendu: Record<string, boolean | number> };
-export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; objectifs: Objective[]; hypotheses: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
+export type Reasoning = { qualification?: 'drafting' | 'contentieux' | 'consultation'; acte?: string; objectifs: Objective[]; hypotheses: Trial[]; terms: Map<string, Term>; valeurs: Map<string, Value>; computed: Map<string, Measure> };
 export type Problem = Finding & { path: string; avocat?: string; cible?: string };
 export type Parsed = { value: unknown; lines: Map<string, number> };
 
 const IDENTIFIER = /^[\p{L}_][\p{L}\p{N}_]*$/u;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification', 'true', 'false']);
+const RESERVED = new Set(['objectifs', 'questions', 'hypotheses', 'essais', 'bilan', 'valeurs', 'qualification', 'acte', 'true', 'false']);
 const TERM_KEYS = new Set(['si', 'sauf']);
 const CONDITION_KEYS = new Set(['l_une', 'delai', 'montant', 'selon', 'decompte']);
 const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
@@ -58,7 +58,7 @@ const KEY_HOMES: Record<string, string> = {
   plus_de: 'un montant', moins_de: 'un montant', valeur: 'une valeur ou un montant', formule: 'une valeur', objectif: 'un objectif', obtenir: 'un objectif', écarter: 'un objectif', réduire: 'un objectif', augmenter: 'un objectif',
   validite: 'une source de selon ou un objectif', prescription: 'un objectif', nom: 'une hypothèse', faits: 'une hypothèse', attendu: 'une hypothèse', true: 'une question établie', false: 'une question établie',
 };
-const ROOT_KEYS = ['qualification', 'objectifs', 'valeurs', 'hypotheses'];
+const ROOT_KEYS = ['qualification', 'acte', 'objectifs', 'valeurs', 'hypotheses'];
 const STRUCTURAL = new Set(['piece', 'citation', 'source', 'vigueur', 'applicabilite', 'version', 'renvoi', 'preuve', 'selon', 'si', 'sauf', 'l_une', 'delai', 'montant', 'decompte', 'au_plus', 'au_moins', 'plus_de', 'moins_de', 'valeur', 'formule', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'faits', 'attendu']);
 const folded = (key: string) => key.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 const distance = (left: string, right: string) => {
@@ -347,6 +347,11 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
       else problem('qualification', finding('qualification-non-admise'));
       continue;
     }
+    if (key === 'acte') {
+      if (typeof raw === 'string' && raw.trim()) reasoning.acte = raw.trim();
+      else problem('acte', finding('acte-mal-forme'));
+      continue;
+    }
     if (key === 'valeurs') {
       if (!isObject(raw)) { problem('valeurs', finding('valeurs-mal-formees')); continue; }
       for (const [name, entry] of Object.entries(raw)) {
@@ -441,7 +446,7 @@ export function readReasoning(value: unknown): { reasoning: Reasoning; problems:
 
 const ANNOTATIONS = new Set(['bilan', 'montant_calcule', 'statut', 'decisif', 'erreurs', 'manques', 'en_jeu', 'atteint', 'obstacles', 'titre', 'corrigee', 'citation_d_origine', 'en_vigueur', 'personnes', 'fiable', 'nature', 'obtenu', 'conforme', 'decisifs', 'vigueur_legifrance', 'calcul', 'correspondance']);
 
-const KEY_ORDER = ['qualification', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'true', 'false', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'but', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'version', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
+const KEY_ORDER = ['qualification', 'acte', 'objectifs', 'objectif', 'obtenir', 'écarter', 'réduire', 'augmenter', 'true', 'false', 'l_une', 'delai', 'montant', 'de', 'a', 'valeur', 'formule', 'but', 'si', 'alors', 'sinon', 'assiette', 'tranches', 'jusqu_a', 'taux', 'source', 'piece', 'citation', 'vigueur', 'debut', 'fin', 'au', 'selon', 'applicabilite', 'version', 'validite', 'renvoi', 'decompte', 'validite', 'prescription', 'preuve', 'sauf', 'nom', 'faits', 'attendu', 'id', 'intitule', 'traite', 'conflit', 'sur', 'modele', 'avocat', 'texte', 'sections'];
 const rank = (key: string) => { const at = KEY_ORDER.indexOf(key); return at < 0 ? KEY_ORDER.length : at; };
 const ordered = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(ordered);
@@ -480,7 +485,7 @@ export function canonical(annotated: Record<string, unknown>, reasoning: Reasoni
     pending.sort((x, y) => slots.indexOf(x.slot) - slots.indexOf(y.slot));
     visit(pending.shift()!.name);
   }
-  const keys = ['qualification', 'objectifs', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'objectifs', 'valeurs', 'hypotheses'].includes(key)), 'valeurs', 'hypotheses'];
+  const keys = ['qualification', 'acte', 'objectifs', ...order, ...Object.keys(annotated).filter((key) => !order.includes(key) && !['qualification', 'acte', 'objectifs', 'valeurs', 'hypotheses'].includes(key)), 'valeurs', 'hypotheses'];
   return Object.fromEntries(keys.filter((key) => key in annotated).map((key) => [key, ordered(annotated[key])]));
 }
 

@@ -22,6 +22,7 @@ L'agent transcrit sa réponse juridique dans `.piecemaker/raisonnements/<nom>.ya
 ## Le fichier
 
 - `qualification` : `'drafting'` (faits à prévoir), `'contentieux'` ou `'consultation'` (faits à prouver ; la consultation suit les règles du contentieux, sauf la prescription). Non affichée dans le volet.
+- `acte` : le document à produire (par exemple `'Conclusions en défense'`). Son absence est un manque. Affiché avec la nature sur la carte du Tableau.
 - `objectifs: [{ objectif, obtenir | écarter | réduire | augmenter: nom, validite?, prescription? }]` : le but du client et, par un seul verbe, ce qu'il vise : `obtenir`/`écarter` un terme, `réduire`/`augmenter` un montant de `valeurs` (statut + `montant_calcule`). Verbe absent, en double ou inadapté au type = erreur ; les anciennes clés `questions`, `question`, `reponse` = erreurs qui disent quoi renommer. Annotations : `atteint` (vrai/faux, en suspens), `obstacles`.
 - Noms : français courant, mots séparés par une espace (`versement de l'indemnité`), lettres, chiffres, `'`, `.`, `-` admis ; l'ancienne écriture avec `_` reste lue. Pas de double espace ni d'espace finale.
 - Un terme par clé : `{ but: '…', si: [...], sauf: [...] }` ; `but` dit en une phrase courte ce que l'étape cherche à démontrer (absent = conseil) ; `l_une` = une condition suffit. Une condition de règle s'écrit toujours avec sa valeur attendue : `- nom: true` ou `- nom: false` (exactement une clé non réservée, booléenne ; avec au besoin `selon`, `delai`, `montant`, `decompte`) ; elle est remplie si la valeur de `nom` égale la valeur attendue (trois valeurs : `null` reste `null`). L'ancienne forme `condition: nom`, `preuve` ou `contredit` sur une condition de règle sont des erreurs de migration qui disent où écrire.
@@ -58,7 +59,7 @@ Exemptions = garde-fous contre la régression à l'infini (validité → texte �
 ## Sortie de `verifier`
 
 - À l'agent : le format ESLint. Le chemin du fichier, puis une ligne par problème, triée par ligne : `ligne:colonne  error|warning  constat. correction.  nom-de-règle` (`0:0` pour un problème de fichier), et le total `✖ N problems (E errors, W warnings)`. Une erreur est un `error`, un manque ou un conseil un `warning`. Les conseils n'apparaissent que sans erreur, limités à 5. Constat en participe passé, correction à l'impératif : catalogue dans `rules.ts`. Pas de réponses ni de statuts.
-- Le fichier est réécrit dans l'ordre canonique (qualification, objectifs, termes en descendant, contrôles regroupés, valeurs, hypothèses) et imprimé pour grep : un terme par en-tête à deux espaces, une source ou preuve par ligne. L'agent relit avec grep/sed.
+- Le fichier est réécrit dans l'ordre canonique (qualification, acte, objectifs, termes en descendant, contrôles regroupés, valeurs, hypothèses) et imprimé pour grep : un terme par en-tête à deux espaces, une source ou preuve par ligne. L'agent relit avec grep/sed.
 - Au volet : l'objet annoté complet (statuts, décisifs, `bilan.controles`, vigueur, pièces). L'avocat écarte des alertes et note la fiabilité des pièces (tables `pm_reasoning_dismissed`, `pm_reasoning_reliability`).
 
 ## Fichiers

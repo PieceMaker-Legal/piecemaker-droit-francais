@@ -43,6 +43,7 @@ Le fichier est une table YAML 1.2. N'écris pas de commentaire. N'écris pas de 
 ### Objectifs
 
 - `qualification` donne la nature du dossier : `contentieux`, `drafting` ou `consultation`.
+- `acte` nomme le document à produire, par exemple `'Conclusions en défense'`, `'Contrat de prestation'` ou `'Note de consultation'`.
 - `objectifs` liste les objectifs du client.
 - Chaque entrée porte `objectif`, le but en une phrase.
 - Chaque entrée porte un seul verbe. `obtenir` ou `écarter` vise un terme. `réduire` ou `augmenter` vise un montant de `valeurs`.

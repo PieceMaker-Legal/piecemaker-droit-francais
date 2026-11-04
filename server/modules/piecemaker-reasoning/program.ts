@@ -156,6 +156,7 @@ export async function verifyReasoning(input: {
     else if (VERBS[objective.verbe] === 'montant' && !amountObjective(objective)) add('erreur', at, finding('verbe-montant-sur-terme', { nom: objective.effet }));
   });
   if (!reasoning.qualification) add('manque', 'qualification', finding('qualification-non-indiquee'), 'Le raisonnement n’est pas qualifié : drafting, contentieux ou consultation.');
+  if (!reasoning.acte) add('manque', 'acte', finding('acte-non-indique'), 'Le document à produire n’est pas indiqué.');
   reasoning.objectifs.forEach((objective, index) => {
     if (reasoning.qualification === 'drafting' && !reasoning.hypotheses.some((trial) => objectiveRoots(objective).some((name) => name in trial.attendu))) add('manque', `objectifs[${index}]`, finding('hypothese-non-indiquee', { nom: objective.effet }), 'Aucune hypothèse ne vérifie cet objectif.');
     if (reasoning.qualification === 'contentieux' && !objective.prescription && !isControlName(objective.effet, 'prescription')) add('manque', `objectifs[${index}]`, finding('prescription-non-verifiee', { nom: derivedName('prescription', '…', spaced) }), 'Prescription à vérifier.');

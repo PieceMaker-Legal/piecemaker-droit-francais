@@ -67,6 +67,17 @@ test('l’exemple fictif est à établir et désigne les faits décisifs', async
   assert.doesNotMatch(described, /Réponses|décisifs :|statut/);
 });
 
+test('l’acte visé est lu, réécrit après la qualification et réclamé s’il manque', async () => {
+  const absent = await verify(EXAMPLE_CODE);
+  assert.ok(texts(absent, 'manque').includes('acte : Acte non indiqué.'));
+  const indique = await verify(EXAMPLE_CODE.replace('  objectifs: [', "  acte: 'Conclusions en défense',\n  qualification: 'contentieux',\n  objectifs: ["));
+  assert.ok(indique.code.includes('Conclusions en défense'));
+  assert.ok(!texts(indique, 'manque').some((texte) => texte.startsWith('acte')));
+  assert.ok(indique.code.indexOf('qualification:') < indique.code.indexOf('acte:') && indique.code.indexOf('acte:') < indique.code.indexOf('objectifs:'));
+  const mal = await verify(EXAMPLE_CODE.replace('  objectifs: [', '  acte: 3,\n  objectifs: ['));
+  assert.ok(texts(mal, 'erreur').includes('acte : Acte mal formé.'));
+});
+
 test('toutes les feuilles établies : la réponse est acquise ; la preuve de l’exception l’exclut', async () => {
   const closed = withRoots(EXAMPLE_CODE, "  force_majeure: { false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `a duré deux jours` }] }] },\n  grève_nationale: { false: [{ preuve: [{ piece: 'pieces/07_courriel.md', citation: `mouvement limité à notre atelier` }] }] },");
   assert.equal(at((await verify(closed)).annotated, 'objectifs[0].statut'), 'acquis');

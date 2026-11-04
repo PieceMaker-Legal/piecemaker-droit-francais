@@ -20,7 +20,7 @@ export type Carte = {
   preparation?: Ligne[];
   mappingValide?: string | null;
   aDemarrer?: boolean;
-  raisonnement?: { nom: string; titre: string; verifie: boolean; erreurs: number; manques: number; alertes: { kind: 'erreur' | 'manque'; texte: string }[] };
+  raisonnement?: { nom: string; titre: string; qualification?: string | null; acte?: string | null; objectifs?: string[]; verifie: boolean; erreurs: number; manques: number; alertes: { kind: 'erreur' | 'manque'; texte: string }[] };
   documents?: DocumentRedige[];
   action?: Action | null;
   historique?: { nom: string; documents: DocumentRedige[] }[];

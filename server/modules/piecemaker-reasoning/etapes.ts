@@ -187,9 +187,13 @@ export function createEtapesService(deps: EtapesDependencies) {
     const dismissed = new Set(snapshot?.dismissed.map((entry) => entry.id) ?? []);
     const issues = (snapshot?.issues ?? []).filter((issue) => !dismissed.has(issue.id));
     const objectifs = isObject(snapshot?.annotated) && Array.isArray(snapshot.annotated.objectifs) ? snapshot.annotated.objectifs as Json[] : [];
-    const titre = objectifs.map((entry) => entry.objectif).filter((value): value is string => typeof value === 'string')[0] ?? nom;
+    const buts = objectifs.map((entry) => entry.objectif).filter((value): value is string => typeof value === 'string');
+    const titre = buts[0] ?? nom;
+    const racine = isObject(snapshot?.annotated) ? snapshot.annotated : {};
+    const qualification = typeof racine.qualification === 'string' ? racine.qualification : null;
+    const acte = typeof racine.acte === 'string' ? racine.acte : null;
     const alertes = issues.filter((issue) => issue.kind === 'erreur' || issue.kind === 'manque');
-    return { nom, titre, verifie: Boolean(snapshot?.revision), erreurs: alertes.filter((issue) => issue.kind === 'erreur').length, manques: alertes.filter((issue) => issue.kind === 'manque').length, alertes: alertes.map((issue) => ({ kind: issue.kind, texte: issue.avocat ?? issue.text })) };
+    return { nom, titre, qualification, acte, objectifs: buts, verifie: Boolean(snapshot?.revision), erreurs: alertes.filter((issue) => issue.kind === 'erreur').length, manques: alertes.filter((issue) => issue.kind === 'manque').length, alertes: alertes.map((issue) => ({ kind: issue.kind, texte: issue.avocat ?? issue.text })) };
   };
   const history = (suites: Record<string, Suite>, nom: string) => {
     const chain: Array<{ nom: string; documents: Document[] }> = [];

@@ -32,6 +32,7 @@ export const RULES = {
 
   'raisonnement-mal-forme': { message: 'Raisonnement mal formé.', correction: 'Écrivez un objet avec objectifs et termes.' },
   'qualification-non-admise': { message: 'Qualification non admise.', correction: 'Écrivez drafting, contentieux ou consultation.' },
+  'acte-mal-forme': { message: 'Acte mal formé.', correction: 'Écrivez le type du document à produire, entre guillemets.' },
   'objectifs-mal-formes': { message: 'Objectifs mal formés ou non indiqués.', correction: 'Écrivez objectif et un verbe suivi du terme ou du montant.' },
   'verbe-non-indique': { message: 'Verbe non indiqué.', correction: 'Ajoutez obtenir, écarter, réduire ou augmenter.' },
   'verbe-duplique': { message: 'Plusieurs verbes indiqués.', correction: 'Gardez un seul verbe.' },
@@ -89,6 +90,7 @@ export const RULES = {
   'verbe-terme-sur-montant': { message: '{nom} déclaré comme montant.', correction: 'Utilisez réduire ou augmenter.' },
   'verbe-montant-sur-terme': { message: '{nom} déclaré comme terme.', correction: 'Utilisez obtenir ou écarter.' },
   'qualification-non-indiquee': { message: 'Qualification non indiquée.', correction: 'Ajoutez drafting, contentieux ou consultation.' },
+  'acte-non-indique': { message: 'Acte non indiqué.', correction: 'Ajoutez acte: \'<type du document à produire>\'.' },
   'hypothese-non-indiquee': { message: 'Hypothèse de l’objectif non indiquée.', correction: 'Ajoutez un cas dont attendu porte sur {nom}.' },
   'prescription-non-verifiee': { message: 'Prescription non vérifiée.', correction: 'Ajoutez prescription: \'{nom}\' et définissez ce terme.' },
   'validite-acte-non-verifiee': { message: 'Validité de l’acte non vérifiée.', correction: 'Ajoutez validite: \'{nom}\' et définissez ce terme.' },
