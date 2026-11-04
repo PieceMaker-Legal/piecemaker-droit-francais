@@ -167,9 +167,10 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-name" x="560" y="438">pm bordereau</text><text class="t-mono" x="730" y="438">pièce… dans l'ordre</text>
         <text class="t-name" x="560" y="456">pm raisonnement</text><text class="t-mono" x="730" y="456">verifier | lister</text>
         <text class="t-name" x="560" y="474">pm suivi_dossiers</text><text class="t-mono" x="730" y="474">verifier | lire | ecrire</text>
-        <text class="t-name" x="560" y="492">pm catala</text><text class="t-mono" x="730" y="492">verifier | formater | preuve | catleg | lister | env | exec</text>
-        <text class="t-note" x="560" y="514">Une commande par onglet. --dossier vise un autre dossier.</text>
-        <text class="t-note" x="560" y="532">Lancer l'index : accord de l'avocat. Il reste dans l'onglet Dossier.</text>
+        <text class="t-name" x="560" y="492">pm catala</text><text class="t-mono" x="730" y="492">verifier | formater | preuve | expliquer | catleg</text>
+        <text class="t-mono" x="730" y="510">lister | env | exec</text>
+        <text class="t-note" x="560" y="532">Une commande par onglet. --dossier vise un autre dossier.</text>
+        <text class="t-note" x="560" y="550">Lancer l'index : accord de l'avocat. Il reste dans l'onglet Dossier.</text>
 
         <text class="t-title t-skill-c" x="306" y="584">Skill docx-cli</text>
         <text class="t-note" x="306" y="602">Source de la commande docx : le skill</text>
@@ -240,7 +241,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     <section class="card wide">
       <h2>Pack Catala</h2>
-      <p>L'app de bureau installe le pack au démarrage, en tâche de fond : <code>catala</code>, <code>clerk</code>, <code>catala-lsp</code>, <code>catala-format</code>, <code>catala-dap</code>, le runtime Python Catala et, sur macOS, <code>catala-proof</code> avec Z3. <code>catleg</code> est dans le Python partagé. <code>pm catala</code> lance ces outils sans serveur PieceMaker. Les programmes vivent dans <code>.piecemaker/catala/&lt;nom&gt;/</code>, les résultats dans son dossier <code>resultats/</code>. L'onglet Catala (<code>piecemaker-catala</code>) montre l'état du pack et les bilans. Détail : <code>docs/catala.md</code>.</p>
+      <p>L'app de bureau installe automatiquement une archive précompilée et vérifie son SHA-256. Le pack Mac et Windows comprend <code>catala</code>, <code>clerk</code>, <code>catala-lsp</code>, <code>catala-format</code>, <code>catala-dap</code>, le runtime Python Catala et <code>catala-proof</code> avec Z3. Aucune compilation ne tourne sur le poste de l'avocat. <code>catleg</code> utilise le Python partagé.</p>
+      <p>Les programmes vivent dans <code>.piecemaker/catala/&lt;nom&gt;/</code>, les résultats dans <code>resultats/</code>. L'onglet Catala (<code>piecemaker-catala</code>) montre les bilans et le graphe produit par <code>pm catala expliquer</code>. Ce graphe décrit une exécution et ne prouve pas les faits. Les archives des deux plateformes doivent être construites, testées et épinglées avant livraison. Détail : <code>docs/catala.md</code>.</p>
     </section>
 
     <section class="card">

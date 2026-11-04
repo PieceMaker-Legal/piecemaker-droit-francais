@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { createWriteStream, readFileSync } from 'node:fs';
+import { createReadStream, createWriteStream, readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,18 +11,36 @@ import { componentLayout } from './install.mjs';
 
 export const catalaRecipe = JSON.parse(readFileSync(new URL('./catala-pack.json', import.meta.url), 'utf8'));
 export const catalaMarker = '.piecemaker-catala.json';
+export const catalaTools = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
 const OWNER = 'piecemaker-catala';
-const MAC_TOOL_DIRECTORIES = ['/opt/homebrew/bin', '/usr/local/bin'];
-const BINARIES = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
 
 export function catalaPlatform(platform = process.platform, arch = process.arch) {
-  if (platform === 'darwin') return 'macos';
+  if (platform === 'darwin' && arch === 'arm64') return 'macos';
   if (platform === 'win32' && arch === 'x64') return 'windows';
   return null;
 }
 
-export function catalaPackId(recipe, platformKey) {
-  const content = JSON.stringify({ format: recipe.format, catala: recipe.catala, platform: platformKey, recipe: recipe[platformKey] });
+export function catalaArchiveAsset(platformKey) {
+  return `piecemaker-catala-${platformKey}.tar.gz`;
+}
+
+export function catalaArchiveSource(recipe, platformKey, env = process.env) {
+  const asset = catalaArchiveAsset(platformKey);
+  if (env.PIECEMAKER_CATALA_ARCHIVE) {
+    const sha256 = String(env.PIECEMAKER_CATALA_ARCHIVE_SHA256 || '').toLowerCase();
+    if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error('PIECEMAKER_CATALA_ARCHIVE_SHA256 doit donner le SHA-256 de l’archive locale.');
+    return { asset, sha256, file: path.resolve(env.PIECEMAKER_CATALA_ARCHIVE) };
+  }
+  const pinned = recipe.archive?.[platformKey];
+  if (!pinned || !recipe.archive?.tag) return null;
+  if (!/^[0-9a-f]{64}$/.test(pinned.sha256 || '')) throw new Error('Empreinte de l’archive Catala invalide.');
+  const source = { asset: pinned.asset || asset, sha256: pinned.sha256, size: pinned.size };
+  if (env.PIECEMAKER_PREBUILT_ASSET_DIR) return { ...source, file: path.resolve(env.PIECEMAKER_PREBUILT_ASSET_DIR, source.asset) };
+  return { ...source, url: `https://github.com/${recipe.archive.repository}/releases/download/${recipe.archive.tag}/${source.asset}` };
+}
+
+export function catalaPackId(recipe, platformKey, source) {
+  const content = JSON.stringify({ format: recipe.format, catala: recipe.catala, platform: platformKey, archive: source.sha256 });
   return crypto.createHash('sha256').update(content).digest('hex').slice(0, 24);
 }
 
@@ -37,42 +55,46 @@ export function catalaLayout(env = process.env, homeDir = os.homedir()) {
   };
 }
 
-export function macosSteps(recipe, directory, jobs) {
-  const { opamRepository, compiler, pins, packages } = recipe.macos;
-  const opamRoot = path.join(directory, 'opam');
-  return [
-    { name: 'opam-init', done: path.join(opamRoot, 'config'), args: ['init', '--bare', '--no-setup', '--yes', 'default', opamRepository] },
-    { name: 'switch', done: path.join(opamRoot, 'catala', '.opam-switch', 'switch-state'), args: ['switch', 'create', 'catala', compiler, '--no-switch', '--yes'] },
-    ...Object.entries(pins).map(([name, url]) => ({ name: `pin-${name}`, args: ['pin', 'add', '--no-action', '--yes', name, url] })),
-    { name: 'install', args: ['install', '--yes', `--jobs=${jobs}`, ...packages] },
-  ];
+export function unsafeArchiveEntries(names, verbose) {
+  const unsafe = names.filter((name) => {
+    const clean = name.replace(/\/$/, '');
+    const parts = clean.split('/');
+    return !clean || clean.includes('\\') || clean.startsWith('/') || /^[A-Za-z]:/.test(clean) || parts.some((part) => !part || part === '.' || part === '..');
+  });
+  const links = verbose.split(/\r?\n/).filter((line) => line && !/^[-d]/.test(line));
+  return [...unsafe, ...links];
 }
 
-export function macosPack(directory, toolDirectory) {
-  const prefix = path.join(directory, 'opam', 'catala');
+function nickelString(value) {
+  return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/%\{/g, '\\%{')}"`;
+}
+
+export function catalaTopiaryConfig(prefix, grammars) {
+  const root = prefix.split(path.sep).join('/');
+  const languages = grammars.map(({ language, extensions, file }) => [
+    `    ${language} = {`,
+    `      extensions = [${extensions.map(nickelString).join(', ')}],`,
+    `      grammar.source.path = ${nickelString(`${root}/${file}`)},`,
+    '    },',
+  ].join('\n'));
+  return `{\n  languages = {\n${languages.join('\n')}\n  }\n}\n`;
+}
+
+export function archivePack(prefix, platformKey, manifest) {
+  if (manifest.format !== 1 || manifest.platform !== platformKey || !Array.isArray(manifest.grammars) || !manifest.grammars.length) throw new Error('Manifeste Catala invalide.');
+  const files = [...catalaTools, 'ninja'].map((name) => manifest.tools?.[name]);
+  files.push(manifest.runtimePython, manifest.topiaryConfig, ...manifest.grammars.map((grammar) => grammar.file));
+  if (files.some((file) => typeof file !== 'string' || unsafeArchiveEntries([file], '').length)) throw new Error('Chemin non sûr dans le manifeste Catala.');
+  if (manifest.grammars.some(({ language, extensions }) => !/^catala_(en|fr|pl)$/.test(language) || !Array.isArray(extensions) || extensions.some((extension) => typeof extension !== 'string'))) throw new Error('Grammaire Catala invalide.');
+  const join = platformKey === 'windows' ? path.win32.join : path.posix.join;
+  const local = (relative) => join(prefix, ...relative.split('/'));
   return {
     prefix,
-    bin: Object.fromEntries(BINARIES.map((name) => [name, path.join(prefix, 'bin', name)])),
-    path: [path.join(prefix, 'bin'), toolDirectory].filter(Boolean),
-    env: {
-      OPAMROOT: path.join(directory, 'opam'),
-      OPAMSWITCH: 'catala',
-      OPAM_SWITCH_PREFIX: prefix,
-      CAML_LD_LIBRARY_PATH: [path.join(prefix, 'lib', 'stublibs'), path.join(prefix, 'lib', 'ocaml', 'stublibs')].join(':'),
-    },
-    runtimePython: path.join(prefix, 'lib', 'catala', 'runtime', 'python', 'src'),
+    bin: Object.fromEntries(catalaTools.map((name) => [name, local(manifest.tools[name])])),
+    path: [join(prefix, 'bin')],
+    env: { NINJA_BIN: local(manifest.tools.ninja), CATALA_STDLIB: join(prefix, 'lib', 'catala', 'runtime') },
+    runtimePython: local(manifest.runtimePython),
     proof: true,
-  };
-}
-
-export function windowsPack(home) {
-  return {
-    prefix: home,
-    bin: Object.fromEntries(BINARIES.map((name) => [name, path.win32.join(home, 'bin', `${name}.cmd`)])),
-    path: [path.win32.join(home, 'bin')],
-    env: {},
-    runtimePython: path.win32.join(home, 'toolchain', 'lib', 'catala', 'runtime', 'python', 'src'),
-    proof: false,
   };
 }
 
@@ -90,6 +112,7 @@ export function createCatalaHost() {
     },
     mkdir: (target) => fs.mkdir(target, { recursive: true }),
     rm: (target) => fs.rm(target, { recursive: true, force: true }),
+    rename: (from, to) => fs.rename(from, to),
     list: (target) => fs.readdir(target).catch(() => []),
     async lock(target) {
       await fs.mkdir(path.dirname(target), { recursive: true });
@@ -106,8 +129,8 @@ export function createCatalaHost() {
     unlock: (target) => fs.rm(target, { force: true }),
     run: runLogged,
     download,
+    hashFile,
     fetch: globalThis.fetch,
-    cpus: () => os.availableParallelism?.() ?? os.cpus().length,
   };
 }
 
@@ -120,7 +143,7 @@ function processAlive(pid) {
   }
 }
 
-function runLogged(command, args, { env, log, cwd = os.homedir() } = {}) {
+function runLogged(command, args, { env, log, cwd = os.homedir(), quiet = false } = {}) {
   return new Promise((resolve) => {
     const output = log ? createWriteStream(log, { flags: 'a' }) : null;
     output?.write(`\n$ ${command} ${args.join(' ')}\n`);
@@ -129,16 +152,22 @@ function runLogged(command, args, { env, log, cwd = os.homedir() } = {}) {
     for (const stream of [child.stdout, child.stderr]) {
       stream.on('data', (chunk) => {
         captured.push(chunk);
-        output?.write(chunk);
+        if (!quiet) output?.write(chunk);
       });
     }
     const finish = (code, message = '') => {
       output?.end(message ? `${message}\n` : '');
-      resolve({ code, output: Buffer.concat(captured).toString('utf8').slice(-4000) + message });
+      resolve({ code, output: Buffer.concat(captured).toString('utf8') + message });
     };
     child.on('error', (error) => finish(1, error.message));
     child.on('close', (code) => finish(code ?? 1));
   });
+}
+
+async function hashFile(file) {
+  const hash = crypto.createHash('sha256');
+  await pipeline(createReadStream(file), hash);
+  return hash.digest('hex');
 }
 
 async function download(fetchImpl, url, destination, expected) {
@@ -166,83 +195,72 @@ async function required(host, command, args, options, step) {
   return result;
 }
 
-async function findTool(host, name, directories) {
-  for (const directory of directories) {
-    const candidate = path.join(directory, name);
-    if (await host.exists(candidate)) return candidate;
-  }
-  return null;
+function tarCommand(platformKey, env) {
+  return platformKey === 'windows' ? path.win32.join(env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : '/usr/bin/tar';
 }
 
-async function installMacos({ host, recipe, directory, env, log, setStep }) {
-  const brew = await findTool(host, 'brew', MAC_TOOL_DIRECTORIES);
-  if (!brew) return { skipped: 'Homebrew est requis pour compiler Catala sur macOS (https://brew.sh).' };
-  const toolDirectory = path.dirname(brew);
-  const searchPath = [toolDirectory, path.join(os.homedir(), '.cargo', 'bin'), '/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(':');
-  const runEnv = { ...env, PATH: searchPath, HOMEBREW_NO_AUTO_UPDATE: '1', OPAMROOT: path.join(directory, 'opam'), OPAMSWITCH: 'catala', OPAMYES: '1', OPAMCONFIRMLEVEL: 'unsafe-yes', OPAMCOLOR: 'never' };
-  let opam = await findTool(host, 'opam', [toolDirectory]);
-  if (!opam) {
-    await setStep('opam');
-    await required(host, brew, ['install', 'opam'], { env: runEnv, log }, 'brew install opam');
-    opam = path.join(toolDirectory, 'opam');
+async function fetchArchive({ host, source, directory, setStep }) {
+  if (source.file) {
+    await setStep('verification-archive');
+    if (!(await host.exists(source.file))) throw new Error(`Archive Catala introuvable : ${source.file}`);
+    if ((await host.hashFile(source.file)) !== source.sha256) throw new Error(`Empreinte inattendue pour ${source.file}.`);
+    return { file: source.file, temporary: false };
   }
-  for (const step of macosSteps(recipe, directory, Math.max(1, Math.floor(host.cpus() / 2)))) {
-    if (step.done && await host.exists(step.done)) continue;
-    await setStep(step.name);
-    await required(host, opam, step.args, { env: runEnv, log }, `opam ${step.name}`);
-  }
-  return macosPack(directory, toolDirectory);
+  const file = path.join(directory, source.asset);
+  await setStep('telechargement');
+  await host.download(host.fetch, source.url, file, source.sha256);
+  return { file, temporary: true };
 }
 
-async function findCatalaHome(host, directory, depth = 4) {
-  if (await host.exists(path.win32.join(directory, 'bin', 'catala.cmd'))) return directory;
-  if (depth === 0) return null;
-  for (const entry of await host.list(directory)) {
-    const found = await findCatalaHome(host, path.win32.join(directory, entry), depth - 1);
-    if (found) return found;
+async function extractArchive({ host, platformKey, archive, prefix, env, log, setStep }) {
+  const tar = tarCommand(platformKey, env);
+  await setStep('controle-archive');
+  const names = await required(host, tar, ['-tzf', archive], { env, log, quiet: true }, 'tar -t');
+  const verbose = await required(host, tar, ['-tvzf', archive], { env, log, quiet: true }, 'tar -tv');
+  const unsafe = unsafeArchiveEntries(names.output.split(/\r?\n/).filter(Boolean), verbose.output);
+  if (unsafe.length) throw new Error(`Archive Catala refusée, entrées non sûres : ${unsafe.slice(0, 5).join(', ')}`);
+  await setStep('extraction');
+  const staging = `${prefix}.extraction`;
+  await host.rm(staging);
+  await host.mkdir(staging);
+  await required(host, tar, ['-xzf', archive, '-C', staging], { env, log }, 'tar -x');
+  await host.rm(prefix);
+  await host.rename(staging, prefix);
+}
+
+async function installArchive({ host, platformKey, source, directory, env, log, setStep, recipe }) {
+  const prefix = path.join(directory, 'catala');
+  const manifestFile = path.join(prefix, 'manifest.json');
+  if (!(await host.exists(manifestFile))) {
+    const archive = await fetchArchive({ host, source, directory, setStep });
+    await extractArchive({ host, platformKey, archive: archive.file, prefix, env, log, setStep });
+    if (archive.temporary) await host.rm(archive.file);
   }
-  return null;
+  const manifest = JSON.parse(await host.readFile(manifestFile));
+  if (manifest.platform !== platformKey) throw new Error(`Archive Catala pour ${manifest.platform}, attendu ${platformKey}.`);
+  if (JSON.stringify(manifest.catala) !== JSON.stringify(recipe.catala)) throw new Error('Version du manifeste Catala inattendue.');
+  const pack = archivePack(prefix, platformKey, manifest);
+  await setStep('grammaires');
+  await host.writeFile(path.join(prefix, ...manifest.topiaryConfig.split('/')), catalaTopiaryConfig(prefix, manifest.grammars));
+  return pack;
 }
 
-async function installWindows({ host, recipe, directory, env, log, setStep }) {
-  const { url, sha256 } = recipe.windows.msi;
-  const target = path.win32.join(directory, 'msi');
-  let home = await findCatalaHome(host, target);
-  if (!home) {
-    const msi = path.win32.join(directory, path.win32.basename(new URL(url).pathname));
-    await setStep('download');
-    if (!(await host.exists(msi))) await host.download(host.fetch, url, msi, sha256);
-    await setStep('extract');
-    const system = env.SystemRoot || 'C:\\Windows';
-    await required(host, path.win32.join(system, 'System32', 'msiexec.exe'), ['/a', msi, '/qn', `TARGETDIR=${target}`], { env, log }, 'msiexec /a');
-    home = await findCatalaHome(host, target);
-    if (!home) throw new Error('Catala introuvable après extraction du MSI.');
-    await setStep('grammar');
-    await required(host, path.win32.join(system, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.win32.join(home, 'toolchain', 'libexec', 'grammar-config.ps1'), '-InstallDir', home], { env, log }, 'grammar-config.ps1');
-    await host.rm(msi);
-  }
-  return windowsPack(home);
+export function catalaCommand(pack, name, args) {
+  return { command: pack.bin[name], args };
 }
 
-export function catalaCommand(pack, name, args, platform = process.platform) {
-  const binary = pack.bin[name];
-  if (platform === 'win32') return { command: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', binary, ...args] };
-  return { command: binary, args };
-}
-
-async function probe(host, pack, platform, env, log) {
+async function probe(host, pack, env, log) {
   for (const name of Object.keys(pack.bin)) {
     if (!(await host.exists(pack.bin[name]))) throw new Error(`${name} absent du pack Catala.`);
   }
+  if (!(await host.exists(pack.env.NINJA_BIN))) throw new Error('ninja absent du pack Catala.');
   if (!(await host.exists(path.join(pack.runtimePython, 'catala', 'catala_runtime.py')))) throw new Error('Runtime Python Catala absent du pack.');
   const runEnv = { ...env, ...pack.env, PATH: [...pack.path, env.PATH || ''].join(path.delimiter) };
-  const version = catalaCommand(pack, 'catala', ['--version'], platform);
+  const version = catalaCommand(pack, 'catala', ['--version']);
   const result = await required(host, version.command, version.args, { env: runEnv, log }, 'catala --version');
-  if (pack.proof) {
-    const proof = catalaCommand(pack, 'catala', ['proof', '--help=plain'], platform);
-    await required(host, proof.command, proof.args, { env: runEnv, log }, 'catala proof --help');
-  }
-  return result.output.trim().split('\n').pop();
+  const proof = catalaCommand(pack, 'catala', ['proof', '--help=plain']);
+  await required(host, proof.command, proof.args, { env: runEnv, log, quiet: true }, 'catala proof --help');
+  return result.output.trim().split('\n').pop().trim();
 }
 
 async function readJson(host, file) {
@@ -274,7 +292,19 @@ export async function installCatalaPack({ env = process.env, platform = process.
     await writeStatus({ state: 'indisponible', error: `Plateforme non prise en charge : ${platform}/${arch}.` });
     return { state: 'indisponible' };
   }
-  const id = catalaPackId(recipe, platformKey);
+  let source;
+  try {
+    source = catalaArchiveSource(recipe, platformKey, env);
+  } catch (error) {
+    await writeStatus({ state: 'echec', step: 'recette', error: error.message });
+    return { state: 'echec', step: 'recette', error: error.message };
+  }
+  if (!source) {
+    const error = `Aucune archive Catala précompilée n’est publiée pour ${platformKey} dans cette version de l’app.`;
+    await writeStatus({ state: 'indisponible', error });
+    return { state: 'indisponible', error };
+  }
+  const id = catalaPackId(recipe, platformKey, source);
   const directory = path.join(layout.base, id);
   const current = await readJson(host, layout.packFile);
   if (current?.id === id && await ownedPack(host, directory) && await host.exists(path.join(directory, 'ready'))) return { state: 'pret', id, pack: current };
@@ -288,14 +318,10 @@ export async function installCatalaPack({ env = process.env, platform = process.
       await writeStatus({ state: 'installation', id, step });
     };
     await setStep(step);
-    const install = platformKey === 'macos' ? installMacos : installWindows;
-    const pack = await install({ host, recipe, directory, env, log: layout.logFile, setStep });
-    if (pack.skipped) {
-      await writeStatus({ state: 'indisponible', id, error: pack.skipped });
-      return { state: 'indisponible', id, error: pack.skipped };
-    }
+    const pack = await installArchive({ host, platformKey, source, directory, env, log: layout.logFile, setStep, recipe });
     await setStep('verification');
-    const version = await probe(host, pack, platform, env, layout.logFile);
+    const version = await probe(host, pack, env, layout.logFile);
+    if (version !== recipe.catala.version) throw new Error(`Version Catala inattendue : ${version}.`);
     const descriptor = { format: 1, id, platform: platformKey, catala: recipe.catala, version, ...pack, installedAt: now() };
     await host.writeFile(path.join(directory, 'ready'), `${now()}\n`);
     await host.writeFile(layout.packFile, `${JSON.stringify(descriptor, null, 2)}\n`);

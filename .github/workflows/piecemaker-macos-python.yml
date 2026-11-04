@@ -38,6 +38,9 @@ jobs:
       - name: Test Python component installation
         run: node --test desktop-bootstrap/composants/*.test.mjs
 
+      - name: Require verified Catala packs for both platforms
+        run: node desktop-bootstrap/composants/catala-release-ready.mjs
+
       - name: Build and verify relocated macOS Python
         run: node desktop-bootstrap/composants/build-release.mjs "$RUNNER_TEMP/python-assets"
         env:

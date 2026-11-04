@@ -47,6 +47,9 @@ jobs:
       - name: Test Windows startup
         run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js desktop-bootstrap/overlay/electron-piecemaker/desktopWindow.test.js desktop-bootstrap/overlay/electron-piecemaker/windowsUpdater.test.js desktop-bootstrap/overlay/electron-piecemaker/updateShutdown.test.js desktop-bootstrap/overlay/electron-piecemaker/asar-runtime.test.mjs desktop-bootstrap/lib/native-uninstall.test.mjs
 
+      - name: Require verified Catala packs for both platforms
+        run: node desktop-bootstrap/composants/catala-release-ready.mjs
+
       - name: Test desktop dependency selection
         run: |
           $env:PSModulePath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\Modules'
