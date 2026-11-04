@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,7 +8,9 @@ import { after, before, test } from 'node:test';
 
 import express from 'express';
 
-import { catalaScriptPath, createCatalaRouter } from './catala.js';
+import { connectedClients, WS_OPEN_STATE } from '../modules/websocket/index.js';
+
+import { catalaScriptPath, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
 const TESTS = '> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d\'application JeanDupont:\n  résultat calcul champ d\'application Prime.Prime\n```\n';
@@ -17,12 +20,14 @@ let home = '';
 let dossier = '';
 let base = '';
 let close = () => {};
+let explanations = 0;
 
 const runner = async (command: string, args: string[], options: { cwd: string }) => {
   const tool = path.basename(command);
+  if (tool === 'catala' && args[0] === 'explain') { explanations++; return { code: 0, stdout: 'digraph G { x001 [label=<Prime>] }', stderr: '' }; }
   if (tool === 'catala-format') return { code: 0, stdout: fs.readFileSync(path.join(options.cwd, args.at(-1)!), 'utf8'), stderr: '' };
   if (tool === 'clerk' && args[0] === 'runtest') fs.writeFileSync(path.join(options.cwd, args.find((arg) => arg.startsWith('--report='))!.slice(9)), 'report');
-  if (tool === 'clerk' && args[0] === 'report') return { code: 0, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, args.at(-1)!), tests: { scopes: [{ scope_name: 'JeanDupont', success: true, errors: [], time: 0.1 }], 'inline-tests': [] } }] }), stderr: '' };
+  if (tool === 'clerk' && args[0] === 'report') return { code: 0, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, 'test_prime.catala_fr'), tests: { scopes: [{ scope_name: 'JeanDupont', success: true, errors: [], time: 0.1 }], 'inline-tests': [] } }] }), stderr: '' };
   return { code: 0, stdout: 'ok', stderr: '' };
 };
 
@@ -48,6 +53,7 @@ before(async () => {
   fs.writeFileSync(path.join(home, 'catala', 'status.json'), JSON.stringify({ state: 'pret', id: 'pack-essai' }));
   const env = { PIECEMAKER_HOME: home, PATH: '/usr/bin' };
   const app = express();
+  app.use(createCatalaUpdatedRouter((request) => request.headers['x-test-loopback'] !== 'no', () => [dossier]));
   app.use(createCatalaRouter(catalaScriptPath(process.cwd()), { env, homeDir: home, run: runner, python: null, credentials: null, now: () => '2026-11-04T10:00:00Z' }));
   const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
@@ -63,7 +69,9 @@ after(() => {
 test('liste le pack et les programmes du dossier avec leurs fichiers', async () => {
   const directory = program('prime-anciennete');
   fs.mkdirSync(path.join(directory, 'resultats'));
-  fs.writeFileSync(path.join(directory, 'resultats', 'explication.json'), JSON.stringify({ scope: 'JeanDupont', passed: true }));
+  const hash = crypto.createHash('sha256');
+  for (const file of ['prime.catala_fr', 'test_prime.catala_fr']) hash.update(`${file}\0`).update(fs.readFileSync(path.join(directory, file))).update('\0');
+  fs.writeFileSync(path.join(directory, 'resultats', 'explication.json'), JSON.stringify({ scope: 'JeanDupont', passed: true, sources_sha256: hash.digest('hex') }));
   fs.writeFileSync(path.join(directory, 'resultats', 'explication.dot'), 'digraph G { x001 -> x002; }');
   const response = await fetch(`${base}/?projectPath=${encodeURIComponent(dossier)}`);
   const data = await response.json() as any;
@@ -85,6 +93,8 @@ test('vérifie un programme et renvoie le bilan et les journaux', async () => {
   const verified = data.programmes.find((entry: { nom: string }) => entry.nom === 'licenciement-jean-dupont');
   assert.equal(verified.verification.passed, true);
   assert.equal(verified.enCours, false);
+  assert.equal(verified.explication.passed, true);
+  assert.equal(verified.perimee, false);
   assert.ok(verified.journaux.some((file: { nom: string }) => file.nom === 'typecheck.log'));
 });
 
@@ -92,4 +102,42 @@ test('refuse un nom de programme mal écrit', async () => {
   const response = await fetch(`${base}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectPath: dossier, programme: '../autre' }) });
   assert.equal(response.status, 400);
   assert.match((await response.json() as { error: string }).error, /mal écrit/);
+});
+
+test('ne calcule rien à la lecture du volet et produit une nouvelle trace seulement à la vérification', async () => {
+  const directory = program('prime-actualisee');
+  const before = explanations;
+  const read = async () => (await (await fetch(`${base}/?projectPath=${encodeURIComponent(dossier)}`)).json() as any).programmes.find((entry: any) => entry.nom === 'prime-actualisee');
+  const initial = await read();
+  assert.equal(initial.graphe, null);
+  assert.equal(explanations, before);
+  const verify = () => fetch(`${base}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectPath: dossier, programme: 'prime-actualisee' }) });
+  await verify();
+  const verified = await read();
+  assert.equal(verified.explication.passed, true);
+  assert.equal(explanations, before + 1);
+  fs.appendFileSync(path.join(directory, 'test_prime.catala_fr'), '\nTexte fictif ajouté.\n');
+  const stale = await read();
+  assert.equal(stale.perimee, true);
+  assert.equal(stale.graphe, null);
+  assert.equal(explanations, before + 1);
+  await verify();
+  const updated = await read();
+  assert.equal(updated.perimee, false);
+  assert.equal(explanations, before + 2);
+  assert.notEqual(updated.explication.sources_sha256, verified.explication.sources_sha256);
+});
+
+test('notifie les clients existants seulement depuis la boucle locale pour un dossier connu', async () => {
+  const messages: string[] = [];
+  const client = { readyState: WS_OPEN_STATE, send: (message: string) => messages.push(message) };
+  connectedClients.add(client);
+  const notify = (cwd: string, loopback = 'yes') => fetch(`${base}/catala-updated`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-loopback': loopback }, body: JSON.stringify({ cwd }) });
+  try {
+    assert.equal((await notify(dossier, 'no')).status, 403);
+    assert.equal((await notify(path.join(root, 'inconnu'))).status, 400);
+    assert.equal(messages.length, 0);
+    assert.equal((await notify(dossier)).status, 200);
+    assert.deepEqual(JSON.parse(messages[0]), { type: 'piecemaker-catala-updated', projectPath: dossier });
+  } finally { connectedClients.delete(client); }
 });

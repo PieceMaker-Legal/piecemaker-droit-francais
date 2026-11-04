@@ -100,13 +100,21 @@ Une preuve réussit si `catala proof --debug` produit au moins une obligation, s
 
 ## Explication d’une exécution
 
-`pm catala expliquer --programme <nom> --fichier test_<module>.catala_fr --scope <Scenario>` lance le plugin officiel `explain`.
+`pm catala verifier --programme <nom>` produit aussi le graphe après une vérification réussie. Le scénario précédent est conservé s’il existe encore ; sinon, le premier scénario réussi est choisi. Les résultats de tests officiels de clerk désignent ce scénario. Un échec d’explication est signalé séparément des contrôles.
+
+`pm catala expliquer --programme <nom> --fichier test_<module>.catala_fr --scope <Scenario>` reste disponible pour choisir une autre exécution.
 
 Le champ choisi doit avoir ses entrées fixées dans le scénario. Quand le programme contient un seul fichier, `--fichier` est facultatif.
 
 La commande produit `resultats/explication.dot`, `explication.json` et `explication.log`. Le bilan identifie le fichier, le champ, les dates et l’empreinte des sources. Une exécution échouée retire le graphe précédent.
 
-L’onglet Catala affiche le dernier graphe. Les flèches pointillées représentent les conditions appliquées. Le dessin utilise JavaScript, sans Graphviz et sans service externe. Les liens externes du DOT ne sont pas activés.
+L’onglet Catala affiche les règles à gauche, les conditions au centre et les données du scénario à droite. Les cartes reprennent les couleurs du volet Raisonnement : règles bleues, calculs monétaires violets, conditions et états ouverts dorés, données vertes ou rouges, résultat du champ turquoise. Les valeurs restent celles de Catala. Les identifiants sont affichés avec des espaces.
+
+Le volet propose Graphe / Vue écrite, la sélection d’une étape, le détail des dépendances et des usages, l’ouverture du fichier du programme, le zoom, le déplacement, la légende et le déroulé de la trace. Les états explicitement nommés `Indéterminé` ou `Disputé` sont signalés. Leur absence ne prouve pas que le dossier est complet. La trace ne contient pas les pièces, les alertes juridiques ni les scénarios alternatifs du vérificateur YAML : ces informations ne sont pas inventées.
+
+Après la commande, le CLI notifie le serveur local par `/api/piecemaker/local/catala-updated`. Seuls les dossiers connus et la boucle locale sont acceptés. Le serveur transmet un événement léger sur le WebSocket déjà ouvert. Le pont PieceMaker du workspace le relaie au volet actif, qui relit le bilan. Le bouton Vérifier utilise le même mécanisme. Aucun watcher, flux supplémentaire ou interrogation périodique n’est ajouté. Ouvrir le volet charge le dernier résultat ; Actualiser permet une relecture manuelle. Une empreinte différente masque le graphe périmé. Une reconnexion recharge le résultat.
+
+Les flèches pointillées représentent les conditions appliquées. Le dessin utilise JavaScript, sans Graphviz et sans service externe. Les liens externes du DOT ne sont pas activés ; seuls les fichiers locaux du programme peuvent être ouverts.
 
 Le graphe explique une exécution précise. Il ne valide ni les faits, ni toutes les exécutions possibles, ni la fidélité au texte juridique.
 

@@ -1,4 +1,5 @@
 import { loadCatala, verifyCatala } from './api.js';
+import { mountExplanation } from './graph-view.js';
 import { explanationGraph } from './graph.js';
 import { STYLES } from './styles.js';
 
@@ -9,7 +10,7 @@ type Check = { name: string; command: string; exit_code: number; seconds: number
 type Report = { started_utc: string; finished_utc: string; passed: boolean; checks: Check[] };
 type Proof = Report & { fichier: string; scope: string; conflits: number };
 type Catleg = { date_controle: string; passed: boolean; fichiers: Array<{ fichier: string; passed: boolean; messages: string[] }> };
-type Program = { nom: string; enCours: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string }) | null; graphe: string | null };
+type Program = { nom: string; enCours: boolean; perimee: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string }) | null; graphe: string | null };
 export type CatalaSnapshot = {
   pack: { id: string; platform: string; version: string; proof: boolean; installedAt: string } | null;
   status: { state: string; id?: string; step?: string; error?: string; updatedAt?: string } | null;
@@ -18,7 +19,6 @@ export type CatalaSnapshot = {
 
 const STATES: Record<string, [string, string]> = { pret: ['ok', 'Prêt'], installation: ['warn', 'Installation en cours'], 'en-cours': ['warn', 'Installation en cours'], indisponible: ['ko', 'Indisponible'], echec: ['ko', 'Échec de l’installation'] };
 const CHECKS: Record<string, string> = { typecheck: 'Typage et invariants', format: 'Mise en forme', tests: 'Tests clerk', 'tests-python': 'Tests Python' };
-const POLL_MS = 2500;
 const cleanups = new WeakMap<HTMLElement, () => void>();
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const pill = (tone: string, label: string) => `<span class="pmc-pill pmc-${tone}">${escape(label)}</span>`;
@@ -43,9 +43,9 @@ export function mount(container: HTMLElement, api: Host) {
   let serialized = '';
   let verifying = '';
   let error = '';
-  let sequence = 0;
   let stopped = false;
-  let timer = 0;
+  let stopGraph = () => {};
+  let sequence = 0;
 
   const shown = () => data?.programmes.find((entry) => entry.nom === chosen) ?? data?.programmes[0];
   const packPart = () => {
@@ -77,16 +77,17 @@ export function mount(container: HTMLElement, api: Host) {
   };
   const explanationPart = (program: Program) => {
     const report = program.explication;
-    if (!report) return '';
+    if (program.perimee || !report) return '<section class="pmc-part"><h4>Graphe à actualiser</h4><p class="pmc-muted">Lancez pm catala verifier pour produire le graphe correspondant au programme.</p></section>';
     let graph = '<p class="pmc-muted">Graphe absent. Relancez l’explication.</p>';
     if (report.passed && program.graphe) {
       try { graph = explanationGraph(program.graphe); }
       catch (failure) { graph = `<p class="pmc-ko">${escape(failure instanceof Error ? failure.message : failure)}</p>`; }
     }
-    return `<section class="pmc-part"><h4>Explication de l’exécution</h4><p>${escape(report.fichier)} › ${escape(report.scope)} · ${escape(when(report.finished_utc))} · ${opener(program.journaux.find((file) => file.nom === 'explication.log'), 'Journal')}</p><p class="pmc-muted">Les flèches pointillées indiquent les conditions appliquées. Ce graphe explique cette exécution ; il ne prouve pas les faits.</p>${report.passed ? `<div class="pmc-graph">${graph}</div>` : '<p class="pmc-ko">L’explication a échoué. Consultez le journal.</p>'}</section>`;
+    return `<section class="pmc-explanation" data-mode="graph"><header class="pmc-graph-head"><div class="pmc-tabs" role="tablist" aria-label="Vue Catala"><button role="tab" data-mode="graph" aria-selected="true">Graphe</button><button role="tab" data-mode="written" aria-selected="false">Vue écrite</button></div><select data-result aria-label="Étape du programme"></select><span class="pmc-muted">${escape(report.scope)} · ${escape(when(report.finished_utc))}</span></header><div class="pmc-open-states" aria-live="polite"></div><div class="pmc-canvas" aria-label="Graphe Catala"><div class="pmc-stage">${report.passed ? graph : '<p class="pmc-ko">L’explication a échoué. Consultez le journal.</p>'}</div><div class="pmc-legend" hidden><span class="is-calculation">Règle · résultat</span><span class="is-condition">Condition appliquée</span><span class="is-input">Donnée du scénario</span><span class="pmc-ok">Vrai</span><span class="pmc-ko">Faux</span><span class="pmc-warn">Pointillés : état ouvert ou condition</span><p>Une donnée vraie n’est pas une preuve. Seules les branches exécutées sont présentes.</p></div><aside class="pmc-inspector" aria-label="Détail de l’étape" hidden></aside><div class="pmc-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1.2" aria-label="Zoomer">+</button><button data-zoom="0.833333" aria-label="Dézoomer">−</button><button data-fit>Ajuster</button><button data-replay>Dérouler</button></div></div><div class="pmc-written"></div><p class="pmc-lead">${escape(report.fichier)} › ${escape(report.scope)} · ${opener(program.journaux.find((file) => file.nom === 'explication.log'), 'Journal')} · Actualisé après la vérification du programme.</p></section>`;
   };
   const filesPart = (program: Program) => `<section class="pmc-part"><h4>Fichiers</h4>${program.fichiers.length ? `<ul class="pmc-files">${program.fichiers.map((file) => `<li>${opener(file)}</li>`).join('')}</ul>` : '<p class="pmc-muted">Aucun fichier .catala_fr.</p>'}${program.journaux.length ? `<h4>Journaux</h4><ul class="pmc-files">${program.journaux.map((file) => `<li>${opener(file)}</li>`).join('')}</ul>` : ''}</section>`;
   const paint = () => {
+    stopGraph();
     root.dataset.theme = context.theme;
     const warning = error ? `<div class="pmc-warning">${escape(error)}</div>` : '';
     if (!context.project) { panel.innerHTML = '<p class="pmc-muted">Ouvrez un dossier pour voir ses programmes Catala.</p>'; return; }
@@ -94,8 +95,15 @@ export function mount(container: HTMLElement, api: Host) {
     const program = shown();
     if (!program) { panel.innerHTML = `${warning}${packPart()}<p class="pmc-muted">Aucun programme Catala dans ce dossier : un programme est un dossier .piecemaker/catala/&lt;nom&gt;/ avec clerk.toml.</p>`; return; }
     const running = program.enCours || verifying === program.nom;
-    const run = `<div class="pmc-run"><button class="pmc-primary" data-verify="${escape(program.nom)}"${running || verifying || !data.pack ? ' disabled' : ''}>${running ? 'Vérification en cours…' : 'Vérifier'}</button><strong>${escape(program.nom)}</strong>${program.verification ? `<span class="pmc-tally">${verdict(program.verification)}</span>` : ''}</div>${data.pack ? '' : '<p class="pmc-muted">Pack Catala absent : la vérification est impossible.</p>'}`;
-    panel.innerHTML = `${warning}${run}${packPart()}${listPart(program)}<section class="pmc-part"><h4>Dernier bilan</h4>${verificationPhase(program)}${proofPhase(program)}${catlegPhase(program)}</section>${explanationPart(program)}${filesPart(program)}`;
+    const run = `<div class="pmc-run"><button data-refresh>Actualiser</button><button class="pmc-primary" data-verify="${escape(program.nom)}"${running || verifying || !data.pack ? ' disabled' : ''}>${running ? 'Vérification en cours…' : 'Vérifier'}</button><strong>${escape(program.nom)}</strong>${data.programmes.length > 1 ? `<select data-program-choice aria-label="Programme Catala">${data.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.nom)}</option>`).join('')}</select>` : ''}${program.verification ? `<span class="pmc-tally">${verdict(program.verification)}</span>` : ''}</div>${data.pack ? '' : '<p class="pmc-muted">Pack Catala absent : la vérification est impossible.</p>'}`;
+    panel.innerHTML = `${warning}${run}${explanationPart(program)}<details class="pmc-part"><summary>Contrôles et fichiers</summary>${packPart()}${listPart(program)}<section class="pmc-part"><h4>Dernier bilan</h4>${verificationPhase(program)}${proofPhase(program)}${catlegPhase(program)}</section>${filesPart(program)}</details>`;
+    const graph = panel.querySelector<HTMLElement>('.pmc-explanation');
+    if (graph) stopGraph = mountExplanation(graph, (source) => {
+      let filename = '';
+      try { filename = decodeURIComponent(new URL(source).pathname).split('/').pop() ?? ''; } catch { return; }
+      const matches = program.fichiers.filter((file) => file.nom.split('/').pop() === filename);
+      if (matches.length === 1) window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path: matches[0].chemin } }));
+    });
   };
   const apply = (next: CatalaSnapshot | null) => {
     const text = JSON.stringify(next);
@@ -108,13 +116,19 @@ export function mount(container: HTMLElement, api: Host) {
     const request = ++sequence;
     const project = context.project?.path;
     if (!project) { apply(null); return; }
-    loadCatala(project).then((next) => { if (!stopped && request === sequence) apply(next); }, () => { if (!stopped && request === sequence) apply(null); });
+    loadCatala(project).then((next) => {
+      if (!stopped && request === sequence) { if (error) serialized = ''; error = ''; apply(next); }
+    }, (failure: unknown) => { if (!stopped && request === sequence) { error = failure instanceof Error ? failure.message : String(failure); paint(); } });
   };
-  const poll = () => { if (stopped) return; if (!verifying) load(); timer = window.setTimeout(poll, POLL_MS); };
 
+  panel.addEventListener('change', (event) => {
+    const select = event.target as HTMLSelectElement;
+    if (select.hasAttribute('data-program-choice')) { chosen = select.value; paint(); }
+  });
   panel.addEventListener('click', (event) => {
     const button = (event.target as Element).closest<HTMLElement>('button');
     if (!button) return;
+    if (button.hasAttribute('data-refresh')) load();
     if (button.dataset.program) { chosen = button.dataset.program; paint(); }
     if (button.dataset.open) window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path: button.dataset.open } }));
     const project = context.project?.path;
@@ -131,11 +145,15 @@ export function mount(container: HTMLElement, api: Host) {
     if (changed) { chosen = undefined; error = ''; data = null; serialized = ''; load(); }
     paint();
   });
+  const updated = (event: Event) => {
+    const project = (event as CustomEvent<{ projectPath?: string }>).detail?.projectPath;
+    if (!project || project === context.project?.path) load();
+  };
+  window.addEventListener('piecemaker:catala-updated', updated);
   paint();
   load();
-  timer = window.setTimeout(poll, POLL_MS);
   window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: 'plugin:piecemaker-catala' } }));
-  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); unsubscribe(); container.replaceChildren(); });
+  cleanups.set(container, () => { stopped = true; sequence++; window.removeEventListener('piecemaker:catala-updated', updated); stopGraph(); unsubscribe(); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {

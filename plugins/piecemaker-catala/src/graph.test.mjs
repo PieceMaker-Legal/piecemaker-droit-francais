@@ -18,7 +18,7 @@ const dot = `digraph G {
 
 test('draws Catala formulas and conditional dependencies as inert SVG text', () => {
   const document = new JSDOM(explanationGraph(dot)).window.document;
-  assert.equal(document.querySelectorAll('svg[role="img"]').length, 1);
+  assert.equal(document.querySelectorAll('svg[role="group"]').length, 1);
   assert.equal(document.querySelectorAll('rect').length, 3);
   assert.equal(document.querySelectorAll('path[stroke-dasharray]').length, 1);
   assert.match(document.querySelector('svg').textContent, /\$300\.00/);
@@ -26,4 +26,25 @@ test('draws Catala formulas and conditional dependencies as inert SVG text', () 
   assert.equal(document.querySelectorAll('img, script, a, [onerror]').length, 0);
   assert.throws(() => explanationGraph('digraph G { x001 [label=<oops>'), /incomplet/);
   assert.throws(() => explanationGraph(dot.replace('style="invis"', 'style="solid"')), /cycle/);
+});
+
+test('preserves explicit open states and groups rules, conditions and scenario inputs', () => {
+  const graph = `digraph G {
+    x001 [label=<<table><tr><td>condition_connue</td></tr><tr><td>= Indéterminé</td></tr></table>>, URL="https://example.test/test_prime.catala_fr#L12", tooltip="Scénario&#10;Fait", style="filled"];
+    x002 [label=<condition_connue ≠ Vrai>, style="filled,dashed"];
+    x003 [label=<<table><tr><td>prime_due</td></tr><tr><td>= Disputé</td></tr></table>>, style="filled"];
+    subgraph cluster_inputs { x001; }
+    x001 -> x002 [style="solid"];
+    x002 -> x003 [style="dashed"];
+  }`;
+  const document = new JSDOM(explanationGraph(graph)).window.document;
+  const input = document.querySelector('[data-node="x001"]');
+  assert.equal(input.dataset.kind, 'input');
+  assert.equal(input.dataset.tone, 'warn');
+  assert.equal(input.dataset.context, 'Scénario\nFait');
+  assert.equal(input.dataset.source, 'https://example.test/test_prime.catala_fr#L12');
+  assert.equal(document.querySelector('[data-node="x002"]').dataset.kind, 'condition');
+  assert.equal(document.querySelector('[data-node="x003"]').dataset.value, 'Disputé');
+  assert.ok(Number(input.querySelector('rect').getAttribute('x')) > Number(document.querySelector('[data-node="x003"] rect').getAttribute('x')));
+  assert.equal(document.querySelectorAll('[data-tone="warn"] rect[stroke-dasharray]').length, 2);
 });

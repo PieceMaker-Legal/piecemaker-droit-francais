@@ -241,6 +241,7 @@ async function defaultDeps(cwd) {
     sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
     reasoningFn: client.runReasoning,
+    catalaUpdated: client.notifyCatalaUpdated,
     suiviFn: client.runSuivi,
     tabularFn: client.runTabularReview,
     stampFn: client.runStamping,
@@ -576,9 +577,15 @@ async function catala(api, positional, flags, resolved) {
   if (!CATALA_COMMANDS.includes(commande)) usage(`catala attend ${CATALA_COMMANDS.join(', ')}.`);
   if (flags.programme === true) usage('Indiquez une valeur pour --programme.');
   const input = { commande, cwd: path.resolve(resolved), flags, args, ...(flags.programme ? { programme: String(flags.programme) } : {}) };
+  const updatePanel = ['verifier', 'preuve', 'catleg', 'expliquer'].includes(commande) && api.catalaUpdated;
   try {
-    return await (api.catalaFn || runCatala)(input);
+    const result = await (api.catalaFn || runCatala)(input);
+    if (updatePanel) {
+      try { await api.catalaUpdated({ cwd: input.cwd }); } catch { return `${result}\nVolet non actualisé : rouvrez le volet Catala.`; }
+    }
+    return result;
   } catch (error) {
+    if (updatePanel) { try { await api.catalaUpdated({ cwd: input.cwd }); } catch {} }
     if (error instanceof TypeError) usage(error.message);
     fail(error.message);
   }

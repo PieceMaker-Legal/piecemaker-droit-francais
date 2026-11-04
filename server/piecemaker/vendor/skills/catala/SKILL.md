@@ -32,7 +32,7 @@ Un programme Catala vit dans `.piecemaker/catala/<nom>/`. `<nom>` s'écrit en mi
 
 ## Vérifier
 
-1. `pm catala verifier --programme <nom>` : typecheck avec invariants, format, tests clerk, tests Python. Corrigez et relancez jusqu'à « vérifié ».
+1. `pm catala verifier --programme <nom>` : typecheck avec invariants, format, tests clerk, tests Python, puis graphe du scénario réussi. Le volet se met à jour après la commande. Corrigez et relancez jusqu'à « vérifié ».
 2. `pm catala formater --programme <nom>` réécrit les fichiers au format officiel.
 3. `pm catala preuve --scope <Champ> [--fichier F]` prouve l'absence de conflit et d'erreur. Le mode `--whole-program` est refusé : Catala 1.3 peut y masquer des conflits. Lancez la preuve sur chaque champ métier de chaque fichier ; les champs appelés ne sont pas couverts. Un `[WARNING]` est un échec : lisez le contre-exemple.
 4. `pm catala catleg [--fichier F]` vérifie la vigueur des articles cités, avec les identifiants PISTE de PieceMaker.
@@ -45,7 +45,7 @@ Un programme Catala vit dans `.piecemaker/catala/<nom>/`. `<nom>` s'écrit en mi
 
 Choisissez un champ sans entrées : ses données doivent être fixées dans le scénario. Indiquez `--fichier` quand le programme contient plusieurs fichiers.
 
-Le graphe s’affiche dans l’onglet Catala après la commande. Les flèches pointillées représentent les conditions. Aucun Graphviz n’est nécessaire.
+La vérification produit déjà le graphe. Utilisez `expliquer` pour choisir un autre scénario. Le volet affiche le graphe et ses états ouverts, sans surveillance des fichiers. Les flèches pointillées représentent les conditions. Aucun Graphviz n’est nécessaire.
 
 L’explication concerne cette exécution seulement. Elle ne remplace ni les tests, ni la preuve du programme, ni la justification des faits.
 

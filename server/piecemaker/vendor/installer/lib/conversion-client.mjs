@@ -253,3 +253,8 @@ export async function readConversionJob({ folder }) {
   await adoptRunningServerPort();
   return readLocalScanJob({ folder });
 }
+
+export async function notifyCatalaUpdated({ cwd }) {
+  await adoptRunningServerPort();
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/catala-updated`, body: { cwd }, timeout: 5000 });
+}

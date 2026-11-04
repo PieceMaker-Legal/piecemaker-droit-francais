@@ -41,6 +41,7 @@ function fakeRun({ testsPass = true, proofOutput = 'No errors found during the p
       const scopes = [{ scope_name: 'JeanDupont', success: testsPass, errors: [], time: 0.1 }];
       return { code: testsPass ? 0 : 1, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, 'test_prime.catala_fr'), tests: { scopes, 'inline-tests': [] } }], coverage: {} }), stderr: '' };
     }
+    if (tool === 'catala' && args[0] === 'explain') return { code: 0, stdout: 'digraph G { x001 [label=<Prime>] }', stderr: '' };
     if (tool === 'catala' && args[0] === 'proof') return { code: 0, stdout: proofOutput, stderr: '' };
     return { code: 0, stdout: '', stderr: '' };
   };
@@ -100,6 +101,10 @@ test('verifier runs every check inside the pack environment and writes the resul
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'));
     assert.equal(report.passed, true);
     assert.match(report.sources_sha256, /^[0-9a-f]{64}$/);
+    const explanation = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'explication.json'), 'utf8'));
+    assert.equal(explanation.passed, true);
+    assert.equal(explanation.sources_sha256, report.sources_sha256);
+    assert.equal(explanation.scope, 'JeanDupont');
     assert.deepEqual(report.checks.map((entry) => entry.name), ['typecheck', 'format', 'tests', 'tests-python']);
     assert.ok(fs.existsSync(path.join(directory, 'resultats', 'tests.json')));
     const clerkTest = calls.find((call) => call.command === 'clerk' && call.args[0] === 'runtest');
@@ -188,12 +193,17 @@ test('Windows tools run through cmd and a missing pack reports the install statu
 
 test('pm catala routes to the Catala wrapper and rejects unknown commands', async () => {
   const seen = [];
-  const deps = { catalaFn: async (input) => { seen.push(input); return 'ok'; } };
+  const notifications = [];
+  const deps = { catalaFn: async (input) => { seen.push(input); return 'ok'; }, catalaUpdated: async (input) => { notifications.push(input); } };
   assert.equal(await run(['catala', 'verifier', '--programme', 'prime', '--dossier', '/tmp/dossier'], { deps }), 'ok');
   assert.equal(seen[0].programme, 'prime');
   assert.equal(seen[0].cwd, path.resolve('/tmp/dossier'));
+  assert.deepEqual(notifications, [{ cwd: path.resolve('/tmp/dossier') }]);
   await run(['catala', 'exec', 'clerk', '--', '--help'], { deps, cwd: '/tmp' });
   assert.deepEqual(seen[1].args, ['clerk', '--help']);
+  assert.equal(notifications.length, 1);
+  await assert.rejects(() => run(['catala', 'expliquer'], { cwd: '/tmp', deps: { ...deps, catalaFn: async () => { throw new Error('Explication échouée'); } } }), /Explication échouée/);
+  assert.equal(notifications.length, 2);
   await assert.rejects(() => run(['catala', 'compiler'], { deps }), (error) => error.exitCode === 2);
   const failing = { catalaFn: async () => { throw new TypeError('Plusieurs programmes'); } };
   await assert.rejects(() => run(['catala', 'verifier'], { deps: failing }), (error) => error.exitCode === 2 && /Plusieurs/.test(error.message));
@@ -220,4 +230,17 @@ test('expliquer saves the graph and rejects an execution failure without retaini
   } finally {
     cleanup();
   }
+});
+
+test('expliquer refuses to label an old execution as current when sources change during execution', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime-anciennete');
+    const run = async () => {
+      fs.appendFileSync(path.join(directory, 'test_prime.catala_fr'), '\nTexte fictif ajouté.\n');
+      return { code: 0, stdout: 'digraph G { x001 [label=<Prime>] }', stderr: '' };
+    };
+    await assert.rejects(() => runCatala({ commande: 'expliquer', cwd: dossier, flags: { fichier: 'test_prime.catala_fr', scope: 'JeanDupont' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } }), /Explication échouée/);
+    assert.equal(fs.readFileSync(path.join(directory, 'resultats', 'explication.dot'), 'utf8'), '');
+  } finally { cleanup(); }
 });

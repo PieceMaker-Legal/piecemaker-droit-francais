@@ -35,7 +35,7 @@ import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
 import { createReasoningConnectors } from './reasoning-connectors.js';
 import { createReasoningReview } from './reasoning-review.js';
-import { catalaScriptPath, createCatalaRouter } from './catala.js';
+import { catalaScriptPath, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
@@ -171,6 +171,7 @@ localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
 localRouter.use(createSuiviLocalRouter(suivi, isLoopback, board));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
+localRouter.use(createCatalaUpdatedRouter(isLoopback, () => projectsDb.getProjectPaths().map((row) => row.project_path)));
 localRouter.use(vendor.createPieceMakerStampingLocalRouter(isLoopback));
 localRouter.use(createTabularReviewLocalRouter({
   proxyOrigin: () => {

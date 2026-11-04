@@ -100,7 +100,7 @@ export function sourceFiles(directory, relative = '') {
   return files.sort();
 }
 
-function sourcesDigest(directory, files) {
+export function sourcesDigest(directory, files) {
   const hash = crypto.createHash('sha256');
   for (const file of files) hash.update(`${file.split(path.sep).join('/')}\0`).update(fs.readFileSync(path.join(directory, file))).update('\0');
   return hash.digest('hex');
@@ -215,6 +215,7 @@ async function verifier(context, program) {
   const files = sourceFiles(program.directory);
   if (!files.length) throw new TypeError(`Aucun fichier .catala_fr dans .piecemaker/catala/${program.name}/.`);
   const started = context.now();
+  const digest = sourcesDigest(program.directory, files);
   const checks = [];
   checks.push((await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--catala-opts=--check-invariants'])).entry);
   const unformatted = [];
@@ -231,14 +232,27 @@ async function verifier(context, program) {
     checks.push(tested.entry);
   } else checks.push({ name: 'tests', command: 'clerk test', exit_code: 1, seconds: 0, passed: false, files: [] });
   if (context.python && tests.length) checks.push(await pythonTests(context, program, tests));
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed), sources_sha256: sourcesDigest(program.directory, files), checks };
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed) && digest === sourcesDigest(program.directory, sourceFiles(program.directory)), sources_sha256: digest, checks };
   writeResult(program.directory, 'verification.json', report);
   const failed = scopes.filter((scope) => !scope.success).map((scope) => `${scope.file} › ${scope.scope_name}`);
   const lines = [`Programme ${program.name} : ${report.passed ? 'vérifié' : 'à corriger'}.`];
   for (const entry of checks) lines.push(`- ${entry.name} : ${entry.passed ? 'ok' : 'échec'}${entry.files?.length ? ` (${entry.files.join(', ')})` : ''}`);
+  if (report.sources_sha256 !== sourcesDigest(program.directory, sourceFiles(program.directory))) lines.push('Code modifié pendant la vérification : relancez verifier.');
   if (!tests.length) lines.push('Aucun test : ajoutez un champ d’application #[test].');
   if (scopes.some((scope) => scope.scope_name === 'compilation')) lines.push('Compilation des tests en échec : un module n’expose que ses blocs catala-metadata.');
   if (failed.length) lines.push(`Tests en échec : ${failed.join(', ')}.`);
+  if (report.passed) {
+    const candidates = scopes.filter((scope) => scope.success && tests.some((file) => path.basename(file) === scope.file));
+    const previous = readJson(path.join(program.directory, 'resultats', 'explication.json'));
+    const selected = candidates.find((scope) => scope.scope_name === previous?.scope && scope.file === path.basename(previous?.fichier ?? '')) ?? candidates[0];
+    const matching = selected ? tests.filter((file) => path.basename(file) === selected.file) : [];
+    if (selected && matching.length === 1) {
+      try {
+        await expliquer(context, program, { fichier: matching[0], scope: selected.scope_name });
+        lines.push(`Graphe actualisé : ${matching[0]} › ${selected.scope_name}.`);
+      } catch (error) { lines.push(error.message); }
+    } else lines.push('Graphe non produit : indiquez un scénario avec pm catala expliquer.');
+  } else writeResult(program.directory, 'explication.dot', '');
   lines.push(`Détail : .piecemaker/catala/${program.name}/resultats/`);
   return lines.join('\n');
 }
@@ -281,8 +295,9 @@ async function expliquer(context, program, flags) {
   const file = flags.fichier && flags.fichier !== true ? String(flags.fichier) : files.length === 1 ? files[0] : null;
   if (!file || !files.includes(file)) throw new TypeError(`Indiquez --fichier parmi : ${files.join(', ')}.`);
   const started = context.now();
+  const digest = sourcesDigest(program.directory, files);
   const { entry, result } = await check(context, program.directory, 'explication', 'catala', ['explain', '--color=never', '--whole-program', '--conditions', '--dot', '-I', '.', file, '-s', String(flags.scope), '-o', '-']);
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed && /^digraph\s/.test(result.stdout.trim()), sources_sha256: sourcesDigest(program.directory, files), checks: [entry] };
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed && /^digraph\s/.test(result.stdout.trim()) && digest === sourcesDigest(program.directory, sourceFiles(program.directory)), sources_sha256: digest, checks: [entry] };
   writeResult(program.directory, 'explication.dot', report.passed ? result.stdout : '');
   writeResult(program.directory, 'explication.json', report);
   if (!report.passed) throw new Error(`Explication échouée :\n${result.stdout}${result.stderr}\nDétail : .piecemaker/catala/${program.name}/resultats/explication.log`);
