@@ -201,7 +201,7 @@ async function clerkTests(context, program, tests) {
   for (const [index, file] of tests.entries()) {
     const report = path.join('resultats', `tests-${index}.report`);
     fs.rmSync(path.join(program.directory, report), { force: true });
-    const outcome = await check(context, program.directory, `tests-${index}`, 'clerk', ['runtest', '--whole-program', '--code-coverage', ...(context.pack.env?.CATALA_STDLIB ? [`--catala-opts=--stdlib=${context.pack.env.CATALA_STDLIB}`] : []), `--report=${report}`, file]);
+    const outcome = await check(context, program.directory, `tests-${index}`, 'clerk', ['runtest', '--whole-program', '-I', '.', '--code-coverage', ...(context.pack.env?.CATALA_STDLIB ? [`--catala-opts=--stdlib=${context.pack.env.CATALA_STDLIB}`] : []), `--report=${report}`, file]);
     failed ||= !outcome.entry.passed;
     if (fs.existsSync(path.join(program.directory, report))) reports.push(report);
   }

@@ -129,7 +129,7 @@ function stageTools({ platformKey, prefix, stage, ninja, topiary }) {
   const runtime = path.join(prefix, 'lib', 'catala', 'runtime');
   for (const file of walk(runtime).filter((file) => {
     const relative = path.relative(runtime, file);
-    return !relative.includes('__pycache__') && (file.endsWith('.catala_en') || file.endsWith('.catala_fr') || file.endsWith('.catala_pl') || relative.startsWith(`python${path.sep}src${path.sep}`));
+    return !relative.includes('__pycache__') && (file.endsWith('.catala_en') || file.endsWith('.catala_fr') || file.endsWith('.catala_pl') || file.endsWith('.py'));
   })) copy(file, path.join(stage, 'lib', 'catala', 'runtime', path.relative(runtime, file)), 0o644);
   for (const file of [['queries', 'catala.scm'], ['configs', 'catala.ncl']]) copy(path.join(prefix, 'share', 'topiary', ...file), path.join(stage, 'share', 'topiary', ...file), 0o644);
 }
@@ -426,6 +426,7 @@ export async function smokeCatalaPack(packFile, work) {
   if (!JSON.parse(failed.stdout)['test-results'].some((entry) => entry.tests.scopes.some((scope) => !scope.success))) throw new Error('Une assertion fausse a été acceptée.');
   fs.writeFileSync(path.join(project, 'test_prime.catala_fr'), TESTS);
   results.clerkTest = 'assertion vraie acceptée, assertion fausse refusée';
+  tool('clerk', ['run', '--backend=python', '--prepare-only', 'test_prime.catala_fr'], project);
   tool('catala', ['python', '--whole-program', '--autotest', '-I', '.', 'test_prime.catala_fr', '-o', 'test_prime.py'], project);
   if (!fs.readFileSync(path.join(project, 'test_prime.py'), 'utf8').includes('import')) throw new Error('Génération Python vide.');
   results.python = 'ok';

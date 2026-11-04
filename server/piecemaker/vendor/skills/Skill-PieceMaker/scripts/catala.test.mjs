@@ -103,7 +103,7 @@ test('verifier runs every check inside the pack environment and writes the resul
     assert.deepEqual(report.checks.map((entry) => entry.name), ['typecheck', 'format', 'tests', 'tests-python']);
     assert.ok(fs.existsSync(path.join(directory, 'resultats', 'tests.json')));
     const clerkTest = calls.find((call) => call.command === 'clerk' && call.args[0] === 'runtest');
-    assert.deepEqual(clerkTest.args, ['runtest', '--whole-program', '--code-coverage', '--report=resultats/tests-0.report', 'test_prime.catala_fr']);
+    assert.deepEqual(clerkTest.args, ['runtest', '--whole-program', '-I', '.', '--code-coverage', '--report=resultats/tests-0.report', 'test_prime.catala_fr']);
     assert.equal(clerkTest.cwd, directory);
     assert.equal(clerkTest.env.OPAMSWITCH, 'catala');
     assert.ok(clerkTest.env.PATH.endsWith('/usr/bin'));
