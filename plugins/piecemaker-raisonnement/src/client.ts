@@ -1,11 +1,10 @@
 import type { ReasoningIssue, ReasoningLogEntry, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
 import { citeSource, dismissIssue, loadReasoning, ratePiece, runTest } from './api.js';
-import { mountCatala } from './catala.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void; openFileInEditor?(file: string): void };
-type View = 'graph' | 'test' | 'catala';
+type View = 'graph' | 'test';
 type Json = Record<string, any>;
 type Occurrence = { path: string; parent: string; link: 'si' | 'sauf' | 'l_une'; condition: Json };
 type Kind = 'question' | 'calcul' | 'terme' | 'controle' | 'fait' | 'ou' | 'conclusion';
@@ -98,7 +97,7 @@ export function mount(container: HTMLElement, api: Host) {
   const root = document.createElement('section');
   root.className = 'pmr piecemaker-ui';
   root.setAttribute('aria-label', 'Raisonnement du dossier');
-  root.innerHTML = `<header class="pmr-head"><div class="pmr-tabs" role="tablist" aria-label="Vue"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Vue écrite<span class="pmr-count" data-alerts hidden></span></button><button role="tab" data-view="catala" hidden>Catala</button></div><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'calcul', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button><button class="pmr-primary" data-run-test>Lancer le test</button></div></div><div class="pmr-inspector"><div class="pmr-detail"></div></div><div class="pmr-detail pmr-catala"></div></div>`;
+  root.innerHTML = `<header class="pmr-head"><div class="pmr-tabs" role="tablist" aria-label="Vue"><button role="tab" data-view="graph">Graphe</button><button role="tab" data-view="test">Vue écrite<span class="pmr-count" data-alerts hidden></span></button></div><select data-reasoning aria-label="Raisonnement" hidden></select><select data-scope aria-label="Objectif" hidden></select></header><div class="pmr-warning" hidden></div><div class="pmr-workspace"><div class="pmr-canvas" aria-label="Graphe du raisonnement"><div class="pmr-stage"></div><div class="pmr-empty" hidden></div><div class="pmr-legend" hidden>${(['question', 'calcul', 'terme', 'controle', 'conclusion'] as const).map((kind) => `<span><i style="background:${COLORS[kind]}"></i>${KINDS[kind][0]}</span>`).join('')}<span><b class="pmr-chip is-source">§ Source</b></span><span><b class="pmr-chip is-piece">Pièce</b></span><span><i style="background:${COLORS.fait}"></i>Fait prouvé</span><span><i style="background:#c45b5b"></i>Fait contraire</span><span><i class="is-dashed"></i>À établir</span><span><i class="is-sauf"></i>sauf</span></div><div class="pmr-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1" aria-label="Zoomer">+</button><button data-zoom="-1" aria-label="Dézoomer">−</button><button data-center>Ajuster</button><button class="pmr-primary" data-run-test>Lancer le test</button></div></div><div class="pmr-inspector"><div class="pmr-detail"></div></div></div>`;
   container.replaceChildren(style, root);
   const canvas = root.querySelector<HTMLElement>('.pmr-canvas')!;
   const stage = root.querySelector<HTMLElement>('.pmr-stage')!;
@@ -107,10 +106,6 @@ export function mount(container: HTMLElement, api: Host) {
   const empty = root.querySelector<HTMLElement>('.pmr-empty')!;
   const picker = root.querySelector<HTMLSelectElement>('[data-scope]')!;
   const chooser = root.querySelector<HTMLSelectElement>('[data-reasoning]')!;
-  const catala = mountCatala(root.querySelector<HTMLElement>('.pmr-catala')!, (count) => {
-    root.querySelector<HTMLElement>('[data-view=catala]')!.hidden = !count;
-    if (!count && view === 'catala') { view = 'graph'; paintView(); }
-  });
   let context = api.context;
   let snapshot: ReasoningSnapshot | null = null;
   let reasoning: string | undefined;
@@ -733,7 +728,6 @@ export function mount(container: HTMLElement, api: Host) {
       const data = await loadReasoning(context.project?.path ?? null, false, reasoning);
       if (!stopped && request === sequence) apply(data);
     } catch (error) { if (!stopped && request === sequence) showError(error); }
-    if (!stopped && request === sequence) catala.refresh(context.project?.path ?? null, shown());
   };
   const act = (run: () => Promise<ReasoningSnapshot>) => {
     busy = true;
@@ -936,7 +930,7 @@ export function mount(container: HTMLElement, api: Host) {
   void load();
   timer = window.setTimeout(poll, 2500);
   window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: 'plugin:piecemaker-raisonnement' } }));
-  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(pacing); catala.stop(); resize.disconnect(); unsubscribe(); window.removeEventListener('piecemaker:raisonnement-show', showRequested); container.replaceChildren(); });
+  cleanups.set(container, () => { stopped = true; sequence++; window.clearTimeout(timer); window.clearTimeout(pacing); resize.disconnect(); unsubscribe(); window.removeEventListener('piecemaker:raisonnement-show', showRequested); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {

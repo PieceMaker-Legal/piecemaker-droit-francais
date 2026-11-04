@@ -13,6 +13,7 @@ const LABELS = {
   'plugin:piecemaker-timesheet': 'Timesheet',
   'plugin:piecemaker-raisonnement': 'Raisonnement',
   'plugin:piecemaker-echeances': 'Suivi des dossiers',
+  'plugin:piecemaker-catala': 'Catala',
 };
 
 const VIEWS = { chronology: 'index', general: 'vue générale' };

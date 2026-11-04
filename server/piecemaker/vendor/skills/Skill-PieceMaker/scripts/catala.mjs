@@ -60,7 +60,7 @@ export function pisteCredentials(homeDir = os.homedir()) {
 }
 
 function programsRoot(cwd) {
-  return path.join(cwd, '.piecemaker', 'raisonnements');
+  return path.join(cwd, '.piecemaker', 'catala');
 }
 
 export function listPrograms(cwd) {
@@ -80,12 +80,12 @@ export function selectProgram(cwd, name) {
   if (name !== undefined) {
     if (!NAME.test(name)) throw new TypeError(`Nom de programme ${name} mal écrit. Format : ${NAME_SHAPE}.`);
     const directory = path.join(programsRoot(cwd), name);
-    if (!fs.existsSync(path.join(directory, 'clerk.toml'))) throw new TypeError(`Programme Catala introuvable : .piecemaker/raisonnements/${name}/clerk.toml.`);
+    if (!fs.existsSync(path.join(directory, 'clerk.toml'))) throw new TypeError(`Programme Catala introuvable : .piecemaker/catala/${name}/clerk.toml.`);
     return { name, directory };
   }
   const names = listPrograms(cwd);
-  if (!names.length) throw new TypeError('Aucun programme Catala : créez .piecemaker/raisonnements/<nom>/clerk.toml.');
-  if (names.length > 1) throw new TypeError(`Plusieurs programmes Catala (${names.join(', ')}) : indiquez --raisonnement <nom>.`);
+  if (!names.length) throw new TypeError('Aucun programme Catala : créez .piecemaker/catala/<nom>/clerk.toml.');
+  if (names.length > 1) throw new TypeError(`Plusieurs programmes Catala (${names.join(', ')}) : indiquez --programme <nom>.`);
   return { name: names[0], directory: path.join(programsRoot(cwd), names[0]) };
 }
 
@@ -195,7 +195,7 @@ async function pythonTests(context, program, tests) {
 
 async function verifier(context, program) {
   const files = sourceFiles(program.directory);
-  if (!files.length) throw new TypeError(`Aucun fichier .catala_fr dans .piecemaker/raisonnements/${program.name}/.`);
+  if (!files.length) throw new TypeError(`Aucun fichier .catala_fr dans .piecemaker/catala/${program.name}/.`);
   const started = context.now();
   const checks = [];
   checks.push((await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--catala-opts=--check-invariants'])).entry);
@@ -223,7 +223,7 @@ async function verifier(context, program) {
   if (!tests.length) lines.push('Aucun test : ajoutez un champ d’application #[test].');
   if (scopes.some((scope) => scope.scope_name === 'compilation')) lines.push('Compilation des tests en échec : un module n’expose que ses blocs catala-metadata.');
   if (failed.length) lines.push(`Tests en échec : ${failed.join(', ')}.`);
-  lines.push(`Détail : .piecemaker/raisonnements/${program.name}/resultats/`);
+  lines.push(`Détail : .piecemaker/catala/${program.name}/resultats/`);
   return lines.join('\n');
 }
 
@@ -256,7 +256,7 @@ async function preuve(context, program, flags) {
   const output = `${result.stdout}${result.stderr}`;
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed, conflits: (output.match(/At least two exceptions overlap/g) || []).length, checks: [entry] };
   writeResult(program.directory, 'preuve.json', report);
-  return `Preuve ${file} › ${flags.scope} : ${entry.passed ? 'aucune erreur' : 'erreurs ou avertissements'}.\n${output.trim()}\nDétail : .piecemaker/raisonnements/${program.name}/resultats/preuve.json`;
+  return `Preuve ${file} › ${flags.scope} : ${entry.passed ? 'aucune erreur' : 'erreurs ou avertissements'}.\n${output.trim()}\nDétail : .piecemaker/catala/${program.name}/resultats/preuve.json`;
 }
 
 async function catleg(context, program, flags) {
@@ -275,10 +275,10 @@ async function catleg(context, program, flags) {
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), passed: results.every((entry) => entry.passed), fichiers: results };
   writeResult(program.directory, 'catleg.json', report);
   const lines = results.map((entry) => `- ${entry.fichier} : ${entry.passed ? 'articles en vigueur ce jour' : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
-  return [`catleg (vigueur au ${report.date_controle} seulement) :`, ...lines, `Détail : .piecemaker/raisonnements/${program.name}/resultats/catleg.json`].join('\n');
+  return [`catleg (vigueur au ${report.date_controle} seulement) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
 }
 
-export async function runCatala({ commande, cwd, raisonnement, flags = {}, args = [], deps = {} }) {
+export async function runCatala({ commande, cwd, programme, flags = {}, args = [], deps = {} }) {
   const env = deps.env || process.env;
   const homeDir = deps.homeDir || os.homedir();
   const found = deps.findPack ? deps.findPack() : findCatalaPack({ env, homeDir });
@@ -296,7 +296,7 @@ export async function runCatala({ commande, cwd, raisonnement, flags = {}, args 
   }
   if (commande === 'lister') {
     const names = listPrograms(cwd);
-    if (!names.length) return 'Aucun programme Catala dans .piecemaker/raisonnements/.';
+    if (!names.length) return 'Aucun programme Catala dans .piecemaker/catala/.';
     return names.map((name) => {
       const report = readJson(path.join(programsRoot(cwd), name, 'resultats', 'verification.json'));
       return `${name} : ${report ? `${report.passed ? 'vérifié' : 'à corriger'} le ${report.finished_utc}` : 'jamais vérifié'}`;
@@ -310,7 +310,7 @@ export async function runCatala({ commande, cwd, raisonnement, flags = {}, args 
     const result = await context.run(command, argv, { cwd, env: packEnv(pack, env), inherit: true });
     return { exitCode: result.code };
   }
-  const program = selectProgram(cwd, raisonnement);
+  const program = selectProgram(cwd, programme);
   if (commande === 'verifier') return verifier(context, program);
   if (commande === 'formater') return formater(context, program);
   if (commande === 'preuve') return preuve(context, program, flags);

@@ -157,7 +157,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
         <text class="t-name" x="560" y="276">pm tab</text><text class="t-mono" x="730" y="276">lister | afficher | fermer</text>
         <text class="t-mono" x="730" y="294">dossier | index | tabular_review | bordereau</text>
-        <text class="t-mono" x="730" y="312">raisonnement | suivi_dossiers | fichier</text>
+        <text class="t-mono" x="730" y="312">raisonnement | suivi_dossiers | catala | fichier</text>
         <text class="t-name" x="560" y="330">pm dossier</text><text class="t-mono" x="730" y="330">verifier | sql "REQUÊTE"</text>
         <text class="t-mono" x="730" y="348">conversion [pièce…] --force</text>
         <text class="t-mono" x="730" y="366">arborescence --dossiers</text>
@@ -240,7 +240,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     <section class="card wide">
       <h2>Pack Catala</h2>
-      <p>L'app de bureau installe le pack au démarrage, en tâche de fond : <code>catala</code>, <code>clerk</code>, <code>catala-lsp</code>, <code>catala-format</code>, <code>catala-dap</code>, le runtime Python Catala et, sur macOS, <code>catala-proof</code> avec Z3. <code>catleg</code> est dans le Python partagé. <code>pm catala</code> lance ces outils sans serveur PieceMaker. Les programmes vivent dans <code>.piecemaker/raisonnements/&lt;nom&gt;/</code>, les résultats dans son dossier <code>resultats/</code>. Détail : <code>docs/catala.md</code>.</p>
+      <p>L'app de bureau installe le pack au démarrage, en tâche de fond : <code>catala</code>, <code>clerk</code>, <code>catala-lsp</code>, <code>catala-format</code>, <code>catala-dap</code>, le runtime Python Catala et, sur macOS, <code>catala-proof</code> avec Z3. <code>catleg</code> est dans le Python partagé. <code>pm catala</code> lance ces outils sans serveur PieceMaker. Les programmes vivent dans <code>.piecemaker/catala/&lt;nom&gt;/</code>, les résultats dans son dossier <code>resultats/</code>. L'onglet Catala (<code>piecemaker-catala</code>) montre l'état du pack et les bilans. Détail : <code>docs/catala.md</code>.</p>
     </section>
 
     <section class="card">
@@ -255,8 +255,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     <section class="card">
       <h2>Volets de l'interface</h2>
-      <p>Ces plugins servent l'avocat. Leurs manifestes ne déclarent aucun outil IA. Le moteur ouvre Dossier, Analyse tabulaire, Bordereau, Raisonnement et Suivi des dossiers avec <code>pm tab afficher</code>. <code>pm bordereau</code> tamponne les pièces et recharge le volet Bordereau. L'index est un onglet du volet Dossier, pas un plugin.</p>
-      <p><code>piecemaker-dossier</code>, <code>piecemaker-echeances</code>, <code>piecemaker-library</code>, <code>piecemaker-raisonnement</code>, <code>piecemaker-tabular-review</code>, <code>piecemaker-tampon</code>, <code>piecemaker-timesheet</code>.</p>
+      <p>Ces plugins servent l'avocat. Leurs manifestes ne déclarent aucun outil IA. Le moteur ouvre Dossier, Analyse tabulaire, Bordereau, Raisonnement, Suivi des dossiers et Catala avec <code>pm tab afficher</code>. <code>pm bordereau</code> tamponne les pièces et recharge le volet Bordereau. L'index est un onglet du volet Dossier, pas un plugin.</p>
+      <p><code>piecemaker-catala</code>, <code>piecemaker-dossier</code>, <code>piecemaker-echeances</code>, <code>piecemaker-library</code>, <code>piecemaker-raisonnement</code>, <code>piecemaker-tabular-review</code>, <code>piecemaker-tampon</code>, <code>piecemaker-timesheet</code>.</p>
     </section>
 
     <section class="card">

@@ -23,7 +23,7 @@ function scratch() {
 }
 
 function program(dossier, name, files = { 'prime.catala_fr': MODULE, 'test_prime.catala_fr': TESTS }) {
-  const directory = path.join(dossier, '.piecemaker', 'raisonnements', name);
+  const directory = path.join(dossier, '.piecemaker', 'catala', name);
   fs.mkdirSync(directory, { recursive: true });
   fs.writeFileSync(path.join(directory, 'clerk.toml'), `[project]\nname = "${name}"\n`);
   for (const [file, content] of Object.entries(files)) fs.writeFileSync(path.join(directory, file), content);
@@ -73,16 +73,15 @@ test('PISTE credentials are mapped to the catleg variables', () => {
   }
 });
 
-test('programs live next to the YAML reasoning and a name is required when there are several', () => {
+test('programs live in .piecemaker/catala and a name is required when there are several', () => {
   const { dossier, cleanup } = scratch();
   try {
     assert.equal(listPrograms(dossier).length, 0);
     program(dossier, 'prime-anciennete');
-    fs.writeFileSync(path.join(dossier, '.piecemaker', 'raisonnements', 'prime-anciennete.yaml'), '');
     assert.equal(selectProgram(dossier).name, 'prime-anciennete');
     program(dossier, 'prime-variante');
     assert.deepEqual(listPrograms(dossier), ['prime-anciennete', 'prime-variante']);
-    assert.throws(() => selectProgram(dossier), /--raisonnement/);
+    assert.throws(() => selectProgram(dossier), /--programme/);
     assert.throws(() => selectProgram(dossier, 'Prime'), /mal écrit/);
     assert.throws(() => selectProgram(dossier, 'absent'), /introuvable/);
   } finally {
@@ -179,8 +178,8 @@ test('Windows tools run through cmd and a missing pack reports the install statu
 test('pm catala routes to the Catala wrapper and rejects unknown commands', async () => {
   const seen = [];
   const deps = { catalaFn: async (input) => { seen.push(input); return 'ok'; } };
-  assert.equal(await run(['catala', 'verifier', '--raisonnement', 'prime', '--dossier', '/tmp/dossier'], { deps }), 'ok');
-  assert.equal(seen[0].raisonnement, 'prime');
+  assert.equal(await run(['catala', 'verifier', '--programme', 'prime', '--dossier', '/tmp/dossier'], { deps }), 'ok');
+  assert.equal(seen[0].programme, 'prime');
   assert.equal(seen[0].cwd, path.resolve('/tmp/dossier'));
   await run(['catala', 'exec', 'clerk', '--', '--help'], { deps, cwd: '/tmp' });
   assert.deepEqual(seen[1].args, ['clerk', '--help']);

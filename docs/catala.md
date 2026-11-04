@@ -1,6 +1,6 @@
 # Pack Catala
 
-L'app de bureau installe le pack Catala. L'agent l'utilise par `pm catala` et le skill `catala`. L'avocat voit l'état et les bilans dans la vue Catala de l'onglet Raisonnement.
+L'app de bureau installe le pack Catala. L'agent l'utilise par `pm catala` et le skill `catala`. L'avocat voit l'état et les bilans dans l'onglet Catala (plugin `plugins/piecemaker-catala`).
 
 ## Contenu
 
@@ -39,26 +39,26 @@ Les versions sont figées dans `desktop-bootstrap/composants/catala-pack.json` :
 
 ## Interface
 
-L'onglet Raisonnement affiche la vue Catala quand le dossier contient au moins un programme. La vue montre :
+L'onglet Catala montre :
 
 - l'état du pack (`status.json`, `pack.json`) ;
 - les programmes du dossier ;
 - le dernier bilan de chaque programme : vérification (contrôles réussis et échoués, durée, date), preuve, vigueur catleg (date du contrôle, résultat par fichier) ;
 - des liens qui ouvrent les fichiers `.catala_fr` et les journaux `resultats/*.log` dans l'éditeur.
 
-La vue est en lecture seule. Le seul bouton, « Vérifier », lance `pm catala verifier --raisonnement <nom>`. Il est inactif sans pack.
+L'onglet est en lecture seule. Le seul bouton, « Vérifier », lance `pm catala verifier --programme <nom>`. Il est inactif sans pack. L'agent ouvre l'onglet par `pm tab afficher catala`.
 
-Routes serveur (`server/piecemaker/catala.ts`) : `GET /api/piecemaker/catala?projectPath=` renvoie l'état et les programmes ; `POST /api/piecemaker/catala/verify` (`projectPath`, `raisonnement`) lance la vérification et renvoie l'état à jour. Une seule vérification à la fois par programme.
+Routes serveur (`server/piecemaker/catala.ts`) : `GET /api/piecemaker/catala?projectPath=` renvoie l'état et les programmes ; `POST /api/piecemaker/catala/verify` (`projectPath`, `programme`) lance la vérification et renvoie l'état à jour. Une seule vérification à la fois par programme.
 
 ## Classement
 
-Un programme vit dans `.piecemaker/raisonnements/<nom>/`, à côté de `<nom>.yaml` qu'il code. Même nom, même règle de nommage. Un dossier peut contenir plusieurs programmes ; `--raisonnement <nom>` choisit le programme. Un programme est un dossier avec `clerk.toml`. `listReasoningFiles` ne lit que les fichiers `.yaml` : les dossiers ne le gênent pas.
+Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`, `<nom>` en minuscules, chiffres et tirets. Un dossier peut contenir plusieurs programmes ; `--programme <nom>` choisit le programme.
 
 ## Commandes
 
 | Commande | Effet | Résultat |
 | --- | --- | --- |
-| `pm catala verifier --raisonnement <nom>` | typecheck avec invariants, format, tests clerk, tests Python | `resultats/verification.json`, `tests.json` |
+| `pm catala verifier --programme <nom>` | typecheck avec invariants, format, tests clerk, tests Python | `resultats/verification.json`, `tests.json` |
 | `pm catala formater` | `catala-format --in-place` | fichiers réécrits |
 | `pm catala preuve --scope <Champ> [--fichier F] [--whole-program]` | `clerk start`, puis `catala proof` | `resultats/preuve.json` |
 | `pm catala catleg [--fichier F]` | vigueur des articles cités, identifiants PISTE de PieceMaker | `resultats/catleg.json` |

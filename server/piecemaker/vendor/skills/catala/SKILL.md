@@ -9,12 +9,11 @@ Catala code une règle juridique en programme exécutable. Le pack Catala est in
 
 ## Classement
 
-Un programme Catala vit dans `.piecemaker/raisonnements/<nom>/`. `<nom>` suit le format des raisonnements YAML : minuscules, chiffres et tirets. Le programme qui code le raisonnement `<nom>.yaml` porte le même nom. Un dossier peut contenir plusieurs programmes ; indiquez alors `--raisonnement <nom>`.
+Un programme Catala vit dans `.piecemaker/catala/<nom>/`. `<nom>` s'écrit en minuscules, chiffres et tirets. Un dossier peut contenir plusieurs programmes ; indiquez alors `--programme <nom>`.
 
 ```
-.piecemaker/raisonnements/
-  prime-anciennete.yaml          raisonnement (pm raisonnement)
-  prime-anciennete/              programme Catala (pm catala)
+.piecemaker/catala/
+  prime-anciennete/              programme Catala
     clerk.toml                   [project] name = "prime-anciennete"
     prime.catala_fr              > Module Prime
     test_prime.catala_fr         > Usage de Prime, scopes #[test]
@@ -33,14 +32,14 @@ Un programme Catala vit dans `.piecemaker/raisonnements/<nom>/`. `<nom>` suit le
 
 ## Vérifier
 
-1. `pm catala verifier --raisonnement <nom>` : typecheck avec invariants, format, tests clerk, tests Python. Corrigez et relancez jusqu'à « vérifié ».
-2. `pm catala formater --raisonnement <nom>` réécrit les fichiers au format officiel.
+1. `pm catala verifier --programme <nom>` : typecheck avec invariants, format, tests clerk, tests Python. Corrigez et relancez jusqu'à « vérifié ».
+2. `pm catala formater --programme <nom>` réécrit les fichiers au format officiel.
 3. `pm catala preuve --scope <Champ> [--fichier F] [--whole-program]` prouve l'absence de conflit et d'erreur. Utilisez `--whole-program` quand le champ appelle un autre module. Un `[WARNING]` est un échec : lisez le contre-exemple.
 4. `pm catala catleg [--fichier F]` vérifie la vigueur des articles cités, avec les identifiants PISTE de PieceMaker.
 5. `pm catala lister` montre les programmes et leur dernier bilan. `pm catala env` montre le pack, son état d'installation et le Python utilisé.
 6. `pm catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> -- <arguments>` lance un outil du pack avec son environnement (LSP et débogueur pour un éditeur, commandes non couvertes).
 
-Les résultats vont dans `.piecemaker/raisonnements/<nom>/resultats/` : `verification.json`, `tests.json`, `preuve.json`, `catleg.json` et un journal par contrôle.
+Les résultats vont dans `.piecemaker/catala/<nom>/resultats/` : `verification.json`, `tests.json`, `preuve.json`, `catleg.json` et un journal par contrôle.
 
 ## Limites à dire à l'avocat
 

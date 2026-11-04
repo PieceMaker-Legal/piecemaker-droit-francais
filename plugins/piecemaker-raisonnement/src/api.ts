@@ -1,5 +1,4 @@
 import type { ReasoningLogEntry, ReasoningSnapshot } from '../../../shared/piecemaker-reasoning.js';
-import type { CatalaSnapshot } from './catala.js';
 
 export function loadReasoning(projectPath: string | null, example = false, raisonnement?: string): Promise<ReasoningSnapshot> {
   return request<ReasoningSnapshot>(`/api/piecemaker/reasoning${example ? '/example' : `?projectPath=${encodeURIComponent(projectPath ?? '')}${raisonnement ? `&raisonnement=${encodeURIComponent(raisonnement)}` : ''}`}`);
@@ -36,14 +35,6 @@ export async function runTest(projectPath: string, onEntry: (entry: ReasoningLog
     }
     if (done) throw new Error('Test interrompu.');
   }
-}
-
-export function loadCatala(projectPath: string): Promise<CatalaSnapshot> {
-  return request<CatalaSnapshot>(`/api/piecemaker/catala?projectPath=${encodeURIComponent(projectPath)}`);
-}
-
-export function verifyCatala(projectPath: string, raisonnement: string): Promise<CatalaSnapshot> {
-  return request<CatalaSnapshot>('/api/piecemaker/catala/verify', { projectPath, raisonnement });
 }
 
 async function request<T>(url: string, body?: object): Promise<T> {

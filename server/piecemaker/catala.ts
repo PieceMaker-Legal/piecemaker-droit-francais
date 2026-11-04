@@ -10,7 +10,7 @@ type CatalaScript = {
   findCatalaPack(options: { env?: NodeJS.ProcessEnv; homeDir?: string }): { pack: Record<string, unknown> | null; status: Record<string, unknown> | null };
   listPrograms(cwd: string): string[];
   sourceFiles(directory: string): string[];
-  runCatala(input: { commande: string; cwd: string; raisonnement?: string; deps?: CatalaDeps }): Promise<unknown>;
+  runCatala(input: { commande: string; cwd: string; programme?: string; deps?: CatalaDeps }): Promise<unknown>;
 };
 
 const readJson = (file: string) => {
@@ -33,7 +33,7 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}) {
     const catala = await script();
     const { pack, status } = catala.findCatalaPack({ env: deps.env ?? process.env, homeDir: deps.homeDir ?? os.homedir() });
     const programmes = catala.listPrograms(projectPath).map((nom) => {
-      const directory = path.join(projectPath, '.piecemaker', 'raisonnements', nom);
+      const directory = path.join(projectPath, '.piecemaker', 'catala', nom);
       const results = path.join(directory, 'resultats');
       const journaux = fs.existsSync(results) ? fs.readdirSync(results).filter((file) => file.endsWith('.log')).sort() : [];
       return {
@@ -55,12 +55,12 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}) {
     snapshot(projectPath).then((data) => response.json(data), (error: unknown) => fail(response, error));
   });
   router.post('/verify', express.json(), (request, response) => {
-    const { projectPath, raisonnement } = request.body ?? {};
-    if (typeof projectPath !== 'string' || !projectPath || typeof raisonnement !== 'string') { fail(response, new TypeError('projectPath et raisonnement requis.')); return; }
-    const directory = path.join(projectPath, '.piecemaker', 'raisonnements', raisonnement);
-    if (running.has(directory)) { fail(response, new Error(`Vérification déjà en cours pour ${raisonnement}.`)); return; }
+    const { projectPath, programme } = request.body ?? {};
+    if (typeof projectPath !== 'string' || !projectPath || typeof programme !== 'string') { fail(response, new TypeError('projectPath et programme requis.')); return; }
+    const directory = path.join(projectPath, '.piecemaker', 'catala', programme);
+    if (running.has(directory)) { fail(response, new Error(`Vérification déjà en cours pour ${programme}.`)); return; }
     running.add(directory);
-    const verified = script().then((catala) => catala.runCatala({ commande: 'verifier', cwd: projectPath, raisonnement, ...(Object.keys(deps).length ? { deps } : {}) }));
+    const verified = script().then((catala) => catala.runCatala({ commande: 'verifier', cwd: projectPath, programme, ...(Object.keys(deps).length ? { deps } : {}) }));
     verified.finally(() => running.delete(directory)).then(() => snapshot(projectPath)).then((data) => response.json(data), (error: unknown) => fail(response, error));
   });
   return router;

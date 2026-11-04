@@ -10,7 +10,7 @@ import { CATALA_COMMANDS, runCatala } from './catala.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
-const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'fichier'];
+const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'fichier'];
 const DOSSIER_COMMANDS = ['verifier', 'sql', 'conversion', 'arborescence', 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
@@ -30,7 +30,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       volets ouverts à côté du chat
   tab afficher|fermer <cible>
       cibles : dossier | index | tabular_review [FICHIER.json] | bordereau
-               | raisonnement | suivi_dossiers | fichier PATH
+               | raisonnement | suivi_dossiers | catala | fichier PATH
 
   dossier verifier
       anonymisation, index (pièces absentes), pièces non converties
@@ -67,13 +67,14 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   suivi_dossiers ecrire <chemin> --json '{...}'
       écrit un document du Matter board
 
-  catala verifier [--raisonnement NOM]
-      programme Catala : .piecemaker/raisonnements/NOM/ (clerk.toml, *.catala_fr) ;
-      typecheck, format, tests clerk, runtime Python → NOM/resultats/verification.json
+  catala verifier [--programme NOM]
+      programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
+      typecheck, format, tests clerk, runtime Python → NOM/resultats/verification.json ;
+      --programme est requis quand le dossier en compte plusieurs
   catala lister | env
-  catala formater [--raisonnement NOM]
-  catala preuve --scope CHAMP [--fichier F] [--whole-program] [--raisonnement NOM]
-  catala catleg [--fichier F] [--raisonnement NOM]
+  catala formater [--programme NOM]
+  catala preuve --scope CHAMP [--fichier F] [--whole-program] [--programme NOM]
+  catala catleg [--fichier F] [--programme NOM]
       vigueur des articles cités, à la date du jour seulement
   catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]
 Le serveur PieceMaker doit tourner (boucle locale).`;
@@ -326,6 +327,7 @@ function voletTarget(cwd, volet, review) {
   if (volet === 'bordereau') return { cwd, tab: 'plugin:piecemaker-tampon' };
   if (volet === 'raisonnement') return { cwd, tab: 'plugin:piecemaker-raisonnement' };
   if (volet === 'suivi_dossiers') return { cwd, tab: 'plugin:piecemaker-echeances' };
+  if (volet === 'catala') return { cwd, tab: 'plugin:piecemaker-catala' };
   if (volet === 'tabular_review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
   return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
 }
@@ -335,6 +337,7 @@ function panelNoticeLabel(target) {
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
   if (target.tab === 'plugin:piecemaker-raisonnement') return 'Raisonnement';
   if (target.tab === 'plugin:piecemaker-echeances') return 'Suivi des dossiers';
+  if (target.tab === 'plugin:piecemaker-catala') return 'Catala';
   if (target.tab === 'plugin:piecemaker-tabular-review') {
     if (target.draft) return `Analyse tabulaire (projet ${target.draft})`;
     if (target.review) return `Analyse tabulaire (${target.review})`;
@@ -569,8 +572,8 @@ async function suiviDossiers(api, positional, flags, resolved) {
 async function catala(api, positional, flags, resolved) {
   const [, commande, ...args] = positional;
   if (!CATALA_COMMANDS.includes(commande)) usage(`catala attend ${CATALA_COMMANDS.join(', ')}.`);
-  if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
-  const input = { commande, cwd: path.resolve(resolved), flags, args, ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
+  if (flags.programme === true) usage('Indiquez une valeur pour --programme.');
+  const input = { commande, cwd: path.resolve(resolved), flags, args, ...(flags.programme ? { programme: String(flags.programme) } : {}) };
   try {
     return await (api.catalaFn || runCatala)(input);
   } catch (error) {

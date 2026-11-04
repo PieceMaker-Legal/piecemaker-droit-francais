@@ -26,7 +26,7 @@ const runner = async (command: string, args: string[], options: { cwd: string })
 };
 
 const program = (name: string) => {
-  const directory = path.join(dossier, '.piecemaker', 'raisonnements', name);
+  const directory = path.join(dossier, '.piecemaker', 'catala', name);
   fs.mkdirSync(directory, { recursive: true });
   fs.writeFileSync(path.join(directory, 'clerk.toml'), `[project]\nname = "${name}"\n`);
   fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE);
@@ -73,7 +73,7 @@ test('liste le pack et les programmes du dossier avec leurs fichiers', async () 
 
 test('vérifie un programme et renvoie le bilan et les journaux', async () => {
   program('licenciement-jean-dupont');
-  const response = await fetch(`${base}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectPath: dossier, raisonnement: 'licenciement-jean-dupont' }) });
+  const response = await fetch(`${base}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectPath: dossier, programme: 'licenciement-jean-dupont' }) });
   const data = await response.json() as any;
   assert.equal(response.status, 200);
   const verified = data.programmes.find((entry: { nom: string }) => entry.nom === 'licenciement-jean-dupont');
@@ -83,7 +83,7 @@ test('vérifie un programme et renvoie le bilan et les journaux', async () => {
 });
 
 test('refuse un nom de programme mal écrit', async () => {
-  const response = await fetch(`${base}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectPath: dossier, raisonnement: '../autre' }) });
+  const response = await fetch(`${base}/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ projectPath: dossier, programme: '../autre' }) });
   assert.equal(response.status, 400);
   assert.match((await response.json() as { error: string }).error, /mal écrit/);
 });
