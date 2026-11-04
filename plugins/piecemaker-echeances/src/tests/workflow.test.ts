@@ -48,38 +48,49 @@ async function tableau(c: Carte) {
   return view;
 }
 
-it('affiche une carte minimaliste et détaille parties, acte, objectifs et étapes dans le panneau', async () => {
+it('met l’action de la colonne sur la carte et détaille parties, acte et objectifs dans le panneau', async () => {
   vi.mocked(loadBoard).mockResolvedValue({ rev: '1', docs: { 'projects/cabinet/matters/exemple': { status: 'open', origin: 'page', nextStep: { text: 'Relancer' }, parties: [{ name: 'Jean Dupont', role: 'Demandeur' }, { name: 'Société Exemple SAS', role: 'Défendeur' }] } } });
   await tableau(carte({ matter: 'exemple', raisonnement: { ...raisonnement, qualification: 'contentieux', acte: 'Conclusions en défense', objectifs: ['Écarter la demande de Jean Dupont', 'Obtenir des frais irrépétibles'] } }));
   await flush();
   const card = root.querySelector('.pme-card')!;
   expect(card.querySelector('.pme-nature--contentieux')?.textContent).toBe('Contentieux');
   expect(card.textContent).toContain('Conclusions en défense');
-  expect(card.querySelector('[data-validate]')).toBeNull();
+  expect(card.querySelector('.pme-card-actions [data-validate="redaction"]')?.textContent).toBe('Valider le raisonnement');
+  expect(card.querySelector('[data-open-reasoning]')).toBeNull();
   const panneau = root.querySelector('.pme-drawer')!;
   expect(panneau.querySelector('[data-title]')?.textContent).toBe('Conclusions en défense');
   expect(panneau.textContent).toContain('Société Exemple SAS');
   expect(panneau.querySelectorAll('.pme-objectifs li')).toHaveLength(2);
-  expect(panneau.querySelectorAll('.pme-step')).toHaveLength(6);
-  expect(panneau.querySelectorAll('.pme-step.is-todo')).toHaveLength(4);
+  expect(panneau.querySelector('.pme-section h4')?.textContent).toBe('Raisonnements');
+  expect(panneau.querySelector('[data-open-reasoning]')).not.toBeNull();
+  expect(panneau.querySelector('[data-validate="redaction"]')).not.toBeNull();
   vi.mocked(loadBoard).mockResolvedValue({ rev: '' });
 });
 
-it('bloque les validations tant que le raisonnement ou le document rédigé n’existe pas', async () => {
+it('ne propose de valider que ce qui existe', async () => {
+  const card = () => root.querySelector('.pme-card')!;
   await tableau(carte({ raisonnement: { ...raisonnement, verifie: false } }));
-  expect(root.querySelector<HTMLButtonElement>('[data-validate="redaction"]')?.disabled).toBe(true);
+  expect(root.querySelector('[data-validate]')).toBeNull();
+  expect(card().querySelector('[data-launch="lever"]')?.textContent).toBe('Vérifier le raisonnement');
+  unmount(root);
+  root.innerHTML = '';
+  await tableau(carte({ raisonnement: { ...raisonnement, manques: 1, alertes: [{ kind: 'manque', texte: 'Source manquante' }] } }));
+  expect(card().querySelector('[data-launch="lever"]')?.textContent).toBe('Lever manques et erreurs');
+  expect(root.querySelector('.pme-drawer [data-validate="redaction"]')?.textContent).toBe('Valider malgré tout');
+  expect(root.querySelector('.pme-drawer')?.textContent).toContain('Source manquante');
   unmount(root);
   root.innerHTML = '';
   await tableau(carte({ etape: 'redaction', raisonnement }));
-  expect(root.querySelector('.pme-drawer')?.textContent).toContain('Rédaction non commencée');
-  expect(root.querySelector('[data-add-doc]')?.textContent).toBe('Lancer la rédaction');
-  expect(root.querySelector<HTMLButtonElement>('[data-validate="finalisation"]')?.disabled).toBe(true);
+  expect(card().textContent).toContain('Rédaction non commencée');
+  expect(card().querySelector('[data-add-doc]')?.textContent).toBe('Lancer la rédaction');
+  expect(root.querySelector('[data-validate]')).toBeNull();
   unmount(root);
   root.innerHTML = '';
   await tableau(carte({ etape: 'redaction', raisonnement, documents: [{ type: 'Conclusions', nom: 'Conclusions exemple', chemin: 'Projets/exemple.docx', statut: 'en cours' }] }));
-  expect(root.querySelector('[data-open-doc="0"]')?.textContent).toContain('Conclusions exemple');
+  expect(card().textContent).toContain('Conclusions exemple');
+  expect(card().querySelector('[data-validate="finalisation"]')?.textContent).toBe('Valider la rédaction');
+  expect(root.querySelector('.pme-drawer [data-open-doc="0"]')?.textContent).toContain('Conclusions exemple');
   expect(root.querySelector('[data-add-doc]')).toBeNull();
-  expect(root.querySelector<HTMLButtonElement>('[data-validate="finalisation"]')?.disabled).toBe(false);
 });
 
 it('déplace une carte à démarrer sans YAML après confirmation et permet son exclusion', async () => {
@@ -198,4 +209,5 @@ it('indique sur la carte l’état de l’anonymisation et de l’index pendant 
   const card = root.querySelector('.pme-card')!;
   expect(card.textContent).toContain('Anonymisation faite · Index à faire');
   expect(card.textContent).not.toContain('Aucun raisonnement');
+  expect(card.querySelector('.pme-card-actions [data-launch="index"]')?.textContent).toBe('Lancer l’index');
 });

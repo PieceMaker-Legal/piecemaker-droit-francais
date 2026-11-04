@@ -27,7 +27,6 @@ const ICONE_RAISONNEMENT = icone('<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1
 const ICONE_DOCUMENT = icone('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>');
 const boutonRaisonnement = (version = '') => `<button type="button" class="ptr-button pme-glass" data-open-reasoning${version ? ` data-version="${escape(version)}"` : ''}>${ICONE_RAISONNEMENT}Ouvrir le raisonnement</button>`;
 const lienRaisonnement = boutonRaisonnement();
-const valider = (etape: Etape, libelle: string, pret: boolean, raison: string) => `<button type="button" class="ptr-button ptr-button-primary" data-validate="${etape}"${pret ? '' : ` disabled title="${escape(raison)}"`}>${libelle}</button>`;
 
 const tacheHtml = (carte: Carte) => {
   const tache = carte.tache;
@@ -45,96 +44,93 @@ const menuHtml = (carte: Carte) => {
   return `<details class="ptr-menu pme-move"><summary class="ptr-icon-button" aria-label="Actions de la carte" title="Déplacer">⋯</summary><div class="ptr-menu-list">${items.join('')}</div></details>`;
 };
 
-const bulle = (fait: boolean) => `<span class="pme-bulle${fait ? ' is-done' : ''}" aria-label="${fait ? 'Fait' : 'À faire'}">${fait ? '✓' : ''}</span>`;
-const preparationHtml = (carte: Carte) => {
+const vide = (texte: string) => `<p class="pme-muted">${texte}</p>`;
+const bouton = (attributs: string, libelle: string, primaire = false) => `<button type="button" class="ptr-button${primaire ? ' ptr-button-primary' : ''}" ${attributs}>${libelle}</button>`;
+const ouvrirDocument = (document: DocumentRedige, index: number, version = '') => `<button type="button" class="ptr-button pme-glass" data-open-doc="${index}"${version ? ` data-version="${escape(version)}"` : ''} title="Ouvrir ${escape(document.nom)}">${ICONE_DOCUMENT}${escape(document.nom)}</button>`;
+const rediges = (carte: Carte) => (carte.documents ?? []).map((document, index) => [document, index] as const).filter(([document]) => document.statut === 'en cours');
+const nomsDocuments = (carte: Carte) => {
+  const liste = rediges(carte);
+  return liste.length ? `<p class="pme-card-doc">${ICONE_DOCUMENT}${liste.map(([document]) => escape(document.nom)).join(', ')}</p>` : vide('Aucun document rédigé.');
+};
+const compte = (carte: Carte) => [carte.raisonnement?.erreurs ? plural(carte.raisonnement.erreurs, 'erreur') : '', carte.raisonnement?.manques ? plural(carte.raisonnement.manques, 'manque') : ''].filter(Boolean).join(' · ');
+
+type Colonne = { etat: string; principal: string; secondaires: string[] };
+
+const preparation = (carte: Carte): Colonne => {
   const lignes = carte.preparation ?? [];
-  const ligne = (nom: string) => lignes.find((entree) => entree.nom === nom);
-  const ok = (nom: string) => ligne(nom)?.ok ?? false;
-  const etape = (libelle: string, fait: boolean, onglet: string, lancement: string, valider = '') => `<li>${valider || bulle(fait)}${fait ? `<button type="button" class="pme-link pme-prep-title" data-volet="${onglet}">${libelle}</button>` : `<strong>${libelle}</strong>`}${fait || valider || !lignes.length ? '' : `<span class="pme-spacer"></span><button type="button" class="pme-link" data-launch="${lancement}">Lancer</button>`}</li>`;
+  const ok = (nom: string) => lignes.some((ligne) => ligne.nom === nom && ligne.ok);
   const pieces = ok('conversion') && ok('anonymisation');
-  const valider = ok('anonymisation') && !ok('mapping') ? '<button type="button" class="ptr-button ptr-button-primary pme-prep-button" data-mapping>Valider le mapping</button>' : '';
-  return `<ul class="pme-prep">${etape('Anonymisation', pieces && ok('mapping'), 'plugin:piecemaker-dossier', 'conversion', valider)}${etape('Index', ok('index'), 'plugin:piecemaker-tabular-review', 'index')}</ul>`;
+  const principal = !lignes.length ? ''
+    : !pieces ? bouton('data-launch="conversion"', 'Lancer l’anonymisation', true)
+      : !ok('mapping') ? bouton('data-mapping', 'Valider le mapping', true)
+        : !ok('index') ? bouton('data-launch="index"', 'Lancer l’index', true) : '';
+  return {
+    etat: vide(`Anonymisation ${pieces && ok('mapping') ? 'faite' : 'à faire'} · Index ${ok('index') ? 'fait' : 'à faire'}`),
+    principal,
+    secondaires: [bouton('data-volet="plugin:piecemaker-dossier"', 'Ouvrir les pièces'), ok('index') ? bouton('data-volet="plugin:piecemaker-tabular-review"', 'Ouvrir l’index') : '', carte.raisonnement ? '' : bouton('data-launch="raisonnement"', 'Démarrer le raisonnement')],
+  };
 };
 
-const alertesHtml = (carte: Carte, ouvertes: Set<string>) => {
+const raisonnement = (carte: Carte): Colonne => {
   const reasoning = carte.raisonnement!;
-  if (!reasoning.verifie) return '<p class="pme-muted">Pas encore vérifié.</p>';
-  if (!reasoning.alertes.length) return '<p class="pme-ok">✓ Aucun manque ni erreur</p>';
-  const resume = [reasoning.erreurs ? plural(reasoning.erreurs, 'erreur') : '', reasoning.manques ? plural(reasoning.manques, 'manque') : ''].filter(Boolean).join(' · ');
-  return `<details class="pme-alertes" data-alertes${ouvertes.has(carte.id) ? ' open' : ''}><summary class="${reasoning.erreurs ? 'pme-erreur' : 'pme-manque'}">${resume}</summary><ul>${reasoning.alertes.map((alerte) => `<li class="pme-${alerte.kind}">${escape(alerte.texte)}</li>`).join('')}</ul></details>`;
+  const issues = compte(carte);
+  if (!reasoning.verifie) return { etat: vide('Pas encore vérifié.'), principal: bouton('data-launch="lever"', 'Vérifier le raisonnement', true), secondaires: [lienRaisonnement] };
+  return {
+    etat: issues ? `<p class="${reasoning.erreurs ? 'pme-erreur' : 'pme-manque'}">${issues}</p>` : '<p class="pme-ok">✓ Vérifié, sans manque ni erreur</p>',
+    principal: issues ? bouton('data-launch="lever"', 'Lever manques et erreurs', true) : bouton('data-validate="redaction"', 'Valider le raisonnement', true),
+    secondaires: [lienRaisonnement, issues && !reasoning.erreurs ? bouton('data-validate="redaction"', 'Valider malgré tout') : ''],
+  };
 };
 
-const documentsHtml = (carte: Carte) => {
-  const documents = carte.documents ?? [];
-  if (!documents.length) return '';
-  return `<ul class="pme-docs">${documents.map((document, index) => `<li>
-      <div class="pme-doc-head"><strong>${escape(document.nom)}</strong><span class="pme-pill${document.statut === 'en cours' ? ' pme-pill--run' : ''}">${escape(document.statut ?? '')}</span></div>
-      <div class="pme-doc-foot"><span class="pme-muted">${escape(document.type)}</span>
-        ${document.statut === 'en cours' ? `<button type="button" class="pme-link" data-open-doc="${index}">Ouvrir</button>` : ''}
-      </div></li>`).join('')}</ul>`;
+const redaction = (carte: Carte): Colonne => {
+  const faits = rediges(carte);
+  const aFaire = (carte.documents ?? []).map((document, index) => [document, index] as const).filter(([document]) => document.statut !== 'en cours');
+  const lancerDocument = ([document, index]: readonly [DocumentRedige, number], primaire: boolean) => bouton(`data-launch="redaction" data-doc="${index}"`, primaire ? 'Lancer la rédaction' : `Rédiger ${escape(document.nom)}`, primaire);
+  return {
+    etat: faits.length ? nomsDocuments(carte) : vide('Rédaction non commencée.'),
+    principal: faits.length ? bouton('data-validate="finalisation"', 'Valider la rédaction', true) : aFaire.length ? lancerDocument(aFaire[0], true) : bouton('data-add-doc', 'Lancer la rédaction', true),
+    secondaires: [...faits.map(([document, index]) => ouvrirDocument(document, index)), lienRaisonnement, ...aFaire.slice(faits.length ? 0 : 1).map((entree) => lancerDocument(entree, false)),
+      ...aFaire.map(([document, index]) => `<button type="button" class="pme-link pme-link--muted" data-remove-doc="${index}">Retirer ${escape(document.nom)}</button>`)],
+  };
 };
 
-const redactionHtml = (carte: Carte) => {
-  const documents = carte.documents ?? [];
-  if (!documents.length) return '<div class="pme-draft is-empty">' + ICONE_DOCUMENT + '<span class="pme-draft-text"><strong>Rédaction non commencée</strong><span class="pme-muted">Aucun document rédigé.</span></span><button type="button" class="ptr-button ptr-button-primary" data-add-doc>Lancer la rédaction</button></div>';
-  return `<ul class="pme-drafts">${documents.map((document, index) => document.statut === 'en cours'
-    ? `<li><button type="button" class="pme-draft pme-draft--file" data-open-doc="${index}" title="Ouvrir ${escape(document.nom)}">${ICONE_DOCUMENT}<span class="pme-draft-text"><strong>${escape(document.nom)}</strong><span class="pme-muted">${escape(document.type)} · Ouvrir</span></span></button></li>`
-    : `<li><div class="pme-draft is-empty">${ICONE_DOCUMENT}<span class="pme-draft-text"><strong>${escape(document.nom)}</strong><span class="pme-muted">Rédaction non commencée</span></span><button type="button" class="ptr-button ptr-button-primary" data-launch="redaction" data-doc="${index}">Lancer la rédaction</button><button type="button" class="pme-link pme-link--muted" data-remove-doc="${index}" aria-label="Retirer ${escape(document.nom)}">Retirer</button></div></li>`).join('')}</ul>`;
-};
-
-const actionHtml = (carte: Carte) => {
+const attente = (carte: Carte): Colonne => {
   const action = carte.action;
-  if (!action?.texte) return '<div class="pme-next"><span class="pme-muted">Aucune prochaine action.</span><button type="button" class="pme-link" data-edit-action>Ajouter</button></div>';
-  return `<div class="pme-next"><button type="button" class="pme-pill ${action.fait ? 'pme-pill--done' : 'pme-pill--todo'}" data-toggle-action title="Changer le statut">${action.fait ? 'Effectué' : 'À faire'}</button><span class="pme-next-text">${escape(action.texte)}</span><button type="button" class="pme-link" data-edit-action>Modifier</button></div>`;
+  return {
+    etat: action?.texte ? `<p class="pme-next"><span class="pme-pill ${action.fait ? 'pme-pill--done' : 'pme-pill--todo'}">${action.fait ? 'Effectué' : 'À faire'}</span><span class="pme-next-text">${escape(action.texte)}</span></p>` : vide('Attente non précisée.'),
+    principal: bouton('data-integrate', '+ Document du tiers', true),
+    secondaires: [bouton('data-edit-action', action?.texte ? 'Modifier l’attente' : 'Préciser l’attente'), action?.texte ? bouton('data-toggle-action', action.fait ? 'Marquer à faire' : 'Marquer effectué') : '', bouton('data-finish', 'Clore'), ...rediges(carte).map(([document, index]) => ouvrirDocument(document, index)), lienRaisonnement],
+  };
 };
 
-const historiqueHtml = (carte: Carte) => carte.historique?.length
-  ? `<p class="pme-muted pme-small">Versions précédentes : ${carte.historique.map((step) => escape(step.nom)).join(', ')}</p>` : '';
-
-const corpsHtml = (carte: Carte, ouvertes: Set<string>) => {
-  if (carte.exclu) return '<div class="pme-actions"><span class="pme-muted">Non juridique</span><button type="button" class="ptr-button" data-include>Réintégrer</button></div>';
-  if (carte.aDemarrer) return '<p class="pme-muted">À démarrer : aucun raisonnement.</p><div class="pme-actions"><button type="button" class="ptr-button ptr-button-primary" data-launch="raisonnement">Démarrer le raisonnement</button></div>';
-  if (carte.etape === 'preparation') return `${preparationHtml(carte)}${carte.raisonnement ? '' : '<div class="pme-actions"><button type="button" class="ptr-button" data-launch="raisonnement">Démarrer le raisonnement</button></div>'}`;
-  if (!carte.raisonnement) return '<button type="button" class="ptr-button" data-launch="raisonnement">Démarrer le raisonnement</button>';
-  const issues = carte.raisonnement.erreurs + carte.raisonnement.manques;
+const colonne = (carte: Carte): Colonne => {
+  if (carte.exclu) return { etat: vide('Non juridique.'), principal: bouton('data-include', 'Réintégrer'), secondaires: [] };
+  if (carte.etape === 'preparation') return preparation(carte);
+  if (carte.aDemarrer || !carte.raisonnement) return { etat: vide('Raisonnement à démarrer.'), principal: bouton('data-launch="raisonnement"', 'Démarrer le raisonnement', true), secondaires: [] };
+  const documents = rediges(carte).map(([document, index]) => ouvrirDocument(document, index));
   switch (carte.etape) {
-    case 'raisonnement':
-      return `${alertesHtml(carte, ouvertes)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span>${issues ? '<button type="button" class="ptr-button" data-launch="lever">Lever manques et erreurs</button>' : ''}${valider('redaction', 'Valider le raisonnement', carte.raisonnement.verifie, 'Le raisonnement n’existe pas encore.')}</div>`;
-    case 'redaction':
-      return `${redactionHtml(carte)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span>${valider('finalisation', 'Valider la rédaction', (carte.documents ?? []).some((document) => document.statut === 'en cours'), 'Le document n’existe pas encore.')}</div>`;
-    case 'finalisation':
-      return `${actionHtml(carte)}${documentsHtml(carte)}<div class="pme-actions">${lienRaisonnement}<button type="button" class="ptr-button ptr-button-primary" data-finish>Valider la finalisation</button></div>`;
-    case 'attente':
-      return `${actionHtml(carte)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span><button type="button" class="ptr-button" data-finish>Valider la suite</button><button type="button" class="ptr-button ptr-button-primary" data-integrate>+ Document du tiers</button></div>`;
-    default:
-      return `${documentsHtml(carte)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}</div>`;
+    case 'raisonnement': return raisonnement(carte);
+    case 'redaction': return redaction(carte);
+    case 'finalisation': return { etat: nomsDocuments(carte), principal: bouton('data-finish', 'Valider la finalisation', true), secondaires: [...documents, lienRaisonnement] };
+    case 'attente': return attente(carte);
+    default: return { etat: nomsDocuments(carte), principal: '', secondaires: [...documents, lienRaisonnement] };
   }
 };
 
-const etapeHtml = (libelle: string, fait: boolean, contenu: string, etat = '') => `<li class="pme-step${etat ? ` is-${etat}` : ''}">${bulle(fait)}<div class="pme-step-body"><strong>${escape(libelle)}${etat === 'current' ? '<span class="pme-pill pme-pill--run">En cours</span>' : ''}</strong>${contenu}</div></li>`;
-const ouvrirVersion = (nom: string) => boutonRaisonnement(nom);
-const documentsVersion = (nom: string, documents: DocumentRedige[]) => documents.length
-  ? `<ul class="pme-docs">${documents.map((document, index) => `<li><div class="pme-doc-head"><strong>${escape(document.nom)}</strong></div><div class="pme-doc-foot"><span class="pme-muted">${escape(document.type)}</span>${document.chemin ? `<button type="button" class="pme-link" data-open-doc="${index}" data-version="${escape(nom)}">Ouvrir</button>` : ''}</div></li>`).join('')}</ul>` : '';
-
-const versionHtml = (nom: string, documents: DocumentRedige[]) => COLONNES.slice(0, 5).map(([etape, libelle]) => etapeHtml(libelle, true,
-  etape === 'preparation' ? '' : `${etape === 'redaction' ? documentsVersion(nom, documents) : ''}<div class="pme-actions">${ouvrirVersion(nom)}</div>`)).join('');
-
-const etapesHtml = (carte: Carte, ouvertes: Set<string>) => {
-  if (carte.exclu) return corpsHtml(carte, ouvertes);
-  const courante = COLONNES.findIndex(([etape]) => etape === carte.etape);
-  const clos = carte.etape === 'clos';
-  const actuelle = COLONNES.map(([etape, libelle], index) => {
-    if (index > courante) return etapeHtml(libelle, false, '', 'todo');
-    if (index === courante) return etapeHtml(libelle, clos, corpsHtml(carte, ouvertes), clos ? '' : 'current');
-    if (etape === 'preparation') return etapeHtml(libelle, true, '');
-    const documents = etape === 'redaction' || etape === 'finalisation' ? documentsHtml(carte) : '';
-    return etapeHtml(libelle, true, `${documents}<div class="pme-actions">${lienRaisonnement}</div>`);
-  }).join('');
-  const versions = carte.historique ?? [];
-  if (!versions.length) return `<ol class="pme-steps">${actuelle}</ol>`;
-  return [...versions.map((version, index) => `<section class="pme-version"><h4>Version ${index + 1}</h4><ol class="pme-steps">${versionHtml(version.nom, version.documents)}</ol></section>`),
-    `<section class="pme-version"><h4>Version ${versions.length + 1}</h4><ol class="pme-steps">${actuelle}</ol></section>`].join('');
+const alertesHtml = (carte: Carte) => {
+  const reasoning = carte.raisonnement;
+  if (carte.etape !== 'raisonnement' || !reasoning?.verifie || !reasoning.alertes.length) return '';
+  return `<ul class="pme-alertes">${reasoning.alertes.map((alerte) => `<li class="pme-${alerte.kind}">${escape(alerte.texte)}</li>`).join('')}</ul>`;
 };
+
+const actionsHtml = (carte: Carte) => {
+  const { etat, principal, secondaires } = colonne(carte);
+  const autres = secondaires.filter(Boolean).join('');
+  return `<section class="pme-section"><h4>${escape(LIBELLE[carte.etape])}</h4>${carte.tache ? tacheHtml(carte) : ''}${etat}${alertesHtml(carte)}${autres || principal ? `<div class="pme-actions">${autres}<span class="pme-spacer"></span>${carte.tache ? '' : principal}</div>` : ''}</section>`;
+};
+
+const versionsHtml = (carte: Carte) => carte.historique?.length
+  ? `<section class="pme-section"><h4>Versions précédentes</h4><ol class="pme-versions">${carte.historique.map((version, index) => `<li><span class="pme-muted">Version ${index + 1}</span><div class="pme-actions">${boutonRaisonnement(version.nom)}${version.documents.map((document, position) => document.chemin ? ouvrirDocument(document, position, version.nom) : '').join('')}</div></li>`).join('')}</ol></section>` : '';
 
 const MATTERS = 'projects/cabinet/matters/';
 const CHAMPS: ['client' | 'practiceArea' | 'responsible' | 'openedOn', string][] = [['client', 'Client'], ['practiceArea', 'Domaine'], ['responsible', 'Responsable'], ['openedOn', 'Ouvert le']];
@@ -145,8 +141,6 @@ const natureHtml = (carte?: Carte) => {
   const nature = NATURES[carte?.raisonnement?.qualification ?? ''];
   return nature ? `<span class="pme-nature pme-nature--${nature[1]}">${nature[0]}</span>` : '';
 };
-const vide = (texte: string) => `<p class="pme-muted">${texte}</p>`;
-
 const resumeHtml = (carte?: Carte, fiche?: Fiche) => {
   const reasoning = carte?.raisonnement;
   const parties = (fiche?.parties ?? []).filter((partie) => partie.name).map((partie) => `<li><strong>${escape(partie.name)}</strong>${partie.role ? `<span class="pme-muted">${escape(partie.role)}</span>` : ''}</li>`).join('');
@@ -164,30 +158,18 @@ const ficheHtml = (fiche?: Fiche) => {
   return `<section class="pme-section pme-fiche"><h4>Fiche du dossier</h4>${fiche.summary ? `<p>${escape(fiche.summary)}</p>` : ''}${champs ? `<dl>${champs}</dl>` : ''}${suite ? `<h5>Prochaine action</h5>${suite}` : ''}${dates ? `<h5>Dates clés</h5><ul class="pme-fiche-dates">${dates}</ul>` : ''}</section>`;
 };
 
-const etatHtml = (carte: Carte) => {
-  const reasoning = carte.raisonnement;
-  if (carte.exclu) return vide('Non juridique');
-  if (carte.etape === 'preparation') {
-    const ok = (nom: string) => (carte.preparation ?? []).some((ligne) => ligne.nom === nom && ligne.ok);
-    const anonymisation = ok('conversion') && ok('anonymisation') && ok('mapping');
-    return vide(`Anonymisation ${anonymisation ? 'faite' : 'à faire'} · Index ${ok('index') ? 'fait' : 'à faire'}`);
-  }
-  if (carte.aDemarrer || !reasoning) return vide('Aucun raisonnement');
-  if (!reasoning.erreurs && !reasoning.manques) return '';
-  return `<p class="${reasoning.erreurs ? 'pme-erreur' : 'pme-manque'}">${[reasoning.erreurs ? plural(reasoning.erreurs, 'erreur') : '', reasoning.manques ? plural(reasoning.manques, 'manque') : ''].filter(Boolean).join(' · ')}</p>`;
-};
-
 const carteHtml = (carte: Carte, index: number, fiche?: Fiche) => {
   const liste = carte.exclu ? [] : alertes(fiche);
   const ton = liste.some((alerte) => alerte.ton === 'danger') ? ' is-flagged is-danger' : liste.length ? ' is-flagged' : '';
   const reasoning = carte.raisonnement;
   const nature = natureHtml(carte);
   const autres = (reasoning?.objectifs?.length ?? 0) - 1;
+  const { etat, principal } = colonne(carte);
   return `<article class="pme-card${carte.exclu ? ' is-excluded' : ''}${ton}" data-card="${index}">
     <header class="pme-card-head"><div class="pme-card-title"><strong>${escape(carte.dossier)}</strong></div>${menuHtml(carte)}</header>
     ${nature || reasoning?.acte ? `<div class="pme-card-meta">${nature}${reasoning?.acte ? `<span>${escape(reasoning.acte)}</span>` : ''}</div>` : ''}
     ${reasoning ? `<p class="pme-card-goal">${escape(reasoning.titre)}${autres > 0 ? ` <span class="pme-muted">+${autres}</span>` : ''}</p>` : ''}
-    ${liste.length ? `<p class="pme-attention pme-attention--${liste[0].ton}">${escape(liste[0].texte)}</p>` : ''}${tacheHtml(carte)}${etatHtml(carte)}
+    ${liste.length ? `<p class="pme-attention pme-attention--${liste[0].ton}">${escape(liste[0].texte)}</p>` : ''}${tacheHtml(carte)}${etat}${principal && !carte.tache ? `<div class="pme-card-actions">${principal}</div>` : ''}
   </article>`;
 };
 
@@ -204,7 +186,6 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
   let afficherExclus = false;
   let ouverte: { carte: string | null; matter: string | null } | null = null;
   let fiches: { rev: string; docs: Record<string, Fiche> } = { rev: '', docs: {} };
-  const ouvertes = new Set<string>();
   let cartes: Carte[] = [];
   let signature = '';
 
@@ -229,7 +210,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     drawer.querySelector('[data-tags]')!.innerHTML = natureHtml(carte);
     etapesZone.dataset.card = String(index);
     const fiche = ouverte.matter ? fiches.docs[`${MATTERS}${ouverte.matter}`] : undefined;
-    etapesZone.innerHTML = `${carte ? tacheHtml(carte) : ''}${resumeHtml(carte, fiche)}${carte ? `<section class="pme-section"><h4>Étapes</h4>${etapesHtml(carte, ouvertes)}</section>` : ''}${ficheHtml(fiche)}`;
+    etapesZone.innerHTML = `${carte ? actionsHtml(carte) : ''}${resumeHtml(carte, fiche)}${carte ? versionsHtml(carte) : ''}${ficheHtml(fiche)}`;
     etapesZone.hidden = !carte && !fiche;
   };
   const chargerFiches = async () => {
@@ -312,8 +293,8 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
   const modifierAction = async (carte: Carte) => {
     let texte = carte.action?.texte ?? '';
     const answer = await openModal(root, {
-      title: 'Prochaine action',
-      body: `<label class="ptr-field"><span class="ptr-label">Action</span><textarea class="ptr-textarea" rows="3" data-action placeholder="Exemple : relancer l’avocat adverse avant le 15 du mois">${escape(texte)}</textarea></label><p class="pme-muted pme-small">Les dates se règlent dans le suivi du dossier (vue Échéances).</p>`,
+      title: 'Ce que l’on attend',
+      body: `<label class="ptr-field"><span class="ptr-label">Attente</span><textarea class="ptr-textarea" rows="3" data-action placeholder="Exemple : relancer l’avocat adverse avant le 15 du mois">${escape(texte)}</textarea></label><p class="pme-muted pme-small">Les dates se règlent dans le suivi du dossier (vue Échéances).</p>`,
       actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'Enregistrer', value: 'save', kind: 'primary' }],
       onMount: (dialog) => dialog.querySelector('[data-action]')!.addEventListener('input', (event) => { texte = (event.target as HTMLTextAreaElement).value; }),
     });
@@ -359,14 +340,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
       : etapes.dossier({ projectPath: carte.projectPath, etape }));
   };
 
-  const ecouter = (type: string, listener: (event: Event) => void, capture = false) => [element, drawer].forEach((zone) => zone.addEventListener(type, listener, capture));
-  ecouter('toggle', (event) => {
-    const details = event.target as HTMLElement;
-    if (!details.matches('[data-alertes]')) return;
-    const id = cartes[Number(details.closest<HTMLElement>('[data-card]')?.dataset.card)]?.id ?? '';
-    if ((details as HTMLDetailsElement).open) ouvertes.add(id); else ouvertes.delete(id);
-  }, true);
-
+  const ecouter = (type: string, listener: (event: Event) => void) => [element, drawer].forEach((zone) => zone.addEventListener(type, listener));
   ecouter('keydown', (event) => { if ((event as KeyboardEvent).key === 'Escape' && ouverte) ouvrir(null); });
   ecouter('click', (event) => {
     const target = event.target as HTMLElement;
@@ -393,7 +367,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     else if (data.validate) {
       const etape = data.validate as Etape;
       const titre = etape === 'redaction' ? 'Valider le raisonnement ?' : 'Valider la rédaction ?';
-      void confirmDialog(root, titre, `${sujet(carte)}<p>La carte passe en ${escape(LIBELLE[etape])}.</p>`, 'Valider').then((ok) => { if (ok) void run(() => etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement!.nom, etape })); });
+      void confirmDialog(root, titre, `${sujet(carte)}${etape === 'redaction' && compte(carte) ? `<p>Il reste ${compte(carte)}.</p>` : ''}<p>La carte passe en ${escape(LIBELLE[etape])}.</p>`, 'Valider').then((ok) => { if (ok) void run(() => etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement!.nom, etape })); });
     } else if ('addDoc' in data) void ajouterDocument(carte);
     else if (data.removeDoc) {
       const documents = sansStatut(carte.documents);
