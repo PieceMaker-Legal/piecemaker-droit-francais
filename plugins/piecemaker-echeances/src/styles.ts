@@ -180,4 +180,11 @@ button.pme-pill:hover{filter:brightness(.96)}
 .pme-bulle{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;box-shadow:inset 0 0 0 1.5px var(--border-stronger);font:var(--text-caption);font-weight:700}
 .pme-bulle.is-done{background:var(--text-success);color:#fff;box-shadow:none}
 .pme-done-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-top:12px}
+.pme .pme-telephone{margin-inline-start:auto;display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;cursor:pointer}
+.pme-telegram{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.pme-telegram p{margin:0}
+.pme-telegram-brand{display:flex;flex-direction:column;align-items:center;gap:4px}
+.pme-telegram-brand img{border-radius:10px}
+.pme-telegram-brand span{color:var(--text-muted);font:var(--text-caption)}
+.pme-telegram-qr{display:block;background:white;border-radius:12px;max-width:100%;height:auto}
 `;

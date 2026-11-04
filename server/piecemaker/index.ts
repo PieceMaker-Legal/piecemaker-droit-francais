@@ -47,6 +47,7 @@ import { startProjectRegistry } from './project-registry.js';
 import { createFolderHistory } from './folder-history/history.js';
 import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-panels.js';
 import { startRemoteAccess } from './remote/index.js';
+import { createTelegramRouter } from './telegram/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
 import { createMistralSdkAuthRouter, createMistralTabularBridge, installMistralSdk } from './mistral-sdk/index.js';
 
@@ -197,6 +198,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));
+  router.use(createTelegramRouter());
   router.use('/library', library.router);
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());

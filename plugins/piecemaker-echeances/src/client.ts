@@ -6,6 +6,7 @@ import { createDates } from './dates.js';
 import { STYLES } from './styles.js';
 import { createTableau } from './tableau.js';
 import { createTaches } from './taches.js';
+import { createTelephone } from './telephone.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void };
@@ -51,6 +52,7 @@ export function mount(container: HTMLElement, api: Host) {
   tabs.className = 'pme-tabs';
   tabs.setAttribute('role', 'tablist');
   tabs.innerHTML = `<div class="pme-segmented">${VUES.map(([vue, libelle]) => `<button type="button" role="tab" class="pme-tab" data-vue="${vue}">${libelle}</button>`).join('')}</div>`;
+  tabs.append(createTelephone(root));
   const tableau = createTableau(root, () => api.context.project?.path ?? null);
   const taches = createTaches(root, tableau.ouvrirDossier);
   const echeances = document.createElement('div');
