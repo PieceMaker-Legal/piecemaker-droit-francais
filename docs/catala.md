@@ -1,6 +1,6 @@
 # Pack Catala
 
-L'app de bureau installe le pack Catala. L'agent l'utilise par `pm catala` et le skill `catala`. Aucune interface graphique.
+L'app de bureau installe le pack Catala. L'agent l'utilise par `pm catala` et le skill `catala`. L'avocat voit l'état et les bilans dans la vue Catala de l'onglet Raisonnement.
 
 ## Contenu
 
@@ -27,7 +27,7 @@ Les versions sont figées dans `desktop-bootstrap/composants/catala-pack.json` :
 
 `catleg` et ses dépendances sont dans `macos-arm64-requirements.txt` et `windows-requirements.txt` : la CI les installe dans le Python partagé (`config.json` › `pythonPath`). Aucun venv propre au pack.
 
-## Fichiers lus par une interface future
+## Fichiers lus par l'interface
 
 `<racine>/catala/status.json` :
 
@@ -36,6 +36,19 @@ Les versions sont figées dans `desktop-bootstrap/composants/catala-pack.json` :
 ```
 
 `<racine>/catala/pack.json` : `id`, `platform`, `catala`, `version`, `prefix`, `bin` (un chemin par outil), `path`, `env`, `runtimePython`, `proof`, `installedAt`. Journal : `<racine>/catala/install.log`.
+
+## Interface
+
+L'onglet Raisonnement affiche la vue Catala quand le dossier contient au moins un programme. La vue montre :
+
+- l'état du pack (`status.json`, `pack.json`) ;
+- les programmes du dossier ;
+- le dernier bilan de chaque programme : vérification (contrôles réussis et échoués, durée, date), preuve, vigueur catleg (date du contrôle, résultat par fichier) ;
+- des liens qui ouvrent les fichiers `.catala_fr` et les journaux `resultats/*.log` dans l'éditeur.
+
+La vue est en lecture seule. Le seul bouton, « Vérifier », lance `pm catala verifier --raisonnement <nom>`. Il est inactif sans pack.
+
+Routes serveur (`server/piecemaker/catala.ts`) : `GET /api/piecemaker/catala?projectPath=` renvoie l'état et les programmes ; `POST /api/piecemaker/catala/verify` (`projectPath`, `raisonnement`) lance la vérification et renvoie l'état à jour. Une seule vérification à la fois par programme.
 
 ## Classement
 
