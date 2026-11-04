@@ -25,6 +25,7 @@ Avant d'utiliser une commande, lisez sa référence dans `<cette-skill>/referenc
 | `pm bordereau` | tamponner et numéroter les pièces | `bordereau.md` |
 | `pm raisonnement` | verifier ou lister les raisonnements juridiques | `raisonnement.md` |
 | `pm suivi_dossiers` | verifier le suivi des échéances, lire ou ecrire le tableau | `suivi.md`, `tableau.md` |
+| `pm catala` | verifier, formater, prouver un programme Catala, catleg | skill `catala` |
 
 Au début du travail sur un dossier, lancez `pm dossier verifier`.
 

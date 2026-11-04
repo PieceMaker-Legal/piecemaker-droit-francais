@@ -5,9 +5,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { CATALA_COMMANDS, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers'];
+const TOOLS = ['tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
 const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'fichier'];
 const DOSSIER_COMMANDS = ['verifier', 'sql', 'conversion', 'arborescence', 'index'];
@@ -18,7 +19,7 @@ const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force']);
+const BOOLEAN_FLAGS = new Set(['force', 'whole_program']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
@@ -65,6 +66,16 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       lit un document du Matter board (ex. projects/cabinet/requests)
   suivi_dossiers ecrire <chemin> --json '{...}'
       écrit un document du Matter board
+
+  catala verifier [--raisonnement NOM]
+      programme Catala : .piecemaker/raisonnements/NOM/ (clerk.toml, *.catala_fr) ;
+      typecheck, format, tests clerk, runtime Python → NOM/resultats/verification.json
+  catala lister | env
+  catala formater [--raisonnement NOM]
+  catala preuve --scope CHAMP [--fichier F] [--whole-program] [--raisonnement NOM]
+  catala catleg [--fichier F] [--raisonnement NOM]
+      vigueur des articles cités, à la date du jour seulement
+  catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -555,6 +566,19 @@ async function suiviDossiers(api, positional, flags, resolved) {
   return api.suiviFn({ commande, chemin, donnees, cwd });
 }
 
+async function catala(api, positional, flags, resolved) {
+  const [, commande, ...args] = positional;
+  if (!CATALA_COMMANDS.includes(commande)) usage(`catala attend ${CATALA_COMMANDS.join(', ')}.`);
+  if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
+  const input = { commande, cwd: path.resolve(resolved), flags, args, ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
+  try {
+    return await (api.catalaFn || runCatala)(input);
+  } catch (error) {
+    if (error instanceof TypeError) usage(error.message);
+    fail(error.message);
+  }
+}
+
 export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   const { flags, positional } = parseArgv(argv);
   if (flags.help && !positional.length) return HELP;
@@ -569,6 +593,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (tool === 'dossier') return dossier(api, positional, flags, resolved);
   if (tool === 'tabular_review') return tabularReview(api, positional, flags, resolved);
   if (tool === 'suivi_dossiers') return suiviDossiers(api, positional, flags, resolved);
+  if (tool === 'catala') return catala(api, positional, flags, resolved);
 
   if (tool === 'bordereau') {
     const pieces = positional.slice(1);
@@ -594,6 +619,10 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (isMain) {
   run(process.argv.slice(2)).then((text) => {
+    if (text && typeof text === 'object') {
+      process.exitCode = text.exitCode;
+      return;
+    }
     process.stdout.write(text.endsWith('\n') ? text : `${text}\n`);
   }).catch((error) => {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

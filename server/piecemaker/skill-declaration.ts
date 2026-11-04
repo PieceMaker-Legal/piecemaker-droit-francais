@@ -14,6 +14,7 @@ const BUNDLED_SKILLS = [
   { slug: 'docx-cli', segments: ['vendor', 'skills', 'docx-cli'] },
   { slug: 'style-redaction-cabinet', segments: ['vendor', 'piecemaker-plugin', 'skills', 'style-redaction-cabinet'] },
   { slug: 'Skill-PieceMaker', segments: ['vendor', 'skills', 'Skill-PieceMaker'] },
+  { slug: 'catala', segments: ['vendor', 'skills', 'catala'] },
 ] as const;
 
 const RETIRED_BUNDLED_SKILLS = ['redaction-juridique'];

@@ -152,6 +152,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-name t-skill-c" x="306" y="426">legal-code</text>
         <text class="t-note" x="306" y="444">skill : raisonnement, session /legal-code,</text>
         <text class="t-note" x="306" y="460">utilise pm raisonnement et pm dossier sql</text>
+        <text class="t-name t-skill-c" x="306" y="498">catala</text>
+        <text class="t-note" x="306" y="516">skill : programme Catala, utilise pm catala</text>
 
         <text class="t-name" x="560" y="276">pm tab</text><text class="t-mono" x="730" y="276">lister | afficher | fermer</text>
         <text class="t-mono" x="730" y="294">dossier | index | tabular_review | bordereau</text>
@@ -165,8 +167,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-name" x="560" y="438">pm bordereau</text><text class="t-mono" x="730" y="438">pièce… dans l'ordre</text>
         <text class="t-name" x="560" y="456">pm raisonnement</text><text class="t-mono" x="730" y="456">verifier | lister</text>
         <text class="t-name" x="560" y="474">pm suivi_dossiers</text><text class="t-mono" x="730" y="474">verifier | lire | ecrire</text>
-        <text class="t-note" x="560" y="496">Une commande par onglet. --dossier vise un autre dossier.</text>
-        <text class="t-note" x="560" y="514">Lancer l'index : accord de l'avocat. Il reste dans l'onglet Dossier.</text>
+        <text class="t-name" x="560" y="492">pm catala</text><text class="t-mono" x="730" y="492">verifier | formater | preuve | catleg | lister | env | exec</text>
+        <text class="t-note" x="560" y="514">Une commande par onglet. --dossier vise un autre dossier.</text>
+        <text class="t-note" x="560" y="532">Lancer l'index : accord de l'avocat. Il reste dans l'onglet Dossier.</text>
 
         <text class="t-title t-skill-c" x="306" y="584">Skill docx-cli</text>
         <text class="t-note" x="306" y="602">Source de la commande docx : le skill</text>
@@ -233,6 +236,11 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td><code>pm dossier sql "REQUÊTE"</code></td><td>Lit ou modifie les dates et les libellés des pièces en base (requêtes d'exemple dans la skill).</td><td>non</td></tr>
         <tr><td><code>pm dossier verifier</code></td><td>Donne l'état de l'anonymisation, de l'index et de la conversion, avec la commande qui corrige.</td><td>non</td></tr>
       </table></div>
+    </section>
+
+    <section class="card wide">
+      <h2>Pack Catala</h2>
+      <p>L'app de bureau installe le pack au démarrage, en tâche de fond : <code>catala</code>, <code>clerk</code>, <code>catala-lsp</code>, <code>catala-format</code>, <code>catala-dap</code>, le runtime Python Catala et, sur macOS, <code>catala-proof</code> avec Z3. <code>catleg</code> est dans le Python partagé. <code>pm catala</code> lance ces outils sans serveur PieceMaker. Les programmes vivent dans <code>.piecemaker/raisonnements/&lt;nom&gt;/</code>, les résultats dans son dossier <code>resultats/</code>. Détail : <code>docs/catala.md</code>.</p>
     </section>
 
     <section class="card">
