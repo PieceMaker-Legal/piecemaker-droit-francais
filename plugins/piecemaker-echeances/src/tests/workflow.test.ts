@@ -65,6 +65,23 @@ it('affiche une carte minimaliste et détaille parties, acte, objectifs et étap
   vi.mocked(loadBoard).mockResolvedValue({ rev: '' });
 });
 
+it('bloque les validations tant que le raisonnement ou le document rédigé n’existe pas', async () => {
+  await tableau(carte({ raisonnement: { ...raisonnement, verifie: false } }));
+  expect(root.querySelector<HTMLButtonElement>('[data-validate="redaction"]')?.disabled).toBe(true);
+  unmount(root);
+  root.innerHTML = '';
+  await tableau(carte({ etape: 'redaction', raisonnement }));
+  expect(root.querySelector('.pme-drawer')?.textContent).toContain('Rédaction non commencée');
+  expect(root.querySelector('[data-add-doc]')?.textContent).toBe('Lancer la rédaction');
+  expect(root.querySelector<HTMLButtonElement>('[data-validate="finalisation"]')?.disabled).toBe(true);
+  unmount(root);
+  root.innerHTML = '';
+  await tableau(carte({ etape: 'redaction', raisonnement, documents: [{ type: 'Conclusions', nom: 'Conclusions exemple', chemin: 'Projets/exemple.docx', statut: 'en cours' }] }));
+  expect(root.querySelector('[data-open-doc="0"]')?.textContent).toContain('Conclusions exemple');
+  expect(root.querySelector('[data-add-doc]')).toBeNull();
+  expect(root.querySelector<HTMLButtonElement>('[data-validate="finalisation"]')?.disabled).toBe(false);
+});
+
 it('déplace une carte à démarrer sans YAML après confirmation et permet son exclusion', async () => {
   await tableau(carte({ aDemarrer: true }));
   expect(document.querySelectorAll('[data-move]')).toHaveLength(5);

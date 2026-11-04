@@ -22,7 +22,12 @@ const CACHE = 'pme-tableau';
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
 const sansStatut = (documents: DocumentRedige[] = []) => documents.map(({ type, nom, chemin }) => ({ type, nom, chemin }));
 
-const lienRaisonnement = '<button type="button" class="pme-link" data-open-reasoning>Ouvrir le raisonnement</button>';
+const icone = (chemins: string) => `<svg class="pme-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${chemins}</svg>`;
+const ICONE_RAISONNEMENT = icone('<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>');
+const ICONE_DOCUMENT = icone('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>');
+const boutonRaisonnement = (version = '') => `<button type="button" class="ptr-button pme-glass" data-open-reasoning${version ? ` data-version="${escape(version)}"` : ''}>${ICONE_RAISONNEMENT}Ouvrir le raisonnement</button>`;
+const lienRaisonnement = boutonRaisonnement();
+const valider = (etape: Etape, libelle: string, pret: boolean, raison: string) => `<button type="button" class="ptr-button ptr-button-primary" data-validate="${etape}"${pret ? '' : ` disabled title="${escape(raison)}"`}>${libelle}</button>`;
 
 const tacheHtml = (carte: Carte) => {
   const tache = carte.tache;
@@ -59,15 +64,22 @@ const alertesHtml = (carte: Carte, ouvertes: Set<string>) => {
   return `<details class="pme-alertes" data-alertes${ouvertes.has(carte.id) ? ' open' : ''}><summary class="${reasoning.erreurs ? 'pme-erreur' : 'pme-manque'}">${resume}</summary><ul>${reasoning.alertes.map((alerte) => `<li class="pme-${alerte.kind}">${escape(alerte.texte)}</li>`).join('')}</ul></details>`;
 };
 
-const documentsHtml = (carte: Carte, edition: boolean) => {
+const documentsHtml = (carte: Carte) => {
   const documents = carte.documents ?? [];
-  if (!documents.length) return edition ? '<p class="pme-muted">Aucun document choisi.</p>' : '';
+  if (!documents.length) return '';
   return `<ul class="pme-docs">${documents.map((document, index) => `<li>
       <div class="pme-doc-head"><strong>${escape(document.nom)}</strong><span class="pme-pill${document.statut === 'en cours' ? ' pme-pill--run' : ''}">${escape(document.statut ?? '')}</span></div>
       <div class="pme-doc-foot"><span class="pme-muted">${escape(document.type)}</span>
         ${document.statut === 'en cours' ? `<button type="button" class="pme-link" data-open-doc="${index}">Ouvrir</button>` : ''}
-        ${edition ? `<button type="button" class="pme-link" data-launch="redaction" data-doc="${index}">Lancer rédaction</button><button type="button" class="pme-link pme-link--muted" data-remove-doc="${index}" aria-label="Retirer ${escape(document.nom)}">Retirer</button>` : ''}
       </div></li>`).join('')}</ul>`;
+};
+
+const redactionHtml = (carte: Carte) => {
+  const documents = carte.documents ?? [];
+  if (!documents.length) return '<div class="pme-draft is-empty">' + ICONE_DOCUMENT + '<span class="pme-draft-text"><strong>Rédaction non commencée</strong><span class="pme-muted">Aucun document rédigé.</span></span><button type="button" class="ptr-button ptr-button-primary" data-add-doc>Lancer la rédaction</button></div>';
+  return `<ul class="pme-drafts">${documents.map((document, index) => document.statut === 'en cours'
+    ? `<li><button type="button" class="pme-draft pme-draft--file" data-open-doc="${index}" title="Ouvrir ${escape(document.nom)}">${ICONE_DOCUMENT}<span class="pme-draft-text"><strong>${escape(document.nom)}</strong><span class="pme-muted">${escape(document.type)} · Ouvrir</span></span></button></li>`
+    : `<li><div class="pme-draft is-empty">${ICONE_DOCUMENT}<span class="pme-draft-text"><strong>${escape(document.nom)}</strong><span class="pme-muted">Rédaction non commencée</span></span><button type="button" class="ptr-button ptr-button-primary" data-launch="redaction" data-doc="${index}">Lancer la rédaction</button><button type="button" class="pme-link pme-link--muted" data-remove-doc="${index}" aria-label="Retirer ${escape(document.nom)}">Retirer</button></div></li>`).join('')}</ul>`;
 };
 
 const actionHtml = (carte: Carte) => {
@@ -87,20 +99,20 @@ const corpsHtml = (carte: Carte, ouvertes: Set<string>) => {
   const issues = carte.raisonnement.erreurs + carte.raisonnement.manques;
   switch (carte.etape) {
     case 'raisonnement':
-      return `${alertesHtml(carte, ouvertes)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span>${issues ? '<button type="button" class="ptr-button" data-launch="lever">Lever manques et erreurs</button>' : ''}<button type="button" class="ptr-button ptr-button-primary" data-validate="redaction">Valider le raisonnement</button></div>`;
+      return `${alertesHtml(carte, ouvertes)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span>${issues ? '<button type="button" class="ptr-button" data-launch="lever">Lever manques et erreurs</button>' : ''}${valider('redaction', 'Valider le raisonnement', carte.raisonnement.verifie, 'Le raisonnement n’existe pas encore.')}</div>`;
     case 'redaction':
-      return `${documentsHtml(carte, true)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span><button type="button" class="ptr-button" data-add-doc>+ Document</button><button type="button" class="ptr-button ptr-button-primary" data-validate="finalisation">Valider</button></div>`;
+      return `${redactionHtml(carte)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span>${valider('finalisation', 'Valider la rédaction', (carte.documents ?? []).some((document) => document.statut === 'en cours'), 'Le document n’existe pas encore.')}</div>`;
     case 'finalisation':
-      return `${actionHtml(carte)}${documentsHtml(carte, false)}<div class="pme-actions">${lienRaisonnement}<button type="button" class="ptr-button ptr-button-primary" data-finish>Valider la finalisation</button></div>`;
+      return `${actionHtml(carte)}${documentsHtml(carte)}<div class="pme-actions">${lienRaisonnement}<button type="button" class="ptr-button ptr-button-primary" data-finish>Valider la finalisation</button></div>`;
     case 'attente':
-      return `${actionHtml(carte)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span><button type="button" class="ptr-button" data-finish>Valider la suite</button><button type="button" class="ptr-button ptr-button-primary" data-integrate>Intégrer une pièce</button></div>`;
+      return `${actionHtml(carte)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}<span class="pme-spacer"></span><button type="button" class="ptr-button" data-finish>Valider la suite</button><button type="button" class="ptr-button ptr-button-primary" data-integrate>+ Document du tiers</button></div>`;
     default:
-      return `${documentsHtml(carte, false)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}</div>`;
+      return `${documentsHtml(carte)}${historiqueHtml(carte)}<div class="pme-actions">${lienRaisonnement}</div>`;
   }
 };
 
 const etapeHtml = (libelle: string, fait: boolean, contenu: string, etat = '') => `<li class="pme-step${etat ? ` is-${etat}` : ''}">${bulle(fait)}<div class="pme-step-body"><strong>${escape(libelle)}${etat === 'current' ? '<span class="pme-pill pme-pill--run">En cours</span>' : ''}</strong>${contenu}</div></li>`;
-const ouvrirVersion = (nom: string) => `<button type="button" class="pme-link" data-open-reasoning data-version="${escape(nom)}">Ouvrir le raisonnement</button>`;
+const ouvrirVersion = (nom: string) => boutonRaisonnement(nom);
 const documentsVersion = (nom: string, documents: DocumentRedige[]) => documents.length
   ? `<ul class="pme-docs">${documents.map((document, index) => `<li><div class="pme-doc-head"><strong>${escape(document.nom)}</strong></div><div class="pme-doc-foot"><span class="pme-muted">${escape(document.type)}</span>${document.chemin ? `<button type="button" class="pme-link" data-open-doc="${index}" data-version="${escape(nom)}">Ouvrir</button>` : ''}</div></li>`).join('')}</ul>` : '';
 
@@ -115,7 +127,7 @@ const etapesHtml = (carte: Carte, ouvertes: Set<string>) => {
     if (index > courante) return etapeHtml(libelle, false, '', 'todo');
     if (index === courante) return etapeHtml(libelle, clos, corpsHtml(carte, ouvertes), clos ? '' : 'current');
     if (etape === 'preparation') return etapeHtml(libelle, true, '');
-    const documents = etape === 'redaction' || etape === 'finalisation' ? documentsHtml(carte, false) : '';
+    const documents = etape === 'redaction' || etape === 'finalisation' ? documentsHtml(carte) : '';
     return etapeHtml(libelle, true, `${documents}<div class="pme-actions">${lienRaisonnement}</div>`);
   }).join('');
   const versions = carte.historique ?? [];
@@ -140,7 +152,7 @@ const resumeHtml = (carte?: Carte, fiche?: Fiche) => {
   const parties = (fiche?.parties ?? []).filter((partie) => partie.name).map((partie) => `<li><strong>${escape(partie.name)}</strong>${partie.role ? `<span class="pme-muted">${escape(partie.role)}</span>` : ''}</li>`).join('');
   const objectifs = (reasoning?.objectifs ?? []).map((objectif) => `<li>${escape(objectif)}</li>`).join('');
   return `<section class="pme-section"><h4>Parties</h4>${parties ? `<ul class="pme-parties">${parties}</ul>` : vide('Non renseignées.')}</section>
-    <section class="pme-section"><h4>Document à produire</h4>${reasoning?.acte ? `<p>${escape(reasoning.acte)}</p>` : vide('Non indiqué.')}</section>
+    ${reasoning?.acte ? '' : `<section class="pme-section"><h4>Document à produire</h4>${vide('Non indiqué.')}</section>`}
     <section class="pme-section"><h4>Objectifs</h4>${objectifs ? `<ol class="pme-objectifs">${objectifs}</ol>` : vide('Aucun objectif.')}</section>`;
 };
 
@@ -206,8 +218,9 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     if (!ouverte) return;
     const index = cartes.findIndex((carte) => carte.id === ouverte!.carte);
     const carte = cartes[index];
-    drawer.querySelector('[data-eyebrow]')!.textContent = carte?.dossier ?? '';
-    drawer.querySelector('[data-title]')!.textContent = carte ? carte.raisonnement?.acte ?? carte.raisonnement?.titre ?? carte.dossier : 'Dossier';
+    const acte = carte?.raisonnement?.acte;
+    drawer.querySelector('[data-eyebrow]')!.textContent = acte ? carte.dossier : '';
+    drawer.querySelector('[data-title]')!.textContent = acte ?? carte?.dossier ?? 'Dossier';
     drawer.querySelector('[data-tags]')!.innerHTML = natureHtml(carte);
     etapesZone.dataset.card = String(index);
     const fiche = ouverte.matter ? fiches.docs[`${MATTERS}${ouverte.matter}`] : undefined;
@@ -261,14 +274,14 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     values = null;
     const types = await etapes.types(carte.projectPath).catch(() => []);
     const answer = await openModal(root, {
-      title: 'Ajouter un document',
+      title: 'Document à rédiger',
       body: `<label class="ptr-field"><span class="ptr-label">Type de document</span><select class="ptr-select" data-type>${types.map((type) => `<option value="${escape(type.nom)}">${escape(type.nom)}</option>`).join('')}<option value="${NOUVEAU_TYPE}"${types.length ? '' : ' selected'}>Nouveau type…</option></select></label>
         <div class="pme-new-type" data-new-type${types.length ? ' hidden' : ''}>
           <label class="ptr-field"><span class="ptr-label">Nom du nouveau type</span><input class="ptr-input" data-type-name placeholder="Exemple : Conclusions d’appel"></label>
           <label class="ptr-field"><span class="ptr-label">Modèle ou document exemple (facultatif)</span><input type="file" data-type-model></label>
         </div>
         <label class="ptr-field"><span class="ptr-label">Nom du document</span><input class="ptr-input" data-name placeholder="Exemple : Conclusions récapitulatives Société Exemple SAS"></label>`,
-      actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'Ajouter', value: 'add', kind: 'primary' }],
+      actions: [{ label: 'Annuler', value: 'cancel' }, { label: 'Continuer', value: 'add', kind: 'primary' }],
       onMount: (dialog) => {
         const select = dialog.querySelector<HTMLSelectElement>('[data-type]')!;
         select.addEventListener('change', () => { dialog.querySelector<HTMLElement>('[data-new-type]')!.hidden = select.value !== NOUVEAU_TYPE; });
@@ -278,6 +291,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
     if (answer !== 'add' || !values) return;
     const { type, typeName, file, nom } = values;
     if (!nom || (type === NOUVEAU_TYPE && !typeName)) { toast(root, 'Indiquez le type et le nom du document.', 'error'); return; }
+    let choisi = false;
     await run(async () => {
       let nomType = type;
       if (type === NOUVEAU_TYPE) {
@@ -286,7 +300,9 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
         nomType = typeName;
       }
       await etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement!.nom, documents: [...sansStatut(carte.documents), { type: nomType, nom, chemin: '' }] });
+      choisi = true;
     });
+    if (choisi) await ajouterTache(carte, 'redaction', { document: carte.documents?.length ?? 0 });
   };
   const modifierAction = async (carte: Carte) => {
     let texte = carte.action?.texte ?? '';
@@ -301,21 +317,21 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
 
   const integrerPiece = async (carte: Carte) => {
     const choix = await lancer(root, {
-      titre: 'Intégrer une pièce',
-      bouton: 'Intégrer',
-      avant: '<label class="ptr-field"><span class="ptr-label">Nouvelle pièce</span><input type="file" data-piece></label><p class="pme-muted pme-small">La carte revient en Raisonnements. Le raisonnement actuel et ses documents sont conservés ; une nouvelle version est créée.</p>',
+      titre: 'Document reçu du tiers',
+      bouton: 'Reprendre le raisonnement',
+      avant: '<label class="ptr-field"><span class="ptr-label">Document du tiers</span><input type="file" data-piece></label><p class="pme-muted pme-small">Le document rejoint les pièces. Une nouvelle version du raisonnement est créée et la carte revient en Raisonnements. La version actuelle et ses documents sont conservés.</p>',
       consignes: 'Consignes pour l’IA (facultatif)',
       auto: 'Relancer l’IA automatiquement sur la nouvelle pièce',
     });
     const file = choix?.dialog.querySelector<HTMLInputElement>('[data-piece]')?.files?.[0];
     if (!choix) return;
-    if (!file) { toast(root, 'Choisissez la pièce à intégrer.', 'error'); return; }
+    if (!file) { toast(root, 'Choisissez le document reçu du tiers.', 'error'); return; }
     const { dialog: _dialog, ...reste } = choix;
     await run(async () => {
       const { chemin } = await etapes.piece(carte.projectPath, file);
       const { raisonnement } = await etapes.reprise(carte.projectPath, carte.raisonnement!.nom);
       await etapes.ajouterTache({ type: 'reprise', projectPath: carte.projectPath, raisonnement, piece: chemin, ...reste });
-    }, 'Pièce intégrée : nouvelle version du raisonnement créée.');
+    }, 'Document du tiers ajouté : nouvelle version du raisonnement créée.');
   };
 
   const finaliser = async (carte: Carte) => {
