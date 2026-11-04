@@ -21,7 +21,8 @@ let close = () => {};
 const runner = async (command: string, args: string[], options: { cwd: string }) => {
   const tool = path.basename(command);
   if (tool === 'catala-format') return { code: 0, stdout: fs.readFileSync(path.join(options.cwd, args.at(-1)!), 'utf8'), stderr: '' };
-  if (tool === 'clerk' && args[0] === 'test') return { code: 0, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, args.at(-1)!), tests: { scopes: [{ scope_name: 'JeanDupont', success: true, errors: [], time: 0.1 }], 'inline-tests': [] } }] }), stderr: '' };
+  if (tool === 'clerk' && args[0] === 'runtest') fs.writeFileSync(path.join(options.cwd, args.find((arg) => arg.startsWith('--report='))!.slice(9)), 'report');
+  if (tool === 'clerk' && args[0] === 'report') return { code: 0, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, args.at(-1)!), tests: { scopes: [{ scope_name: 'JeanDupont', success: true, errors: [], time: 0.1 }], 'inline-tests': [] } }] }), stderr: '' };
   return { code: 0, stdout: 'ok', stderr: '' };
 };
 
@@ -60,7 +61,10 @@ after(() => {
 });
 
 test('liste le pack et les programmes du dossier avec leurs fichiers', async () => {
-  program('prime-anciennete');
+  const directory = program('prime-anciennete');
+  fs.mkdirSync(path.join(directory, 'resultats'));
+  fs.writeFileSync(path.join(directory, 'resultats', 'explication.json'), JSON.stringify({ scope: 'JeanDupont', passed: true }));
+  fs.writeFileSync(path.join(directory, 'resultats', 'explication.dot'), 'digraph G { x001 -> x002; }');
   const response = await fetch(`${base}/?projectPath=${encodeURIComponent(dossier)}`);
   const data = await response.json() as any;
   assert.equal(response.status, 200);
@@ -69,6 +73,8 @@ test('liste le pack et les programmes du dossier avec leurs fichiers', async () 
   assert.deepEqual(data.programmes.map((entry: { nom: string }) => entry.nom), ['prime-anciennete']);
   assert.deepEqual(data.programmes[0].fichiers.map((file: { nom: string }) => file.nom), ['prime.catala_fr', 'test_prime.catala_fr']);
   assert.equal(data.programmes[0].verification, null);
+  assert.equal(data.programmes[0].explication.scope, 'JeanDupont');
+  assert.equal(data.programmes[0].graphe, 'digraph G { x001 -> x002; }');
 });
 
 test('vérifie un programme et renvoie le bilan et les journaux', async () => {

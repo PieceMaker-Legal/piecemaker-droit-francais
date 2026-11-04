@@ -73,7 +73,9 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       --programme est requis quand le dossier en compte plusieurs
   catala lister | env
   catala formater [--programme NOM]
-  catala preuve --scope CHAMP [--fichier F] [--whole-program] [--programme NOM]
+  catala preuve --scope CHAMP [--fichier F] [--programme NOM]
+  catala expliquer --scope CHAMP [--fichier F] [--programme NOM]
+      graphe des formules et conditions pour un champ sans entrées ;
   catala catleg [--fichier F] [--programme NOM]
       vigueur des articles cités, à la date du jour seulement
   catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]

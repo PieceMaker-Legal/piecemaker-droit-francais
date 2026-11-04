@@ -44,6 +44,8 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}) {
         verification: readJson(path.join(results, 'verification.json')),
         preuve: readJson(path.join(results, 'preuve.json')),
         catleg: readJson(path.join(results, 'catleg.json')),
+        explication: readJson(path.join(results, 'explication.json')),
+        graphe: fs.existsSync(path.join(results, 'explication.dot')) ? fs.readFileSync(path.join(results, 'explication.dot'), 'utf8') : null,
       };
     });
     return { pack: pack ? { id: pack.id, platform: pack.platform, version: pack.version, proof: pack.proof, installedAt: pack.installedAt } : null, status, programmes };

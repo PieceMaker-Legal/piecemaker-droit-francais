@@ -36,9 +36,10 @@ function fakeRun({ testsPass = true, proofOutput = 'No errors found during the p
     calls.push({ command: path.basename(command), args, cwd: options.cwd, env: options.env });
     const tool = path.basename(command);
     if (tool === 'catala-format') return { code: 0, stdout: fs.readFileSync(path.join(options.cwd, args.at(-1)), 'utf8'), stderr: '' };
-    if (tool === 'clerk' && args[0] === 'test') {
+    if (tool === 'clerk' && args[0] === 'runtest') fs.writeFileSync(path.join(options.cwd, args.find((arg) => arg.startsWith('--report=')).slice(9)), 'report');
+    if (tool === 'clerk' && args[0] === 'report') {
       const scopes = [{ scope_name: 'JeanDupont', success: testsPass, errors: [], time: 0.1 }];
-      return { code: testsPass ? 0 : 1, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, args.at(-1)), tests: { scopes, 'inline-tests': [] } }], coverage: {} }), stderr: '' };
+      return { code: testsPass ? 0 : 1, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, 'test_prime.catala_fr'), tests: { scopes, 'inline-tests': [] } }], coverage: {} }), stderr: '' };
     }
     if (tool === 'catala' && args[0] === 'proof') return { code: 0, stdout: proofOutput, stderr: '' };
     return { code: 0, stdout: '', stderr: '' };
@@ -101,8 +102,8 @@ test('verifier runs every check inside the pack environment and writes the resul
     assert.match(report.sources_sha256, /^[0-9a-f]{64}$/);
     assert.deepEqual(report.checks.map((entry) => entry.name), ['typecheck', 'format', 'tests', 'tests-python']);
     assert.ok(fs.existsSync(path.join(directory, 'resultats', 'tests.json')));
-    const clerkTest = calls.find((call) => call.command === 'clerk' && call.args[0] === 'test');
-    assert.deepEqual(clerkTest.args, ['test', '--json', '--code-coverage', 'test_prime.catala_fr']);
+    const clerkTest = calls.find((call) => call.command === 'clerk' && call.args[0] === 'runtest');
+    assert.deepEqual(clerkTest.args, ['runtest', '--whole-program', '--code-coverage', '--report=resultats/tests-0.report', 'test_prime.catala_fr']);
     assert.equal(clerkTest.cwd, directory);
     assert.equal(clerkTest.env.OPAMSWITCH, 'catala');
     assert.ok(clerkTest.env.PATH.endsWith('/usr/bin'));
@@ -127,7 +128,7 @@ test('a failing test or an unformatted file makes the verification fail', async 
   }
 });
 
-test('a proof with an overlap warning fails and Windows refuses proofs', async () => {
+test('a proof with an overlap warning fails and a pack without proof refuses it', async () => {
   const { home, dossier, pack, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime-anciennete');
@@ -138,10 +139,19 @@ test('a proof with an overlap warning fails and Windows refuses proofs', async (
     assert.equal(report.passed, false);
     assert.equal(report.conflits, 1);
     assert.equal(report.fichier, 'prime.catala_fr');
-    assert.deepEqual(calls.filter((call) => call.command === 'clerk').map((call) => call.args[0]), ['start']);
+    assert.deepEqual(calls.filter((call) => call.command === 'clerk'), []);
+    const emptyProof = fakeRun();
+    await runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime' }, deps: { ...deps, run: emptyProof.runner } });
+    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json'), 'utf8')).passed, false);
+    const checkedProof = fakeRun({ proofOutput: 'This verification condition was generated\nNo errors found during the proof mode run.\n' });
+    await runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime' }, deps: { ...deps, run: checkedProof.runner } });
+    const checked = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json'), 'utf8'));
+    assert.equal(checked.passed, true);
+    assert.equal(checked.obligations, 1);
     await assert.rejects(() => runCatala({ commande: 'preuve', cwd: dossier, flags: {}, deps }), /--scope/);
+    await assert.rejects(() => runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime', whole_program: true }, deps }), /masquer des conflits/);
     fs.writeFileSync(path.join(home, 'catala', 'pack.json'), JSON.stringify({ ...pack, proof: false }));
-    await assert.rejects(() => runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime' }, deps }), /Windows/);
+    await assert.rejects(() => runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime' }, deps }), /pas disponible/);
   } finally {
     cleanup();
   }
@@ -172,6 +182,7 @@ test('catleg runs in the shared Python with the PISTE credentials of the child o
 test('Windows tools run through cmd and a missing pack reports the install status', async () => {
   const pack = { bin: { clerk: 'C:\\Catala\\bin\\clerk.cmd' } };
   assert.deepEqual(toolCommand(pack, 'clerk', ['test'], 'win32', { ComSpec: 'C:\\Windows\\System32\\cmd.exe' }), { command: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/s', '/c', 'C:\\Catala\\bin\\clerk.cmd', 'test'] });
+  assert.deepEqual(toolCommand({ bin: { catala: 'C:\\Catala & outils\\catala.exe' } }, 'catala', ['explain', 'Jean & Dupont.catala_fr'], 'win32'), { command: 'C:\\Catala & outils\\catala.exe', args: ['explain', 'Jean & Dupont.catala_fr'] });
   await assert.rejects(() => runCatala({ commande: 'verifier', cwd: os.tmpdir(), deps: { findPack: () => ({ pack: null, status: { state: 'installation', step: 'switch' } }) } }), /étape switch/);
 });
 
@@ -186,4 +197,27 @@ test('pm catala routes to the Catala wrapper and rejects unknown commands', asyn
   await assert.rejects(() => run(['catala', 'compiler'], { deps }), (error) => error.exitCode === 2);
   const failing = { catalaFn: async () => { throw new TypeError('Plusieurs programmes'); } };
   await assert.rejects(() => run(['catala', 'verifier'], { deps: failing }), (error) => error.exitCode === 2 && /Plusieurs/.test(error.message));
+});
+
+test('expliquer saves the graph and rejects an execution failure without retaining an old graph', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime-anciennete');
+    let fail = false;
+    const run = async (_command, args) => args[0] === 'explain' ? { code: fail ? 123 : 0, stdout: fail ? '' : 'digraph G { x001 -> x002; }\n', stderr: fail ? 'Invalid input' : '' } : { code: 0, stdout: '', stderr: '' };
+    const input = { commande: 'expliquer', cwd: dossier, programme: 'prime-anciennete', flags: { fichier: 'test_prime.catala_fr', scope: 'JeanDupont' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } };
+    assert.match(await runCatala(input), /graphe des formules/);
+    assert.match(fs.readFileSync(path.join(directory, 'resultats', 'explication.dot'), 'utf8'), /digraph/);
+    const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'explication.json'), 'utf8'));
+    assert.equal(report.scope, 'JeanDupont');
+    assert.equal(report.passed, true);
+    fail = true;
+    await assert.rejects(() => runCatala(input), /Invalid input/);
+    assert.equal(fs.readFileSync(path.join(directory, 'resultats', 'explication.dot'), 'utf8'), '');
+    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'explication.json'), 'utf8')).passed, false);
+    await assert.rejects(() => runCatala({ ...input, flags: { ...input.flags, scope: undefined } }), /--scope/);
+    await assert.rejects(() => runCatala({ ...input, flags: { ...input.flags, fichier: '../autre.catala_fr' } }), /--fichier/);
+  } finally {
+    cleanup();
+  }
 });

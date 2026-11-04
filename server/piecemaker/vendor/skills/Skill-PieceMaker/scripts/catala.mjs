@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'exec'];
+export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
 const NAME = /^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$/u;
 const NAME_SHAPE = 'minuscules, chiffres et tirets (ex. prime-anciennete)';
@@ -12,6 +12,7 @@ const IGNORED = new Set(['_build', '_targets', 'resultats']);
 const SOURCE = /\.catala_(?:fr|en|pl)$/;
 const PYTHON_PACKAGE = 'pm_python';
 const PROOF_OK ='No errors found during the proof mode run.';
+const PROOF_OBLIGATION = 'This verification condition was generated';
 
 export function catalaHomes(env = process.env, homeDir = os.homedir()) {
   return [...new Set([env.PIECEMAKER_COMPONENTS_HOME, env.PIECEMAKER_HOME, path.join(homeDir, '.piecemaker')].filter(Boolean))];
@@ -112,7 +113,7 @@ function isTestFile(directory, file) {
 export function toolCommand(pack, name, args, platform = process.platform, env = process.env) {
   const binary = pack.bin[name];
   if (!binary) throw new TypeError(`Outil Catala inconnu : ${name}. Outils : ${CATALA_TOOLS.join(', ')}.`);
-  if (platform === 'win32') return { command: env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', binary, ...args] };
+  if (platform === 'win32' && /\.(?:cmd|bat)$/i.test(binary)) return { command: env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', binary, ...args] };
   return { command: binary, args };
 }
 
@@ -193,6 +194,23 @@ async function pythonTests(context, program, tests) {
   return entry(0);
 }
 
+async function clerkTests(context, program, tests) {
+  const started = Date.now();
+  const reports = [];
+  let failed = false;
+  for (const [index, file] of tests.entries()) {
+    const report = path.join('resultats', `tests-${index}.report`);
+    fs.rmSync(path.join(program.directory, report), { force: true });
+    const outcome = await check(context, program.directory, `tests-${index}`, 'clerk', ['runtest', '--whole-program', '--code-coverage', ...(context.pack.env?.CATALA_STDLIB ? [`--catala-opts=--stdlib=${context.pack.env.CATALA_STDLIB}`] : []), `--report=${report}`, file]);
+    failed ||= !outcome.entry.passed;
+    if (fs.existsSync(path.join(program.directory, report))) reports.push(report);
+  }
+  const { entry, result } = await check(context, program.directory, 'tests', 'clerk', ['report', '--json', '--code-coverage', ...reports]);
+  const summary = testSummary(result.stdout);
+  if (summary.report) writeResult(program.directory, 'tests.json', summary.report);
+  return { entry: { ...entry, command: 'clerk runtest --whole-program + clerk report --json', seconds: Math.round((Date.now() - started) / 10) / 100, passed: !failed && reports.length === tests.length && entry.passed && summary.scopes.length > 0 && summary.scopes.every((scope) => scope.success) }, scopes: summary.scopes };
+}
+
 async function verifier(context, program) {
   const files = sourceFiles(program.directory);
   if (!files.length) throw new TypeError(`Aucun fichier .catala_fr dans .piecemaker/catala/${program.name}/.`);
@@ -208,11 +226,9 @@ async function verifier(context, program) {
   const tests = files.filter((file) => isTestFile(program.directory, file));
   let scopes = [];
   if (tests.length) {
-    const { entry, result } = await check(context, program.directory, 'tests', 'clerk', ['test', '--json', '--code-coverage', ...tests]);
-    const summary = testSummary(result.stdout);
-    scopes = summary.scopes;
-    if (summary.report) writeResult(program.directory, 'tests.json', summary.report);
-    checks.push({ ...entry, passed: entry.exit_code === 0 && scopes.length > 0 && scopes.every((scope) => scope.success) });
+    const tested = await clerkTests(context, program, tests);
+    scopes = tested.scopes;
+    checks.push(tested.entry);
   } else checks.push({ name: 'tests', command: 'clerk test', exit_code: 1, seconds: 0, passed: false, files: [] });
   if (context.python && tests.length) checks.push(await pythonTests(context, program, tests));
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed), sources_sha256: sourcesDigest(program.directory, files), checks };
@@ -246,17 +262,31 @@ function defaultProofFile(program) {
 }
 
 async function preuve(context, program, flags) {
-  if (!context.pack.proof) throw new Error('catala proof n’est pas fourni sur cette plateforme (Windows : pas de Z3 dans le pack officiel).');
+  if (!context.pack.proof) throw new Error('La preuve n’est pas disponible dans ce pack Catala.');
+  if (flags.whole_program) throw new TypeError('Preuve --whole-program refusée : Catala 1.3 peut masquer des conflits dans ce mode.');
   if (!flags.scope || flags.scope === true) throw new TypeError('Indiquez --scope <ChampDApplication>.');
   const file = flags.fichier && flags.fichier !== true ? String(flags.fichier) : defaultProofFile(program);
   const started = context.now();
-  await check(context, program.directory, 'start', 'clerk', ['start']);
-  const args = ['proof', '--color=never', ...(flags.whole_program ? ['--whole-program'] : []), '-I', '.', file, '-s', String(flags.scope)];
-  const { entry, result } = await check(context, program.directory, 'preuve', 'catala', args, (outcome) => outcome.code === 0 && outcome.stdout.includes(PROOF_OK) && !/\[WARNING\]/.test(`${outcome.stdout}${outcome.stderr}`));
+  const args = ['proof', '--debug', '--color=never', '-I', '.', file, '-s', String(flags.scope)];
+  const { entry, result } = await check(context, program.directory, 'preuve', 'catala', args, (outcome) => outcome.code === 0 && outcome.stdout.includes(PROOF_OK) && `${outcome.stdout}${outcome.stderr}`.includes(PROOF_OBLIGATION) && !/\[WARNING\]/.test(`${outcome.stdout}${outcome.stderr}`));
   const output = `${result.stdout}${result.stderr}`;
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed, conflits: (output.match(/At least two exceptions overlap/g) || []).length, checks: [entry] };
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed, obligations: output.split(PROOF_OBLIGATION).length - 1, conflits: (output.match(/At least two exceptions overlap/g) || []).length, checks: [entry] };
   writeResult(program.directory, 'preuve.json', report);
-  return `Preuve ${file} › ${flags.scope} : ${entry.passed ? 'aucune erreur' : 'erreurs ou avertissements'}.\n${output.trim()}\nDétail : .piecemaker/catala/${program.name}/resultats/preuve.json`;
+  return `Preuve ${file} › ${flags.scope} : ${entry.passed ? 'aucune erreur sur les obligations produites' : 'erreurs, avertissements ou aucune obligation produite'}.\n${output.trim()}\nDétail : .piecemaker/catala/${program.name}/resultats/preuve.json`;
+}
+
+async function expliquer(context, program, flags) {
+  if (!flags.scope || flags.scope === true) throw new TypeError('Indiquez --scope <ChampSansEntrees>.');
+  const files = sourceFiles(program.directory);
+  const file = flags.fichier && flags.fichier !== true ? String(flags.fichier) : files.length === 1 ? files[0] : null;
+  if (!file || !files.includes(file)) throw new TypeError(`Indiquez --fichier parmi : ${files.join(', ')}.`);
+  const started = context.now();
+  const { entry, result } = await check(context, program.directory, 'explication', 'catala', ['explain', '--color=never', '--whole-program', '--conditions', '--dot', '-I', '.', file, '-s', String(flags.scope), '-o', '-']);
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed && /^digraph\s/.test(result.stdout.trim()), sources_sha256: sourcesDigest(program.directory, files), checks: [entry] };
+  writeResult(program.directory, 'explication.dot', report.passed ? result.stdout : '');
+  writeResult(program.directory, 'explication.json', report);
+  if (!report.passed) throw new Error(`Explication échouée :\n${result.stdout}${result.stderr}\nDétail : .piecemaker/catala/${program.name}/resultats/explication.log`);
+  return `Explication ${file} › ${flags.scope} : graphe des formules et conditions appliquées.\nGraphe : .piecemaker/catala/${program.name}/resultats/explication.dot`;
 }
 
 async function catleg(context, program, flags) {
@@ -315,5 +345,6 @@ export async function runCatala({ commande, cwd, programme, flags = {}, args = [
   if (commande === 'formater') return formater(context, program);
   if (commande === 'preuve') return preuve(context, program, flags);
   if (commande === 'catleg') return catleg(context, program, flags);
+  if (commande === 'expliquer') return expliquer(context, program, flags);
   throw new TypeError(`pm catala attend ${CATALA_COMMANDS.join(', ')}.`);
 }

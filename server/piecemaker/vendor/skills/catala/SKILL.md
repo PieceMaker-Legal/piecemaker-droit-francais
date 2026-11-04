@@ -1,6 +1,6 @@
 ---
 name: catala
-description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — typecheck, format, tests clerk, tests Python, preuve d'absence de conflit entre exceptions, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
+description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — typecheck, format, tests clerk, tests Python, preuve d'absence de conflit entre exceptions, explication d’une exécution, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
 ---
 
 # Catala
@@ -34,19 +34,29 @@ Un programme Catala vit dans `.piecemaker/catala/<nom>/`. `<nom>` s'écrit en mi
 
 1. `pm catala verifier --programme <nom>` : typecheck avec invariants, format, tests clerk, tests Python. Corrigez et relancez jusqu'à « vérifié ».
 2. `pm catala formater --programme <nom>` réécrit les fichiers au format officiel.
-3. `pm catala preuve --scope <Champ> [--fichier F] [--whole-program]` prouve l'absence de conflit et d'erreur. Utilisez `--whole-program` quand le champ appelle un autre module. Un `[WARNING]` est un échec : lisez le contre-exemple.
+3. `pm catala preuve --scope <Champ> [--fichier F]` prouve l'absence de conflit et d'erreur. Le mode `--whole-program` est refusé : Catala 1.3 peut y masquer des conflits. Lancez la preuve sur chaque champ métier de chaque fichier ; les champs appelés ne sont pas couverts. Un `[WARNING]` est un échec : lisez le contre-exemple.
 4. `pm catala catleg [--fichier F]` vérifie la vigueur des articles cités, avec les identifiants PISTE de PieceMaker.
 5. `pm catala lister` montre les programmes et leur dernier bilan. `pm catala env` montre le pack, son état d'installation et le Python utilisé.
 6. `pm catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> -- <arguments>` lance un outil du pack avec son environnement (LSP et débogueur pour un éditeur, commandes non couvertes).
 
-Les résultats vont dans `.piecemaker/catala/<nom>/resultats/` : `verification.json`, `tests.json`, `preuve.json`, `catleg.json` et un journal par contrôle.
+## Expliquer une exécution
+
+`pm catala expliquer --programme <nom> --fichier test_<module>.catala_fr --scope <Scenario>` produit le graphe des formules et conditions appliquées.
+
+Choisissez un champ sans entrées : ses données doivent être fixées dans le scénario. Indiquez `--fichier` quand le programme contient plusieurs fichiers.
+
+Le graphe s’affiche dans l’onglet Catala après la commande. Les flèches pointillées représentent les conditions. Aucun Graphviz n’est nécessaire.
+
+L’explication concerne cette exécution seulement. Elle ne remplace ni les tests, ni la preuve du programme, ni la justification des faits.
+
+Les résultats vont dans `.piecemaker/catala/<nom>/resultats/` : `verification.json`, `tests.json`, `preuve.json`, `catleg.json`, `explication.json`, `explication.dot` et un journal par contrôle.
 
 ## Limites à dire à l'avocat
 
 - catleg contrôle la vigueur à la date du jour seulement. Il ne dit rien de la version applicable à la date des faits.
+- Catala 1.3 peut omettre des obligations pour des définitions globales. La preuve valide seulement les obligations produites. Une preuve sans obligation échoue.
 - Une preuve porte sur le programme. Elle ne prouve ni les faits, ni la fidélité du programme au texte.
 - Le programme ne lit pas les pièces. Le lien entre les entrées du programme et les pièces passe par une table des sources que l'avocat construit (qualification, lien officiel, pièce).
-- Sur Windows, `pm catala preuve` n'est pas disponible : le pack officiel ne fournit ni catala-proof ni Z3.
 - Si `catala-format` signale « Failed idempotence check », le formateur bute sur la construction : gardez la forme écrite et signalez-le.
 
 Répondez à l'avocat sans code : la règle codée, les scénarios testés, le résultat des contrôles et ces limites.

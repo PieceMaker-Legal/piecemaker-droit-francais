@@ -1,4 +1,5 @@
 import { loadCatala, verifyCatala } from './api.js';
+import { explanationGraph } from './graph.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
@@ -8,7 +9,7 @@ type Check = { name: string; command: string; exit_code: number; seconds: number
 type Report = { started_utc: string; finished_utc: string; passed: boolean; checks: Check[] };
 type Proof = Report & { fichier: string; scope: string; conflits: number };
 type Catleg = { date_controle: string; passed: boolean; fichiers: Array<{ fichier: string; passed: boolean; messages: string[] }> };
-type Program = { nom: string; enCours: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; preuve: Proof | null; catleg: Catleg | null };
+type Program = { nom: string; enCours: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string }) | null; graphe: string | null };
 export type CatalaSnapshot = {
   pack: { id: string; platform: string; version: string; proof: boolean; installedAt: string } | null;
   status: { state: string; id?: string; step?: string; error?: string; updatedAt?: string } | null;
@@ -66,13 +67,23 @@ export function mount(container: HTMLElement, api: Host) {
   const proofPhase = (program: Program) => {
     const proof = program.preuve;
     if (!proof) return '<section class="pmc-phase"><header><span class="pmc-step">Preuve</span><strong>Pas de preuve</strong></header><p class="pmc-lead">Aucune preuve lancée sur ce programme.</p></section>';
-    return `<section class="pmc-phase" data-status="${proof.passed ? 'ok' : 'alerte'}"><header><span class="pmc-step">Preuve</span><strong>${escape(proof.fichier)} › ${escape(proof.scope)}</strong><span class="pmc-phase-state">${proof.passed ? 'Aucune erreur' : 'Erreurs ou avertissements'}</span></header><p class="pmc-lead">${escape(when(proof.finished_utc))} · ${proof.conflits ? `${proof.conflits} chevauchement${proof.conflits > 1 ? 's' : ''} d’exceptions` : 'aucun chevauchement d’exceptions'} · ${opener(program.journaux.find((file) => file.nom === 'preuve.log'), 'Journal')}</p></section>`;
+    return `<section class="pmc-phase" data-status="${proof.passed ? 'ok' : 'alerte'}"><header><span class="pmc-step">Preuve</span><strong>${escape(proof.fichier)} › ${escape(proof.scope)}</strong><span class="pmc-phase-state">${proof.passed ? 'Obligations produites vérifiées' : 'Preuve non validée'}</span></header><p class="pmc-lead">${escape(when(proof.finished_utc))} · ${proof.conflits ? `${proof.conflits} chevauchement${proof.conflits > 1 ? 's' : ''} d’exceptions` : 'aucun chevauchement d’exceptions'} · ${opener(program.journaux.find((file) => file.nom === 'preuve.log'), 'Journal')}</p></section>`;
   };
   const catlegPhase = (program: Program) => {
     const report = program.catleg;
     if (!report) return '<section class="pmc-phase"><header><span class="pmc-step">Vigueur</span><strong>Pas de contrôle catleg</strong></header><p class="pmc-lead">La vigueur des articles cités n’a pas été contrôlée.</p></section>';
     const day = report.date_controle.split('-').reverse().join('/');
     return `<section class="pmc-phase" data-status="${report.passed ? 'ok' : 'alerte'}"><header><span class="pmc-step">Vigueur</span><strong>Contrôle du ${escape(day)}</strong><span class="pmc-phase-state">${report.passed ? 'Articles en vigueur' : 'À revoir'}</span></header><p class="pmc-lead">catleg contrôle la vigueur à la date du contrôle seulement.</p><ol class="pmc-log">${report.fichiers.map((entry) => `<li class="pmc-entry" data-status="${entry.passed ? 'ok' : 'alerte'}"><span class="pmc-mark" aria-hidden="true">${entry.passed ? '✓' : '!'}</span><div class="pmc-entry-head">${opener(program.fichiers.find((file) => file.nom === entry.fichier), entry.fichier) || `<strong>${escape(entry.fichier)}</strong>`}<span class="pmc-step">${entry.passed ? 'En vigueur ce jour' : 'À revoir'}</span></div>${entry.messages.length ? `<details><summary class="pmc-muted">Messages (${entry.messages.length})</summary><span class="pmc-entry-text">${entry.messages.map(escape).join('<br>')}</span></details>` : ''}</li>`).join('')}</ol></section>`;
+  };
+  const explanationPart = (program: Program) => {
+    const report = program.explication;
+    if (!report) return '';
+    let graph = '<p class="pmc-muted">Graphe absent. Relancez l’explication.</p>';
+    if (report.passed && program.graphe) {
+      try { graph = explanationGraph(program.graphe); }
+      catch (failure) { graph = `<p class="pmc-ko">${escape(failure instanceof Error ? failure.message : failure)}</p>`; }
+    }
+    return `<section class="pmc-part"><h4>Explication de l’exécution</h4><p>${escape(report.fichier)} › ${escape(report.scope)} · ${escape(when(report.finished_utc))} · ${opener(program.journaux.find((file) => file.nom === 'explication.log'), 'Journal')}</p><p class="pmc-muted">Les flèches pointillées indiquent les conditions appliquées. Ce graphe explique cette exécution ; il ne prouve pas les faits.</p>${report.passed ? `<div class="pmc-graph">${graph}</div>` : '<p class="pmc-ko">L’explication a échoué. Consultez le journal.</p>'}</section>`;
   };
   const filesPart = (program: Program) => `<section class="pmc-part"><h4>Fichiers</h4>${program.fichiers.length ? `<ul class="pmc-files">${program.fichiers.map((file) => `<li>${opener(file)}</li>`).join('')}</ul>` : '<p class="pmc-muted">Aucun fichier .catala_fr.</p>'}${program.journaux.length ? `<h4>Journaux</h4><ul class="pmc-files">${program.journaux.map((file) => `<li>${opener(file)}</li>`).join('')}</ul>` : ''}</section>`;
   const paint = () => {
@@ -84,7 +95,7 @@ export function mount(container: HTMLElement, api: Host) {
     if (!program) { panel.innerHTML = `${warning}${packPart()}<p class="pmc-muted">Aucun programme Catala dans ce dossier : un programme est un dossier .piecemaker/catala/&lt;nom&gt;/ avec clerk.toml.</p>`; return; }
     const running = program.enCours || verifying === program.nom;
     const run = `<div class="pmc-run"><button class="pmc-primary" data-verify="${escape(program.nom)}"${running || verifying || !data.pack ? ' disabled' : ''}>${running ? 'Vérification en cours…' : 'Vérifier'}</button><strong>${escape(program.nom)}</strong>${program.verification ? `<span class="pmc-tally">${verdict(program.verification)}</span>` : ''}</div>${data.pack ? '' : '<p class="pmc-muted">Pack Catala absent : la vérification est impossible.</p>'}`;
-    panel.innerHTML = `${warning}${run}${packPart()}${listPart(program)}<section class="pmc-part"><h4>Dernier bilan</h4>${verificationPhase(program)}${proofPhase(program)}${catlegPhase(program)}</section>${filesPart(program)}`;
+    panel.innerHTML = `${warning}${run}${packPart()}${listPart(program)}<section class="pmc-part"><h4>Dernier bilan</h4>${verificationPhase(program)}${proofPhase(program)}${catlegPhase(program)}</section>${explanationPart(program)}${filesPart(program)}`;
   };
   const apply = (next: CatalaSnapshot | null) => {
     const text = JSON.stringify(next);
