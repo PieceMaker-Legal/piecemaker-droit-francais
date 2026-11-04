@@ -192,3 +192,10 @@ it('reprend le code couleur des échéances du Matter board sur les cartes', asy
   expect(calme.classList.contains('is-flagged')).toBe(false);
   vi.useRealTimers();
 });
+
+it('indique sur la carte l’état de l’anonymisation et de l’index pendant la préparation', async () => {
+  await tableau(carte({ etape: 'preparation', preparation: [{ nom: 'conversion', texte: '', ok: true }, { nom: 'anonymisation', texte: '', ok: true }, { nom: 'mapping', texte: '', ok: true }, { nom: 'index', texte: '', ok: false }] }));
+  const card = root.querySelector('.pme-card')!;
+  expect(card.textContent).toContain('Anonymisation faite · Index à faire');
+  expect(card.textContent).not.toContain('Aucun raisonnement');
+});

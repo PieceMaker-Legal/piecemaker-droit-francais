@@ -167,6 +167,11 @@ const ficheHtml = (fiche?: Fiche) => {
 const etatHtml = (carte: Carte) => {
   const reasoning = carte.raisonnement;
   if (carte.exclu) return vide('Non juridique');
+  if (carte.etape === 'preparation') {
+    const ok = (nom: string) => (carte.preparation ?? []).some((ligne) => ligne.nom === nom && ligne.ok);
+    const anonymisation = ok('conversion') && ok('anonymisation') && ok('mapping');
+    return vide(`Anonymisation ${anonymisation ? 'faite' : 'à faire'} · Index ${ok('index') ? 'fait' : 'à faire'}`);
+  }
   if (carte.aDemarrer || !reasoning) return vide('Aucun raisonnement');
   if (!reasoning.erreurs && !reasoning.manques) return '';
   return `<p class="${reasoning.erreurs ? 'pme-erreur' : 'pme-manque'}">${[reasoning.erreurs ? plural(reasoning.erreurs, 'erreur') : '', reasoning.manques ? plural(reasoning.manques, 'manque') : ''].filter(Boolean).join(' · ')}</p>`;
