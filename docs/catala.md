@@ -110,7 +110,13 @@ La commande produit `resultats/explication.dot`, `explication.json` et `explicat
 
 L’onglet Catala affiche les règles à gauche, les conditions au centre et les données du scénario à droite. Les cartes reprennent les couleurs du volet Raisonnement : règles bleues, calculs monétaires violets, conditions et états ouverts dorés, données vertes ou rouges, résultat du champ turquoise. Les valeurs restent celles de Catala. Les identifiants sont affichés avec des espaces.
 
-Le volet propose Graphe / Vue écrite, la sélection d’une étape, le détail des dépendances et des usages, l’ouverture du fichier du programme, le zoom, le déplacement, la légende et le déroulé de la trace. Les états explicitement nommés `Indéterminé` ou `Disputé` sont signalés. Leur absence ne prouve pas que le dossier est complet. La trace ne contient pas les pièces, les alertes juridiques ni les scénarios alternatifs du vérificateur YAML : ces informations ne sont pas inventées.
+Le volet sépare deux onglets, Graphe et Vue écrite, comme le volet Raisonnement. Le graphe aligne les étapes numérotées sur une colonne, avec leurs conditions et données sur les côtés. La numérotation suit les dépendances ; elle ne prétend pas dater les branches indépendantes. Le déroulé révèle chaque étape, affiche son détail et recentre la vue. La sélection, les dépendances et usages, l’ouverture du programme, le zoom, le déplacement et la légende restent disponibles.
+
+La Vue écrite regroupe les mêmes étapes et la réponse finale. Elle contient aussi les contrôles, bilans, fichiers et journaux, même sans graphe valide. Le volet conserve l’onglet choisi lors d’une actualisation.
+
+Les fichiers Catala peuvent documenter les pièces et les sources en Markdown. Le volet affiche le texte placé avant le bloc de code correspondant à la position source de la trace, dans le détail et la Vue écrite. Les liens du texte restent affichés sans ouvrir les pièces. Une référence déclarée ne constitue pas une vérification de la pièce. Le DOT seul ne contient pas ce texte ; le serveur transmet aussi le contenu des fichiers Catala.
+
+Les états explicitement nommés `Indéterminé` ou `Disputé` sont signalés. Leur absence ne prouve pas que le dossier est complet. Les alertes juridiques, décisions sur la fiabilité des pièces et scénarios alternatifs du vérificateur YAML ne sont pas déduits de la trace.
 
 Après la commande, le CLI notifie le serveur local par `/api/piecemaker/local/catala-updated`. Seuls les dossiers connus et la boucle locale sont acceptés. Le serveur transmet un événement léger sur le WebSocket déjà ouvert. Le pont PieceMaker du workspace le relaie au volet actif, qui relit le bilan. Le bouton Vérifier utilise le même mécanisme. Aucun watcher, flux supplémentaire ou interrogation périodique n’est ajouté. Ouvrir le volet charge le dernier résultat ; Actualiser permet une relecture manuelle. Une empreinte différente masque le graphe périmé. Une reconnexion recharge le résultat.
 

@@ -5,15 +5,17 @@ import { explanationGraph } from './graph.ts';
 import { mountExplanation } from './graph-view.ts';
 
 test('navigates the execution, exposes open states and releases replay on unmount', () => {
-  const dom = new JSDOM('<section data-mode="graph"><select data-result></select><div class="pmc-open-states"></div><button data-mode="graph"></button><button data-mode="written"></button><div class="pmc-canvas"><div class="pmc-stage"></div><aside class="pmc-inspector" hidden></aside><div class="pmc-legend" hidden></div></div><div class="pmc-written"></div><button data-legend></button><button data-fit></button><button data-zoom="1.2"></button><button data-replay></button></section>');
+  const dom = new JSDOM('<section class="pmc-view" data-mode="graph"><div role="tablist"><button role="tab" data-mode="graph" aria-selected="true"></button><button role="tab" data-mode="written" aria-selected="false"></button></div><div class="pmc-explanation"><select data-result></select><div class="pmc-open-states"></div><div class="pmc-canvas"><div class="pmc-stage"></div><aside class="pmc-inspector" hidden></aside><div class="pmc-legend" hidden></div></div></div><div class="pmc-written" hidden><div class="pmc-step-list"></div></div><button data-legend></button><button data-fit></button><button data-zoom="1.2"></button><button data-replay></button></section>');
   globalThis.DOMParser = dom.window.DOMParser;
   globalThis.window = dom.window;
   const container = dom.window.document.querySelector('section');
   container.querySelector('.pmc-stage').innerHTML = explanationGraph(`digraph G {
     x001 [label=<<table><tr><td>fait_attendu</td></tr><tr><td>= Indéterminé</td></tr></table>>, URL="https://example.test/test_prime.catala_fr#L10", style="filled"];
     x002 [label=<<table><tr><td>prime_due</td></tr><tr><td>= Faux</td></tr></table>>, style="filled"];
+    x003 [label=<<table><tr><td>conclusion</td></tr><tr><td>= Faux</td></tr></table>>, shape=plaintext];
     subgraph cluster_inputs { x001; }
     x001 -> x002 [style="solid"];
+    x002 -> x003 [style="solid"];
   }`);
   const opened = [];
   const unmount = mountExplanation(container, (source) => opened.push(source));
@@ -30,7 +32,7 @@ test('navigates the execution, exposes open states and releases replay on unmoun
   assert.deepEqual(opened, ['https://example.test/test_prime.catala_fr#L10']);
   click('[data-mode="written"]');
   assert.equal(container.dataset.mode, 'written');
-  assert.equal(container.querySelectorAll('.pmc-written .pmc-phase').length, 2);
+  assert.equal(container.querySelectorAll('.pmc-written .pmc-phase').length, 3);
   click('.pmc-written [data-select-node="x002"]');
   assert.equal(container.dataset.mode, 'graph');
   assert.equal(container.querySelector('[data-mode="graph"]').getAttribute('aria-selected'), 'true');
@@ -38,6 +40,8 @@ test('navigates the execution, exposes open states and releases replay on unmoun
   assert.equal(container.querySelector('.pmc-legend').hidden, false);
   click('[data-replay]');
   assert.equal(container.querySelectorAll('.pmc-node.is-waiting').length, 1);
+  assert.equal(container.querySelector('[data-node="x002"]').getAttribute('aria-pressed'), 'true');
+  assert.match(container.querySelector('.pmc-stage').style.transform, /translate/);
   unmount();
   assert.equal(container.querySelectorAll('.is-waiting').length, 0);
   click('[data-node="x001"]');
@@ -71,5 +75,76 @@ test('the panel reloads after verification notifications for its project and sto
     unmount(container);
     window.dispatchEvent(new CustomEvent('piecemaker:catala-updated', { detail: { projectPath: '/dossier-fictif' } }));
     assert.equal(requests, 2);
+  } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
+});
+
+test('keeps the written tab and program controls available for a stale trace', async () => {
+  const { mount, unmount } = await import('./client.ts');
+  const dom = new JSDOM('<div id="panel"></div>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.CustomEvent = dom.window.CustomEvent;
+  globalThis.localStorage = { getItem: () => null };
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ pack: null, status: null, programmes: [{ nom: 'regle-demo', enCours: false, perimee: true, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr' }], journaux: [], verification: null, preuve: null, catleg: null, explication: null, graphe: null }] }), { headers: { 'Content-Type': 'application/json' } });
+  const container = dom.window.document.querySelector('#panel');
+  try {
+    mount(container, { context: { theme: 'light', project: { name: 'fictif', path: '/dossier-fictif' } }, onContextChange: () => () => {} });
+    await new Promise((resolve) => setImmediate(resolve));
+    const graphTab = container.querySelector('[data-mode="graph"]');
+    const writtenTab = container.querySelector('[data-mode="written"]');
+    assert.ok(graphTab && writtenTab);
+    assert.equal(container.querySelector('.pmc-explanation').hidden, false);
+    writtenTab.click();
+    assert.equal(container.querySelector('.pmc-explanation').hidden, true);
+    assert.equal(container.querySelector('.pmc-written').hidden, false);
+    assert.match(container.querySelector('.pmc-written').textContent, /Contrôles et fichiers/);
+    assert.match(container.querySelector('.pmc-written').textContent, /demo.catala_fr/);
+    unmount(container);
+  } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
+});
+
+test('separates the views, orders steps and keeps each source context through refresh', async () => {
+  const { mount, unmount } = await import('./client.ts');
+  const dom = new JSDOM('<div id="panel"></div>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.DOMParser = dom.window.DOMParser;
+  globalThis.CustomEvent = dom.window.CustomEvent;
+  globalThis.localStorage = { getItem: () => null };
+  const previousFetch = globalThis.fetch;
+  const contenu = ['## Première', '', 'Pièce : [Attestation fictive](../../../pieces/attestation.md).', '', '```catala', 'définition premiere égal à vrai', '```', '', '## Seconde', '', 'Pièce : <img src=x onerror=alert(1)> Document fictif.', '', '```catala', 'définition seconde égal à premiere', '```'].join('\n');
+  const graphe = `digraph G {
+    x003 [label=<<table><tr><td>reponse</td></tr><tr><td>= Vrai</td></tr></table>>, shape=plaintext, URL="https://example.test/demo.catala_fr#L14"];
+    x001 [label=<<table><tr><td>donnee</td></tr><tr><td>= Vrai</td></tr></table>>, URL="https://example.test/demo.catala_fr#L999"];
+    x002 [label=<<table><tr><td>premiere</td></tr><tr><td>= Vrai</td></tr></table>>, URL="https://example.test/demo.catala_fr#L6"];
+    subgraph cluster_inputs { x001; }
+    x001 -> x003 [style="solid"];
+    x002 -> x003 [style="solid"];
+  }`;
+  const snapshot = { pack: null, status: null, programmes: [{ nom: 'regle-demo', enCours: false, perimee: false, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier-fictif/demo.catala_fr', contenu }], journaux: [], verification: null, preuve: null, catleg: null, explication: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', finished_utc: '2026-11-05T10:00:00Z' }, graphe }] };
+  globalThis.fetch = async () => new Response(JSON.stringify(snapshot));
+  const container = dom.window.document.querySelector('#panel');
+  try {
+    mount(container, { context: { theme: 'light', project: { name: 'fictif', path: '/dossier-fictif' } }, onContextChange: () => () => {} });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(container.querySelectorAll('[role="tab"]').length, 2);
+    assert.equal(container.querySelector('.pmc-written').hidden, true);
+    assert.equal(container.querySelector('.pmc-explanation details.pmc-part'), null);
+    container.querySelector('[role="tab"][data-mode="written"]').click();
+    assert.equal(container.querySelector('.pmc-explanation').hidden, true);
+    assert.deepEqual([...container.querySelectorAll('.pmc-written-step h3')].map((heading) => heading.textContent), ['Étape 1 · premiere', 'Réponse · Étape 2 · reponse']);
+    const contexts = [...container.querySelectorAll('.pmc-written .pmc-source-text')].map((element) => element.textContent);
+    assert.match(contexts[0], /Attestation fictive/);
+    assert.doesNotMatch(contexts[0], /Document fictif/);
+    assert.match(contexts[1], /Document fictif/);
+    assert.doesNotMatch(contexts[1], /Attestation fictive/);
+    assert.equal(container.querySelectorAll('img, script, [onerror]').length, 0);
+    snapshot.programmes[0].perimee = true;
+    window.dispatchEvent(new CustomEvent('piecemaker:catala-updated', { detail: { projectPath: '/dossier-fictif' } }));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(container.querySelector('[role="tab"][data-mode="written"]').getAttribute('aria-selected'), 'true');
+    assert.equal(container.querySelector('.pmc-written').hidden, false);
+    assert.match(container.querySelector('.pmc-written').textContent, /Contrôles et fichiers/);
   } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
 });

@@ -12,7 +12,7 @@ import { connectedClients, WS_OPEN_STATE } from '../modules/websocket/index.js';
 
 import { catalaScriptPath, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 
-const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
+const MODULE = '> Module Prime\n\n## Ancienneté\n\nPièce : [Attestation fictive](../../../pieces/attestation.md).\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
 const TESTS = '> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d\'application JeanDupont:\n  résultat calcul champ d\'application Prime.Prime\n```\n';
 
 let root = '';
@@ -80,6 +80,7 @@ test('liste le pack et les programmes du dossier avec leurs fichiers', async () 
   assert.equal(data.status.state, 'pret');
   assert.deepEqual(data.programmes.map((entry: { nom: string }) => entry.nom), ['prime-anciennete']);
   assert.deepEqual(data.programmes[0].fichiers.map((file: { nom: string }) => file.nom), ['prime.catala_fr', 'test_prime.catala_fr']);
+  assert.equal(data.programmes[0].fichiers[0].contenu, MODULE);
   assert.equal(data.programmes[0].verification, null);
   assert.equal(data.programmes[0].explication.scope, 'JeanDupont');
   assert.equal(data.programmes[0].graphe, 'digraph G { x001 -> x002; }');

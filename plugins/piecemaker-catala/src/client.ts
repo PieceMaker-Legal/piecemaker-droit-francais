@@ -5,7 +5,7 @@ import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void };
-type File = { nom: string; chemin: string };
+type File = { nom: string; chemin: string; contenu?: string };
 type Check = { name: string; command: string; exit_code: number; seconds: number; passed: boolean; files?: string[] };
 type Report = { started_utc: string; finished_utc: string; passed: boolean; checks: Check[] };
 type Proof = Report & { fichier: string; scope: string; conflits: number };
@@ -27,6 +27,23 @@ const seconds = (value: number) => `${value.toLocaleString('fr-FR', { maximumFra
 const span = (report: Report) => seconds((Date.parse(report.finished_utc) - Date.parse(report.started_utc)) / 1000);
 const opener = (file: File | undefined, label = file?.nom) => (file ? `<button class="pmc-link" data-open="${escape(file.chemin)}">${escape(label)}</button>` : '');
 const verdict = (report: Report | null) => (report ? report.passed ? pill('ok', 'Vérifié') : pill('ko', 'À corriger') : pill('muted', 'Jamais vérifié'));
+const sourceText = (file: File, source: string) => {
+  const line = Number(source.match(/#L(\d+)/)?.[1]);
+  if (!file.contenu || !line) return '';
+  const lines = file.contenu.split(/\r?\n/);
+  let opening = -1;
+  let inCatala = false;
+  for (let index = 0; index < Math.min(line, lines.length); index++) {
+    if (!lines[index].startsWith('```')) continue;
+    if (inCatala) { inCatala = false; opening = -1; }
+    else if (lines[index].startsWith('```catala')) { inCatala = true; opening = index; }
+    else inCatala = true;
+  }
+  if (opening < 0) return '';
+  let proseStart = opening - 1;
+  while (proseStart >= 0 && !lines[proseStart].startsWith('```')) proseStart--;
+  return lines.slice(proseStart + 1, opening).join('\n').trim();
+};
 
 export function mount(container: HTMLElement, api: Host) {
   const style = document.createElement('style');
@@ -46,6 +63,7 @@ export function mount(container: HTMLElement, api: Host) {
   let stopped = false;
   let stopGraph = () => {};
   let sequence = 0;
+  let viewMode = 'graph';
 
   const shown = () => data?.programmes.find((entry) => entry.nom === chosen) ?? data?.programmes[0];
   const packPart = () => {
@@ -77,13 +95,14 @@ export function mount(container: HTMLElement, api: Host) {
   };
   const explanationPart = (program: Program) => {
     const report = program.explication;
-    if (program.perimee || !report) return '<section class="pmc-part"><h4>Graphe à actualiser</h4><p class="pmc-muted">Lancez pm catala verifier pour produire le graphe correspondant au programme.</p></section>';
+    const stale = program.perimee || !report;
+    if (stale) return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-tabs" role="tablist" aria-label="Vue Catala"><button role="tab" data-mode="graph" aria-selected="${viewMode === 'graph'}">Graphe</button><button role="tab" data-mode="written" aria-selected="${viewMode === 'written'}">Vue écrite</button></div><div class="pmc-explanation"${viewMode === 'written' ? ' hidden' : ''}><div class="pmc-canvas" aria-label="Graphe Catala"><p class="pmc-muted">Lancez pm catala verifier pour actualiser le graphe.</p></div></div><div class="pmc-written" role="tabpanel"${viewMode === 'graph' ? ' hidden' : ''}><p class="pmc-muted">${program.perimee ? 'Le graphe est périmé. Relancez la vérification pour le rétablir.' : 'Aucune trace d’exécution disponible.'}</p><details class="pmc-part"><summary>Contrôles et fichiers</summary>${packPart()}${listPart(program)}<section class="pmc-part"><h4>Dernier bilan</h4>${verificationPhase(program)}${proofPhase(program)}${catlegPhase(program)}</section>${filesPart(program)}</details></div></section>`;
     let graph = '<p class="pmc-muted">Graphe absent. Relancez l’explication.</p>';
     if (report.passed && program.graphe) {
       try { graph = explanationGraph(program.graphe); }
       catch (failure) { graph = `<p class="pmc-ko">${escape(failure instanceof Error ? failure.message : failure)}</p>`; }
     }
-    return `<section class="pmc-explanation" data-mode="graph"><header class="pmc-graph-head"><div class="pmc-tabs" role="tablist" aria-label="Vue Catala"><button role="tab" data-mode="graph" aria-selected="true">Graphe</button><button role="tab" data-mode="written" aria-selected="false">Vue écrite</button></div><select data-result aria-label="Étape du programme"></select><span class="pmc-muted">${escape(report.scope)} · ${escape(when(report.finished_utc))}</span></header><div class="pmc-open-states" aria-live="polite"></div><div class="pmc-canvas" aria-label="Graphe Catala"><div class="pmc-stage">${report.passed ? graph : '<p class="pmc-ko">L’explication a échoué. Consultez le journal.</p>'}</div><div class="pmc-legend" hidden><span class="is-calculation">Règle · résultat</span><span class="is-condition">Condition appliquée</span><span class="is-input">Donnée du scénario</span><span class="pmc-ok">Vrai</span><span class="pmc-ko">Faux</span><span class="pmc-warn">Pointillés : état ouvert ou condition</span><p>Une donnée vraie n’est pas une preuve. Seules les branches exécutées sont présentes.</p></div><aside class="pmc-inspector" aria-label="Détail de l’étape" hidden></aside><div class="pmc-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1.2" aria-label="Zoomer">+</button><button data-zoom="0.833333" aria-label="Dézoomer">−</button><button data-fit>Ajuster</button><button data-replay>Dérouler</button></div></div><div class="pmc-written"></div><p class="pmc-lead">${escape(report.fichier)} › ${escape(report.scope)} · ${opener(program.journaux.find((file) => file.nom === 'explication.log'), 'Journal')} · Actualisé après la vérification du programme.</p></section>`;
+    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-tabs" role="tablist" aria-label="Vue Catala"><button role="tab" data-mode="graph" aria-selected="${viewMode === 'graph'}">Graphe</button><button role="tab" data-mode="written" aria-selected="${viewMode === 'written'}">Vue écrite</button></div><div class="pmc-explanation"${viewMode === 'written' ? ' hidden' : ''}><header class="pmc-graph-head"><select data-result aria-label="Étape du programme"></select><span class="pmc-muted">${escape(report.scope)} · ${escape(when(report.finished_utc))}</span></header><div class="pmc-open-states" aria-live="polite"></div><div class="pmc-canvas" aria-label="Graphe Catala"><div class="pmc-stage">${report.passed ? graph : '<p class="pmc-ko">L’explication a échoué. Consultez le journal.</p>'}</div><div class="pmc-legend" hidden><span class="is-calculation">Règle · résultat</span><span class="is-condition">Condition appliquée</span><span class="is-input">Donnée du scénario</span><span class="pmc-ok">Vrai</span><span class="pmc-ko">Faux</span><span class="pmc-warn">Pointillés : état ouvert ou condition</span><p>Une donnée vraie n’est pas une preuve. Seules les branches exécutées sont présentes.</p></div><aside class="pmc-inspector" aria-label="Détail de l’étape" hidden></aside><div class="pmc-tools"><button data-legend aria-pressed="false">Légende</button><button data-zoom="1.2" aria-label="Zoomer">+</button><button data-zoom="0.833333" aria-label="Dézoomer">−</button><button data-fit>Ajuster</button><button data-replay>Dérouler</button></div></div></div><div class="pmc-written" role="tabpanel"${viewMode === 'graph' ? ' hidden' : ''}><p class="pmc-lead">${escape(report.fichier)} › ${escape(report.scope)} · ${opener(program.journaux.find((file) => file.nom === 'explication.log'), 'Journal')} · Actualisé après la vérification du programme.</p><div class="pmc-step-list"></div><details class="pmc-part"><summary>Contrôles et fichiers</summary>${packPart()}${listPart(program)}<section class="pmc-part"><h4>Dernier bilan</h4>${verificationPhase(program)}${proofPhase(program)}${catlegPhase(program)}</section>${filesPart(program)}</details></div></section>`;
   };
   const filesPart = (program: Program) => `<section class="pmc-part"><h4>Fichiers</h4>${program.fichiers.length ? `<ul class="pmc-files">${program.fichiers.map((file) => `<li>${opener(file)}</li>`).join('')}</ul>` : '<p class="pmc-muted">Aucun fichier .catala_fr.</p>'}${program.journaux.length ? `<h4>Journaux</h4><ul class="pmc-files">${program.journaux.map((file) => `<li>${opener(file)}</li>`).join('')}</ul>` : ''}</section>`;
   const paint = () => {
@@ -96,8 +115,14 @@ export function mount(container: HTMLElement, api: Host) {
     if (!program) { panel.innerHTML = `${warning}${packPart()}<p class="pmc-muted">Aucun programme Catala dans ce dossier : un programme est un dossier .piecemaker/catala/&lt;nom&gt;/ avec clerk.toml.</p>`; return; }
     const running = program.enCours || verifying === program.nom;
     const run = `<div class="pmc-run"><button data-refresh>Actualiser</button><button class="pmc-primary" data-verify="${escape(program.nom)}"${running || verifying || !data.pack ? ' disabled' : ''}>${running ? 'Vérification en cours…' : 'Vérifier'}</button><strong>${escape(program.nom)}</strong>${data.programmes.length > 1 ? `<select data-program-choice aria-label="Programme Catala">${data.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.nom)}</option>`).join('')}</select>` : ''}${program.verification ? `<span class="pmc-tally">${verdict(program.verification)}</span>` : ''}</div>${data.pack ? '' : '<p class="pmc-muted">Pack Catala absent : la vérification est impossible.</p>'}`;
-    panel.innerHTML = `${warning}${run}${explanationPart(program)}<details class="pmc-part"><summary>Contrôles et fichiers</summary>${packPart()}${listPart(program)}<section class="pmc-part"><h4>Dernier bilan</h4>${verificationPhase(program)}${proofPhase(program)}${catlegPhase(program)}</section>${filesPart(program)}</details>`;
+    panel.innerHTML = `${warning}${run}${explanationPart(program)}`;
     const graph = panel.querySelector<HTMLElement>('.pmc-explanation');
+    graph?.querySelectorAll<SVGGElement>('[data-node][data-source]').forEach((node) => {
+      let filename = '';
+      try { filename = decodeURIComponent(new URL(node.dataset.source!).pathname).split('/').pop() ?? ''; } catch { return; }
+      const matches = program.fichiers.filter((file) => file.nom.split('/').pop() === filename);
+      if (matches.length === 1) node.dataset.literaryContext = sourceText(matches[0], node.dataset.source!);
+    });
     if (graph) stopGraph = mountExplanation(graph, (source) => {
       let filename = '';
       try { filename = decodeURIComponent(new URL(source).pathname).split('/').pop() ?? ''; } catch { return; }
@@ -105,6 +130,17 @@ export function mount(container: HTMLElement, api: Host) {
       if (matches.length === 1) window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path: matches[0].chemin } }));
     });
   };
+
+  panel.addEventListener('click', (event) => {
+    const tab = (event.target as Element).closest<HTMLElement>('[role="tab"][data-mode]');
+    if (!tab) return;
+    viewMode = tab.dataset.mode ?? 'graph';
+    const view = tab.closest<HTMLElement>('.pmc-view')!;
+    view.dataset.mode = viewMode;
+    view.querySelectorAll<HTMLElement>('[role="tab"]').forEach((item) => item.setAttribute('aria-selected', String(item === tab)));
+    view.querySelector<HTMLElement>('.pmc-explanation')!.hidden = viewMode !== 'graph';
+    view.querySelector<HTMLElement>('.pmc-written')!.hidden = viewMode !== 'written';
+  });
   const apply = (next: CatalaSnapshot | null) => {
     const text = JSON.stringify(next);
     if (text === serialized) return;

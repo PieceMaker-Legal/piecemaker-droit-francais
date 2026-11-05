@@ -1,6 +1,7 @@
 export function mountExplanation(container: HTMLElement, openSource: (source: string) => void) {
   const svg = container.querySelector<SVGSVGElement>('svg');
   if (!svg) return () => {};
+  const view = container.closest<HTMLElement>('.pmc-view')!;
   const nodes = [...svg.querySelectorAll<SVGGElement>('[data-node]')];
   const wires = [...svg.querySelectorAll<SVGPathElement>('[data-from]')];
   const canvas = container.querySelector<HTMLElement>('.pmc-canvas')!;
@@ -23,10 +24,10 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
   };
   const label = (node: SVGGElement) => node.dataset.title ?? '';
   const pending = nodes.filter((node) => node.dataset.tone === 'warn');
-  chooser.innerHTML = '<option value="">Toutes les étapes</option>' + nodes.filter((node) => ['calculation', 'conclusion'].includes(node.dataset.kind!)).map((node) => `<option value="${node.dataset.node}">${escape(label(node))}</option>`).join('');
+  chooser.innerHTML = '<option value="">Toutes les étapes</option>' + nodes.filter((node) => ['calculation', 'conclusion'].includes(node.dataset.kind!)).map((node) => `<option value="${node.dataset.node}">Étape ${node.dataset.step} · ${escape(label(node))}</option>`).join('');
   const ref = (id: string) => {
     const node = nodes.find((item) => item.dataset.node === id)!;
-    return `<button class="pmc-link" data-select-node="${id}">${escape(label(node))}</button>`;
+    return `<button class="pmc-link" data-select-node="${id}">${node.dataset.step ? `Étape ${node.dataset.step} · ` : ''}${escape(label(node))}</button>`;
   };
   const select = (id: string) => {
     selected = id;
@@ -44,10 +45,14 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
     if (!node) return;
     const dependencies = wires.filter((wire) => wire.dataset.to === id);
     const consumers = wires.filter((wire) => wire.dataset.from === id);
-    inspector.innerHTML = `<header><strong>${escape(label(node))}</strong><button data-close-node aria-label="Fermer le détail">×</button></header><p>${escape(node.dataset.context ?? '')}</p><p class="pmc-${node.dataset.tone === 'neutral' ? 'muted' : node.dataset.tone}">${node.dataset.kind === 'input' ? 'Donnée fournie au scénario' : node.dataset.kind === 'condition' ? 'Condition utilisée dans cette exécution' : 'Valeur calculée par Catala'}${node.dataset.value ? ` : <strong>${escape(node.dataset.value)}</strong>` : ''}.</p>${node.dataset.tone === 'warn' ? '<p class="pmc-warn">État ouvert dans le programme. Établissez la donnée ou tranchez le désaccord avant de conclure.</p>' : ''}${dependencies.length ? `<h4>Dépend de</h4><ul>${dependencies.map((wire) => `<li>${ref(wire.dataset.from!)}${wire.hasAttribute('stroke-dasharray') ? ' · condition' : ''}</li>`).join('')}</ul>` : ''}${consumers.length ? `<h4>Utilisé par</h4><ul>${consumers.map((wire) => `<li>${ref(wire.dataset.to!)}</li>`).join('')}</ul>` : ''}${node.dataset.source ? '<button data-open-source>Ouvrir le programme</button>' : ''}`;
+    inspector.innerHTML = `<header><strong>${escape(label(node))}</strong><button data-close-node aria-label="Fermer le détail">×</button></header><p>${escape(node.dataset.context ?? '')}</p>${node.dataset.literaryContext ? `<p class="pmc-source-text">${escape(node.dataset.literaryContext)}</p>` : ''}<p class="pmc-${node.dataset.tone === 'neutral' ? 'muted' : node.dataset.tone}">${node.dataset.kind === 'input' ? 'Donnée fournie au scénario' : node.dataset.kind === 'condition' ? 'Condition utilisée dans cette exécution' : 'Valeur calculée par Catala'}${node.dataset.value ? ` : <strong>${escape(node.dataset.value)}</strong>` : ''}.</p>${node.dataset.tone === 'warn' ? '<p class="pmc-warn">État ouvert dans le programme. Établissez la donnée ou tranchez le désaccord avant de conclure.</p>' : ''}${dependencies.length ? `<h4>Dépend de</h4><ul>${dependencies.map((wire) => `<li>${ref(wire.dataset.from!)}${wire.hasAttribute('stroke-dasharray') ? ' · condition' : ''}</li>`).join('')}</ul>` : ''}${consumers.length ? `<h4>Utilisé par</h4><ul>${consumers.map((wire) => `<li>${ref(wire.dataset.to!)}</li>`).join('')}</ul>` : ''}${node.dataset.source ? '<button data-open-source>Ouvrir le programme</button>' : ''}`;
   };
   container.querySelector<HTMLElement>('.pmc-open-states')!.innerHTML = pending.length ? `<details><summary class="pmc-warn">${pending.length} état${pending.length > 1 ? 's' : ''} à éclaircir dans cette exécution</summary><ul>${pending.map((node) => `<li>${ref(node.dataset.node!)} : ${escape(node.dataset.value!)}</li>`).join('')}</ul></details>` : '<span class="pmc-muted">Aucun état ouvert nommé « Indéterminé » ou « Disputé » dans la trace.</span>';
-  container.querySelector<HTMLElement>('.pmc-written')!.innerHTML = nodes.map((node) => `<section class="pmc-phase" data-status="${node.dataset.tone === 'warn' ? 'attente' : node.dataset.tone === 'ko' ? 'alerte' : node.dataset.tone}"><header>${ref(node.dataset.node!)}${node.dataset.value ? `<strong>${escape(node.dataset.value)}</strong>` : ''}</header><p class="pmc-muted">${escape(node.dataset.context ?? '')}</p>${wires.some((wire) => wire.dataset.to === node.dataset.node) ? `<p>Dépend de : ${wires.filter((wire) => wire.dataset.to === node.dataset.node).map((wire) => ref(wire.dataset.from!)).join(' · ')}</p>` : ''}</section>`).join('');
+  view.querySelector<HTMLElement>('.pmc-step-list')!.innerHTML = [...new Set(nodes.map((node) => node.dataset.step).filter(Boolean))].sort((a, b) => Number(a) - Number(b)).map((step) => {
+    const members = nodes.filter((node) => node.dataset.step === step);
+    const main = members.find((node) => ['calculation', 'conclusion'].includes(node.dataset.kind!));
+    return `<section class="pmc-written-step"><h3>${main?.dataset.kind === 'conclusion' ? 'Réponse · ' : ''}Étape ${step}${main ? ` · ${escape(label(main))}` : ''}</h3><div class="pmc-written-branches">${members.map((node) => `<section class="pmc-phase" data-status="${node.dataset.tone === 'warn' ? 'attente' : node.dataset.tone === 'ko' ? 'alerte' : node.dataset.tone}"><header>${ref(node.dataset.node!)}${node.dataset.value ? `<strong>${escape(node.dataset.value)}</strong>` : ''}</header><p class="pmc-muted">${escape(node.dataset.context ?? '')}</p>${node.dataset.literaryContext ? `<p class="pmc-source-text">${escape(node.dataset.literaryContext)}</p>` : ''}${wires.some((wire) => wire.dataset.to === node.dataset.node) ? `<p>Dépend de : ${wires.filter((wire) => wire.dataset.to === node.dataset.node).map((wire) => ref(wire.dataset.from!)).join(' · ')}</p>` : ''}</section>`).join('')}</div></section>`;
+  }).join('');
   const finishReplay = () => {
     window.clearTimeout(timer);
     replay = 0;
@@ -64,8 +69,7 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
     if (!button) return;
     if (button.dataset.selectNode) {
       select(button.dataset.selectNode);
-      container.dataset.mode = 'graph';
-      container.querySelectorAll<HTMLElement>('[data-mode]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.mode === 'graph')));
+      view.querySelector<HTMLElement>('[role="tab"][data-mode="graph"]')?.click();
       const card = nodes.find((item) => item.dataset.node === selected)!.querySelector('rect')!;
       pan = { x: 30 - Number(card.getAttribute('x')) * zoom, y: 40 - Number(card.getAttribute('y')) * zoom };
       transform();
@@ -73,8 +77,10 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
     if (button.hasAttribute('data-close-node')) { select(''); chooser.value = ''; }
     if (button.hasAttribute('data-open-source')) openSource(nodes.find((item) => item.dataset.node === selected)!.dataset.source!);
     if (button.dataset.mode) {
-      container.dataset.mode = button.dataset.mode;
-      container.querySelectorAll<HTMLElement>('[data-mode]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.mode === button.dataset.mode)));
+      view.dataset.mode = button.dataset.mode;
+      view.querySelectorAll<HTMLElement>('[role="tab"][data-mode]').forEach((tab) => tab.setAttribute('aria-selected', String(tab.dataset.mode === button.dataset.mode)));
+      view.querySelector<HTMLElement>('.pmc-explanation')!.hidden = button.dataset.mode !== 'graph';
+      view.querySelector<HTMLElement>('.pmc-written')!.hidden = button.dataset.mode !== 'written';
     }
     if (button.hasAttribute('data-legend')) {
       const legend = container.querySelector<HTMLElement>('.pmc-legend')!;
@@ -96,12 +102,23 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
       const revealed = new Set<string>();
       nodes.forEach((entry) => entry.classList.add('is-waiting'));
       wires.forEach((wire) => wire.classList.add('is-waiting'));
+      const stages = [...new Set(nodes.map((entry) => entry.dataset.step).filter(Boolean))].sort((a, b) => Number(a) - Number(b));
+      let stageIndex = 0;
       const step = () => {
-        const ready = nodes.filter((entry) => !revealed.has(entry.dataset.node!) && wires.filter((wire) => wire.dataset.to === entry.dataset.node).every((wire) => revealed.has(wire.dataset.from!)));
-        if (!ready.length) { finishReplay(); return; }
-        ready.forEach((entry) => { revealed.add(entry.dataset.node!); entry.classList.remove('is-waiting'); });
+        const current = nodes.filter((entry) => entry.dataset.step === stages[stageIndex]);
+        const active = current.find((entry) => ['calculation', 'conclusion'].includes(entry.dataset.kind!));
+        if (!current.length) { finishReplay(); return; }
+        current.forEach((entry) => { revealed.add(entry.dataset.node!); entry.classList.remove('is-waiting'); });
         wires.forEach((wire) => wire.classList.toggle('is-waiting', !revealed.has(wire.dataset.from!) || !revealed.has(wire.dataset.to!)));
-        timer = window.setTimeout(step, 700);
+        if (active) {
+          select(active.dataset.node!);
+          const rect = active.querySelector('rect')!;
+          pan = { x: canvas.clientWidth / 2 - (Number(rect.getAttribute('x')) + 140) * zoom, y: canvas.clientHeight / 2 - (Number(rect.getAttribute('y')) + Number(rect.getAttribute('height')) / 2) * zoom };
+          transform();
+        }
+        stageIndex++;
+        if (stageIndex < stages.length) timer = window.setTimeout(step, 700);
+        else timer = window.setTimeout(finishReplay, 700);
       };
       step();
     }
@@ -137,7 +154,7 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
     zoom = next;
     transform();
   };
-  container.addEventListener('click', click);
+  view.addEventListener('click', click);
   container.addEventListener('keydown', key);
   chooser.addEventListener('change', change);
   canvas.addEventListener('pointerdown', down);
@@ -148,7 +165,8 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
   fit();
   return () => {
     finishReplay();
-    container.removeEventListener('click', click);
+    select('');
+    view.removeEventListener('click', click);
     container.removeEventListener('keydown', key);
     chooser.removeEventListener('change', change);
     canvas.removeEventListener('pointerdown', down);

@@ -48,3 +48,18 @@ test('preserves explicit open states and groups rules, conditions and scenario i
   assert.ok(Number(input.querySelector('rect').getAttribute('x')) > Number(document.querySelector('[data-node="x003"] rect').getAttribute('x')));
   assert.equal(document.querySelectorAll('[data-tone="warn"] rect[stroke-dasharray]').length, 2);
 });
+
+test('numbers the main calculation path in dependency order', () => {
+  const graph = `digraph G {
+    x003 [label=<<table><tr><td>resultat</td></tr><tr><td>= 12</td></tr></table>>, shape=plaintext];
+    x002 [label=<<table><tr><td>calcul</td></tr><tr><td>= 12</td></tr></table>>];
+    x001 [label=<<table><tr><td>donnee</td><td>3</td></tr></table>>];
+    subgraph cluster_inputs { x001; };
+    x001 -> x002 [style="solid"];
+    x002 -> x003 [style="solid"];
+  }`;
+  const document = new JSDOM(explanationGraph(graph)).window.document;
+  assert.equal(document.querySelector('[data-node="x002"]').dataset.step, '1');
+  assert.equal(document.querySelector('[data-node="x003"]').dataset.step, '2');
+  assert.ok(document.querySelector('svg').textContent.indexOf('Étape 1') < document.querySelector('svg').textContent.indexOf('Étape 2'));
+});
