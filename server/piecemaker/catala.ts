@@ -28,7 +28,7 @@ export function catalaScriptPath(applicationRoot: string) {
   return path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'catala.mjs');
 }
 
-export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}) {
+export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, cite?: (cwd: string, id: string, quote: string, content: string) => Promise<string>) {
   const router = express.Router();
   const running = new Set<string>();
   const script = () => import(pathToFileURL(scriptPath).href) as Promise<CatalaScript>;
@@ -63,6 +63,16 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}) {
     const { projectPath } = request.query;
     if (typeof projectPath !== 'string' || !projectPath) { fail(response, new TypeError('projectPath requis.')); return; }
     snapshot(projectPath).then((data) => response.json(data), (error: unknown) => fail(response, error));
+  });
+  router.post('/citation', express.json(), async (request, response) => {
+    try {
+      const { projectPath, programme, fichier, source, citation } = request.body ?? {};
+      if (![projectPath, programme, fichier, source, citation].every((value) => typeof value === 'string') || !projectPath || !cite) throw new Error('Référence Catala incomplète.');
+      const data = await snapshot(projectPath);
+      const file = data.programmes.find((entry) => entry.nom === programme)?.fichiers.find((entry) => entry.chemin === fichier);
+      if (!file) throw new Error('Fichier absent du programme Catala.');
+      response.json({ token: await cite(projectPath, source, citation, file.contenu) });
+    } catch (error) { fail(response, error); }
   });
   router.post('/verify', express.json(), (request, response) => {
     const { projectPath, programme } = request.body ?? {};

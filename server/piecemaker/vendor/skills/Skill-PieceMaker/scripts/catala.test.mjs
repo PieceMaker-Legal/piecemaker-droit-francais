@@ -162,26 +162,39 @@ test('a proof with an overlap warning fails and a pack without proof refuses it'
   }
 });
 
-test('catleg runs in the shared Python with the PISTE credentials of the child only', async () => {
+test('catleg counts native parser results, rejects empty checks and uses the user PISTE credentials', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
-    const directory = program(dossier, 'prime-anciennete');
+    const directory = program(dossier, 'prime-anciennete', { 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' });
     const calls = [];
+    let stdout = 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":false}]\n';
     const runner = async (command, args, options) => {
       calls.push({ command, args, env: options.env });
-      return { code: 0, stdout: '', stderr: '' };
+      if (args.includes('lf')) return { code: 0, stdout: JSON.stringify({ article: { id: 'LEGIARTI000000000001', dateDebut: '2020-01-01', dateFin: '2999-01-01' } }), stderr: '' };
+      return { code: 0, stdout, stderr: '' };
     };
     const deps = { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: '/py/python3', credentials: { CATLEG_LF_CLIENT_ID: 'id', CATLEG_LF_CLIENT_SECRET: 's' }, now: () => '2026-03-04T10:00:00Z' };
-    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { fichier: 'prime.catala_fr' }, deps }), /vigueur au 2026-03-04/);
+    const report = () => JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'catleg.json'), 'utf8'));
+    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { fichier: 'prime.catala_fr' }, deps }), /1 article\(s\) contrôlé/);
     assert.equal(calls[0].command, '/py/python3');
     assert.deepEqual(calls[0].args.slice(-2), ['check-expiry', 'prime.catala_fr']);
     assert.equal(calls[0].env.CATLEG_LF_CLIENT_ID, 'id');
     assert.equal(process.env.CATLEG_LF_CLIENT_ID, undefined);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'catleg.json'), 'utf8')).passed, true);
+    assert.equal(report().passed, true);
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2019-12-31' }, deps });
+    assert.equal(report().passed, false);
+    assert.equal(report().fichiers[0].versions[0].valide, false);
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2020-01-01' }, deps });
+    assert.equal(report().fichiers[0].versions[0].valide, true);
+    for (const output of ['', 'PIECEMAKER_ARTICLES=[]\n', 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":true}]\n']) {
+      stdout = output;
+      await runCatala({ commande: 'catleg', cwd: dossier, deps });
+      assert.equal(report().passed, false);
+    }
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-02-30' }, deps }), /date valide/);
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, flags: { fichier: '../secret' }, deps }), /absent du programme/);
     await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps: { ...deps, credentials: null } }), /PISTE/);
-  } finally {
-    cleanup();
-  }
+  } finally { cleanup(); }
 });
 
 test('Windows tools run through cmd and a missing pack reports the install status', async () => {

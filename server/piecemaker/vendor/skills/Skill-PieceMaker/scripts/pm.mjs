@@ -76,8 +76,8 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   catala preuve --scope CHAMP [--fichier F] [--programme NOM]
   catala expliquer --scope CHAMP [--fichier F] [--programme NOM]
       graphe des formules et conditions pour un champ sans entrées ;
-  catala catleg [--fichier F] [--programme NOM]
-      vigueur des articles cités, à la date du jour seulement
+  catala catleg [--fichier F] [--au AAAA-MM-JJ] [--programme NOM]
+      expiration actuelle ; --au compare aussi les périodes officielles à la date indiquée
   catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 

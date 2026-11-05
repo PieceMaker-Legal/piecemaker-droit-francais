@@ -175,9 +175,13 @@ test('opens cited pieces and sources while keeping local links inside the dossie
   globalThis.CustomEvent = dom.window.CustomEvent;
   globalThis.localStorage = { getItem: () => null };
   const previousFetch = globalThis.fetch;
-  const contenu = ['## Fait', '', '[Attestation fictive](../../../pieces/attestation.md)', '[Article 1218](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041431)', '[Hors dossier](../../../../hors-dossier.md)', '[Chemin encodé](../../../pieces/..%2f..%2fhors-dossier.md)', '[Protocole refusé](javascript:alert%281%29)', '', '```catala', 'définition fait égal à vrai', '```', '', '## Autre fondement', '[Jurisprudence fictive](https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001)', 'Pièce 99'].join('\n');
-  const graphe = 'digraph G { x001 [label=<<table><tr><td>fait</td></tr><tr><td>= Vrai</td></tr></table>>, URL="https://example.test/demo.catala_fr#L10"]; }';
-  globalThis.fetch = async () => new Response(JSON.stringify({ pack: null, status: null, programmes: [{ nom: 'demo', enCours: false, perimee: false, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier/.piecemaker/catala/demo/demo.catala_fr', contenu }], journaux: [{ nom: 'typecheck.log', chemin: '/dossier/.piecemaker/catala/demo/resultats/typecheck.log', contenu: 'demo.catala_fr:14: Type incompatible : entier attendu, date reçue.' }], verification: { finished_utc: '2026-11-05T10:00:00Z', started_utc: '2026-11-05T09:59:58Z', passed: false, checks: [{ name: 'typecheck', command: 'catala typecheck demo.catala_fr', exit_code: 1, seconds: 2, passed: false }] }, tests: { 'test-results': [{ file: 'demo.catala_fr', tests: { scopes: [{ scope_name: 'Exemple', success: false, errors: ['Assertion fictive non satisfaite'], time: 0.1 }] } }], coverage: { regle: 'non couverte' } }, preuve: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', conflits: 0, obligations: 3, started_utc: '2026-11-05T09:59:58Z', finished_utc: '2026-11-05T10:00:00Z', checks: [] }, catleg: { date_controle: '2026-11-05', passed: false, fichiers: [{ fichier: 'demo.catala_fr', passed: false, messages: ['Article à revoir : version abrogée'] }] }, explication: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', finished_utc: '2026-11-05T10:00:00Z' }, graphe }] }));
+  const contenu = ['## Fait', '', '[Attestation fictive](../../../pieces/attestation.md)', '[Article 1218](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041431)', 'Citation : « Passage juridique fictif. »', '[Hors dossier](../../../../hors-dossier.md)', '[Chemin encodé](../../../pieces/..%2f..%2fhors-dossier.md)', '[Protocole refusé](javascript:alert%281%29)', '', '```catala', 'définition fait égal à vrai', '```', '', '## Autre fondement', '[Jurisprudence fictive](https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001)', 'Pièce 99'].join('\n');
+  const graphe = 'digraph G { x001 [label=<<table><tr><td>fait</td></tr><tr><td>= Vrai</td></tr></table>>, URL="https://example.test/demo.catala_fr#L11"]; }';
+  const citationRequests = [];
+  globalThis.fetch = async (url, options) => {
+    if (url.endsWith('/citation')) { citationRequests.push(JSON.parse(options.body)); return new Response(JSON.stringify({ token: 'a'.repeat(64) })); }
+    return new Response(JSON.stringify({ pack: null, status: null, programmes: [{ nom: 'demo', enCours: false, perimee: false, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier/.piecemaker/catala/demo/demo.catala_fr', contenu }], journaux: [{ nom: 'typecheck.log', chemin: '/dossier/.piecemaker/catala/demo/resultats/typecheck.log', contenu: 'demo.catala_fr:14: Type incompatible : entier attendu, date reçue.' }], verification: { finished_utc: '2026-11-05T10:00:00Z', started_utc: '2026-11-05T09:59:58Z', passed: false, checks: [{ name: 'typecheck', command: 'catala typecheck demo.catala_fr', exit_code: 1, seconds: 2, passed: false }] }, tests: { 'test-results': [{ file: 'demo.catala_fr', tests: { scopes: [{ scope_name: 'Exemple', success: false, errors: ['Assertion fictive non satisfaite'], time: 0.1 }] } }], coverage: { regle: 'non couverte' } }, preuve: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', conflits: 0, obligations: 3, started_utc: '2026-11-05T09:59:58Z', finished_utc: '2026-11-05T10:00:00Z', checks: [] }, catleg: { date_controle: '2026-11-05', passed: false, fichiers: [{ fichier: 'demo.catala_fr', passed: false, articles: ['LEGIARTI000032041431'], messages: ['Article à revoir : version abrogée'] }] }, explication: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', finished_utc: '2026-11-05T10:00:00Z' }, graphe }] }));
+  };
   const opened = [];
   const external = [];
   window.addEventListener('piecemaker:open-in-editor', (event) => opened.push(event.detail.path));
@@ -194,13 +198,17 @@ test('opens cited pieces and sources while keeping local links inside the dossie
     open('Attestation fictive');
     assert.deepEqual(opened, ['/dossier/pieces/attestation.md']);
     open('Article 1218');
-    assert.deepEqual(external, [['https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041431', '_blank', 'noopener,noreferrer']]);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.match(opened.at(-1), /^piecemaker:\/\/citation\/a{64}\/LEGIARTI000032041431$/);
+    assert.equal(citationRequests[0].citation, 'Passage juridique fictif.');
+    assert.equal(external.length, 0);
     open('Jurisprudence fictive');
-    assert.equal(external[1][0], 'https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001');
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.match(opened.at(-1), /JURITEXT000000000001$/);
     const article = container.querySelector('[data-kind="article"][data-title="Article 1218"]');
     assert.match(article.textContent, /2026-11-05/);
     assert.match(article.textContent, /version abrogée/);
-    assert.match(article.textContent, /date des faits : non contrôlée/);
+    assert.match(article.textContent, /Version applicable non établie/);
     const check = [...container.querySelectorAll('[data-kind="control"]')].find((node) => node.dataset.title === 'Typage et invariants');
     assert.equal(check.dataset.tone, 'ko');
     const rule = container.querySelector('[data-node="x001"]');
@@ -212,7 +220,7 @@ test('opens cited pieces and sources while keeping local links inside the dossie
     assert.ok([...container.querySelector('[data-result]').options].some((option) => option.value === check.dataset.node));
     assert.equal(container.querySelector('[data-title="Jurisprudence fictive"]').dataset.kind, 'jurisprudence');
     check.querySelector('[data-open-reference]').click();
-    assert.equal(opened[1], '/dossier/.piecemaker/catala/demo/resultats/typecheck.log');
+    assert.equal(opened.at(-1), '/dossier/.piecemaker/catala/demo/resultats/typecheck.log');
     const proof = [...container.querySelectorAll('[data-kind="control"]')].find((node) => node.dataset.title === 'Preuve');
     assert.match(proof.textContent, /3 obligations produites/);
     const tests = [...container.querySelectorAll('[data-kind="control"]')].find((node) => node.dataset.title === 'Scénarios et couverture des tests');
@@ -226,10 +234,12 @@ test('opens cited pieces and sources while keeping local links inside the dossie
     assert.match(container.querySelector('.pmc-inspector').textContent, /Lien absent du programme/);
     container.querySelector('[role="tab"][data-mode="written"]').click();
     container.querySelector(`.pmc-written [data-open-reference="${article.dataset.node}"]`).click();
-    assert.equal(external.length, 3);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(external.length, 0);
     for (const title of ['Hors dossier', 'Chemin encodé', 'Protocole refusé']) open(title);
-    assert.equal(opened.length, 2);
-    assert.equal(external.length, 3);
+    assert.equal(opened.length, 5);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(external.length, 0);
     assert.match(container.querySelector('.pmc-written').textContent, /Attestation fictive/);
     assert.match(container.querySelector('.pmc-written').textContent, /Article 1218/);
   } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }

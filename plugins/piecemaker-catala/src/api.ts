@@ -8,6 +8,10 @@ export function verifyCatala(projectPath: string, programme: string): Promise<Ca
   return request<CatalaSnapshot>('/api/piecemaker/catala/verify', { projectPath, programme });
 }
 
+export function citeCatala(projectPath: string, programme: string, fichier: string, source: string, citation: string): Promise<{ token: string }> {
+  return request('/api/piecemaker/catala/citation', { projectPath, programme, fichier, source, citation });
+}
+
 async function request<T>(url: string, body?: object): Promise<T> {
   const token = localStorage.getItem('auth-token');
   const response = await fetch(url, { ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}), headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) } });

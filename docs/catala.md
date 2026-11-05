@@ -78,7 +78,7 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 | `pm catala formater` | `catala-format --in-place` | fichiers réécrits |
 | `pm catala preuve --scope <Champ> [--fichier F]` | `catala proof`, sans compilation OCaml | `resultats/preuve.json` |
 | `pm catala expliquer --programme <nom> --fichier test_prime.catala_fr --scope Exemple` | Graphe des formules et conditions d’une exécution | `resultats/explication.dot`, `explication.json` |
-| `pm catala catleg [--fichier F]` | vigueur des articles cités, identifiants PISTE de PieceMaker | `resultats/catleg.json` |
+| `pm catala catleg [--fichier F] [--au AAAA-MM-JJ]` | vigueur des articles cités, identifiants PISTE de PieceMaker | `resultats/catleg.json` |
 | `pm catala lister` / `env` | programmes et dernier bilan / pack, état, Python | sortie |
 | `pm catala exec <outil> -- <args>` | lance un outil du pack (LSP, DAP, autres) | code de sortie |
 
@@ -90,7 +90,7 @@ Une preuve réussit si `catala proof --debug` produit au moins une obligation, s
 
 ## Limites
 
-- catleg contrôle la vigueur à la date du jour seulement.
+- Catleg contrôle l’expiration actuelle des articles reconnus par son parseur natif. Un contrôle vide échoue. `--au` réutilise `catleg lf article` pour comparer la période officielle à une date de référence. Cette comparaison ne détermine pas l’applicabilité juridique.
 - Une preuve porte sur le programme, pas sur les faits.
 - Le lien avec les pièces passe par une table des sources que l'avocat construit.
 - Windows : installation et preuve non exécutées sur ce Mac. La CI Windows doit réussir avant livraison.
@@ -114,7 +114,7 @@ Le volet sépare deux onglets, Graphe et Vue écrite, comme le volet Raisonnemen
 
 Les bilans globaux de typage, format, tests et preuve apparaissent une seule fois après les étapes. Ils ne sont pas reliés artificiellement à chaque règle. La preuve indique le nombre d’obligations produites. Une carte présente les scénarios des tests ; son détail conserve le rapport complet et la couverture. Chaque contrôle montre son résultat et sa date ; les journaux disponibles s’ouvrent depuis les cartes. Les badges des articles ouvrent le contrôle catleg de leur fichier. Les sources restent reliées directement aux règles ou conditions dont la section Catala les cite. Les traits de bilan restent distincts des dépendances de calcul. Les messages des contrôles échoués et les erreurs des scénarios apparaissent dans le graphe. Le détail conserve les journaux complets. Les cartes de contrôle restent accessibles si la trace est absente ou périmée. Les références des sections non exécutées apparaissent sans dépendance inventée.
 
-Les articles affichent la date et les messages du contrôle catleg de leur fichier. Ce bilan concerne le fichier, sans verdict individuel ajouté par l’interface. Une date de contrôle ne constitue pas une date d’entrée en vigueur. La version applicable à la date des faits reste signalée comme non contrôlée. Un contrôle absent reste visible.
+Les articles affichent la date et les messages du contrôle catleg de leur fichier. Ce bilan concerne le fichier, sans verdict individuel ajouté par l’interface. Une date de contrôle ne constitue pas une date d’entrée en vigueur. Sans date de référence, la version applicable reste signalée comme non contrôlée. Avec `--au`, le graphe affiche la période officielle et le résultat de sa comparaison à la date indiquée ; l’applicabilité juridique reste distincte. Un contrôle absent reste visible.
 
 Les alertes visibles sur les cartes distinguent donnée non établie, fait contesté, résultat dépendant de ces manques, lien absent et version juridique applicable non contrôlée. Elles indiquent l’action attendue. Un état faux reste une valeur calculée ; il ne devient pas automatiquement une erreur.
 
@@ -122,7 +122,7 @@ La Vue écrite regroupe les mêmes étapes et la réponse finale. Elle contient 
 
 Les fichiers Catala peuvent documenter les pièces et les sources en Markdown. Le volet retrouve la section et les sections parentes correspondant à la position source de la trace. Il conserve leur texte dans le détail et la Vue écrite, y compris quand plusieurs blocs de code partagent la même section.
 
-Les liens Markdown, liens par référence, URL et identifiants Légifrance deviennent des cartes Pièce citée, Article ou Référence, reliées aux éléments concernés du graphe. Les références communes à une même section sont partagées. Un article ou numéro de pièce sans lien reste visible, avec la mention « Lien absent du programme ». Un titre d’article contenant son identifiant officiel devient un lien unique. Les cartes proposent un bouton d’ouverture dans les deux vues, pour les pièces, articles et jurisprudences. Les pièces locales s’ouvrent dans l’éditeur, avec des chemins limités au dossier ; les liens HTTP(S) s’ouvrent dans un nouvel onglet. Le volet ne lit pas les pièces. Une référence déclarée ne constitue pas une vérification de son contenu. Le DOT seul ne contient pas le texte documentaire ; le serveur transmet aussi le contenu des fichiers Catala.
+Les liens Markdown, liens par référence, URL et identifiants Légifrance deviennent des cartes Pièce citée, Article ou Référence, reliées aux éléments concernés du graphe. Les références communes à une même section sont partagées. Un article ou numéro de pièce sans lien reste visible, avec la mention « Lien absent du programme ». Un titre d’article contenant son identifiant officiel devient un lien unique. Les cartes proposent un bouton d’ouverture dans les deux vues, pour les pièces, articles et jurisprudences. Les pièces locales s’ouvrent dans l’éditeur, avec des chemins limités au dossier ; les sources Légifrance passent par le lecteur interne et son contrôle de citation, les autres liens HTTP(S) ouvrent un nouvel onglet. Le volet ne lit pas les pièces. Une référence déclarée ne constitue pas une vérification de son contenu. Le DOT seul ne contient pas le texte documentaire ; le serveur transmet aussi le contenu des fichiers Catala.
 
 Chaque carte conserve le libellé complet de Catala, ses expressions, valeurs, position source et contexte documentaire dans son détail et la Vue écrite. Les éléments sans étape consommatrice restent visibles. Les opérateurs logiques `et` et `ou` prennent la forme de pills dans les conditions, sans modifier les parenthèses, identifiants ou chaînes de caractères.
 
@@ -139,3 +139,5 @@ La preuve refuse `--whole-program` : Catala 1.3 peut masquer des conflits avec c
 Catala 1.3 peut omettre des obligations avec des définitions globales. Le bilan positif porte seulement sur les obligations produites. Une preuve vide échoue.
 
 La preuve couvre le champ choisi, sans couvrir les champs ou modules appelés. Lancez la preuve séparément sur chaque champ métier.
+
+Les sources Légifrance citées dans Catala utilisent le lecteur interne existant. L’API vérifie leur présence dans le programme, consulte le MCP Légifrance avec les identifiants PISTE existants et contrôle l’extrait déclaré. Sans extrait, aucun statut de citation vérifiée n’est attribué. Le Markdown `Citation : « passage exact »` suit le lien ; les pièces locales transmettent cet extrait au lecteur pour le surlignage.

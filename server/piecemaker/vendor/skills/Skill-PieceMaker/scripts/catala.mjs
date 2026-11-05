@@ -310,16 +310,46 @@ async function catleg(context, program, flags) {
   const credentials = context.credentials;
   if (!credentials) throw new Error('Identifiants PISTE absents : configurez Légifrance dans PieceMaker (~/.config/mcp-legifrance/.env).');
   const files = flags.fichier && flags.fichier !== true ? [String(flags.fichier)] : sourceFiles(program.directory);
+  if (files.some((file) => !sourceFiles(program.directory).includes(file))) throw new Error('Fichier Catala absent du programme.');
+  const at = flags.au;
+  if (at !== undefined && (typeof at !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(at) || !Number.isFinite(Date.parse(at)) || new Date(at).toISOString().slice(0, 10) !== at)) throw new Error('--au attend une date valide AAAA-MM-JJ.');
   const started = context.now();
   const results = [];
   for (const file of files) {
-    const result = await context.run(python, ['-I', '-c', 'import sys; from catleg.catleg import main; sys.argv[0] = "catleg"; main()', 'check-expiry', file], { cwd: program.directory, env: { ...context.env, ...credentials } });
+    const inspect = 'import json,sys; from catleg.parse_catala_markdown import parse_catala_file; from pathlib import Path; f=Path(sys.argv[2]); articles=parse_catala_file(f.open(), file_path=f); print("PIECEMAKER_ARTICLES="+json.dumps([{"id":a.id.upper(),"archive":a.is_archive} for a in articles]),flush=True); from catleg.catleg import main; sys.argv[0]="catleg"; main() if articles else None';
+    const result = await context.run(python, ['-I', '-c', inspect, 'check-expiry', file], { cwd: program.directory, env: { ...context.env, ...credentials } });
     const output = `${result.stdout}${result.stderr}`;
-    results.push({ fichier: file, exit_code: result.code, passed: result.code === 0 && !/Could not retrieve article/.test(output), messages: output.split('\n').map((line) => line.trim()).filter(Boolean) });
+    const marker = /^PIECEMAKER_ARTICLES=(.+)$/m.exec(output);
+    let articles = [];
+    try { articles = JSON.parse(marker?.[1] ?? '[]'); } catch {}
+    const declared = [...new Set(fs.readFileSync(path.join(program.directory, file), 'utf8').match(/\b(?:LEGIARTI|JORFARTI)\d+\b/g) ?? [])];
+    const missing = declared.filter((id) => !articles.some((article) => article.id === id));
+    const checked = articles.filter((article) => !article.archive).map((article) => article.id);
+    const messages = output.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('PIECEMAKER_ARTICLES='));
+    if (missing.length) messages.push(`Articles non reconnus par Catleg : ${missing.join(', ')}. Placez chaque identifiant dans un titre Markdown d’article.`);
+    if (!checked.length) messages.push('Aucun article contrôlé : aucun titre reconnu ou uniquement des articles archivés.');
+    const versions = [];
+    if (at) for (const id of checked) {
+      const response = await context.run(python, ['-I', '-c', 'import sys; from catleg.catleg import main; sys.argv[0]="catleg"; main()', 'lf', 'article', id], { cwd: program.directory, env: { ...context.env, ...credentials } });
+      try {
+        const article = JSON.parse(response.stdout).article;
+        const day = (value) => typeof value === 'number' ? new Date(value).toISOString().slice(0, 10) : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
+        const debut = day(article?.dateDebut), fin = day(article?.dateFin);
+        if (response.code !== 0 || article?.id !== id || !debut || !fin) throw new Error('Période officielle indisponible');
+        const valide = debut <= at && at < fin;
+        versions.push({ id, au: at, debut, fin: fin >= '2999-01-01' ? null : fin, valide });
+        messages.push(`${id} : période officielle ${debut} → ${fin >= '2999-01-01' ? 'sans fin publiée' : fin} ; ${valide ? 'couvre' : 'ne couvre pas'} le ${at}. Applicabilité juridique à justifier séparément.`);
+      } catch {
+        versions.push({ id, au: at, valide: null });
+        messages.push(`${id} : période officielle non obtenue pour le ${at}.`);
+      }
+    }
+    const skipped = Boolean(marker) && !declared.length && !articles.length;
+    results.push({ fichier: file, exit_code: result.code, passed: Boolean(marker) && checked.length > 0 && !missing.length && versions.every((version) => version.valide === true) && result.code === 0 && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
   }
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), passed: results.every((entry) => entry.passed), fichiers: results };
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), ...(at ? { date_reference: at } : {}), passed: results.some((entry) => entry.articles.length) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), fichiers: results };
   writeResult(program.directory, 'catleg.json', report);
-  const lines = results.map((entry) => `- ${entry.fichier} : ${entry.passed ? 'articles en vigueur ce jour' : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
+  const lines = results.map((entry) => `- ${entry.fichier} : ${entry.skipped ? 'sans article cité, non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s), sans expiration signalée` : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
   return [`catleg (vigueur au ${report.date_controle} seulement) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
 }
 

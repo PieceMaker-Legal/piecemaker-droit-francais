@@ -109,3 +109,15 @@ test('unfolds nested conditions to the right without flattening their dependenci
   assert.ok(x('x002') < x('x001'));
   for (const node of document.querySelectorAll('[data-node]')) assert.equal(node.dataset.step, '1');
 });
+
+test('keeps distinct passages of the same article attached to their own rules', () => {
+  const contenu = ['## Première', '[Article](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001)', 'Citation : « Premier passage. »', '', '```catala', 'premiere', '```', '## Seconde', '[Article](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001)', 'Citation : « Second passage. »', '', '```catala', 'seconde', '```'].join('\n');
+  const graph = 'digraph G { x001 [label=<premiere>, URL="https://example.test/demo.catala_fr#L6"]; x002 [label=<seconde>, URL="https://example.test/demo.catala_fr#L13"]; }';
+  const document = new JSDOM(explanationGraph(graph, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu }])).window.document;
+  for (const [quote, rule, other] of [['Premier passage.', 'x001', 'x002'], ['Second passage.', 'x002', 'x001']]) {
+    const reference = [...document.querySelectorAll('[data-kind="article"]')].find((node) => node.dataset.quote === quote);
+    assert.ok(reference);
+    assert.ok(document.querySelector(`[data-from="${reference.dataset.node}"][data-to="${rule}"]`));
+    assert.equal(document.querySelector(`[data-from="${reference.dataset.node}"][data-to="${other}"]`), null);
+  }
+});

@@ -1,4 +1,4 @@
-import { loadCatala, verifyCatala } from './api.js';
+import { citeCatala, loadCatala, verifyCatala } from './api.js';
 import { mountExplanation } from './graph-view.js';
 import { explanationGraph } from './graph.js';
 import { STYLES } from './styles.js';
@@ -9,7 +9,7 @@ type File = { nom: string; chemin: string; contenu?: string };
 type Check = { name: string; command: string; exit_code: number; seconds: number; passed: boolean; files?: string[] };
 type Report = { started_utc: string; finished_utc: string; passed: boolean; checks: Check[] };
 type Proof = Report & { fichier: string; scope: string; conflits: number; obligations?: number };
-type Catleg = { date_controle: string; passed: boolean; fichiers: Array<{ fichier: string; passed: boolean; messages: string[] }> };
+type Catleg = { date_controle: string; passed: boolean; fichiers: Array<{ fichier: string; passed: boolean; skipped?: boolean; articles?: string[]; versions?: Array<{ id: string; au: string; debut?: string; fin?: string | null; valide: boolean | null }>; messages: string[] }> };
 type Program = { nom: string; enCours: boolean; perimee: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; tests?: { 'test-results': Array<{ file: string; tests: { scopes: Array<{ scope_name: string; success: boolean; errors?: unknown[] }> } }> } | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string }) | null; graphe: string | null };
 export type CatalaSnapshot = {
   pack: { id: string; platform: string; version: string; proof: boolean; installedAt: string } | null;
@@ -74,7 +74,7 @@ export function mount(container: HTMLElement, api: Host) {
     const report = program.catleg;
     if (!report) return '<section class="pmc-phase"><header><span class="pmc-step">Vigueur</span><strong>Pas de contrôle catleg</strong></header><p class="pmc-lead">La vigueur des articles cités n’a pas été contrôlée.</p></section>';
     const day = report.date_controle.split('-').reverse().join('/');
-    return `<section class="pmc-phase" data-status="${report.passed ? 'ok' : 'alerte'}"><header><span class="pmc-step">Vigueur</span><strong>Contrôle du ${escape(day)}</strong><span class="pmc-phase-state">${report.passed ? 'Articles en vigueur' : 'À revoir'}</span></header><p class="pmc-lead">catleg contrôle la vigueur à la date du contrôle seulement.</p><ol class="pmc-log">${report.fichiers.map((entry) => `<li class="pmc-entry" data-status="${entry.passed ? 'ok' : 'alerte'}"><span class="pmc-mark" aria-hidden="true">${entry.passed ? '✓' : '!'}</span><div class="pmc-entry-head">${opener(program.fichiers.find((file) => file.nom === entry.fichier), entry.fichier) || `<strong>${escape(entry.fichier)}</strong>`}<span class="pmc-step">${entry.passed ? 'En vigueur ce jour' : 'À revoir'}</span></div>${entry.messages.length ? `<details><summary class="pmc-muted">Messages (${entry.messages.length})</summary><span class="pmc-entry-text">${entry.messages.map(escape).join('<br>')}</span></details>` : ''}</li>`).join('')}</ol></section>`;
+    return `<section class="pmc-phase" data-status="${report.passed ? 'ok' : 'alerte'}"><header><span class="pmc-step">Vigueur</span><strong>Contrôle du ${escape(day)}</strong><span class="pmc-phase-state">${report.passed && report.fichiers.some((file) => file.articles?.length) ? 'Contrôle effectué' : 'À revoir'}</span></header><p class="pmc-lead">Catleg contrôle l’expiration actuelle. Une date de référence permet aussi de comparer les périodes officielles ; l’applicabilité juridique reste à justifier.</p><ol class="pmc-log">${report.fichiers.map((entry) => `<li class="pmc-entry" data-status="${entry.passed ? 'ok' : 'alerte'}"><span class="pmc-mark" aria-hidden="true">${entry.passed ? '✓' : '!'}</span><div class="pmc-entry-head">${opener(program.fichiers.find((file) => file.nom === entry.fichier), entry.fichier) || `<strong>${escape(entry.fichier)}</strong>`}<span class="pmc-step">${entry.skipped ? 'Sans article cité' : !entry.articles?.length ? 'Non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s)` : 'À revoir'}</span></div>${entry.messages.length ? `<details><summary class="pmc-muted">Messages (${entry.messages.length})</summary><span class="pmc-entry-text">${entry.messages.map(escape).join('<br>')}</span></details>` : ''}</li>`).join('')}</ol></section>`;
   };
   const graphControls = (program: Program) => {
     const journal = (name: string) => {
@@ -94,7 +94,7 @@ export function mount(container: HTMLElement, api: Host) {
       ...(verification ? verification.checks.map((check) => ({ title: CHECKS[check.name] ?? check.name, lines: [check.passed ? 'Réussi' : 'Échoué', `Contrôle : ${when(verification.finished_utc)}`, check.command, `Code ${check.exit_code} · ${seconds(check.seconds)}`, ...(check.files ?? []), ...(!check.passed ? diagnostics(check.name) : [])], value: check.passed ? 'Vrai' : 'Faux', ...journal(check.name) })) : [{ title: 'Vérification', lines: ['Jamais vérifié'], value: 'Indéterminé' }]),
       ...(program.tests ? [{ title: 'Scénarios et couverture des tests', lines: scenarios, detail: JSON.stringify(program.tests, null, 2), value: testsCheck ? testsCheck.passed ? 'Vrai' : 'Faux' : 'Indéterminé' }] : []),
       ...(proof ? [{ title: 'Preuve', lines: [proof.passed ? 'Obligations produites vérifiées' : 'Preuve non validée', `${proof.fichier} › ${proof.scope}`, `Contrôle : ${when(proof.finished_utc)}`, `${proof.conflits} chevauchement(s) d’exceptions`, ...(proof.obligations === undefined ? [] : [`${proof.obligations} obligations produites`]), ...proof.checks.map((check) => `${check.command} · code ${check.exit_code} · ${seconds(check.seconds)}`), ...(!proof.passed ? diagnostics('preuve') : [])], value: proof.passed ? 'Vrai' : 'Faux', ...journal('preuve') }] : [{ title: 'Preuve', lines: ['Aucune preuve lancée'], value: 'Indéterminé' }]),
-      ...(catleg ? catleg.fichiers.map((file) => ({ title: `Vigueur · ${file.fichier}`, file: file.fichier, lines: [`Date du contrôle : ${catleg.date_controle}`, file.passed ? 'Contrôle du fichier réussi' : 'Contrôle du fichier à revoir', ...file.messages, 'Version applicable à la date des faits : non contrôlée'], value: file.passed ? 'Vrai' : 'Faux' })) : [{ title: 'Vigueur des articles', lines: ['Aucun contrôle catleg', 'Version applicable à la date des faits : non contrôlée'], value: 'Indéterminé' }]),
+      ...(catleg ? catleg.fichiers.map((file) => ({ title: `Vigueur · ${file.fichier}`, file: file.fichier, articles: file.articles, versions: file.versions, lines: [`Date du contrôle : ${catleg.date_controle}`, file.articles ? `${file.articles.length} article(s) contrôlé(s)` : 'Ancien bilan sans décompte : relancez Catleg.', file.skipped ? 'Fichier sans article : non contrôlé' : file.passed ? 'Contrôle du fichier réussi' : 'Contrôle du fichier à revoir', ...file.messages], value: file.skipped || !file.articles ? 'Indéterminé' : file.passed ? 'Vrai' : 'Faux' })) : [{ title: 'Vigueur des articles', lines: ['Aucun contrôle catleg', 'Version applicable à la date des faits : non contrôlée'], value: 'Indéterminé' }]),
       { title: 'Exécution expliquée', lines: [program.explication?.fichier ?? '', program.explication?.scope ?? '', program.explication ? when(program.explication.finished_utc) : 'Aucune exécution'], value: program.explication ? program.explication.passed ? 'Vrai' : 'Faux' : 'Indéterminé', ...journal('explication') },
     ];
   };
@@ -124,7 +124,16 @@ export function mount(container: HTMLElement, api: Host) {
       try { filename = decodeURIComponent(new URL(source).pathname).split('/').pop() ?? ''; } catch { return; }
       const matches = program.fichiers.filter((file) => file.nom.split('/').pop() === filename);
       if (matches.length === 1) window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path: matches[0].chemin } }));
-    }, (target, origin) => {
+    }, (target, origin, quote) => {
+      let legalId: string | undefined;
+      try { const url = new URL(target); if (url.protocol === 'https:' && /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname)) legalId = url.pathname.match(/\/(LEGIARTI\d{12}|JURITEXT\d{12}|CETATEXT\d{12})(?:\/|$)/)?.[1]; } catch {}
+      if (legalId && context.project) {
+        const projectPath = context.project.path;
+        void citeCatala(projectPath, program.nom, origin, legalId, quote).then(({ token }) => {
+          if (!stopped && context.project?.path === projectPath) window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path: `piecemaker://citation/${token}/${encodeURIComponent(legalId!)}` } }));
+        }).catch((failure) => { if (!stopped) { error = failure instanceof Error ? failure.message : String(failure); paint(); } });
+        return;
+      }
       if (/^https?:\/\//i.test(target)) { window.open(target, '_blank', 'noopener,noreferrer'); return; }
       const project = context.project?.path.replaceAll('\\', '/').replace(/\/$/, '');
       if (!project || ![...program.fichiers, ...program.journaux].some((file) => file.chemin === origin)) return;
@@ -135,7 +144,7 @@ export function mount(container: HTMLElement, api: Host) {
         if (resolved.protocol !== 'file:' || resolved.host !== root.host || !resolved.pathname.startsWith(root.pathname)) return;
         const path = decodeURIComponent(resolved.pathname).replace(/^\/(\w:)/, '$1');
         if (path.includes('\\') || path.split('/').some((part) => part === '..' || part === '.')) return;
-        window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path } }));
+        window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path, ...(quote ? { passage: { quote } } : {}) } }));
       } catch { return; }
     });
   };

@@ -1,6 +1,6 @@
 import { logicalText } from './source-context.js';
 
-export function mountExplanation(container: HTMLElement, openSource: (source: string) => void, openReference: (target: string, origin: string) => void = () => {}) {
+export function mountExplanation(container: HTMLElement, openSource: (source: string) => void, openReference: (target: string, origin: string, quote: string) => void = () => {}) {
   const svg = container.querySelector<SVGSVGElement>('svg');
   if (!svg) return () => {};
   const view = container.closest<HTMLElement>('.pmc-view')!;
@@ -87,7 +87,7 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
       reach(button.dataset.selectNode);
     }
     if (button.hasAttribute('data-close-node')) { select(''); chooser.value = ''; }
-    if (button.hasAttribute('data-open-reference')) { const chosen = nodes.find((item) => item.dataset.node === button.dataset.openReference)!; openReference(chosen.dataset.target!, chosen.dataset.origin ?? ''); }
+    if (button.hasAttribute('data-open-reference')) { const chosen = nodes.find((item) => item.dataset.node === button.dataset.openReference)!; openReference(chosen.dataset.target!, chosen.dataset.origin ?? '', chosen.dataset.quote ?? ''); }
     if (button.hasAttribute('data-open-source')) openSource(nodes.find((item) => item.dataset.node === selected)!.dataset.source!);
     if (button.dataset.mode) {
       view.dataset.mode = button.dataset.mode;
