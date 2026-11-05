@@ -93,6 +93,8 @@ test('vérifie un programme et renvoie le bilan et les journaux', async () => {
   assert.equal(response.status, 200);
   const verified = data.programmes.find((entry: { nom: string }) => entry.nom === 'licenciement-jean-dupont');
   assert.equal(verified.verification.passed, true);
+  assert.equal(verified.tests['test-results'][0].tests.scopes[0].scope_name, 'JeanDupont');
+  assert.equal(verified.tests['test-results'][0].tests.scopes[0].success, true);
   assert.equal(verified.enCours, false);
   assert.equal(verified.explication.passed, true);
   assert.equal(verified.perimee, false);

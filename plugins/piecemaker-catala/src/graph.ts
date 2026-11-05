@@ -2,13 +2,13 @@ import { logicalText, sourceContext } from './source-context.js';
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
-export function explanationGraph(dot: string, files: Array<{ nom: string; chemin: string; contenu?: string }> = []): string {
+export function explanationGraph(dot: string, files: Array<{ nom: string; chemin: string; contenu?: string }> = [], controls: Array<{ title: string; lines: string[]; value: string; origin?: string; target?: string; file?: string; detail?: string }> = []): string {
   const nodes = new Map<string, { lines: string[]; kind: string; value: string; source: string; context: string; documentation: string; target?: string; origin?: string }>();
   const inputBlock = dot.match(/subgraph\s+cluster_inputs\s*\{([^}]*)\}/)?.[1] ?? '';
   const inputs = new Set(inputBlock.match(/\bx\d+\b/g) ?? []);
   const plain = (html: string) => new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
   const attribute = (text: string, name: string) => plain(text.match(new RegExp(`\\b${name}\\s*=\\s*"((?:\\\\.|[^"\\\\])*)"`))?.[1] ?? '');
-  const edges: Array<{ from: string; to: string; condition: boolean }> = [];
+  const edges: Array<{ from: string; to: string; condition: boolean; control?: boolean }> = [];
   const statements = /\b(x\d+)\s*(?:->\s*(x\d+)\s*)?\[/g;
   let match: RegExpExecArray | null;
   while ((match = statements.exec(dot))) {
@@ -42,12 +42,12 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
       nodes.set(match[1], { lines, kind, value: condition ? '' : lines.length > 1 ? lines.at(-1)!.replace(/^=\s*/, '') : '', source, context: attribute(attributes, 'tooltip'), documentation: documentation.text });
     }
   }
-  if (!nodes.size || edges.some((edge) => !nodes.has(edge.from) || !nodes.has(edge.to))) throw new Error('Graphe Catala invalide.');
+  if (edges.some((edge) => !nodes.has(edge.from) || !nodes.has(edge.to))) throw new Error('Graphe Catala invalide.');
   let reference = 0;
   const cited = new Map<string, string>();
   for (const [id, node] of [...nodes]) {
     for (const entry of sourceContext(node.source, files).references) {
-      const identity = JSON.stringify([entry.origin, entry.label, entry.target, node.documentation]);
+      const identity = JSON.stringify([entry.origin, entry.label, entry.target]);
       let key = cited.get(identity);
       if (!key) {
         key = `r${++reference}`;
@@ -57,6 +57,26 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
       edges.push({ from: key, to: id, condition: false });
     }
   }
+  for (const file of files) {
+    for (const entry of sourceContext(`https://catala.local/${encodeURIComponent(file.nom.split('/').pop()!)}`, [file], true).references) {
+      const identity = JSON.stringify([entry.origin, entry.label, entry.target]);
+      if (cited.has(identity)) continue;
+      const key = `r${++reference}`;
+      cited.set(identity, key);
+      nodes.set(key, { lines: [entry.label, ...(entry.target ? [entry.target] : [])], kind: entry.kind, value: '', source: '', context: 'Référence du programme, absente de la trace exécutée.', documentation: '', target: entry.target, origin: entry.origin });
+    }
+  }
+  for (const node of nodes.values()) {
+    if (['piece', 'article', 'jurisprudence', 'reference'].includes(node.kind) && !node.target) node.lines.push('Lien absent du programme');
+    if (node.kind !== 'article') continue;
+    const file = files.find((entry) => entry.chemin === node.origin);
+    const report = controls.find((control) => control.file === file?.nom && control.file);
+    node.lines.push(...(report ? report.lines : ['Vigueur : non contrôlée pour ce fichier', 'Version applicable à la date des faits : non contrôlée']));
+  }
+  for (const [index, control] of controls.entries()) {
+    nodes.set(`c${index}`, { lines: [control.title, ...control.lines], kind: 'control', value: control.value, source: '', context: 'Dernier contrôle enregistré du programme. Ce contrôle ne justifie pas les faits.', documentation: control.detail ?? '', target: control.target, origin: control.origin });
+  }
+  if (!nodes.size) throw new Error('Graphe Catala invalide.');
   const levels = new Map<string, number>();
   for (let pass = 0; pass < nodes.size; pass++) {
     for (const id of nodes.keys()) {
@@ -68,6 +88,14 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
   if (levels.size !== nodes.size) throw new Error('Le graphe Catala contient un cycle.');
   const ordered = [...nodes.keys()].sort((a, b) => levels.get(a)! - levels.get(b)!);
   const steps = new Map(ordered.filter((id) => ['calculation', 'conclusion'].includes(nodes.get(id)!.kind)).map((id, index) => [id, index + 1]));
+  for (const [index, control] of controls.entries()) {
+    for (const [id, node] of nodes) {
+      const concerned = control.file
+        ? node.kind === 'article' && files.some((file) => file.nom === control.file && file.chemin === node.origin)
+        : ['calculation', 'conclusion'].includes(node.kind);
+      if (concerned) edges.push({ from: `c${index}`, to: id, condition: false, control: true });
+    }
+  }
   const stepFor = (id: string) => {
     if (steps.has(id)) return steps.get(id)!;
     const reachable = new Set([id]);
@@ -76,13 +104,14 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
   };
   const human = (value: string) => value.replace(/_/g, ' ').replace(/\btrue\b/g, 'Vrai').replace(/\bfalse\b/g, 'Faux');
   const wrap = (text: string) => text.match(/.{1,36}(?:\s|$)|.{1,36}/gu) ?? [''];
-  const titles: Record<string, string> = { input: 'Donnée du scénario', condition: 'Condition appliquée', calculation: 'Règle · résultat', conclusion: 'Résultat du champ', piece: 'Pièce citée', article: 'Article · source citée', reference: 'Référence citée' };
+  const titles: Record<string, string> = { input: 'Donnée du scénario', condition: 'Condition appliquée', calculation: 'Règle · résultat', conclusion: 'Résultat du champ', piece: 'Pièce citée', article: 'Article · source citée', jurisprudence: 'Jurisprudence citée', reference: 'Référence citée', control: 'Contrôle du programme' };
   const positions = new Map<string, { x: number; y: number; height: number }>();
   const content = new Map([...nodes].map(([id, node]) => [id, {
     title: wrap(human(node.lines[0])),
     body: node.lines.slice(1).flatMap((line) => wrap(human(line))),
   }]));
-  const height = (id: string) => 58 + (content.get(id)!.title.length + content.get(id)!.body.length) * 22 + (nodes.get(id)!.kind === 'condition' ? (nodes.get(id)!.lines.join(' ').match(/\b(?:et|ou|and|or)\b/g)?.length ?? 0) * 12 : 0);
+  const attachedControls = (id: string) => edges.filter((edge) => edge.control && edge.to === id).map((edge) => edge.from);
+  const height = (id: string) => 58 + attachedControls(id).length * 28 + (nodes.get(id)!.target ? 34 : 0) + (content.get(id)!.title.length + content.get(id)!.body.length) * 22 + (nodes.get(id)!.kind === 'condition' ? (nodes.get(id)!.lines.join(' ').match(/\b(?:et|ou|and|or)\b/g)?.length ?? 0) * 12 : 0);
   const place = (id: string, column: number, top: number) => {
     positions.set(id, { x: 24 + column * 340, y: top, height: height(id) });
     return top + height(id) + 22;
@@ -93,6 +122,7 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     let middle = y;
     let right = y;
     let citations = y;
+    let checks = y;
     place(id, 0, y);
     const conditions = edges.filter((edge) => edge.to === id && nodes.get(edge.from)!.kind === 'condition');
     for (const edge of conditions) {
@@ -104,12 +134,13 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     for (const edge of edges.filter((item) => item.to === id)) {
       if (!positions.has(edge.from) && nodes.get(edge.from)!.kind === 'input') right = place(edge.from, 2, right);
     }
-    for (const [key, node] of nodes) if (['piece', 'article', 'reference'].includes(node.kind) && stepFor(key) === steps.get(id)) citations = place(key, 3, citations);
-    y = Math.max(y + height(id) + 22, middle, right, citations) + 28;
+    for (const [key, node] of nodes) if (['piece', 'article', 'jurisprudence', 'reference'].includes(node.kind) && stepFor(key) === steps.get(id)) citations = place(key, 3, citations);
+    for (const [key, node] of nodes) if (node.kind === 'control' && stepFor(key) === steps.get(id)) checks = place(key, 4, checks);
+    y = Math.max(y + height(id) + 22, middle, right, citations, checks) + 28;
   }
   for (const id of ordered) {
     const node = nodes.get(id)!;
-    if (!positions.has(id)) y = place(id, node.kind === 'conclusion' ? 0 : node.kind === 'condition' ? 1 : ['piece', 'article', 'reference'].includes(node.kind) ? 3 : 2, y);
+    if (!positions.has(id)) y = place(id, !spine.length || node.kind === 'conclusion' ? 0 : node.kind === 'control' ? 4 : node.kind === 'condition' ? 1 : ['piece', 'article', 'jurisprudence', 'reference', 'control'].includes(node.kind) ? 3 : 2, y);
   }
   const tone = (value: string) => /^(?:true|Vrai)$/i.test(value) ? 'ok' : /^(?:false|Faux)$/i.test(value) ? 'ko' : /^(?:Indéterminé|Disputé|null|None)$/i.test(value) ? 'warn' : 'neutral';
   const wires = edges.map((edge) => {
@@ -121,7 +152,7 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     const x2 = to.x + (!same && !forward ? 280 : 0), y2 = to.y + to.height / 2;
     const bend = forward && !same ? 35 : -35;
     const d = `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 + (same ? bend : -bend)} ${y2} ${x2} ${y2}`;
-    return `<path class="pmc-wire" data-from="${edge.from}" data-to="${edge.to}" d="${d}" fill="none" stroke="currentColor" marker-end="url(#pmc-arrow)"${edge.condition ? ' stroke-dasharray="6 4"' : ''}/>`;
+    return `<path class="pmc-wire" data-from="${edge.from}" data-to="${edge.to}" data-relation="${edge.control ? 'control' : edge.condition ? 'condition' : 'dependency'}" d="${d}" fill="none" stroke="currentColor" marker-end="url(#pmc-arrow)"${edge.control ? ' stroke-dasharray="2 5"' : edge.condition ? ' stroke-dasharray="6 4"' : ''}/>`;
   }).join('');
   const boxes = ordered.map((id) => {
     const node = nodes.get(id)!;
@@ -131,7 +162,8 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     const missing = state === 'warn';
     const text = [...lines.title, ...lines.body];
     const step = stepFor(id);
-    return `<g class="pmc-node" data-node="${id}" data-step="${Number.isFinite(step) ? step : ''}" data-kind="${node.kind}" data-tone="${state}" data-monetary="${/[$€£]/.test(node.lines.join(' '))}" data-title="${escape(human(node.lines[0]))}" data-value="${escape(node.value)}" data-expression="${escape(node.lines.join('\n'))}" data-literary-context="${escape(node.documentation)}" data-target="${escape(node.target ?? '')}" data-origin="${escape(node.origin ?? '')}" data-source="${escape(node.source)}" data-context="${escape(node.context)}" tabindex="0" role="button" aria-label="${escape(`${Number.isFinite(step) ? `Étape ${step} · ` : ''}${titles[node.kind]} : ${human(node.lines.join(' '))}`)}" aria-pressed="false"><title>${escape(node.context || human(node.lines.join(' ')))}</title><rect x="${position.x}" y="${position.y}" width="280" height="${position.height}" rx="14"${missing ? ' stroke-dasharray="5 4"' : ''}/><text class="pmc-node-kind" x="${position.x + 14}" y="${position.y + 22}">${Number.isFinite(step) ? `Étape ${step} · ` : ''}${titles[node.kind]}</text>${node.kind === 'condition' ? `<foreignObject x="${position.x + 14}" y="${position.y + 34}" width="252" height="${position.height - 40}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-condition-expression">${logicalText(node.lines.join('\n'))}</div></foreignObject>` : `<text class="pmc-node-text" x="${position.x + 14}" y="${position.y + 46}">${text.map((line, index) => `<tspan x="${position.x + 14}" dy="${index ? 18 : 0}"${index >= lines.title.length ? ' class="pmc-node-value"' : ''}>${escape(line)}</tspan>`).join('')}</text>`}${missing ? `<text class="pmc-node-alert" x="${position.x + 258}" y="${position.y + 22}">?</text>` : ''}</g>`;
+    const checks = attachedControls(id);
+    return `<g class="pmc-node" data-node="${id}" data-step="${Number.isFinite(step) ? step : ''}" data-kind="${node.kind}" data-tone="${state}" data-monetary="${/[$€£]/.test(node.lines.join(' '))}" data-title="${escape(human(node.lines[0]))}" data-value="${escape(node.value)}" data-expression="${escape(node.lines.join('\n'))}" data-literary-context="${escape(node.documentation)}" data-target="${escape(node.target ?? '')}" data-origin="${escape(node.origin ?? '')}" data-source="${escape(node.source)}" data-context="${escape(node.context)}" tabindex="0" role="button" aria-label="${escape(`${Number.isFinite(step) ? `Étape ${step} · ` : ''}${titles[node.kind]} : ${human(node.lines.join(' '))}`)}" aria-pressed="false"><title>${escape(node.context || human(node.lines.join(' ')))}</title><rect x="${position.x}" y="${position.y}" width="280" height="${position.height}" rx="14"${missing ? ' stroke-dasharray="5 4"' : ''}/><text class="pmc-node-kind" x="${position.x + 14}" y="${position.y + 22}">${Number.isFinite(step) ? `Étape ${step} · ` : ''}${titles[node.kind]}</text>${node.kind === 'condition' ? `<foreignObject x="${position.x + 14}" y="${position.y + 34}" width="252" height="${position.height - 40}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-condition-expression">${logicalText(node.lines.join('\n'))}</div></foreignObject>` : `<text class="pmc-node-text" x="${position.x + 14}" y="${position.y + 46}">${text.map((line, index) => `<tspan x="${position.x + 14}" dy="${index ? 18 : 0}"${index >= lines.title.length ? ' class="pmc-node-value"' : ''}>${escape(line)}</tspan>`).join('')}</text>`}${checks.length ? `<foreignObject x="${position.x + 14}" y="${position.y + position.height - checks.length * 28 - (node.target ? 44 : 10)}" width="252" height="${checks.length * 28}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-check-badges">${checks.map((key) => { const control = nodes.get(key)!; const state = tone(control.value); return `<button class="pmc-check-badge pmc-${state}" data-select-node="${key}" title="${escape(control.lines.join(' · '))}">${state === 'ok' ? '✓' : state === 'ko' ? '!' : '?'} ${escape(control.lines[0])}</button>`; }).join('')}</div></foreignObject>` : ''}${node.target ? `<foreignObject x="${position.x + 14}" y="${position.y + position.height - 34}" width="252" height="30"><div xmlns="http://www.w3.org/1999/xhtml"><button data-open-reference="${id}">${node.kind === 'control' ? 'Ouvrir le journal' : 'Ouvrir la référence'}</button></div></foreignObject>` : ''}${missing ? `<text class="pmc-node-alert" x="${position.x + 258}" y="${position.y + 22}">?</text>` : ''}</g>`;
   }).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Règles, conditions et données de l’exécution Catala" viewBox="0 0 ${reference ? 1360 : 1020} ${y}" width="${reference ? 1360 : 1020}" height="${y}"><defs><marker id="pmc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker></defs>${wires}${boxes}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Règles, conditions et données de l’exécution Catala" viewBox="0 0 ${controls.length ? 1700 : reference ? 1360 : 1020} ${y}" width="${controls.length ? 1700 : reference ? 1360 : 1020}" height="${y}"><defs><marker id="pmc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker></defs>${wires}${boxes}</svg>`;
 }

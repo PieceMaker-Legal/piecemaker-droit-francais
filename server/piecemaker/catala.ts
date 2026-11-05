@@ -49,6 +49,7 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}) {
         fichiers: files.map((file) => ({ nom: file.split(path.sep).join('/'), chemin: path.join(directory, file), contenu: fs.readFileSync(path.join(directory, file), 'utf8') })),
         journaux: journaux.map((file) => ({ nom: file, chemin: path.join(results, file) })),
         verification: readJson(path.join(results, 'verification.json')),
+        tests: readJson(path.join(results, 'tests.json')),
         preuve: readJson(path.join(results, 'preuve.json')),
         catleg: readJson(path.join(results, 'catleg.json')),
         explication: explanation,

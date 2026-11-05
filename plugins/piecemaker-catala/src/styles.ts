@@ -75,10 +75,10 @@ export const STYLES = `
 .pmc-inspector header{display:flex;align-items:baseline;justify-content:space-between;gap:10px}.pmc-inspector p{white-space:pre-line}.pmc-inspector h4{margin-top:10px}
 .pmc-written{padding:12px 0;max-height:68vh;overflow:auto}
 .pmc-part>summary{cursor:pointer;color:var(--muted);font-weight:500}.pmc-open-states summary{cursor:pointer}
-.pmc-node[data-kind=piece]{--kind:#2f9e7c}.pmc-node[data-kind=article]{--kind:#3b82f6}.pmc-node[data-kind=reference]{--kind:#8c96ad}
+.pmc-node[data-kind=piece]{--kind:#2f9e7c}.pmc-node[data-kind=jurisprudence],.pmc-node[data-kind=article]{--kind:#3b82f6}.pmc-node[data-kind=reference]{--kind:#8c96ad}
 .pmc-condition-expression{color:var(--ink);font:500 12px/1.85 var(--mono);overflow-wrap:anywhere;white-space:pre-wrap}
 .pmc-logic-pill{display:inline-flex;align-items:center;justify-content:center;min-width:28px;padding:0 8px;margin:1px 3px;border:1px solid color-mix(in srgb,var(--warn) 45%,var(--border));border-radius:999px;background:color-mix(in srgb,var(--warn-soft) 20%,var(--surface));color:var(--warn);font:600 11px/20px var(--piecemaker-font-ui,Inter,system-ui,sans-serif);vertical-align:baseline}
-.pmc-expression,.pmc-source-text{white-space:pre-wrap;overflow-wrap:anywhere}.pmc-expression{margin:8px 0;font:12px/1.7 var(--mono)}
+.pmc-check-badges{display:flex;flex-direction:column;gap:3px}.pmc-check-badge{height:25px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left;font-size:11px!important}.pmc-wire[data-relation=control]{color:var(--muted);opacity:.55}.pmc-expression,.pmc-source-text{white-space:pre-wrap;overflow-wrap:anywhere}.pmc-expression{margin:8px 0;font:12px/1.7 var(--mono)}
 .pmc-legend .is-piece{color:#2f9e7c}.pmc-legend .is-article{color:#3b82f6}.pmc-legend .is-reference{color:#8c96ad}
 
 `;

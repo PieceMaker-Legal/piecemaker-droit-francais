@@ -20,15 +20,16 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
   let timer = 0;
   const transform = () => { stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`; };
   const fit = () => {
-    zoom = Math.min(1, Math.max(.75, (canvas.clientWidth - 40) / Number(svg.getAttribute('width'))));
+    zoom = Math.min(1, Math.max(.2, (canvas.clientWidth - 40) / Number(svg.getAttribute('width'))));
     pan = { x: 20, y: 20 };
     transform();
   };
   const label = (node: SVGGElement) => node.dataset.title ?? '';
   const expression = (node: SVGGElement) => node.dataset.expression ? `<div class="pmc-expression">${node.dataset.kind === 'condition' ? logicalText(node.dataset.expression) : escape(node.dataset.expression)}</div>` : '';
-  const referenceAction = (node: SVGGElement) => node.dataset.target ? '<button data-open-reference>Ouvrir la référence</button>' : '';
-  const pending = nodes.filter((node) => node.dataset.tone === 'warn');
+  const referenceAction = (node: SVGGElement) => node.dataset.target ? `<button data-open-reference="${node.dataset.node}">${node.dataset.kind === 'control' ? 'Ouvrir le journal' : 'Ouvrir la référence'}</button>` : ['piece', 'article', 'jurisprudence', 'reference'].includes(node.dataset.kind!) ? '<p class="pmc-warn">Lien absent du programme : référence impossible à ouvrir.</p>' : '';
+  const pending = nodes.filter((node) => node.dataset.tone === 'warn' && node.dataset.kind !== 'control');
   chooser.innerHTML = '<option value="">Toutes les étapes</option>' + nodes.filter((node) => ['calculation', 'conclusion'].includes(node.dataset.kind!)).map((node) => `<option value="${node.dataset.node}">Étape ${node.dataset.step} · ${escape(label(node))}</option>`).join('');
+  chooser.innerHTML += '<optgroup label="Contrôles et références">' + nodes.filter((node) => ['control', 'piece', 'article', 'jurisprudence', 'reference'].includes(node.dataset.kind!)).map((node) => `<option value="${node.dataset.node}">${escape(label(node))}</option>`).join('') + '</optgroup>';
   const ref = (id: string) => {
     const node = nodes.find((item) => item.dataset.node === id)!;
     return `<button class="pmc-link" data-select-node="${id}">${node.dataset.step ? `Étape ${node.dataset.step} · ` : ''}${escape(label(node))}</button>`;
@@ -47,15 +48,23 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
     const node = nodes.find((item) => item.dataset.node === id);
     inspector.hidden = !node;
     if (!node) return;
-    const dependencies = wires.filter((wire) => wire.dataset.to === id);
+    const dependencies = wires.filter((wire) => wire.dataset.to === id && wire.dataset.relation !== 'control');
+    const checks = wires.filter((wire) => wire.dataset.to === id && wire.dataset.relation === 'control');
     const consumers = wires.filter((wire) => wire.dataset.from === id);
-    inspector.innerHTML = `<header><strong>${escape(label(node))}</strong><button data-close-node aria-label="Fermer le détail">×</button></header><p>${escape(node.dataset.context ?? '')}</p>${expression(node)}${node.dataset.literaryContext ? `<p class="pmc-source-text">${escape(node.dataset.literaryContext)}</p>` : ''}<p class="pmc-${node.dataset.tone === 'neutral' ? 'muted' : node.dataset.tone}">${node.dataset.kind === 'input' ? 'Donnée fournie au scénario' : node.dataset.kind === 'condition' ? 'Condition utilisée dans cette exécution' : ['piece', 'article', 'reference'].includes(node.dataset.kind!) ? 'Référence déclarée dans le programme' : 'Valeur calculée par Catala'}${node.dataset.value ? ` : <strong>${escape(node.dataset.value)}</strong>` : ''}.</p>${node.dataset.tone === 'warn' ? '<p class="pmc-warn">État ouvert dans le programme. Établissez la donnée ou tranchez le désaccord avant de conclure.</p>' : ''}${dependencies.length ? `<h4>Dépend de</h4><ul>${dependencies.map((wire) => `<li>${ref(wire.dataset.from!)}${wire.hasAttribute('stroke-dasharray') ? ' · condition' : ''}</li>`).join('')}</ul>` : ''}${consumers.length ? `<h4>Utilisé par</h4><ul>${consumers.map((wire) => `<li>${ref(wire.dataset.to!)}</li>`).join('')}</ul>` : ''}${referenceAction(node)}${node.dataset.source ? '<button data-open-source>Ouvrir le programme</button>' : ''}`;
+    inspector.innerHTML = `<header><strong>${escape(label(node))}</strong><button data-close-node aria-label="Fermer le détail">×</button></header><p>${escape(node.dataset.context ?? '')}</p>${expression(node)}${node.dataset.literaryContext ? `<p class="pmc-source-text">${escape(node.dataset.literaryContext)}</p>` : ''}<p class="pmc-${node.dataset.tone === 'neutral' ? 'muted' : node.dataset.tone}">${node.dataset.kind === 'input' ? 'Donnée fournie au scénario' : node.dataset.kind === 'condition' ? 'Condition utilisée dans cette exécution' : ['piece', 'article', 'jurisprudence', 'reference'].includes(node.dataset.kind!) ? 'Référence déclarée dans le programme' : node.dataset.kind === 'control' ? 'Résultat du contrôle du programme' : 'Valeur calculée par Catala'}${node.dataset.value ? ` : <strong>${escape(node.dataset.value)}</strong>` : ''}.</p>${node.dataset.tone === 'warn' && node.dataset.kind !== 'control' ? '<p class="pmc-warn">État ouvert dans le programme. Établissez la donnée ou tranchez le désaccord avant de conclure.</p>' : ''}${dependencies.length ? `<h4>Dépend de</h4><ul>${dependencies.map((wire) => `<li>${ref(wire.dataset.from!)}${wire.dataset.relation === 'control' ? ' · bilan du programme' : wire.hasAttribute('stroke-dasharray') ? ' · condition' : ''}</li>`).join('')}</ul>` : ''}${checks.length ? `<h4>Bilans associés</h4><ul>${checks.map((wire) => `<li>${ref(wire.dataset.from!)}</li>`).join('')}</ul>` : ''}${consumers.length ? `<h4>Utilisé par</h4><ul>${consumers.map((wire) => `<li>${ref(wire.dataset.to!)}</li>`).join('')}</ul>` : ''}${referenceAction(node)}${node.dataset.source ? '<button data-open-source>Ouvrir le programme</button>' : ''}`;
+  };
+  const reach = (id: string) => {
+    select(id);
+    if (!id) return;
+    const card = nodes.find((item) => item.dataset.node === id)!.querySelector('rect')!;
+    pan = { x: 30 - Number(card.getAttribute('x')) * zoom, y: 40 - Number(card.getAttribute('y')) * zoom };
+    transform();
   };
   container.querySelector<HTMLElement>('.pmc-open-states')!.innerHTML = pending.length ? `<details><summary class="pmc-warn">${pending.length} état${pending.length > 1 ? 's' : ''} à éclaircir dans cette exécution</summary><ul>${pending.map((node) => `<li>${ref(node.dataset.node!)} : ${escape(node.dataset.value!)}</li>`).join('')}</ul></details>` : '<span class="pmc-muted">Aucun état ouvert nommé « Indéterminé » ou « Disputé » dans la trace.</span>';
   view.querySelector<HTMLElement>('.pmc-step-list')!.innerHTML = [...new Set(nodes.map((node) => node.dataset.step ?? ''))].sort((a, b) => Number(a || Infinity) - Number(b || Infinity)).map((step) => {
     const members = nodes.filter((node) => node.dataset.step === step);
     const main = members.find((node) => ['calculation', 'conclusion'].includes(node.dataset.kind!));
-    return `<section class="pmc-written-step"><h3>${main?.dataset.kind === 'conclusion' ? 'Réponse · ' : ''}${step ? `Étape ${step}` : 'Autres éléments de l’exécution'}${main ? ` · ${escape(label(main))}` : ''}</h3><div class="pmc-written-branches">${members.map((node) => `<section class="pmc-phase" data-status="${node.dataset.tone === 'warn' ? 'attente' : node.dataset.tone === 'ko' ? 'alerte' : node.dataset.tone}"><header>${ref(node.dataset.node!)}${node.dataset.value ? `<strong>${escape(node.dataset.value)}</strong>` : ''}</header><p class="pmc-muted">${escape(node.dataset.context ?? '')}</p>${expression(node)}${node.dataset.literaryContext ? `<p class="pmc-source-text">${escape(node.dataset.literaryContext)}</p>` : ''}${wires.some((wire) => wire.dataset.to === node.dataset.node) ? `<p>Dépend de : ${wires.filter((wire) => wire.dataset.to === node.dataset.node).map((wire) => ref(wire.dataset.from!)).join(' · ')}</p>` : ''}</section>`).join('')}</div></section>`;
+    return `<section class="pmc-written-step"><h3>${main?.dataset.kind === 'conclusion' ? 'Réponse · ' : ''}${step ? `Étape ${step}` : 'Contrôles et références hors trace'}${main ? ` · ${escape(label(main))}` : ''}</h3><div class="pmc-written-branches">${members.map((node) => `<section class="pmc-phase" data-status="${node.dataset.tone === 'warn' ? 'attente' : node.dataset.tone === 'ko' ? 'alerte' : node.dataset.tone}"><header>${ref(node.dataset.node!)}${node.dataset.value ? `<strong>${escape(node.dataset.value)}</strong>` : ''}</header><p class="pmc-muted">${escape(node.dataset.context ?? '')}</p>${expression(node)}${node.dataset.literaryContext ? `<p class="pmc-source-text">${escape(node.dataset.literaryContext)}</p>` : ''}${referenceAction(node)}${wires.some((wire) => wire.dataset.to === node.dataset.node && wire.dataset.relation !== 'control') ? `<p>Dépend de : ${wires.filter((wire) => wire.dataset.to === node.dataset.node && wire.dataset.relation !== 'control').map((wire) => ref(wire.dataset.from!)).join(' · ')}</p>` : ''}</section>`).join('')}</div></section>`;
   }).join('');
   const finishReplay = () => {
     window.clearTimeout(timer);
@@ -72,14 +81,11 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
     if (node) select(node.dataset.node!);
     if (!button) return;
     if (button.dataset.selectNode) {
-      select(button.dataset.selectNode);
       view.querySelector<HTMLElement>('[role="tab"][data-mode="graph"]')?.click();
-      const card = nodes.find((item) => item.dataset.node === selected)!.querySelector('rect')!;
-      pan = { x: 30 - Number(card.getAttribute('x')) * zoom, y: 40 - Number(card.getAttribute('y')) * zoom };
-      transform();
+      reach(button.dataset.selectNode);
     }
     if (button.hasAttribute('data-close-node')) { select(''); chooser.value = ''; }
-    if (button.hasAttribute('data-open-reference')) { const chosen = nodes.find((item) => item.dataset.node === selected)!; openReference(chosen.dataset.target!, chosen.dataset.origin ?? ''); }
+    if (button.hasAttribute('data-open-reference')) { const chosen = nodes.find((item) => item.dataset.node === button.dataset.openReference)!; openReference(chosen.dataset.target!, chosen.dataset.origin ?? ''); }
     if (button.hasAttribute('data-open-source')) openSource(nodes.find((item) => item.dataset.node === selected)!.dataset.source!);
     if (button.dataset.mode) {
       view.dataset.mode = button.dataset.mode;
@@ -129,10 +135,10 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
     }
   };
   const key = (event: KeyboardEvent) => {
-    if ((event.key === 'Enter' || event.key === ' ') && (event.target as Element).closest('[data-node]')) { event.preventDefault(); select((event.target as SVGGElement).dataset.node!); }
+    if ((event.key === 'Enter' || event.key === ' ') && (event.target as Element).closest('[data-node]') && !(event.target as Element).closest('button')) { event.preventDefault(); select((event.target as SVGGElement).dataset.node!); }
     if (event.key === 'Escape') select('');
   };
-  const change = () => { select(chooser.value); };
+  const change = () => { reach(chooser.value); };
   const down = (event: PointerEvent) => {
     if (event.button !== 0 || (event.target as Element).closest('button, select, .pmc-inspector, .pmc-legend')) return;
     moved = false;

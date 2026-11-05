@@ -75,7 +75,7 @@ test('shows cited documents as graph dependencies and preserves logical expressi
   const condition = document.querySelector('[data-node="x001"]');
   assert.deepEqual([...condition.querySelectorAll('.pmc-logic-pill')].map((pill) => pill.textContent), ['et', 'ou']);
   assert.equal(condition.querySelector('.pmc-condition-expression').textContent, '(fait_etabli et (autre_fait ou nom = "et ou"))');
-  for (const [kind, title] of [['piece', 'Pièce 1'], ['piece', 'Annexe'], ['reference', 'Source'], ['article', 'LEGIARTI000032041431']]) {
+  for (const [kind, title] of [['piece', 'Pièce 1'], ['piece', 'Annexe'], ['reference', 'Source'], ['article', 'Article 1218']]) {
     const reference = [...document.querySelectorAll(`[data-kind="${kind}"]`)].find((node) => node.dataset.title === title);
     assert.ok(reference, `${title} doit figurer dans le graphe`);
     assert.ok(document.querySelector(`[data-from="${reference.dataset.node}"][data-to="x001"]`));
