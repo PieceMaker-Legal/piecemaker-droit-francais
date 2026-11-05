@@ -41,13 +41,13 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}) {
       const files = catala.sourceFiles(directory);
       const explanation = readJson(path.join(results, 'explication.json'));
       const perimee = explanation?.sources_sha256 !== catala.sourcesDigest(directory, files);
-      const journaux = fs.existsSync(results) ? fs.readdirSync(results).filter((file) => file.endsWith('.log')).sort() : [];
+      const journaux = fs.existsSync(results) ? fs.readdirSync(results).filter((file) => file.endsWith('.log') && fs.lstatSync(path.join(results, file)).isFile()).sort() : [];
       return {
         nom,
         perimee,
         enCours: running.has(directory),
         fichiers: files.map((file) => ({ nom: file.split(path.sep).join('/'), chemin: path.join(directory, file), contenu: fs.readFileSync(path.join(directory, file), 'utf8') })),
-        journaux: journaux.map((file) => ({ nom: file, chemin: path.join(results, file) })),
+        journaux: journaux.map((file) => ({ nom: file, chemin: path.join(results, file), contenu: fs.readFileSync(path.join(results, file), 'utf8') })),
         verification: readJson(path.join(results, 'verification.json')),
         tests: readJson(path.join(results, 'tests.json')),
         preuve: readJson(path.join(results, 'preuve.json')),

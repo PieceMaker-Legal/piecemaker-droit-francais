@@ -47,6 +47,10 @@ test('preserves explicit open states and groups rules, conditions and scenario i
   assert.equal(document.querySelector('[data-node="x003"]').dataset.value, 'Disputé');
   assert.ok(Number(input.querySelector('rect').getAttribute('x')) > Number(document.querySelector('[data-node="x003"] rect').getAttribute('x')));
   assert.equal(document.querySelectorAll('[data-tone="warn"] rect[stroke-dasharray]').length, 2);
+  assert.match(input.textContent, /Donnée non établie/);
+  assert.match(document.querySelector('[data-node="x003"]').textContent, /Résultat disputé/);
+  assert.equal(document.querySelectorAll('.pmc-step-heading[data-step-heading]').length, 1);
+  for (const label of document.querySelectorAll('.pmc-node-kind')) assert.doesNotMatch(label.textContent, /Étape/);
 });
 
 test('numbers the main calculation path in dependency order', () => {
@@ -85,4 +89,23 @@ test('shows cited documents as graph dependencies and preserves logical expressi
   assert.equal(document.querySelectorAll('[data-kind="piece"][data-title="Pièce 1"]').length, 1);
   assert.match(document.querySelector('[data-node="x002"]').dataset.expression, /calcul intermédiaire/);
   assert.equal(document.querySelectorAll('a, script, img, [onerror]').length, 0);
+});
+
+
+test('unfolds nested conditions to the right without flattening their dependencies', () => {
+  const document = new JSDOM(explanationGraph(`digraph G {
+    x001 [label=<<table><tr><td>fait</td><td>Vrai</td></tr></table>>];
+    x002 [label=<fait>, style="dashed"];
+    x003 [label=<autre_condition et fait>, style="dashed"];
+    x004 [label=<<table><tr><td>droit</td><td>Vrai</td></tr></table>>];
+    subgraph cluster_inputs { x001; }
+    x001 -> x002 [style="solid"];
+    x002 -> x003 [style="dashed"];
+    x003 -> x004 [style="dashed"];
+  }`)).window.document;
+  const x = (id) => Number(document.querySelector(`[data-node="${id}"] rect`).getAttribute('x'));
+  assert.ok(x('x004') < x('x003'));
+  assert.ok(x('x003') < x('x002'));
+  assert.ok(x('x002') < x('x001'));
+  for (const node of document.querySelectorAll('[data-node]')) assert.equal(node.dataset.step, '1');
 });

@@ -65,9 +65,9 @@ export const STYLES = `
 .pmc-node[data-kind=input][data-tone=ko]{--kind:#c45b5b}.pmc-node[data-tone=warn]{--kind:#d99a2b}
 .pmc-node rect{fill:color-mix(in srgb,var(--kind) 8%,var(--surface));stroke:color-mix(in srgb,var(--kind) 70%,var(--border));stroke-width:1.5}
 .pmc-node:hover rect,.pmc-node:focus-visible rect,.pmc-node[aria-pressed=true] rect{stroke:var(--kind);stroke-width:3}
-.pmc-node-kind{fill:var(--kind);font-size:10px;font-weight:600}.pmc-node-text{fill:var(--ink);font-weight:600}.pmc-node-value{fill:var(--muted);font-weight:400}
+.pmc-step-heading{fill:var(--ink);font-size:15px;font-weight:600}.pmc-node-kind{fill:var(--kind);font-size:10px;font-weight:600}.pmc-node-text{fill:var(--ink);font-weight:600}.pmc-node-issue{fill:var(--warn);font-weight:600}.pmc-node-value{fill:var(--muted);font-weight:400}
 .pmc-node[data-tone=ok] .pmc-node-value{fill:var(--ok)}.pmc-node[data-tone=ko] .pmc-node-value{fill:var(--ko)}.pmc-node[data-tone=warn] .pmc-node-value,.pmc-node-alert{fill:var(--warn)}
-.pmc-node.is-dim,.pmc-wire.is-dim{opacity:.13}.pmc-node.is-waiting,.pmc-wire.is-waiting{opacity:.05}
+.pmc-node.is-dim,.pmc-wire.is-dim{opacity:.13}.pmc-node.is-waiting,.pmc-wire.is-waiting,.pmc-step-heading.is-waiting{visibility:hidden;pointer-events:none}
 .pmc-tools{position:absolute;bottom:12px;right:12px;display:flex;gap:4px;padding:3px;border:1px solid var(--glass-border);border-radius:999px;background:var(--glass-bg);box-shadow:var(--glass-shadow);backdrop-filter:blur(20px)}
 .pmc-tools button{padding:0 8px;min-width:28px;border:0;box-shadow:none;background:transparent}
 .pmc-legend,.pmc-inspector{position:absolute;right:12px;bottom:56px;max-width:calc(100% - 24px);width:340px;max-height:calc(100% - 76px);overflow:auto;padding:12px;border:1px solid var(--glass-border);border-radius:14px;background:var(--surface);box-shadow:var(--glass-shadow);cursor:auto}

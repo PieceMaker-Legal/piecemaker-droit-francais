@@ -98,7 +98,7 @@ test('vérifie un programme et renvoie le bilan et les journaux', async () => {
   assert.equal(verified.enCours, false);
   assert.equal(verified.explication.passed, true);
   assert.equal(verified.perimee, false);
-  assert.ok(verified.journaux.some((file: { nom: string }) => file.nom === 'typecheck.log'));
+  assert.match(verified.journaux.find((file: { nom: string }) => file.nom === 'typecheck.log').contenu, /ok/);
 });
 
 test('refuse un nom de programme mal écrit', async () => {

@@ -3,7 +3,7 @@ import { logicalText, sourceContext } from './source-context.js';
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
 export function explanationGraph(dot: string, files: Array<{ nom: string; chemin: string; contenu?: string }> = [], controls: Array<{ title: string; lines: string[]; value: string; origin?: string; target?: string; file?: string; detail?: string }> = []): string {
-  const nodes = new Map<string, { lines: string[]; kind: string; value: string; source: string; context: string; documentation: string; target?: string; origin?: string }>();
+  const nodes = new Map<string, { lines: string[]; kind: string; value: string; source: string; context: string; documentation: string; target?: string; origin?: string; issue?: string }>();
   const inputBlock = dot.match(/subgraph\s+cluster_inputs\s*\{([^}]*)\}/)?.[1] ?? '';
   const inputs = new Set(inputBlock.match(/\bx\d+\b/g) ?? []);
   const plain = (html: string) => new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
@@ -67,14 +67,17 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     }
   }
   for (const node of nodes.values()) {
-    if (['piece', 'article', 'jurisprudence', 'reference'].includes(node.kind) && !node.target) node.lines.push('Lien absent du programme');
+    if (['piece', 'article', 'jurisprudence', 'reference'].includes(node.kind) && !node.target) node.issue = 'Lien absent du programme : renseignez le chemin de la pièce ou l’adresse officielle de la source.';
+    if (node.value === 'Disputé') node.issue = node.kind === 'input' ? 'Fait contesté : examinez les pièces contradictoires et tranchez la donnée du scénario.' : 'Résultat disputé : tranchez les faits contestés dans les dépendances.';
+    if (/^(?:Indéterminé|null|None)$/.test(node.value)) node.issue = node.kind === 'input' ? 'Donnée non établie : renseignez sa valeur et la pièce qui la justifie.' : 'Résultat indéterminé : établissez les données manquantes dans les dépendances.';
     if (node.kind !== 'article') continue;
     const file = files.find((entry) => entry.chemin === node.origin);
     const report = controls.find((control) => control.file === file?.nom && control.file);
-    node.lines.push(...(report ? report.lines : ['Vigueur : non contrôlée pour ce fichier', 'Version applicable à la date des faits : non contrôlée']));
+    node.lines.push(...(report ? report.lines : ['Vigueur : non contrôlée pour ce fichier']));
+    node.issue = [node.issue, 'Version applicable non établie : vérifiez le texte à la date des faits.'].filter(Boolean).join(' ');
   }
   for (const [index, control] of controls.entries()) {
-    nodes.set(`c${index}`, { lines: [control.title, ...control.lines], kind: 'control', value: control.value, source: '', context: 'Dernier contrôle enregistré du programme. Ce contrôle ne justifie pas les faits.', documentation: control.detail ?? '', target: control.target, origin: control.origin });
+    nodes.set(`c${index}`, { lines: [control.title, ...control.lines], kind: 'control', value: control.value, source: '', context: 'Dernier contrôle enregistré du programme. Ce contrôle ne justifie pas les faits.', documentation: control.detail ?? '', target: control.target, origin: control.origin, issue: control.value === 'Faux' ? `${control.title} : contrôle échoué. Corrigez la cause indiquée ci-dessus puis relancez ce contrôle.` : undefined });
   }
   if (!nodes.size) throw new Error('Graphe Catala invalide.');
   const levels = new Map<string, number>();
@@ -92,15 +95,18 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     for (const [id, node] of nodes) {
       const concerned = control.file
         ? node.kind === 'article' && files.some((file) => file.nom === control.file && file.chemin === node.origin)
-        : ['calculation', 'conclusion'].includes(node.kind);
+        : false;
       if (concerned) edges.push({ from: `c${index}`, to: id, condition: false, control: true });
     }
   }
+  const assignments = new Map(steps);
   const stepFor = (id: string) => {
-    if (steps.has(id)) return steps.get(id)!;
+    if (assignments.has(id)) return assignments.get(id)!;
     const reachable = new Set([id]);
     for (let pass = 0; pass < nodes.size; pass++) for (const edge of edges) if (reachable.has(edge.from)) reachable.add(edge.to);
-    return Math.min(...[...reachable].map((item) => steps.get(item) ?? Infinity));
+    const step = Math.min(...[...reachable].map((item) => steps.get(item) ?? Infinity));
+    assignments.set(id, step);
+    return step;
   };
   const human = (value: string) => value.replace(/_/g, ' ').replace(/\btrue\b/g, 'Vrai').replace(/\bfalse\b/g, 'Faux');
   const wrap = (text: string) => text.match(/.{1,36}(?:\s|$)|.{1,36}/gu) ?? [''];
@@ -108,7 +114,7 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
   const positions = new Map<string, { x: number; y: number; height: number }>();
   const content = new Map([...nodes].map(([id, node]) => [id, {
     title: wrap(human(node.lines[0])),
-    body: node.lines.slice(1).flatMap((line) => wrap(human(line))),
+    body: [...node.lines.slice(1), ...(node.issue ? [node.issue] : [])].flatMap((line) => wrap(line)),
   }]));
   const attachedControls = (id: string) => edges.filter((edge) => edge.control && edge.to === id).map((edge) => edge.from);
   const height = (id: string) => 58 + attachedControls(id).length * 28 + (nodes.get(id)!.target ? 34 : 0) + (content.get(id)!.title.length + content.get(id)!.body.length) * 22 + (nodes.get(id)!.kind === 'condition' ? (nodes.get(id)!.lines.join(' ').match(/\b(?:et|ou|and|or)\b/g)?.length ?? 0) * 12 : 0);
@@ -117,31 +123,39 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     return top + height(id) + 22;
   };
   let y = 36;
-  const spine = ordered.filter((id) => ['calculation', 'conclusion'].includes(nodes.get(id)!.kind));
+  const headings: string[] = [];
+  const spine = ordered.filter((id) => steps.has(id));
+  const columns = new Map<string, number>();
   for (const id of spine) {
-    let middle = y;
-    let right = y;
-    let citations = y;
-    let checks = y;
-    place(id, 0, y);
-    const conditions = edges.filter((edge) => edge.to === id && nodes.get(edge.from)!.kind === 'condition');
-    for (const edge of conditions) {
-      if (!positions.has(edge.from)) middle = place(edge.from, 1, middle);
-      for (const dependency of edges.filter((item) => item.to === edge.from)) {
-        if (!positions.has(dependency.from) && nodes.get(dependency.from)!.kind === 'input') right = place(dependency.from, 2, right);
+    headings.push(`<text class="pmc-step-heading" data-step-heading="${steps.get(id)}" x="24" y="${y}">Étape ${steps.get(id)} · ${escape(human(nodes.get(id)!.lines[0]))}</text>`);
+    y += 26;
+    const depths = new Map([[id, 0]]);
+    for (let pass = 0; pass < nodes.size; pass++) {
+      let changed = false;
+      for (const edge of edges) {
+        const depth = depths.get(edge.to);
+        if (depth === undefined || steps.has(edge.from) || stepFor(edge.from) !== steps.get(id)) continue;
+        if ((depths.get(edge.from) ?? -1) < depth + 1) { depths.set(edge.from, depth + 1); changed = true; }
       }
+      if (!changed) break;
     }
-    for (const edge of edges.filter((item) => item.to === id)) {
-      if (!positions.has(edge.from) && nodes.get(edge.from)!.kind === 'input') right = place(edge.from, 2, right);
+    const bottoms = new Map<number, number>();
+    for (const [key, column] of [...depths].sort((a, b) => a[1] - b[1])) {
+      if (positions.has(key)) continue;
+      columns.set(key, column);
+      bottoms.set(column, place(key, column, bottoms.get(column) ?? y));
     }
-    for (const [key, node] of nodes) if (['piece', 'article', 'jurisprudence', 'reference'].includes(node.kind) && stepFor(key) === steps.get(id)) citations = place(key, 3, citations);
-    for (const [key, node] of nodes) if (node.kind === 'control' && stepFor(key) === steps.get(id)) checks = place(key, 4, checks);
-    y = Math.max(y + height(id) + 22, middle, right, citations, checks) + 28;
+    y = Math.max(...bottoms.values()) + 32;
   }
-  for (const id of ordered) {
-    const node = nodes.get(id)!;
-    if (!positions.has(id)) y = place(id, !spine.length || node.kind === 'conclusion' ? 0 : node.kind === 'control' ? 4 : node.kind === 'condition' ? 1 : ['piece', 'article', 'jurisprudence', 'reference', 'control'].includes(node.kind) ? 3 : 2, y);
+  const remaining = ordered.filter((id) => !positions.has(id));
+  if (remaining.length) {
+    headings.push(`<text class="pmc-step-heading" x="24" y="${y}">Bilans du programme et références hors trace</text>`);
+    y += 26;
+    for (let index = 0; index < remaining.length; index += 3) {
+      y = Math.max(...remaining.slice(index, index + 3).map((id, column) => { columns.set(id, column); return place(id, column, y); })) + 24;
+    }
   }
+  const width = Math.max(1020, (Math.max(...columns.values()) + 1) * 340);
   const tone = (value: string) => /^(?:true|Vrai)$/i.test(value) ? 'ok' : /^(?:false|Faux)$/i.test(value) ? 'ko' : /^(?:Indéterminé|Disputé|null|None)$/i.test(value) ? 'warn' : 'neutral';
   const wires = edges.map((edge) => {
     const from = positions.get(edge.from)!;
@@ -158,12 +172,12 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     const node = nodes.get(id)!;
     const position = positions.get(id)!;
     const lines = content.get(id)!;
-    const state = tone(node.value);
+    const state = node.kind === 'control' && node.value === 'Faux' ? 'ko' : node.issue ? 'warn' : tone(node.value);
     const missing = state === 'warn';
     const text = [...lines.title, ...lines.body];
     const step = stepFor(id);
     const checks = attachedControls(id);
-    return `<g class="pmc-node" data-node="${id}" data-step="${Number.isFinite(step) ? step : ''}" data-kind="${node.kind}" data-tone="${state}" data-monetary="${/[$€£]/.test(node.lines.join(' '))}" data-title="${escape(human(node.lines[0]))}" data-value="${escape(node.value)}" data-expression="${escape(node.lines.join('\n'))}" data-literary-context="${escape(node.documentation)}" data-target="${escape(node.target ?? '')}" data-origin="${escape(node.origin ?? '')}" data-source="${escape(node.source)}" data-context="${escape(node.context)}" tabindex="0" role="button" aria-label="${escape(`${Number.isFinite(step) ? `Étape ${step} · ` : ''}${titles[node.kind]} : ${human(node.lines.join(' '))}`)}" aria-pressed="false"><title>${escape(node.context || human(node.lines.join(' ')))}</title><rect x="${position.x}" y="${position.y}" width="280" height="${position.height}" rx="14"${missing ? ' stroke-dasharray="5 4"' : ''}/><text class="pmc-node-kind" x="${position.x + 14}" y="${position.y + 22}">${Number.isFinite(step) ? `Étape ${step} · ` : ''}${titles[node.kind]}</text>${node.kind === 'condition' ? `<foreignObject x="${position.x + 14}" y="${position.y + 34}" width="252" height="${position.height - 40}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-condition-expression">${logicalText(node.lines.join('\n'))}</div></foreignObject>` : `<text class="pmc-node-text" x="${position.x + 14}" y="${position.y + 46}">${text.map((line, index) => `<tspan x="${position.x + 14}" dy="${index ? 18 : 0}"${index >= lines.title.length ? ' class="pmc-node-value"' : ''}>${escape(line)}</tspan>`).join('')}</text>`}${checks.length ? `<foreignObject x="${position.x + 14}" y="${position.y + position.height - checks.length * 28 - (node.target ? 44 : 10)}" width="252" height="${checks.length * 28}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-check-badges">${checks.map((key) => { const control = nodes.get(key)!; const state = tone(control.value); return `<button class="pmc-check-badge pmc-${state}" data-select-node="${key}" title="${escape(control.lines.join(' · '))}">${state === 'ok' ? '✓' : state === 'ko' ? '!' : '?'} ${escape(control.lines[0])}</button>`; }).join('')}</div></foreignObject>` : ''}${node.target ? `<foreignObject x="${position.x + 14}" y="${position.y + position.height - 34}" width="252" height="30"><div xmlns="http://www.w3.org/1999/xhtml"><button data-open-reference="${id}">${node.kind === 'control' ? 'Ouvrir le journal' : 'Ouvrir la référence'}</button></div></foreignObject>` : ''}${missing ? `<text class="pmc-node-alert" x="${position.x + 258}" y="${position.y + 22}">?</text>` : ''}</g>`;
+    return `<g class="pmc-node" data-node="${id}" data-step="${Number.isFinite(step) ? step : ''}" data-column="${columns.get(id)}" data-issue="${escape(node.issue ?? '')}" data-kind="${node.kind}" data-tone="${state}" data-monetary="${/[$€£]/.test(node.lines.join(' '))}" data-title="${escape(human(node.lines[0]))}" data-value="${escape(node.value)}" data-expression="${escape(node.lines.join('\n'))}" data-literary-context="${escape(node.documentation)}" data-target="${escape(node.target ?? '')}" data-origin="${escape(node.origin ?? '')}" data-source="${escape(node.source)}" data-context="${escape(node.context)}" tabindex="0" role="button" aria-label="${escape(`${Number.isFinite(step) ? `Étape ${step} · ` : ''}${titles[node.kind]} : ${human(node.lines.join(' '))}`)}" aria-pressed="false"><title>${escape(node.context || human(node.lines.join(' ')))}</title><rect x="${position.x}" y="${position.y}" width="280" height="${position.height}" rx="14"${missing ? ' stroke-dasharray="5 4"' : ''}/><text class="pmc-node-kind" x="${position.x + 14}" y="${position.y + 22}">${steps.has(id) ? 'Objectif · ' : ''}${titles[node.kind]}</text>${node.kind === 'condition' ? `<foreignObject x="${position.x + 14}" y="${position.y + 34}" width="252" height="${position.height - 40}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-condition-expression">${logicalText(node.lines.join('\n'))}</div></foreignObject>` : `<text class="pmc-node-text" x="${position.x + 14}" y="${position.y + 46}">${text.map((line, index) => `<tspan x="${position.x + 14}" dy="${index ? 18 : 0}"${node.issue && index >= text.length - wrap(node.issue).length ? ' class="pmc-node-issue"' : index >= lines.title.length ? ' class="pmc-node-value"' : ''}>${escape(line)}</tspan>`).join('')}</text>`}${checks.length ? `<foreignObject x="${position.x + 14}" y="${position.y + position.height - checks.length * 28 - (node.target ? 44 : 10)}" width="252" height="${checks.length * 28}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-check-badges">${checks.map((key) => { const control = nodes.get(key)!; const state = tone(control.value); return `<button class="pmc-check-badge pmc-${state}" data-select-node="${key}" title="${escape(control.lines.join(' · '))}">${state === 'ok' ? '✓' : state === 'ko' ? '!' : '?'} ${escape(control.lines[0])}</button>`; }).join('')}</div></foreignObject>` : ''}${node.target ? `<foreignObject x="${position.x + 14}" y="${position.y + position.height - 34}" width="252" height="30"><div xmlns="http://www.w3.org/1999/xhtml"><button data-open-reference="${id}">${node.kind === 'control' ? 'Ouvrir le journal' : 'Ouvrir la référence'}</button></div></foreignObject>` : ''}${missing ? `<text class="pmc-node-alert" x="${position.x + 258}" y="${position.y + 22}">?</text>` : ''}</g>`;
   }).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Règles, conditions et données de l’exécution Catala" viewBox="0 0 ${controls.length ? 1700 : reference ? 1360 : 1020} ${y}" width="${controls.length ? 1700 : reference ? 1360 : 1020}" height="${y}"><defs><marker id="pmc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker></defs>${wires}${boxes}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Règles, conditions et données de l’exécution Catala" viewBox="0 0 ${width} ${y}" width="${width}" height="${y}"><defs><marker id="pmc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker></defs>${headings.join('')}${wires}${boxes}</svg>`;
 }
