@@ -25,6 +25,15 @@ test('navigates the execution, exposes open states and releases replay on unmoun
   assert.equal(container.querySelector('.pmc-inspector').hidden, false);
   assert.match(container.querySelector('.pmc-inspector').textContent, /Dépend de/);
   assert.match(container.querySelector('.pmc-inspector').textContent, /Faux/);
+  click('.pmc-inspector strong');
+  assert.equal(container.querySelector('.pmc-inspector').hidden, false);
+  click('.pmc-stage svg');
+  assert.equal(container.querySelector('.pmc-inspector').hidden, true);
+  assert.equal(container.querySelectorAll('[aria-pressed="true"], .is-dim').length, 0);
+  click('[data-node="x002"]');
+  click('.pmc-canvas');
+  assert.equal(container.querySelector('.pmc-inspector').hidden, true);
+  click('[data-node="x002"]');
   click('.pmc-inspector [data-select-node="x001"]');
   assert.match(container.querySelector('.pmc-inspector').textContent, /Donnée fournie/);
   assert.match(container.querySelector('.pmc-inspector').textContent, /Donnée non établie/);

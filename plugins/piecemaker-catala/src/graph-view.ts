@@ -80,6 +80,7 @@ export function mountExplanation(container: HTMLElement, openSource: (source: st
     const node = target.closest<SVGGElement>('[data-node]');
     if (moved) { moved = false; return; }
     if (node) select(node.dataset.node!);
+    else if (!button && canvas.contains(target) && !target.closest('.pmc-inspector, .pmc-legend, .pmc-tools')) { select(''); chooser.value = ''; }
     if (!button) return;
     if (button.dataset.selectNode) {
       view.querySelector<HTMLElement>('[role="tab"][data-mode="graph"]')?.click();
