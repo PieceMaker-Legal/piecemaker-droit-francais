@@ -114,7 +114,11 @@ Le volet sépare deux onglets, Graphe et Vue écrite, comme le volet Raisonnemen
 
 La Vue écrite regroupe les mêmes étapes et la réponse finale. Elle contient aussi les contrôles, bilans, fichiers et journaux, même sans graphe valide. Le volet conserve l’onglet choisi lors d’une actualisation.
 
-Les fichiers Catala peuvent documenter les pièces et les sources en Markdown. Le volet affiche le texte placé avant le bloc de code correspondant à la position source de la trace, dans le détail et la Vue écrite. Les liens du texte restent affichés sans ouvrir les pièces. Une référence déclarée ne constitue pas une vérification de la pièce. Le DOT seul ne contient pas ce texte ; le serveur transmet aussi le contenu des fichiers Catala.
+Les fichiers Catala peuvent documenter les pièces et les sources en Markdown. Le volet retrouve la section et les sections parentes correspondant à la position source de la trace. Il conserve leur texte dans le détail et la Vue écrite, y compris quand plusieurs blocs de code partagent la même section.
+
+Les liens Markdown, liens par référence, URL et identifiants Légifrance deviennent des cartes Pièce citée, Article ou Référence, reliées aux éléments concernés du graphe. Les références communes à une même section sont partagées. Un article ou numéro de pièce sans lien reste visible, sans destination inventée. Les pièces locales s’ouvrent dans l’éditeur, avec des chemins limités au dossier ; les liens HTTP(S) s’ouvrent dans un nouvel onglet. Le volet ne lit pas les pièces. Une référence déclarée ne constitue pas une vérification de son contenu. Le DOT seul ne contient pas le texte documentaire ; le serveur transmet aussi le contenu des fichiers Catala.
+
+Chaque carte conserve le libellé complet de Catala, ses expressions, valeurs, position source et contexte documentaire dans son détail et la Vue écrite. Les éléments sans étape consommatrice restent visibles. Les opérateurs logiques `et` et `ou` prennent la forme de pills dans les conditions, sans modifier les parenthèses, identifiants ou chaînes de caractères.
 
 Les états explicitement nommés `Indéterminé` ou `Disputé` sont signalés. Leur absence ne prouve pas que le dossier est complet. Les alertes juridiques, décisions sur la fiabilité des pièces et scénarios alternatifs du vérificateur YAML ne sont pas déduits de la trace.
 

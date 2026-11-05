@@ -134,7 +134,7 @@ test('separates the views, orders steps and keeps each source context through re
     container.querySelector('[role="tab"][data-mode="written"]').click();
     assert.equal(container.querySelector('.pmc-explanation').hidden, true);
     assert.deepEqual([...container.querySelectorAll('.pmc-written-step h3')].map((heading) => heading.textContent), ['Étape 1 · premiere', 'Réponse · Étape 2 · reponse']);
-    const contexts = [...container.querySelectorAll('.pmc-written .pmc-source-text')].map((element) => element.textContent);
+    const contexts = ['x002', 'x003'].map((id) => container.querySelector(`.pmc-written .pmc-phase header [data-select-node="${id}"]`).closest('.pmc-phase').querySelector('.pmc-source-text').textContent);
     assert.match(contexts[0], /Attestation fictive/);
     assert.doesNotMatch(contexts[0], /Document fictif/);
     assert.match(contexts[1], /Document fictif/);
@@ -146,5 +146,43 @@ test('separates the views, orders steps and keeps each source context through re
     assert.equal(container.querySelector('[role="tab"][data-mode="written"]').getAttribute('aria-selected'), 'true');
     assert.equal(container.querySelector('.pmc-written').hidden, false);
     assert.match(container.querySelector('.pmc-written').textContent, /Contrôles et fichiers/);
+  } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
+});
+
+test('opens cited pieces and sources while keeping local links inside the dossier', async () => {
+  const { mount, unmount } = await import('./client.ts');
+  const dom = new JSDOM('<div id="panel"></div>');
+  globalThis.window = dom.window;
+  globalThis.document = dom.window.document;
+  globalThis.DOMParser = dom.window.DOMParser;
+  globalThis.CustomEvent = dom.window.CustomEvent;
+  globalThis.localStorage = { getItem: () => null };
+  const previousFetch = globalThis.fetch;
+  const contenu = ['## Fait', '', '[Attestation fictive](../../../pieces/attestation.md)', '[Article 1218](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041431)', '[Hors dossier](../../../../hors-dossier.md)', '[Chemin encodé](../../../pieces/..%2f..%2fhors-dossier.md)', '[Protocole refusé](javascript:alert%281%29)', '', '```catala', 'définition fait égal à vrai', '```'].join('\n');
+  const graphe = 'digraph G { x001 [label=<<table><tr><td>fait</td></tr><tr><td>= Vrai</td></tr></table>>, URL="https://example.test/demo.catala_fr#L10"]; }';
+  globalThis.fetch = async () => new Response(JSON.stringify({ pack: null, status: null, programmes: [{ nom: 'demo', enCours: false, perimee: false, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier/.piecemaker/catala/demo/demo.catala_fr', contenu }], journaux: [], verification: null, preuve: null, catleg: null, explication: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', finished_utc: '2026-11-05T10:00:00Z' }, graphe }] }));
+  const opened = [];
+  const external = [];
+  window.addEventListener('piecemaker:open-in-editor', (event) => opened.push(event.detail.path));
+  window.open = (...args) => external.push(args);
+  const container = document.querySelector('#panel');
+  try {
+    mount(container, { context: { theme: 'light', project: { name: 'fictif', path: '/dossier' } }, onContextChange: () => () => {} });
+    await new Promise((resolve) => setImmediate(resolve));
+    const open = (title) => {
+      const card = [...container.querySelectorAll('.pmc-node')].find((node) => node.dataset.title === title);
+      assert.ok(card, `${title} doit être montré`);
+      card.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      container.querySelector('[data-open-reference]').click();
+    };
+    open('Attestation fictive');
+    assert.deepEqual(opened, ['/dossier/pieces/attestation.md']);
+    open('Article 1218');
+    assert.deepEqual(external, [['https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041431', '_blank', 'noopener,noreferrer']]);
+    for (const title of ['Hors dossier', 'Chemin encodé', 'Protocole refusé']) open(title);
+    assert.equal(opened.length, 1);
+    assert.equal(external.length, 1);
+    assert.match(container.querySelector('.pmc-written').textContent, /Attestation fictive/);
+    assert.match(container.querySelector('.pmc-written').textContent, /Article 1218/);
   } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
 });
