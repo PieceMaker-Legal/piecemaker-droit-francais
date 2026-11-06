@@ -7,10 +7,13 @@ import express from 'express';
 
 import { notifyCatalaUpdated } from '../modules/piecemaker-catala/index.js';
 
+import type { createCatalaCitation } from './catala-citation.js';
+
 type CatalaDeps = { env?: NodeJS.ProcessEnv; homeDir?: string; [key: string]: unknown };
 type CatalaScript = {
   findCatalaPack(options: { env?: NodeJS.ProcessEnv; homeDir?: string }): { pack: Record<string, unknown> | null; status: Record<string, unknown> | null };
   listPrograms(cwd: string): string[];
+  selectProgram(cwd: string, name?: string): { directory: string; name: string };
   sourceFiles(directory: string): string[];
   sourcesDigest(directory: string, files: string[]): string;
   runCatala(input: { commande: string; cwd: string; programme?: string; deps?: CatalaDeps }): Promise<unknown>;
@@ -28,7 +31,15 @@ export function catalaScriptPath(applicationRoot: string) {
   return path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'catala.mjs');
 }
 
-export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, cite?: (cwd: string, id: string, quote: string, content: string) => Promise<string>) {
+export function createCatalaCitationCheck(scriptPath: string, service: ReturnType<typeof createCatalaCitation>) {
+  return async ({ cwd, programme }: { cwd: string; programme?: string }) => {
+    const catala = await import(pathToFileURL(scriptPath).href) as CatalaScript;
+    const { directory } = catala.selectProgram(cwd, programme);
+    return service.verify(cwd, catala.sourceFiles(directory).map((nom) => ({ nom, chemin: path.join(directory, nom), contenu: fs.readFileSync(path.join(directory, nom), 'utf8') })));
+  };
+}
+
+export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, service?: ReturnType<typeof createCatalaCitation>) {
   const router = express.Router();
   const running = new Set<string>();
   const script = () => import(pathToFileURL(scriptPath).href) as Promise<CatalaScript>;
@@ -40,7 +51,9 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, ci
       const results = path.join(directory, 'resultats');
       const files = catala.sourceFiles(directory);
       const explanation = readJson(path.join(results, 'explication.json'));
-      const perimee = explanation?.sources_sha256 !== catala.sourcesDigest(directory, files);
+      const digest = catala.sourcesDigest(directory, files);
+      const perimee = explanation?.sources_sha256 !== digest;
+      const citationReport = readJson(path.join(results, 'citations.json'));
       const journaux = fs.existsSync(results) ? fs.readdirSync(results).filter((file) => file.endsWith('.log') && fs.lstatSync(path.join(results, file)).isFile()).sort() : [];
       return {
         nom,
@@ -52,6 +65,7 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, ci
         tests: readJson(path.join(results, 'tests.json')),
         preuve: readJson(path.join(results, 'preuve.json')),
         catleg: readJson(path.join(results, 'catleg.json')),
+        citations: citationReport?.sources_sha256 === digest ? citationReport : null,
         explication: explanation,
         graphe: !perimee && fs.existsSync(path.join(results, 'explication.dot')) ? fs.readFileSync(path.join(results, 'explication.dot'), 'utf8') : null,
       };
@@ -67,11 +81,13 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, ci
   router.post('/citation', express.json(), async (request, response) => {
     try {
       const { projectPath, programme, fichier, source, citation } = request.body ?? {};
-      if (![projectPath, programme, fichier, source, citation].every((value) => typeof value === 'string') || !projectPath || !cite) throw new Error('Référence Catala incomplète.');
+      if (![projectPath, programme, fichier, source, citation].every((value) => typeof value === 'string') || !projectPath || !service) throw new Error('Référence Catala incomplète.');
       const data = await snapshot(projectPath);
-      const file = data.programmes.find((entry) => entry.nom === programme)?.fichiers.find((entry) => entry.chemin === fichier);
+      const program = data.programmes.find((entry) => entry.nom === programme);
+      const file = program?.fichiers.find((entry) => entry.chemin === fichier);
       if (!file) throw new Error('Fichier absent du programme Catala.');
-      response.json({ token: await cite(projectPath, source, citation, file.contenu) });
+      const saved = program?.citations?.results.find((entry: { origin: string; id?: string; quote: string; token?: string }) => entry.origin === fichier && entry.id === source && entry.quote === citation && entry.token);
+      response.json({ token: saved?.token ?? await service.cite(projectPath, source, citation, file.contenu) });
     } catch (error) { fail(response, error); }
   });
   router.post('/verify', express.json(), (request, response) => {
@@ -80,14 +96,22 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, ci
     const directory = path.join(projectPath, '.piecemaker', 'catala', programme);
     if (running.has(directory)) { fail(response, new Error(`Vérification déjà en cours pour ${programme}.`)); return; }
     running.add(directory);
-    const verified = script().then((catala) => catala.runCatala({ commande: 'verifier', cwd: projectPath, programme, ...(Object.keys(deps).length ? { deps } : {}) }));
+    const verified = script().then((catala) => catala.runCatala({ commande: 'verifier', cwd: projectPath, programme, deps: { ...deps, ...(service ? { citations: createCatalaCitationCheck(scriptPath, service) } : {}) } }));
     verified.finally(() => { running.delete(directory); notifyCatalaUpdated(projectPath); }).then(() => snapshot(projectPath)).then((data) => response.json(data), (error: unknown) => fail(response, error));
   });
   return router;
 }
 
-export function createCatalaUpdatedRouter(isLoopback: (request: express.Request) => boolean, projects: () => string[]) {
+export function createCatalaUpdatedRouter(isLoopback: (request: express.Request) => boolean, projects: () => string[], verify?: ReturnType<typeof createCatalaCitationCheck>) {
   const router = express.Router();
+  router.post('/catala-citations', express.json(), async (request, response) => {
+    if (!isLoopback(request)) { response.sendStatus(403); return; }
+    const { cwd, programme } = request.body ?? {};
+    if (typeof cwd !== 'string' || !projects().includes(cwd) || (programme !== undefined && typeof programme !== 'string')) { response.status(400).json({ error: 'Dossier ou programme inconnu.' }); return; }
+    if (!verify) { response.status(503).json({ error: 'Contrôle des citations indisponible.' }); return; }
+    try { response.json(await verify({ cwd, programme })); }
+    catch (error) { response.status(400).json({ error: error instanceof Error ? error.message : String(error) }); }
+  });
   router.post('/catala-updated', express.json(), (request, response) => {
     if (!isLoopback(request)) { response.sendStatus(403); return; }
     const { cwd } = request.body ?? {};

@@ -74,7 +74,7 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 
 | Commande | Effet | Résultat |
 | --- | --- | --- |
-| `pm catala verifier --programme <nom>` | typecheck avec invariants, format, tests clerk, tests Python | `resultats/verification.json`, `tests.json` |
+| `pm catala verifier --programme <nom> [--au AAAA-MM-JJ]` | typage, format, tests Clerk/Python, preuves, Catleg, citations PieceMaker, explication | `resultats/verification.json`, `tests.json` |
 | `pm catala formater` | `catala-format --in-place` | fichiers réécrits |
 | `pm catala preuve --scope <Champ> [--fichier F]` | `catala proof`, sans compilation OCaml | `resultats/preuve.json` |
 | `pm catala expliquer --programme <nom> --fichier test_prime.catala_fr --scope Exemple` | Graphe des formules et conditions d’une exécution | `resultats/explication.dot`, `explication.json` |
@@ -84,7 +84,7 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 
 Les tests passent par `clerk runtest --whole-program`, puis `clerk report --json`. Cette voie conserve le bilan sans compiler de modules OCaml.
 
-`verification.json` : `started_utc`, `finished_utc`, `programme`, `passed`, `sources_sha256`, `checks[]` (`name`, `command`, `exit_code`, `seconds`, `passed`, `files`). Un journal `resultats/<contrôle>.log` par contrôle. `preuve.json` ajoute `fichier`, `scope`, `conflits`. `catleg.json` : `date_controle`, `passed`, `fichiers[]` (`fichier`, `exit_code`, `passed`, `messages`).
+`verification.json` : `started_utc`, `finished_utc`, `programme`, `passed`, `sources_sha256`, `checks[]` (`name`, `command`, `exit_code`, `seconds`, `passed`, `status`, `message`, `files`). Un journal `resultats/<contrôle>.log` par contrôle. `preuve.json` ajoute `fichier`, `scope`, `conflits`. `catleg.json` : `date_controle`, `passed`, `fichiers[]` (`fichier`, `exit_code`, `passed`, `messages`).
 
 Une preuve réussit si `catala proof --debug` produit au moins une obligation, sort à 0, écrit « No errors found » et aucun `[WARNING]` : un chevauchement d'exceptions sort aussi à 0.
 
@@ -141,3 +141,19 @@ Catala 1.3 peut omettre des obligations avec des définitions globales. Le bilan
 La preuve couvre le champ choisi, sans couvrir les champs ou modules appelés. Lancez la preuve séparément sur chaque champ métier.
 
 Les sources Légifrance citées dans Catala utilisent le lecteur interne existant. L’API vérifie leur présence dans le programme, consulte le MCP Légifrance avec les identifiants PISTE existants et contrôle l’extrait déclaré. Sans extrait, aucun statut de citation vérifiée n’est attribué. Le Markdown `Citation : « passage exact »` suit le lien ; les pièces locales transmettent cet extrait au lecteur pour le surlignage.
+
+
+## Vérification regroupée
+
+`verifier` rend un bilan unique. Chaque contrôle porte un état : `passed`, `failed`, `blocked` ou `missing`.
+Catleg et le contrôle existant des citations PieceMaker tournent en parallèle avec les outils de compilation.
+Les commandes qui utilisent `_build` restent séquentielles. Un échec ne bloque que les contrôles dépendants.
+Catala fournit les champs à prouver via `dependency-graph`. Chaque champ des fichiers métier reçoit sa propre preuve.
+Le graphe reste disponible lorsqu’un scénario réussit, même si une autre vérification échoue.
+
+Le contrôle des citations utilise les mêmes références que le graphe et les connecteurs PieceMaker existants.
+Les sources officielles passent par le MCP Légifrance et les identifiants PISTE de l’utilisateur.
+Les pièces passent par le lecteur existant du dossier. Aucun extrait absent ou introuvable ne vaut validation.
+`citations.json` conserve les résultats et les jetons du lecteur interne. Le graphe affiche les erreurs sur leurs références.
+Le lecteur réutilise ces résultats tant que le programme reste inchangé. Aucun contrôle sémantique supplémentaire n’est ajouté.
+La commande CLI joint le serveur local pour ce contrôle ; serveur absent, le bilan signale l’indisponibilité.

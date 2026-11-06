@@ -258,3 +258,8 @@ export async function notifyCatalaUpdated({ cwd }) {
   await adoptRunningServerPort();
   return requestJson({ method: 'POST', path: `${LOCAL_BASE}/catala-updated`, body: { cwd }, timeout: 5000 });
 }
+
+export async function verifyCatalaCitations({ cwd, programme }) {
+  await adoptRunningServerPort();
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/catala-citations`, body: { cwd, programme }, timeout: 300000 });
+}

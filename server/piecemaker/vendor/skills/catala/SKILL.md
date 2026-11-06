@@ -32,9 +32,9 @@ Un programme Catala vit dans `.piecemaker/catala/<nom>/`. `<nom>` s'écrit en mi
 
 ## Vérifier
 
-1. `pm catala verifier --programme <nom>` : typecheck avec invariants, format, tests clerk, tests Python, puis graphe du scénario réussi. Le volet se met à jour après la commande. Corrigez et relancez jusqu'à « vérifié ».
+1. `pm catala verifier --programme <nom>` : typage avec invariants, format, tests Clerk/Python, preuves de tous les champs métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande. Corrigez et relancez jusqu'à « vérifié ».
 2. `pm catala formater --programme <nom>` réécrit les fichiers au format officiel.
-3. `pm catala preuve --scope <Champ> [--fichier F]` prouve l'absence de conflit et d'erreur. Le mode `--whole-program` est refusé : Catala 1.3 peut y masquer des conflits. Lancez la preuve sur chaque champ métier de chaque fichier ; les champs appelés ne sont pas couverts. Un `[WARNING]` est un échec : lisez le contre-exemple.
+3. `pm catala preuve --scope <Champ> [--fichier F]` prouve l'absence de conflit et d'erreur. Le mode `--whole-program` est refusé : Catala 1.3 peut y masquer des conflits. Le vérificateur inventorie les champs métier avec `catala dependency-graph` puis prouve chaque champ séparément. Une commande `preuve` isolée ne couvre pas les champs appelés. Un `[WARNING]` est un échec : lisez le contre-exemple.
 4. `pm catala catleg [--fichier F] [--au AAAA-MM-JJ]` vérifie la vigueur des articles cités, avec les identifiants PISTE de PieceMaker.
 5. `pm catala lister` montre les programmes et leur dernier bilan. `pm catala env` montre le pack, son état d'installation et le Python utilisé.
 6. `pm catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> -- <arguments>` lance un outil du pack avec son environnement (LSP et débogueur pour un éditeur, commandes non couvertes).
@@ -49,7 +49,9 @@ La vérification produit déjà le graphe. Utilisez `expliquer` pour choisir un 
 
 L’explication concerne cette exécution seulement. Elle ne remplace ni les tests, ni la preuve du programme, ni la justification des faits.
 
-Les résultats vont dans `.piecemaker/catala/<nom>/resultats/` : `verification.json`, `tests.json`, `preuve.json`, `catleg.json`, `explication.json`, `explication.dot` et un journal par contrôle.
+Les résultats vont dans `.piecemaker/catala/<nom>/resultats/` : `verification.json`, `tests.json`, `preuve.json`, `catleg.json`, `citations.json`, `explication.json`, `explication.dot` et un journal par contrôle.
+
+Le bilan distingue réussite, échec, contrôle bloqué et contrôle indisponible. Catleg et les citations tournent en parallèle ; les commandes qui utilisent `_build` restent séquentielles. Le contrôle des citations réutilise PieceMaker, le MCP Légifrance et les identifiants PISTE existants. Il vérifie les extraits déclarés, sans ajouter de raisonnement juridique.
 
 ## Limites à dire à l'avocat
 

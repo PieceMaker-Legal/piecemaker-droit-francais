@@ -10,7 +10,9 @@ import express from 'express';
 
 import { connectedClients, WS_OPEN_STATE } from '../modules/websocket/index.js';
 
-import { catalaScriptPath, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
+import { catalaScriptPath, createCatalaCitationCheck, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
+import { createCatalaCitation } from './catala-citation.js';
+import { createCitationStore } from './harness/citation-store.js';
 
 const MODULE = '> Module Prime\n\n## Ancienneté\n\nPièce : [Attestation fictive](../../../pieces/attestation.md).\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
 const TESTS = '> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d\'application JeanDupont:\n  résultat calcul champ d\'application Prime.Prime\n```\n';
@@ -21,6 +23,7 @@ let dossier = '';
 let base = '';
 let close = () => {};
 let explanations = 0;
+let sourceReads = 0;
 
 const runner = async (command: string, args: string[], options: { cwd: string }) => {
   const tool = path.basename(command);
@@ -52,9 +55,10 @@ before(async () => {
   fs.writeFileSync(path.join(home, 'catala', 'pack.json'), JSON.stringify({ id: 'pack-essai', platform: 'darwin-arm64', version: '1.3.0', proof: true, installedAt: '2026-11-01T09:00:00Z', bin: tools, path: [bin], env: {} }));
   fs.writeFileSync(path.join(home, 'catala', 'status.json'), JSON.stringify({ state: 'pret', id: 'pack-essai' }));
   const env = { PIECEMAKER_HOME: home, PATH: '/usr/bin' };
+  const service = createCatalaCitation({ source: async () => { sourceReads++; return { kind: 'texte', title: 'Source fictive', text: 'Passage exact.' }; }, match: (text, quote) => text.includes(quote) ? quote : null }, createCitationStore(home));
   const app = express();
-  app.use(createCatalaUpdatedRouter((request) => request.headers['x-test-loopback'] !== 'no', () => [dossier]));
-  app.use(createCatalaRouter(catalaScriptPath(process.cwd()), { env, homeDir: home, run: runner, python: null, credentials: null, now: () => '2026-11-04T10:00:00Z' }));
+  app.use(createCatalaUpdatedRouter((request) => request.headers['x-test-loopback'] !== 'no', () => [dossier], createCatalaCitationCheck(catalaScriptPath(process.cwd()), service)));
+  app.use(createCatalaRouter(catalaScriptPath(process.cwd()), { env, homeDir: home, run: runner, python: null, credentials: null, now: () => '2026-11-04T10:00:00Z' }, service));
   const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
@@ -92,7 +96,8 @@ test('vérifie un programme et renvoie le bilan et les journaux', async () => {
   const data = await response.json() as any;
   assert.equal(response.status, 200);
   const verified = data.programmes.find((entry: { nom: string }) => entry.nom === 'licenciement-jean-dupont');
-  assert.equal(verified.verification.passed, true);
+  assert.equal(verified.verification.passed, false);
+  assert.equal(verified.verification.checks.find((entry: any) => entry.name === 'citations').status, 'missing');
   assert.equal(verified.tests['test-results'][0].tests.scopes[0].scope_name, 'JeanDupont');
   assert.equal(verified.tests['test-results'][0].tests.scopes[0].success, true);
   assert.equal(verified.enCours, false);
@@ -143,4 +148,28 @@ test('notifie les clients existants seulement depuis la boucle locale pour un do
     assert.equal((await notify(dossier)).status, 200);
     assert.deepEqual(JSON.parse(messages[0]), { type: 'piecemaker-catala-updated', projectPath: dossier });
   } finally { connectedClients.delete(client); }
+});
+
+
+test('local citation transport validates access and the reader reuses current stored verification', async () => {
+  const directory = program('citations');
+  const file = path.join(directory, 'prime.catala_fr');
+  fs.writeFileSync(file, '## Article fictif | LEGIARTI000000000001\nCitation : « Passage exact. »\n');
+  const post = (endpoint: string, body: unknown, loopback = 'yes') => fetch(`${base}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-loopback': loopback }, body: JSON.stringify(body) });
+  assert.equal((await post('catala-citations', { cwd: dossier, programme: 'citations' }, 'no')).status, 403);
+  assert.equal((await post('catala-citations', { cwd: '/inconnu', programme: 'citations' })).status, 400);
+  assert.equal((await post('catala-citations', { cwd: dossier, programme: '../autre' })).status, 400);
+  const local = await post('catala-citations', { cwd: dossier, programme: 'citations' });
+  assert.equal(local.status, 200);
+  assert.equal((await local.json() as any).passed, true);
+  const verified = await post('verify', { projectPath: dossier, programme: 'citations' });
+  const report = (await verified.json() as any).programmes.find((entry: any) => entry.nom === 'citations').citations;
+  const before = sourceReads;
+  const request = { projectPath: dossier, programme: 'citations', fichier: file, source: 'LEGIARTI000000000001', citation: 'Passage exact.' };
+  const opened = await post('citation', request);
+  assert.equal((await opened.json() as any).token, report.results[0].token);
+  assert.equal(sourceReads, before);
+  fs.appendFileSync(file, '\nTexte modifié.\n');
+  await post('citation', request);
+  assert.equal(sourceReads, before + 1);
 });

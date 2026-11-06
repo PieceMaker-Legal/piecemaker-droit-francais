@@ -36,7 +36,7 @@ import { isLoopback } from './knowledge/local-routes.js';
 import { createReasoningConnectors } from './reasoning-connectors.js';
 import { createReasoningReview } from './reasoning-review.js';
 import { createCatalaCitation } from './catala-citation.js';
-import { catalaScriptPath, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
+import { catalaScriptPath, createCatalaCitationCheck, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
@@ -164,6 +164,7 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
   declareBundledSkills(workspace);
 });
 
+const catalaCitations = createCatalaCitation(createReasoningConnectors(), citations);
 const localRouter = express.Router();
 localRouter.use(createMistralTabularBridge({ ensureProxy, runInProject: (id, run) => anonymizer.runInProject(id, run) }));
 localRouter.use(knowledge.localRouter);
@@ -172,7 +173,7 @@ localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
 localRouter.use(createSuiviLocalRouter(suivi, isLoopback, board));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
-localRouter.use(createCatalaUpdatedRouter(isLoopback, () => projectsDb.getProjectPaths().map((row) => row.project_path)));
+localRouter.use(createCatalaUpdatedRouter(isLoopback, () => projectsDb.getProjectPaths().map((row) => row.project_path), createCatalaCitationCheck(catalaScriptPath(applicationRoot), catalaCitations)));
 localRouter.use(vendor.createPieceMakerStampingLocalRouter(isLoopback));
 localRouter.use(createTabularReviewLocalRouter({
   proxyOrigin: () => {
@@ -199,7 +200,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
     const reference = info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id };
     return citations.save({ sessionId: `raisonnement:${cwd}`, title: info.title, source: info.text, citation: { ref: 1, ...reference, verified: true, quotes }, ranges: locateSourcePassages(info.text, quotes) });
   }));
-  router.use('/catala', createCatalaRouter(catalaScriptPath(applicationRoot), {}, createCatalaCitation(createReasoningConnectors(), citations)));
+  router.use('/catala', createCatalaRouter(catalaScriptPath(applicationRoot), {}, catalaCitations));
   router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));

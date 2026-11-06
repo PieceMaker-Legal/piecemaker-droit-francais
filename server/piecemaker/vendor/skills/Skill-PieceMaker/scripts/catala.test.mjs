@@ -41,6 +41,8 @@ function fakeRun({ testsPass = true, proofOutput = 'No errors found during the p
       const scopes = [{ scope_name: 'JeanDupont', success: testsPass, errors: [], time: 0.1 }];
       return { code: testsPass ? 0 : 1, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, 'test_prime.catala_fr'), tests: { scopes, 'inline-tests': [] } }], coverage: {} }), stderr: '' };
     }
+    if (tool === 'catala' && args[0] === 'dependency-graph') return { code: 0, stdout: JSON.stringify({ inter_scopes: { nodes: { 1: 'Prime', 2: 'AutrePrime' } } }), stderr: '' };
+    if (args.includes('check-expiry')) return { code: 0, stdout: 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":false}]', stderr: '' };
     if (tool === 'catala' && args[0] === 'explain') return { code: 0, stdout: 'digraph G { x001 [label=<Prime>] }', stderr: '' };
     if (tool === 'catala' && args[0] === 'proof') return { code: 0, stdout: proofOutput, stderr: '' };
     return { code: 0, stdout: '', stderr: '' };
@@ -95,8 +97,8 @@ test('verifier runs every check inside the pack environment and writes the resul
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime-anciennete');
-    const { calls, runner } = fakeRun();
-    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home, PATH: '/usr/bin' }, homeDir: home, run: runner, python: '/usr/bin/python3', credentials: null, now: () => '2026-01-02T00:00:00Z' } });
+    const { calls, runner } = fakeRun({ proofOutput: 'This verification condition was generated\nNo errors found during the proof mode run.\n' });
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home, PATH: '/usr/bin' }, homeDir: home, run: runner, python: '/usr/bin/python3', credentials: { CATLEG_LF_CLIENT_ID: 'id', CATLEG_LF_CLIENT_SECRET: 's' }, citations: async () => ({ passed: true, status: 'passed', results: [] }), now: () => '2026-01-02T00:00:00Z' } });
     assert.match(text, /vérifié/);
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'));
     assert.equal(report.passed, true);
@@ -105,7 +107,10 @@ test('verifier runs every check inside the pack environment and writes the resul
     assert.equal(explanation.passed, true);
     assert.equal(explanation.sources_sha256, report.sources_sha256);
     assert.equal(explanation.scope, 'JeanDupont');
-    assert.deepEqual(report.checks.map((entry) => entry.name), ['typecheck', 'format', 'tests', 'tests-python']);
+    assert.deepEqual(report.checks.map((entry) => entry.name), ['typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
+    const proof = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json')));
+    assert.deepEqual(proof.scopes.map((entry) => entry.scope), ['Prime', 'AutrePrime']);
+    assert.equal(proof.obligations, 2);
     assert.ok(fs.existsSync(path.join(directory, 'resultats', 'tests.json')));
     const clerkTest = calls.find((call) => call.command === 'clerk' && call.args[0] === 'runtest');
     assert.deepEqual(clerkTest.args, ['runtest', '--whole-program', '-I', '.', '--code-coverage', '--report=resultats/tests-0.report', 'test_prime.catala_fr']);
@@ -124,7 +129,7 @@ test('a failing test or an unformatted file makes the verification fail', async 
     const { runner } = fakeRun({ testsPass: false });
     const deps = { env: { PIECEMAKER_HOME: home }, homeDir: home, python: null, credentials: null };
     const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: runner } });
-    assert.match(text, /Tests en échec : test_prime.catala_fr › JeanDupont/);
+    assert.match(text, /tests : échec/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).passed, false);
     const unformatted = async (command, args, options) => (path.basename(command) === 'catala-format' ? { code: 0, stdout: 'autre', stderr: '' } : runner(command, args, options));
     assert.match(await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: unformatted } }), /format : échec \(prime.catala_fr, test_prime.catala_fr\)/);
@@ -201,7 +206,7 @@ test('Windows tools run through cmd and a missing pack reports the install statu
   const pack = { bin: { clerk: 'C:\\Catala\\bin\\clerk.cmd' } };
   assert.deepEqual(toolCommand(pack, 'clerk', ['test'], 'win32', { ComSpec: 'C:\\Windows\\System32\\cmd.exe' }), { command: 'C:\\Windows\\System32\\cmd.exe', args: ['/d', '/s', '/c', 'C:\\Catala\\bin\\clerk.cmd', 'test'] });
   assert.deepEqual(toolCommand({ bin: { catala: 'C:\\Catala & outils\\catala.exe' } }, 'catala', ['explain', 'Jean & Dupont.catala_fr'], 'win32'), { command: 'C:\\Catala & outils\\catala.exe', args: ['explain', 'Jean & Dupont.catala_fr'] });
-  await assert.rejects(() => runCatala({ commande: 'verifier', cwd: os.tmpdir(), deps: { findPack: () => ({ pack: null, status: { state: 'installation', step: 'switch' } }) } }), /étape switch/);
+  await assert.rejects(() => runCatala({ commande: 'exec', args: ['catala', '--help'], cwd: os.tmpdir(), deps: { findPack: () => ({ pack: null, status: { state: 'installation', step: 'switch' } }) } }), /étape switch/);
 });
 
 test('pm catala routes to the Catala wrapper and rejects unknown commands', async () => {
@@ -255,5 +260,49 @@ test('expliquer refuses to label an old execution as current when sources change
     };
     await assert.rejects(() => runCatala({ commande: 'expliquer', cwd: dossier, flags: { fichier: 'test_prime.catala_fr', scope: 'JeanDupont' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } }), /Explication échouée/);
     assert.equal(fs.readFileSync(path.join(directory, 'resultats', 'explication.dot'), 'utf8'), '');
+  } finally { cleanup(); }
+});
+
+
+test('independent checks finish despite compilation failure and stale reports are removed', { timeout: 5000 }, async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime');
+    fs.mkdirSync(path.join(directory, 'resultats'));
+    for (const file of ['preuve.json', 'tests.json', 'explication.json']) fs.writeFileSync(path.join(directory, 'resultats', file), '{"passed":true}');
+    let release;
+    const networkStarted = new Promise((resolve) => { release = resolve; });
+    const { runner, calls } = fakeRun();
+    const run = async (command, args, options) => {
+      if (args[0] === 'typecheck') { await networkStarted; return { code: 1, stdout: '', stderr: 'Erreur de type' }; }
+      return runner(command, args, options);
+    };
+    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => { release(); return { passed: false, status: 'failed', message: 'Citation introuvable', results: [] }; } } });
+    const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
+    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['typecheck', 'failed'], ['format', 'passed'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
+    assert.equal(report.passed, false);
+    assert.ok(!calls.some((call) => ['proof', 'explain', 'runtest'].includes(call.args[0])));
+    for (const file of ['preuve.json', 'tests.json', 'explication.json']) assert.equal(fs.existsSync(path.join(directory, 'resultats', file)), false);
+    const unavailable = await runCatala({ commande: 'verifier', cwd: dossier, deps: { findPack: () => ({ pack: null }), python: null, credentials: null, citations: async () => ({ passed: true, status: 'passed', results: [] }) } });
+    assert.match(unavailable, /typecheck : non effectué/);
+    assert.match(unavailable, /citations : ok/);
+  } finally { cleanup(); }
+});
+
+test('a failed Python scenario does not prevent the remaining scenarios from running', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime', { 'prime.catala_fr': MODULE, 'test_prime.catala_fr': TESTS, 'test_variante.catala_fr': TESTS });
+    const executed = [];
+    const { runner } = fakeRun();
+    const run = async (command, args, options) => {
+      if (args.at(-1) === '--test') { executed.push(args[2]); return { code: executed.length === 1 ? 1 : 0, stdout: '', stderr: '' }; }
+      return runner(command, args, options);
+    };
+    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: '/python', credentials: null } });
+    const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
+    assert.equal(executed.length, 2);
+    assert.equal(report.checks.find((entry) => entry.name === 'tests-python').status, 'failed');
+    assert.match(fs.readFileSync(path.join(directory, 'resultats', 'tests-python.log'), 'utf8'), /test_variante.catala_fr: code 0/);
   } finally { cleanup(); }
 });

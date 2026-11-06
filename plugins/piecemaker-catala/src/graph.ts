@@ -2,7 +2,7 @@ import { logicalText, sourceContext } from './source-context.js';
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 
-export function explanationGraph(dot: string, files: Array<{ nom: string; chemin: string; contenu?: string }> = [], controls: Array<{ title: string; lines: string[]; value: string; origin?: string; target?: string; file?: string; articles?: string[]; versions?: Array<{ id: string; au: string; debut?: string; fin?: string | null; valide: boolean | null }>; detail?: string }> = []): string {
+export function explanationGraph(dot: string, files: Array<{ nom: string; chemin: string; contenu?: string }> = [], controls: Array<{ title: string; lines: string[]; value: string; origin?: string; target?: string; file?: string; articles?: string[]; versions?: Array<{ id: string; au: string; debut?: string; fin?: string | null; valide: boolean | null }>; detail?: string }> = [], citations: Array<{ origin: string; target: string; quote: string; label?: string; kind?: string; status: string; message: string }> = []): string {
   const nodes = new Map<string, { lines: string[]; kind: string; value: string; source: string; context: string; documentation: string; target?: string; origin?: string; issue?: string; quote?: string }>();
   const inputBlock = dot.match(/subgraph\s+cluster_inputs\s*\{([^}]*)\}/)?.[1] ?? '';
   const inputs = new Set(inputBlock.match(/\bx\d+\b/g) ?? []);
@@ -58,7 +58,7 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     }
   }
   for (const file of files) {
-    for (const entry of sourceContext(`https://catala.local/${encodeURIComponent(file.nom.split('/').pop()!)}`, [file], true).references) {
+    for (const entry of [...sourceContext(`https://catala.local/${encodeURIComponent(file.nom.split('/').pop()!)}`, [file], true).references, ...citations.filter((entry) => entry.origin === file.chemin).map((entry) => ({ ...entry, label: entry.label ?? entry.target, kind: entry.kind ?? 'reference' }))]) {
       const identity = JSON.stringify([entry.origin, entry.label, entry.target, entry.quote]);
       if (cited.has(identity)) continue;
       const key = `r${++reference}`;
@@ -78,6 +78,13 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     const version = report?.versions?.find((entry) => entry.id === id);
     if (version) node.lines.push(`Version ${version.debut ?? '?'} → ${version.fin ?? 'sans fin publiée'} : ${version.valide === null ? 'non contrôlée' : version.valide ? 'couvre' : 'ne couvre pas'} le ${version.au}.`);
     node.issue = [node.issue, version?.valide === true ? 'Période vérifiée. Applicabilité juridique et dispositions transitoires à justifier.' : 'Version applicable non établie : vérifiez le texte à la date des faits.'].filter(Boolean).join(' ');
+  }
+  for (const node of nodes.values()) {
+    const result = citations.find((entry) => entry.origin === node.origin && entry.target === node.target && entry.quote === node.quote);
+    if (!result) continue;
+    node.lines.push(`Citation : ${result.message}`);
+    node.value = result.status === 'passed' ? 'Vrai' : result.status === 'failed' ? 'Faux' : 'Indéterminé';
+    if (result.status !== 'passed') node.issue = [node.issue, result.message].filter(Boolean).join(' ');
   }
   for (const [index, control] of controls.entries()) {
     nodes.set(`c${index}`, { lines: [control.title, ...control.lines], kind: 'control', value: control.value, source: '', context: 'Dernier contrôle enregistré du programme. Ce contrôle ne justifie pas les faits.', documentation: control.detail ?? '', target: control.target, origin: control.origin, issue: control.value === 'Faux' ? `${control.title} : contrôle échoué. Corrigez la cause indiquée ci-dessus puis relancez ce contrôle.` : undefined });

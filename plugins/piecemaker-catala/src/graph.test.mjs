@@ -121,3 +121,18 @@ test('keeps distinct passages of the same article attached to their own rules', 
     assert.equal(document.querySelector(`[data-from="${reference.dataset.node}"][data-to="${other}"]`), null);
   }
 });
+
+test('attaches each saved citation verdict to its reference, including an unexecuted rule', () => {
+  const target = 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001';
+  const origin = '/dossier/demo.catala_fr';
+  const contenu = `## Source\n[Article fictif](${target})\nCitation : « Extrait exact. »\n\n\`\`\`catala\nrègle\n\`\`\``;
+  const results = [
+    { origin, target, quote: 'Extrait exact.', label: 'Article fictif', kind: 'article', status: 'passed', message: 'Citation retrouvée.' },
+    { origin, target, quote: 'Extrait différent.', label: 'Article fictif', kind: 'article', status: 'failed', message: 'Citation non retrouvée.' },
+  ];
+  const document = new JSDOM(explanationGraph('digraph G {}', [{ nom: 'demo.catala_fr', chemin: origin, contenu }], [], results)).window.document;
+  const nodes = [...document.querySelectorAll('[data-kind="article"]')];
+  assert.equal(nodes.length, 2);
+  assert.match(nodes.find((node) => node.dataset.quote === 'Extrait exact.').dataset.expression, /Citation retrouvée/);
+  assert.match(nodes.find((node) => node.dataset.quote === 'Extrait différent.').dataset.issue, /Citation non retrouvée/);
+});

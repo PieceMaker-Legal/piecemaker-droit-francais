@@ -67,9 +67,9 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   suivi_dossiers ecrire <chemin> --json '{...}'
       écrit un document du Matter board
 
-  catala verifier [--programme NOM]
+  catala verifier [--programme NOM] [--au AAAA-MM-JJ]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
-      typecheck, format, tests clerk, runtime Python → NOM/resultats/verification.json ;
+      typage, format, tests Clerk/Python, preuves, Catleg, citations, explication → resultats/verification.json ;
       --programme est requis quand le dossier en compte plusieurs
   catala lister | env
   catala formater [--programme NOM]
@@ -242,6 +242,7 @@ async function defaultDeps(cwd) {
     sqlFn: client.runSql,
     reasoningFn: client.runReasoning,
     catalaUpdated: client.notifyCatalaUpdated,
+    catalaCitations: client.verifyCatalaCitations,
     suiviFn: client.runSuivi,
     tabularFn: client.runTabularReview,
     stampFn: client.runStamping,
@@ -577,6 +578,7 @@ async function catala(api, positional, flags, resolved) {
   if (!CATALA_COMMANDS.includes(commande)) usage(`catala attend ${CATALA_COMMANDS.join(', ')}.`);
   if (flags.programme === true) usage('Indiquez une valeur pour --programme.');
   const input = { commande, cwd: path.resolve(resolved), flags, args, ...(flags.programme ? { programme: String(flags.programme) } : {}) };
+  if (commande === 'verifier' && api.catalaCitations) input.deps = { citations: api.catalaCitations };
   const updatePanel = ['verifier', 'preuve', 'catleg', 'expliquer'].includes(commande) && api.catalaUpdated;
   try {
     const result = await (api.catalaFn || runCatala)(input);

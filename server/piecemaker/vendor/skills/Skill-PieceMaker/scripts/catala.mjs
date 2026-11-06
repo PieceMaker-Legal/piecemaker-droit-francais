@@ -181,17 +181,22 @@ async function pythonTests(context, program, tests) {
     for (const file of fs.existsSync(library) ? fs.readdirSync(library) : []) if (file.endsWith('.py')) fs.copyFileSync(path.join(library, file), path.join(target, file));
   }
   const logs = [];
+  let exitCode = 0;
   for (const test of tests) {
     const module = path.basename(test).replace(SOURCE, '').replace(/\W/g, '_');
     const compiled = await check(context, program.directory, 'python-compilation', 'catala', ['python', '--whole-program', '--autotest', test, '-I', '.', '-o', path.join('_build', PYTHON_PACKAGE, `${module}.py`)]);
-    if (!compiled.entry.passed) return entry(compiled.entry.exit_code);
+    if (!compiled.entry.passed) {
+      exitCode ||= compiled.entry.exit_code;
+      logs.push(`${test}: compilation échouée\n${compiled.result.stdout}${compiled.result.stderr}`);
+      continue;
+    }
     const script = `import runpy, sys; sys.path[:0] = ['_build', ${JSON.stringify(path.join('_build', PYTHON_PACKAGE))}]; runpy.run_module('${PYTHON_PACKAGE}.${module}', run_name='__main__')`;
     const result = await context.run(context.python, ['-I', '-c', script, '--test'], { cwd: program.directory, env: context.env });
-    logs.push(`${result.stdout}${result.stderr}`);
-    writeResult(program.directory, 'tests-python.log', logs.join('\n'));
-    if (result.code !== 0) return entry(result.code);
+    logs.push(`${test}: code ${result.code}\n${result.stdout}${result.stderr}`);
+    exitCode ||= result.code;
   }
-  return entry(0);
+  writeResult(program.directory, 'tests-python.log', logs.join('\n'));
+  return entry(exitCode);
 }
 
 async function clerkTests(context, program, tests) {
@@ -211,50 +216,117 @@ async function clerkTests(context, program, tests) {
   return { entry: { ...entry, command: 'clerk runtest --whole-program + clerk report --json', seconds: Math.round((Date.now() - started) / 10) / 100, passed: !failed && reports.length === tests.length && entry.passed && summary.scopes.length > 0 && summary.scopes.every((scope) => scope.success) }, scopes: summary.scopes };
 }
 
-async function verifier(context, program) {
+async function verifier(context, program, flags = {}) {
   const files = sourceFiles(program.directory);
   if (!files.length) throw new TypeError(`Aucun fichier .catala_fr dans .piecemaker/catala/${program.name}/.`);
   const started = context.now();
   const digest = sourcesDigest(program.directory, files);
+  const previous = readJson(path.join(program.directory, 'resultats', 'explication.json'));
+  for (const file of ['preuve.json', 'catleg.json', 'citations.json', 'tests.json', 'explication.json', 'explication.dot']) fs.rmSync(path.join(program.directory, 'resultats', file), { force: true });
   const checks = [];
-  checks.push((await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--catala-opts=--check-invariants'])).entry);
-  const unformatted = [];
-  for (const file of files) {
-    const { result } = await check(context, program.directory, 'format', 'catala-format', [file]);
-    if (result.code !== 0 || result.stdout !== fs.readFileSync(path.join(program.directory, file), 'utf8')) unformatted.push(file);
-  }
-  checks.push({ name: 'format', command: 'catala-format', exit_code: unformatted.length ? 1 : 0, seconds: 0, passed: !unformatted.length, files: unformatted });
-  const tests = files.filter((file) => isTestFile(program.directory, file));
-  let scopes = [];
-  if (tests.length) {
-    const tested = await clerkTests(context, program, tests);
-    scopes = tested.scopes;
-    checks.push(tested.entry);
-  } else checks.push({ name: 'tests', command: 'clerk test', exit_code: 1, seconds: 0, passed: false, files: [] });
-  if (context.python && tests.length) checks.push(await pythonTests(context, program, tests));
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed) && digest === sourcesDigest(program.directory, sourceFiles(program.directory)), sources_sha256: digest, checks };
+  const record = async (name, command, work) => {
+    let entry;
+    const begin = Date.now();
+    fs.rmSync(path.join(program.directory, 'resultats', `${name}.log`), { force: true });
+    try { entry = { name, command, exit_code: 0, seconds: 0, ...await work() }; }
+    catch (error) {
+      entry = { name, command, exit_code: 1, passed: false, message: error.message };
+      writeResult(program.directory, `${name}.log`, error.message);
+    }
+    entry.status ??= entry.passed ? 'passed' : 'failed';
+    entry.seconds = Math.round((Date.now() - begin) / 10) / 100;
+    if (!fs.existsSync(path.join(program.directory, 'resultats', `${name}.log`))) writeResult(program.directory, `${name}.log`, entry.message || entry.status);
+    checks.push(entry);
+    return entry;
+  };
+  const missing = (message) => ({ exit_code: null, passed: false, status: 'missing', message });
+  const blocked = (message) => ({ exit_code: null, passed: false, status: 'blocked', message });
+  const execution = async () => {
+    const typed = await record('typecheck', 'clerk typecheck', async () => context.pack
+      ? (await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--catala-opts=--check-invariants'])).entry
+      : missing('Pack Catala absent.'));
+    await record('format', 'catala-format', async () => {
+      if (!context.pack) return missing('Pack Catala absent.');
+      const unformatted = [], logs = [];
+      for (const file of files) {
+        const { result } = await check(context, program.directory, 'format', 'catala-format', [file]);
+        logs.push(`${file}:\n${result.code ? result.stdout + result.stderr : result.stdout !== fs.readFileSync(path.join(program.directory, file), 'utf8') ? 'Mise en forme différente : lancez pm catala formater.' : 'Conforme.'}`);
+        if (result.code !== 0 || result.stdout !== fs.readFileSync(path.join(program.directory, file), 'utf8')) unformatted.push(file);
+      }
+      writeResult(program.directory, 'format.log', logs.join('\n'));
+      return { passed: !unformatted.length, exit_code: unformatted.length ? 1 : 0, files: unformatted };
+    });
+    const tests = files.filter((file) => isTestFile(program.directory, file));
+    let scopes = [];
+    await record('tests', 'clerk runtest + clerk report', async () => {
+      if (!typed.passed) return blocked('Compilation non validée.');
+      if (!tests.length) return missing('Aucun scénario #[test].');
+      const tested = await clerkTests(context, program, tests);
+      scopes = tested.scopes;
+      return { ...tested.entry, message: scopes.filter((scope) => !scope.success).map((scope) => `${scope.file} › ${scope.scope_name}`).join(', ') };
+    });
+    await record('tests-python', 'clerk run --backend=python + python --test', async () => {
+      if (!typed.passed) return blocked('Compilation non validée.');
+      if (!context.python || !tests.length) return missing(!context.python ? 'Python partagé absent.' : 'Aucun scénario #[test].');
+      return pythonTests(context, program, tests);
+    });
+    await record('preuve', 'catala dependency-graph + catala proof', async () => {
+      if (!typed.passed) return blocked('Compilation non validée.');
+      if (!context.pack.proof) return missing('Preuve indisponible dans ce pack.');
+      const reports = [], logs = [];
+      for (const file of files.filter((file) => !isTestFile(program.directory, file))) {
+        try {
+          const listed = await check(context, program.directory, 'champs', 'catala', ['dependency-graph', '--color=never', '-I', '.', file]);
+          if (!listed.entry.passed) throw new Error(listed.result.stderr || 'Inventaire des champs échoué.');
+          const names = Object.values(JSON.parse(listed.result.stdout).inter_scopes.nodes);
+          if (!names.length) throw new Error('Aucun champ à prouver.');
+          for (const scope of names) {
+            try {
+              await preuve(context, program, { fichier: file, scope });
+              reports.push(readJson(path.join(program.directory, 'resultats', 'preuve.json')));
+              logs.push(fs.readFileSync(path.join(program.directory, 'resultats', 'preuve.log'), 'utf8'));
+            } catch (error) { reports.push({ fichier: file, scope, passed: false, checks: [], obligations: 0, conflits: 0, error: error.message }); logs.push(`${file} › ${scope}: ${error.message}`); }
+          }
+        } catch (error) { reports.push({ fichier: file, scope: '', passed: false, checks: [], obligations: 0, conflits: 0, error: error.message }); logs.push(`${file}: ${error.message}`); }
+      }
+      const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: 'Fichiers métier', scope: `${reports.length} champ(s)`, passed: reports.length > 0 && reports.every((item) => item.passed), obligations: reports.reduce((n, item) => n + item.obligations, 0), conflits: reports.reduce((n, item) => n + item.conflits, 0), checks: reports.flatMap((item) => item.checks), scopes: reports, sources_sha256: digest };
+      writeResult(program.directory, 'preuve.json', report);
+      writeResult(program.directory, 'preuve.log', logs.join('\n'));
+      return { passed: report.passed, ...(!reports.length ? missing('Aucun champ métier à prouver.') : {}) };
+    });
+    await record('explication', 'catala explain', async () => {
+      if (!typed.passed) return blocked('Compilation non validée.');
+      const candidates = scopes.filter((scope) => scope.success && tests.some((file) => path.basename(file) === scope.file));
+      const selected = candidates.find((scope) => scope.scope_name === previous?.scope && scope.file === path.basename(previous?.fichier ?? '')) ?? candidates[0];
+      const matching = selected ? tests.filter((file) => path.basename(file) === selected.file) : [];
+      if (!selected || matching.length !== 1) return blocked('Aucun scénario réussi identifiable pour expliquer son exécution.');
+      await expliquer(context, program, { fichier: matching[0], scope: selected.scope_name });
+      return { passed: true };
+    });
+  };
+  await Promise.all([
+    execution(),
+    record('catleg', 'catleg check-expiry', async () => {
+      if (!context.python || !context.credentials) return missing(!context.python ? 'Python partagé absent.' : 'Identifiants PISTE absents.');
+      await catleg(context, program, flags.au ? { au: flags.au } : {});
+      const report = readJson(path.join(program.directory, 'resultats', 'catleg.json'));
+      return { passed: report.passed, message: report.fichiers.filter((file) => !file.passed && !file.skipped).flatMap((file) => file.messages).join(' · ') };
+    }),
+    record('citations', 'Contrôle des citations PieceMaker', async () => {
+      if (!context.citations) return missing('Contrôle de citations indisponible : serveur PieceMaker requis.');
+      const report = await context.citations({ cwd: program.root, programme: program.name });
+      writeResult(program.directory, 'citations.json', { ...report, sources_sha256: digest, started_utc: started, finished_utc: context.now() });
+      return { passed: report.passed, status: report.status, message: report.message };
+    }),
+  ]);
+  const changed = digest !== sourcesDigest(program.directory, sourceFiles(program.directory));
+  if (changed) { checks.push({ name: 'sources', command: '', exit_code: 1, seconds: 0, passed: false, status: 'blocked', message: 'Code modifié pendant la vérification : relancez verifier.' }); writeResult(program.directory, 'explication.dot', ''); }
+  const order = ['typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
+  checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed), sources_sha256: digest, checks };
   writeResult(program.directory, 'verification.json', report);
-  const failed = scopes.filter((scope) => !scope.success).map((scope) => `${scope.file} › ${scope.scope_name}`);
-  const lines = [`Programme ${program.name} : ${report.passed ? 'vérifié' : 'à corriger'}.`];
-  for (const entry of checks) lines.push(`- ${entry.name} : ${entry.passed ? 'ok' : 'échec'}${entry.files?.length ? ` (${entry.files.join(', ')})` : ''}`);
-  if (report.sources_sha256 !== sourcesDigest(program.directory, sourceFiles(program.directory))) lines.push('Code modifié pendant la vérification : relancez verifier.');
-  if (!tests.length) lines.push('Aucun test : ajoutez un champ d’application #[test].');
-  if (scopes.some((scope) => scope.scope_name === 'compilation')) lines.push('Compilation des tests en échec : un module n’expose que ses blocs catala-metadata.');
-  if (failed.length) lines.push(`Tests en échec : ${failed.join(', ')}.`);
-  if (report.passed) {
-    const candidates = scopes.filter((scope) => scope.success && tests.some((file) => path.basename(file) === scope.file));
-    const previous = readJson(path.join(program.directory, 'resultats', 'explication.json'));
-    const selected = candidates.find((scope) => scope.scope_name === previous?.scope && scope.file === path.basename(previous?.fichier ?? '')) ?? candidates[0];
-    const matching = selected ? tests.filter((file) => path.basename(file) === selected.file) : [];
-    if (selected && matching.length === 1) {
-      try {
-        await expliquer(context, program, { fichier: matching[0], scope: selected.scope_name });
-        lines.push(`Graphe actualisé : ${matching[0]} › ${selected.scope_name}.`);
-      } catch (error) { lines.push(error.message); }
-    } else lines.push('Graphe non produit : indiquez un scénario avec pm catala expliquer.');
-  } else writeResult(program.directory, 'explication.dot', '');
-  lines.push(`Détail : .piecemaker/catala/${program.name}/resultats/`);
-  return lines.join('\n');
+  const labels = { passed: 'ok', failed: 'échec', blocked: 'bloqué', missing: 'non effectué' };
+  return [`Programme ${program.name} : ${report.passed ? 'vérifié' : 'à corriger'}.`, ...checks.map((entry) => `- ${entry.name} : ${labels[entry.status]}${entry.message ? ` — ${entry.message}` : ''}${entry.files?.length ? ` (${entry.files.join(', ')})` : ''}`), `Détail : .piecemaker/catala/${program.name}/resultats/`].join('\n');
 }
 
 async function formater(context, program) {
@@ -364,6 +436,7 @@ export async function runCatala({ commande, cwd, programme, flags = {}, args = [
     run: deps.run || runProcess,
     now: deps.now || (() => new Date().toISOString()),
     python: deps.python !== undefined ? deps.python : sharedPython({ env, homeDir }),
+    citations: deps.citations,
     credentials: deps.credentials !== undefined ? deps.credentials : pisteCredentials(homeDir),
   };
   if (commande === 'env') {
@@ -377,6 +450,7 @@ export async function runCatala({ commande, cwd, programme, flags = {}, args = [
       return `${name} : ${report ? `${report.passed ? 'vérifié' : 'à corriger'} le ${report.finished_utc}` : 'jamais vérifié'}`;
     }).join('\n');
   }
+  if (commande === 'verifier') { const program = selectProgram(cwd, programme); return verifier(context, { ...program, root: cwd }, flags); }
   const pack = requirePack(context);
   if (commande === 'exec') {
     const [tool, ...rest] = args;
@@ -386,7 +460,6 @@ export async function runCatala({ commande, cwd, programme, flags = {}, args = [
     return { exitCode: result.code };
   }
   const program = selectProgram(cwd, programme);
-  if (commande === 'verifier') return verifier(context, program);
   if (commande === 'formater') return formater(context, program);
   if (commande === 'preuve') return preuve(context, program, flags);
   if (commande === 'catleg') return catleg(context, program, flags);
