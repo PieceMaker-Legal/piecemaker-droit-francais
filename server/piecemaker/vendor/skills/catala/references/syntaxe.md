@@ -64,6 +64,11 @@ champ d'application TestUrgence:
 | « Please add parentheses » | `et` et `ou` mélangés sans parenthèses | Parenthésez : `(a ou b) et c` |
 | « Reserved builtin name » | Nom réservé (`nombre`, par exemple) | Choisissez un autre nom |
 | `[WARNING] Unused variable` | Entrée qui ne sert à aucun résultat | Utilisez-la ou retirez-la |
+| « Module declared as X, which does not match the file name » | Nom du module différent du nom du fichier | Nommez le module d'après le fichier : `resolution.catala_fr` → `> Module Resolution` |
+| Citation : « Pièce hors du dossier » | Lien relatif qui remonte trop haut | Comptez depuis `.piecemaker/catala/<nom>/` : `../../../<chemin de la pièce>.md` |
+| Citation : « Aucun extrait cité » | Le contrôle lit la citation sous la première ligne qui contient le lien ; ici, un titre | Ne mettez le lien qu'une fois, suivi directement de `Citation : « … »` |
+| Deuxième citation ignorée | Seule la première ligne `Citation :` sous un lien est lue | Gardez une seule citation par source, la plus probante |
+| Citation : « Lien de source absent » | Espace dans le chemin du lien | Encodez chaque espace en `%20` |
 | Variable sans valeur | Entrée non fixée dans le test | Fixez chaque entrée dans `avec { -- nom: valeur }` |
 
 ## Mots-clés utiles
