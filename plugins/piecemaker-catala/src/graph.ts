@@ -1,14 +1,23 @@
 import { logicalText, sourceContext } from './source-context.js';
 
-const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
+type File = { nom: string; chemin: string; contenu?: string };
+type Citation = { origin: string; target: string; quote: string; status: string };
+export type Source = { label: string; target: string; kind: string; origin: string; quote: string; status: string };
+export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; answer: boolean; name: string; title: string; formula: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string };
+export type Reasoning = { steps: Step[]; others: Source[] };
 
-export function explanationGraph(dot: string, files: Array<{ nom: string; chemin: string; contenu?: string }> = [], controls: Array<{ title: string; lines: string[]; value: string; origin?: string; target?: string; file?: string; articles?: string[]; versions?: Array<{ id: string; au: string; debut?: string; fin?: string | null; valide: boolean | null }>; detail?: string }> = [], citations: Array<{ origin: string; target: string; quote: string; label?: string; kind?: string; status: string; message: string }> = []): string {
-  const nodes = new Map<string, { lines: string[]; kind: string; value: string; source: string; context: string; documentation: string; target?: string; origin?: string; issue?: string; quote?: string }>();
-  const inputBlock = dot.match(/subgraph\s+cluster_inputs\s*\{([^}]*)\}/)?.[1] ?? '';
-  const inputs = new Set(inputBlock.match(/\bx\d+\b/g) ?? []);
+const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
+const key = (name: string) => name.normalize('NFC').trim().toLowerCase().replace(/[\s_]+/g, '_');
+export const human = (text: string) => text.replace(/[\p{L}\p{N}_]+/gu, (word) => /^(?:true|vrai)$/i.test(word) ? 'Vrai' : /^(?:false|faux)$/i.test(word) ? 'Faux' : word.replace(/_/g, ' ')).replace(/\s+/g, ' ').trim();
+const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+const tone = (value: string) => value === 'Vrai' ? 'ok' : value === 'Faux' ? 'ko' : /^(?:Indéterminé|Disputé|null|None)$/i.test(value) ? 'warn' : 'neutral';
+const KINDS = { fact: 'Fait', condition: 'Condition', rule: 'Règle' };
+
+function parseDot(dot: string) {
+  const nodes = new Map<string, { lines: string[]; kind: string; source: string }>();
+  const inputs = new Set(dot.match(/subgraph\s+cluster_inputs\s*\{([^}]*)\}/)?.[1].match(/\bx\d+\b/g) ?? []);
   const plain = (html: string) => new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
-  const attribute = (text: string, name: string) => plain(text.match(new RegExp(`\\b${name}\\s*=\\s*"((?:\\\\.|[^"\\\\])*)"`))?.[1] ?? '');
-  const edges: Array<{ from: string; to: string; condition: boolean; control?: boolean }> = [];
+  const edges: Array<{ from: string; to: string }> = [];
   const statements = /\b(x\d+)\s*(?:->\s*(x\d+)\s*)?\[/g;
   let match: RegExpExecArray | null;
   while ((match = statements.exec(dot))) {
@@ -29,165 +38,154 @@ export function explanationGraph(dot: string, files: Array<{ nom: string; chemin
     statements.lastIndex = end + 1;
     const attributes = dot.slice(start, end);
     if (match[2]) {
-      if (!/style\s*=\s*"?invis\b/.test(attributes)) edges.push({ from: match[1], to: match[2], condition: /style\s*=\s*"?dashed\b/.test(attributes) });
-    } else {
-      const label = attributes.match(/\blabel\s*=\s*<([\s\S]*)>/)?.[1];
-      if (!label) throw new Error('Libellé Catala absent.');
-      const document = new DOMParser().parseFromString(label.replace(/<\/(?:td|tr)>|<br\s*\/?\s*>/gi, '\n'), 'text/html');
-      const lines = (document.body.textContent || '').split('\n').map((line) => line.trim()).filter(Boolean);
-      const condition = /style\s*=\s*"[^"]*dashed/.test(attributes);
-      const kind = condition ? 'condition' : inputs.has(match[1]) ? 'input' : /shape\s*=\s*plaintext/.test(attributes) ? 'conclusion' : 'calculation';
-      const source = attribute(attributes, 'URL');
-      const documentation = sourceContext(source, files);
-      nodes.set(match[1], { lines, kind, value: condition ? '' : lines.length > 1 ? lines.at(-1)!.replace(/^=\s*/, '') : '', source, context: attribute(attributes, 'tooltip'), documentation: documentation.text });
+      if (!/style\s*=\s*"?invis\b/.test(attributes)) edges.push({ from: match[1], to: match[2] });
+      continue;
     }
+    const label = attributes.match(/\blabel\s*=\s*<([\s\S]*)>/)?.[1];
+    if (!label) throw new Error('Libellé Catala absent.');
+    const lines = (new DOMParser().parseFromString(label.replace(/<\/(?:td|tr)>|<br\s*\/?\s*>/gi, '\n'), 'text/html').body.textContent || '').split('\n').map((line) => line.trim()).filter(Boolean);
+    const kind = /style\s*=\s*"[^"]*dashed/.test(attributes) ? 'condition' : inputs.has(match[1]) ? 'input' : /shape\s*=\s*plaintext/.test(attributes) ? 'conclusion' : 'calculation';
+    nodes.set(match[1], { lines, kind, source: plain(attributes.match(/\bURL\s*=\s*"((?:\\.|[^"\\])*)"/)?.[1] ?? '') });
   }
   if (edges.some((edge) => !nodes.has(edge.from) || !nodes.has(edge.to))) throw new Error('Graphe Catala invalide.');
-  let reference = 0;
-  const cited = new Map<string, string>();
-  for (const [id, node] of [...nodes]) {
-    for (const entry of sourceContext(node.source, files).references) {
-      const identity = JSON.stringify([entry.origin, entry.label, entry.target, entry.quote]);
-      let key = cited.get(identity);
-      if (!key) {
-        key = `r${++reference}`;
-        cited.set(identity, key);
-        nodes.set(key, { lines: [entry.label, ...(entry.target ? [entry.target] : [])], kind: entry.kind, value: '', source: node.source, context: node.context, documentation: node.documentation, target: entry.target, origin: entry.origin, quote: entry.quote });
+  return { nodes, edges };
+}
+
+function documentSources(file: File, citations: Citation[], linked: Map<string, Source[]>) {
+  const blocks: Array<{ start: number; end: number; sources: Source[] }> = [];
+  let pending: Source[] = [];
+  let section: string[] = [];
+  let fence = '';
+  let start = 0;
+  let catala = false;
+  const flush = () => {
+    const text = section.join('\n');
+    section = [];
+    if (!text.trim()) return;
+    const concerned = [...text.matchAll(/^Concerne\s*:\s*(.+)$/gim)].flatMap((entry) => entry[1].split(',').map(key)).filter(Boolean);
+    const found = sourceContext('https://catala.local/section.md', [{ nom: 'section.md', chemin: file.chemin, contenu: text }], true).references.filter((entry) => entry.target).map((entry) => ({ label: entry.label, target: entry.target, kind: entry.kind, origin: file.chemin, quote: entry.quote, status: citations.find((citation) => citation.origin === file.chemin && citation.target === entry.target && citation.quote === entry.quote)?.status ?? '' }));
+    if (concerned.length) for (const name of concerned) linked.set(name, [...(linked.get(name) ?? []), ...found]);
+    else pending.push(...found);
+  };
+  (file.contenu ?? '').split(/\r?\n/).forEach((line, index) => {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (marker && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) {
+        if (catala) { blocks.push({ start, end: index + 1, sources: pending }); pending = []; }
+        fence = '';
       }
-      edges.push({ from: key, to: id, condition: false });
+      return;
     }
+    if (marker) { flush(); fence = marker[1]; start = index + 1; catala = marker[2].trim() === 'catala'; return; }
+    if (/^#{1,6}\s/.test(line)) flush();
+    section.push(line);
+  });
+  flush();
+  return { blocks, trailing: pending };
+}
+
+export function reasoning(dot: string, files: File[] = [], citations: Citation[] = []): Reasoning {
+  const { nodes, edges } = parseDot(dot);
+  const linked = new Map<string, Source[]>();
+  const documents = new Map(files.map((file) => [file.nom.split('/').pop()!, documentSources(file, citations, linked)]));
+  const located = (source: string) => {
+    try {
+      const url = new URL(source);
+      const line = Number(url.hash.match(/^#L(\d+)/)?.[1]);
+      return documents.get(decodeURIComponent(url.pathname).split('/').pop() ?? '')?.blocks.find((block) => block.start < line && line < block.end)?.sources ?? [];
+    } catch { return []; }
+  };
+  const steps = new Map<string, Step>();
+  for (const [id, node] of nodes) {
+    const body = node.kind === 'conclusion' && node.lines.length > 2 ? node.lines.slice(1) : node.lines;
+    let equal = -1;
+    body.forEach((line, index) => { if (line.startsWith('=')) equal = index; });
+    const value = human(equal >= 0 ? body.slice(equal).join(' ').replace(/^=\s*/, '') : node.kind !== 'condition' && body.length > 1 ? body.at(-1)! : '');
+    const kind = node.kind === 'input' ? 'fact' : node.kind === 'condition' ? 'condition' : 'rule';
+    const head = kind === 'condition' ? body.slice(0, equal >= 0 ? equal : undefined).join(' ') : body[0] ?? '';
+    const formula = kind === 'condition' ? '' : human(body.slice(1, equal >= 0 ? equal : body.length > 1 ? -1 : undefined).join(' '));
+    steps.set(id, { id, kind, answer: node.kind === 'conclusion', name: kind === 'condition' ? '' : head, title: capital(human(head)), formula, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '' });
   }
-  for (const file of files) {
-    for (const entry of [...sourceContext(`https://catala.local/${encodeURIComponent(file.nom.split('/').pop()!)}`, [file], true).references, ...citations.filter((entry) => entry.origin === file.chemin).map((entry) => ({ ...entry, label: entry.label ?? entry.target, kind: entry.kind ?? 'reference' }))]) {
-      const identity = JSON.stringify([entry.origin, entry.label, entry.target, entry.quote]);
-      if (cited.has(identity)) continue;
-      const key = `r${++reference}`;
-      cited.set(identity, key);
-      nodes.set(key, { lines: [entry.label, ...(entry.target ? [entry.target] : [])], kind: entry.kind, value: '', source: '', context: 'Référence du programme, absente de la trace exécutée.', documentation: '', target: entry.target, origin: entry.origin, quote: entry.quote });
-    }
+  for (const step of [...steps.values()].filter((entry) => entry.answer)) {
+    const twin = step.parents.map((id) => steps.get(id)!).find((parent) => parent.kind === 'rule' && key(parent.name) === key(step.name));
+    if (!twin) continue;
+    twin.answer = true;
+    steps.delete(step.id);
+    for (const other of steps.values()) other.parents = other.parents.map((id) => id === step.id ? twin.id : id);
   }
-  for (const node of nodes.values()) {
-    if (['piece', 'article', 'jurisprudence', 'reference'].includes(node.kind) && !node.target) node.issue = 'Lien absent du programme : renseignez le chemin de la pièce ou l’adresse officielle de la source.';
-    if (node.value === 'Disputé') node.issue = node.kind === 'input' ? 'Fait contesté : examinez les pièces contradictoires et tranchez la donnée du scénario.' : 'Résultat disputé : tranchez les faits contestés dans les dépendances.';
-    if (/^(?:Indéterminé|null|None)$/.test(node.value)) node.issue = node.kind === 'input' ? 'Donnée non établie : renseignez sa valeur et la pièce qui la justifie.' : 'Résultat indéterminé : établissez les données manquantes dans les dépendances.';
-    if (node.kind !== 'article') continue;
-    const file = files.find((entry) => entry.chemin === node.origin);
-    const report = controls.find((control) => control.file === file?.nom && control.file);
-    node.lines.push(...(report ? report.lines : ['Vigueur : non contrôlée pour ce fichier']));
-    const id = node.target?.match(/(?:LEGIARTI|JORFARTI)\d+/)?.[0];
-    const version = report?.versions?.find((entry) => entry.id === id);
-    if (version) node.lines.push(`Version ${version.debut ?? '?'} → ${version.fin ?? 'sans fin publiée'} : ${version.valide === null ? 'non contrôlée' : version.valide ? 'couvre' : 'ne couvre pas'} le ${version.au}.`);
-    node.issue = [node.issue, version?.valide === true ? 'Période vérifiée. Applicabilité juridique et dispositions transitoires à justifier.' : 'Version applicable non établie : vérifiez le texte à la date des faits.'].filter(Boolean).join(' ');
+  const used = new Set<string>();
+  const identity = (source: Source) => JSON.stringify([source.origin, source.label, source.target, source.quote]);
+  for (const step of steps.values()) {
+    const own = [...(step.kind === 'rule' ? located(nodes.get(step.id)!.source) : []), ...(step.name ? linked.get(key(step.name)) ?? [] : [])];
+    step.sources = own.filter((source, index) => own.findIndex((other) => identity(other) === identity(source)) === index);
+    step.sources.forEach((source) => used.add(identity(source)));
+    if (step.kind === 'fact' && step.value === 'Disputé') step.issue = 'Fait contesté : tranchez-le au vu des pièces.';
+    if (step.kind === 'fact' && /^(?:Indéterminé|null|None)$/.test(step.value)) step.issue = 'Fait non établi : indiquez la pièce qui l’établit.';
+    if (step.kind === 'rule' && !step.sources.some((source) => source.kind !== 'piece')) step.issue = 'Aucun article ni aucune décision rattaché à cette règle.';
   }
-  for (const node of nodes.values()) {
-    const result = citations.find((entry) => entry.origin === node.origin && entry.target === node.target && entry.quote === node.quote);
-    if (!result) continue;
-    node.lines.push(`Citation : ${result.message}`);
-    node.value = result.status === 'passed' ? 'Vrai' : result.status === 'failed' ? 'Faux' : 'Indéterminé';
-    if (result.status !== 'passed') node.issue = [node.issue, result.message].filter(Boolean).join(' ');
-  }
-  for (const [index, control] of controls.entries()) {
-    nodes.set(`c${index}`, { lines: [control.title, ...control.lines], kind: 'control', value: control.value, source: '', context: 'Dernier contrôle enregistré du programme. Ce contrôle ne justifie pas les faits.', documentation: control.detail ?? '', target: control.target, origin: control.origin, issue: control.value === 'Faux' ? `${control.title} : contrôle échoué. Corrigez la cause indiquée ci-dessus puis relancez ce contrôle.` : undefined });
-  }
-  if (!nodes.size) throw new Error('Graphe Catala invalide.');
   const levels = new Map<string, number>();
-  for (let pass = 0; pass < nodes.size; pass++) {
-    for (const id of nodes.keys()) {
-      if (levels.has(id)) continue;
-      const parents = edges.filter((edge) => edge.to === id).map((edge) => edge.from);
-      if (parents.every((parent) => levels.has(parent))) levels.set(id, parents.length ? Math.max(...parents.map((parent) => levels.get(parent)!)) + 1 : 0);
+  for (let pass = 0; pass <= steps.size; pass++) {
+    for (const step of steps.values()) {
+      if (levels.has(step.id) || !step.parents.every((id) => levels.has(id))) continue;
+      levels.set(step.id, step.parents.length ? Math.max(...step.parents.map((id) => levels.get(id)!)) + 1 : 0);
     }
   }
-  if (levels.size !== nodes.size) throw new Error('Le graphe Catala contient un cycle.');
-  const ordered = [...nodes.keys()].sort((a, b) => levels.get(a)! - levels.get(b)!);
-  const steps = new Map(ordered.filter((id) => ['calculation', 'conclusion'].includes(nodes.get(id)!.kind)).map((id, index) => [id, index + 1]));
-  for (const [index, control] of controls.entries()) {
-    for (const [id, node] of nodes) {
-      const concerned = control.file
-        ? node.kind === 'article' && files.some((file) => file.nom === control.file && file.chemin === node.origin)
-        : false;
-      if (concerned) edges.push({ from: `c${index}`, to: id, condition: false, control: true });
-    }
-  }
-  const assignments = new Map(steps);
-  const stepFor = (id: string) => {
-    if (assignments.has(id)) return assignments.get(id)!;
-    const reachable = new Set([id]);
-    for (let pass = 0; pass < nodes.size; pass++) for (const edge of edges) if (reachable.has(edge.from)) reachable.add(edge.to);
-    const step = Math.min(...[...reachable].map((item) => steps.get(item) ?? Infinity));
-    assignments.set(id, step);
-    return step;
-  };
-  const human = (value: string) => value.replace(/_/g, ' ').replace(/\btrue\b/g, 'Vrai').replace(/\bfalse\b/g, 'Faux');
-  const wrap = (text: string) => text.match(/.{1,36}(?:\s|$)|.{1,36}/gu) ?? [''];
-  const titles: Record<string, string> = { input: 'Donnée du scénario', condition: 'Condition appliquée', calculation: 'Règle · résultat', conclusion: 'Résultat du champ', piece: 'Pièce citée', article: 'Article · source citée', jurisprudence: 'Jurisprudence citée', reference: 'Référence citée', control: 'Contrôle du programme' };
+  if (levels.size !== steps.size) throw new Error('Le graphe Catala contient un cycle.');
+  for (const step of steps.values()) step.level = levels.get(step.id)!;
+  const all = [...[...documents.values()].flatMap((document) => [...document.blocks.flatMap((block) => block.sources), ...document.trailing]), ...[...linked.values()].flat()];
+  const others = all.filter((source, index) => !used.has(identity(source)) && all.findIndex((other) => identity(other) === identity(source)) === index);
+  return { steps: [...steps.values()].sort((a, b) => a.level - b.level), others };
+}
+
+const sourceLink = (source: Source) => `<a href="#" class="pmc-link" data-open-reference data-target="${escape(source.target)}" data-origin="${escape(source.origin)}" data-quote="${escape(source.quote)}">${escape(source.label)}</a>`;
+const sourceItem = (source: Source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}${source.quote ? `<q>${escape(source.quote)}</q>` : ''}${source.status === 'failed' ? '<span class="pmc-warn">Citation non retrouvée dans la source</span>' : ''}</li>`;
+const sourceList = (sources: Source[]) => sources.length ? `<ul class="pmc-sources">${sources.map(sourceItem).join('')}</ul>` : '';
+const value = (step: Step) => step.value ? `<span class="pmc-value pmc-${tone(step.value)}">${escape(step.value)}</span>` : '';
+
+export function reasoningCard(step: Step, model: Reasoning) {
+  const legal = step.sources.filter((source) => source.kind !== 'piece');
+  const pieces = step.sources.filter((source) => source.kind === 'piece');
+  const label = step.answer ? 'Réponse' : KINDS[step.kind];
+  const parents = step.parents.map((id) => model.steps.find((entry) => entry.id === id)!);
+  const application = parents.map((parent) => `<li data-tone="${tone(parent.value)}">${parent.kind === 'rule' ? `<a href="#" class="pmc-link" data-goto="${parent.id}">${escape(parent.title)}</a>` : `<span>${escape(parent.title)}</span>`}${value(parent)}${parent.kind === 'rule' ? '' : sourceList(parent.sources)}${parent.issue ? `<p class="pmc-warn">${escape(parent.issue)}</p>` : ''}</li>`).join('');
+  return `<section class="pmc-rule" data-card="${step.id}" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${label}</span><h3>${escape(step.title)}</h3>${value(step)}</header>${step.formula ? `<p class="pmc-formula">${logicalText(step.formula)}</p>` : ''}${legal.length ? `<h4>Fondement</h4>${sourceList(legal)}` : ''}${pieces.length ? `<h4>Pièces</h4>${sourceList(pieces)}` : ''}${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}${application ? `<h4>Application au dossier</h4><ul class="pmc-application">${application}</ul>` : ''}</section>`;
+}
+
+export function reasoningText(model: Reasoning) {
+  const rules = model.steps.filter((step) => step.kind === 'rule').sort((a, b) => Number(b.answer) - Number(a.answer) || b.level - a.level);
+  return `${rules.map((step) => reasoningCard(step, model)).join('')}${model.others.length ? `<section class="pmc-rule pmc-others"><header><h3>Autres sources citées</h3></header>${sourceList(model.others)}</section>` : ''}`;
+}
+
+export function reasoningIssues(model: Reasoning) {
+  return [
+    ...model.steps.filter((step) => step.issue).map((step) => ({ id: step.id, title: step.title, issue: step.issue })),
+    ...[...model.steps.flatMap((step) => step.sources.map((source) => ({ id: step.id, source }))), ...model.others.map((source) => ({ id: '', source }))].filter((entry, index, all) => entry.source.status === 'failed' && all.findIndex((other) => other.source === entry.source) === index).map((entry) => ({ id: entry.id, title: entry.source.label, issue: 'Citation non retrouvée dans la source.' })),
+  ];
+}
+
+export function reasoningGraph(model: Reasoning) {
+  if (!model.steps.length) return '';
+  const width = 290;
+  const gap = 70;
+  const lines = (text: string, size: number) => Math.max(1, Math.ceil(text.length / size));
+  const height = (step: Step) => 46 + lines(step.title, 30) * 19 + (step.value ? 26 : 0) + step.sources.reduce((total, source) => total + lines(source.label, 38) * 17 + 4, 0);
   const positions = new Map<string, { x: number; y: number; height: number }>();
-  const content = new Map([...nodes].map(([id, node]) => [id, {
-    title: wrap(human(node.lines[0])),
-    body: [...node.lines.slice(1), ...(node.issue ? [node.issue] : [])].flatMap((line) => wrap(line)),
-  }]));
-  const attachedControls = (id: string) => edges.filter((edge) => edge.control && edge.to === id).map((edge) => edge.from);
-  const height = (id: string) => 58 + attachedControls(id).length * 28 + (nodes.get(id)!.target ? 34 : 0) + (content.get(id)!.title.length + content.get(id)!.body.length) * 22 + (nodes.get(id)!.kind === 'condition' ? (nodes.get(id)!.lines.join(' ').match(/\b(?:et|ou|and|or)\b/g)?.length ?? 0) * 12 : 0);
-  const place = (id: string, column: number, top: number) => {
-    positions.set(id, { x: 24 + column * 340, y: top, height: height(id) });
-    return top + height(id) + 22;
-  };
-  let y = 36;
-  const headings: string[] = [];
-  const spine = ordered.filter((id) => steps.has(id));
-  const columns = new Map<string, number>();
-  for (const id of spine) {
-    headings.push(`<text class="pmc-step-heading" data-step-heading="${steps.get(id)}" x="24" y="${y}">Étape ${steps.get(id)} · ${escape(human(nodes.get(id)!.lines[0]))}</text>`);
-    y += 26;
-    const depths = new Map([[id, 0]]);
-    for (let pass = 0; pass < nodes.size; pass++) {
-      let changed = false;
-      for (const edge of edges) {
-        const depth = depths.get(edge.to);
-        if (depth === undefined || steps.has(edge.from) || stepFor(edge.from) !== steps.get(id)) continue;
-        if ((depths.get(edge.from) ?? -1) < depth + 1) { depths.set(edge.from, depth + 1); changed = true; }
-      }
-      if (!changed) break;
-    }
-    const bottoms = new Map<number, number>();
-    for (const [key, column] of [...depths].sort((a, b) => a[1] - b[1])) {
-      if (positions.has(key)) continue;
-      columns.set(key, column);
-      bottoms.set(column, place(key, column, bottoms.get(column) ?? y));
-    }
-    y = Math.max(...bottoms.values()) + 32;
+  const bottoms = new Map<number, number>();
+  for (const step of model.steps) {
+    const top = bottoms.get(step.level) ?? 20;
+    positions.set(step.id, { x: 20 + step.level * (width + gap), y: top, height: height(step) });
+    bottoms.set(step.level, top + height(step) + 16);
   }
-  const remaining = ordered.filter((id) => !positions.has(id));
-  if (remaining.length) {
-    headings.push(`<text class="pmc-step-heading" x="24" y="${y}">Bilans du programme et références hors trace</text>`);
-    y += 26;
-    for (let index = 0; index < remaining.length; index += 3) {
-      y = Math.max(...remaining.slice(index, index + 3).map((id, column) => { columns.set(id, column); return place(id, column, y); })) + 24;
-    }
-  }
-  const width = Math.max(1020, (Math.max(...columns.values()) + 1) * 340);
-  const tone = (value: string) => /^(?:true|Vrai)$/i.test(value) ? 'ok' : /^(?:false|Faux)$/i.test(value) ? 'ko' : /^(?:Indéterminé|Disputé|null|None)$/i.test(value) ? 'warn' : 'neutral';
-  const wires = edges.map((edge) => {
-    const from = positions.get(edge.from)!;
-    const to = positions.get(edge.to)!;
-    const same = from.x === to.x;
-    const forward = from.x < to.x;
-    const x1 = from.x + (!same && forward ? 280 : 0), y1 = from.y + from.height / 2;
-    const x2 = to.x + (!same && !forward ? 280 : 0), y2 = to.y + to.height / 2;
-    const bend = forward && !same ? 35 : -35;
-    const d = `M${x1} ${y1} C${x1 + bend} ${y1} ${x2 + (same ? bend : -bend)} ${y2} ${x2} ${y2}`;
-    return `<path class="pmc-wire" data-from="${edge.from}" data-to="${edge.to}" data-relation="${edge.control ? 'control' : edge.condition ? 'condition' : 'dependency'}" d="${d}" fill="none" stroke="currentColor" marker-end="url(#pmc-arrow)"${edge.control ? ' stroke-dasharray="2 5"' : edge.condition ? ' stroke-dasharray="6 4"' : ''}/>`;
+  const total = { width: 40 + (Math.max(...model.steps.map((step) => step.level)) + 1) * (width + gap) - gap, height: Math.max(...bottoms.values()) + 4 };
+  const wires = model.steps.flatMap((step) => step.parents.map((id) => {
+    const from = positions.get(id)!;
+    const to = positions.get(step.id)!;
+    const x1 = from.x + width, y1 = from.y + 30, x2 = to.x, y2 = to.y + 30;
+    return `<path class="pmc-wire" data-from="${id}" data-to="${step.id}" d="M${x1} ${y1} C${x1 + gap / 2} ${y1} ${x2 - gap / 2} ${y2} ${x2} ${y2}" fill="none" stroke="currentColor" marker-end="url(#pmc-arrow)"/>`;
+  })).join('');
+  const boxes = model.steps.map((step) => {
+    const position = positions.get(step.id)!;
+    return `<article class="pmc-node" data-node="${step.id}" data-kind="${step.answer ? 'answer' : step.kind}" data-tone="${tone(step.value)}"${step.issue ? ` data-issue="${escape(step.issue)}"` : ''} style="left:${position.x}px;top:${position.y}px;width:${width}px;min-height:${position.height}px" tabindex="0" role="button" aria-pressed="false" aria-label="${escape(`${step.answer ? 'Réponse' : KINDS[step.kind]} : ${step.title}${step.value ? `, ${step.value}` : ''}`)}"><span class="pmc-kind">${step.answer ? 'Réponse' : KINDS[step.kind]}</span><strong>${escape(step.title)}</strong>${value(step)}${step.sources.length ? `<ul class="pmc-node-sources">${step.sources.map((source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}</li>`).join('')}</ul>` : ''}</article>`;
   }).join('');
-  const boxes = ordered.map((id) => {
-    const node = nodes.get(id)!;
-    const position = positions.get(id)!;
-    const lines = content.get(id)!;
-    const state = node.kind === 'control' && node.value === 'Faux' ? 'ko' : node.issue ? 'warn' : tone(node.value);
-    const missing = state === 'warn';
-    const text = [...lines.title, ...lines.body];
-    const step = stepFor(id);
-    const checks = attachedControls(id);
-    return `<g class="pmc-node" data-node="${id}" data-step="${Number.isFinite(step) ? step : ''}" data-column="${columns.get(id)}" data-issue="${escape(node.issue ?? '')}" data-kind="${node.kind}" data-tone="${state}" data-monetary="${/[$€£]/.test(node.lines.join(' '))}" data-title="${escape(human(node.lines[0]))}" data-value="${escape(node.value)}" data-expression="${escape(node.lines.join('\n'))}" data-literary-context="${escape(node.documentation)}" data-quote="${escape(node.quote ?? '')}" data-target="${escape(node.target ?? '')}" data-origin="${escape(node.origin ?? '')}" data-source="${escape(node.source)}" data-context="${escape(node.context)}" tabindex="0" role="button" aria-label="${escape(`${Number.isFinite(step) ? `Étape ${step} · ` : ''}${titles[node.kind]} : ${human(node.lines.join(' '))}`)}" aria-pressed="false"><title>${escape(node.context || human(node.lines.join(' ')))}</title><rect x="${position.x}" y="${position.y}" width="280" height="${position.height}" rx="14"${missing ? ' stroke-dasharray="5 4"' : ''}/><text class="pmc-node-kind" x="${position.x + 14}" y="${position.y + 22}">${steps.has(id) ? 'Objectif · ' : ''}${titles[node.kind]}</text>${node.kind === 'condition' ? `<foreignObject x="${position.x + 14}" y="${position.y + 34}" width="252" height="${position.height - 40}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-condition-expression">${logicalText(node.lines.join('\n'))}</div></foreignObject>` : `<text class="pmc-node-text" x="${position.x + 14}" y="${position.y + 46}">${text.map((line, index) => `<tspan x="${position.x + 14}" dy="${index ? 18 : 0}"${node.issue && index >= text.length - wrap(node.issue).length ? ' class="pmc-node-issue"' : index >= lines.title.length ? ' class="pmc-node-value"' : ''}>${escape(line)}</tspan>`).join('')}</text>`}${checks.length ? `<foreignObject x="${position.x + 14}" y="${position.y + position.height - checks.length * 28 - (node.target ? 44 : 10)}" width="252" height="${checks.length * 28}"><div xmlns="http://www.w3.org/1999/xhtml" class="pmc-check-badges">${checks.map((key) => { const control = nodes.get(key)!; const state = tone(control.value); return `<button class="pmc-check-badge pmc-${state}" data-select-node="${key}" title="${escape(control.lines.join(' · '))}">${state === 'ok' ? '✓' : state === 'ko' ? '!' : '?'} ${escape(control.lines[0])}</button>`; }).join('')}</div></foreignObject>` : ''}${node.target ? `<foreignObject x="${position.x + 14}" y="${position.y + position.height - 34}" width="252" height="30"><div xmlns="http://www.w3.org/1999/xhtml"><button data-open-reference="${id}">${node.kind === 'control' ? 'Ouvrir le journal' : 'Ouvrir la référence'}</button></div></foreignObject>` : ''}${missing ? `<text class="pmc-node-alert" x="${position.x + 258}" y="${position.y + 22}">?</text>` : ''}</g>`;
-  }).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Règles, conditions et données de l’exécution Catala" viewBox="0 0 ${width} ${y}" width="${width}" height="${y}"><defs><marker id="pmc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker></defs>${headings.join('')}${wires}${boxes}</svg>`;
+  return `<div class="pmc-graph" data-width="${total.width}" style="width:${total.width}px;height:${total.height}px"><svg aria-hidden="true" width="${total.width}" height="${total.height}"><defs><marker id="pmc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker></defs>${wires}</svg>${boxes}</div>`;
 }

@@ -1,68 +1,34 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
-import { explanationGraph } from './graph.ts';
-import { mountExplanation } from './graph-view.ts';
 
-test('navigates the execution, exposes open states and releases replay on unmount', () => {
-  const dom = new JSDOM('<section class="pmc-view" data-mode="graph"><div role="tablist"><button role="tab" data-mode="graph" aria-selected="true"></button><button role="tab" data-mode="written" aria-selected="false"></button></div><div class="pmc-explanation"><select data-result></select><div class="pmc-open-states"></div><div class="pmc-canvas"><div class="pmc-stage"></div><aside class="pmc-inspector" hidden></aside><div class="pmc-legend" hidden></div></div></div><div class="pmc-written" hidden><div class="pmc-step-list"></div></div><button data-legend></button><button data-fit></button><button data-zoom="1.2"></button><button data-replay></button></section>');
-  globalThis.DOMParser = dom.window.DOMParser;
+const contenu = ['> Module Demo', '', '## Article 1217', '', '[Article 1217](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041431)', 'Citation : « Passage juridique fictif. »', '', '```catala', 'définition sanction_possible égal à inexécution', '```', '', '## Pièce 1', '', 'Concerne : inexécution', '', '[Attestation de Jean Dupont](../../../pieces/attestation.md)', 'Citation : « Société Exemple SAS n’a pas livré. »', '', '## Hors dossier', '', '[Hors dossier](../../../../hors-dossier.md)', '[Décision fictive](https://www.courdecassation.fr/decision/abcdef0123456789abcdef01)'].join('\n');
+const graphe = `digraph G {
+  x001 [label=<<table><tr><td>inexécution</td><td>true</td></tr></table>>, URL="https://catala.local/test_demo.catala_fr#L9", style="filled"];
+  x002 [label=<<table><tr><td>sanction_possible</td></tr><tr><td>inexécution</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L9", style="filled"];
+  subgraph cluster_inputs { x001; }
+  x001 -> x002 [style="solid"];
+}`;
+const program = (changes = {}) => ({ nom: 'demo', enCours: false, perimee: false, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier/.piecemaker/catala/demo/demo.catala_fr', contenu }], journaux: [], verification: { started_utc: '2026-11-05T09:59:58Z', finished_utc: '2026-11-05T10:00:00Z', passed: true, checks: [] }, citations: { results: [] }, preuve: null, catleg: null, explication: { passed: true, fichier: 'test_demo.catala_fr', scope: 'Test', started_utc: '2026-11-05T09:59:58Z', finished_utc: '2026-11-05T10:00:00Z', checks: [] }, graphe, ...changes });
+
+async function open(programmes, fetchMore = async () => null) {
+  const { mount, unmount } = await import('./client.ts');
+  const dom = new JSDOM('<div id="panel"></div><div id="outside"></div>');
   globalThis.window = dom.window;
-  const container = dom.window.document.querySelector('section');
-  container.querySelector('.pmc-stage').innerHTML = explanationGraph(`digraph G {
-    x001 [label=<<table><tr><td>fait_attendu</td></tr><tr><td>= Indéterminé</td></tr></table>>, URL="https://example.test/test_prime.catala_fr#L10", style="filled"];
-    x002 [label=<<table><tr><td>prime_due</td></tr><tr><td>= Faux</td></tr></table>>, style="filled"];
-    x003 [label=<<table><tr><td>conclusion</td></tr><tr><td>= Faux</td></tr></table>>, shape=plaintext];
-    subgraph cluster_inputs { x001; }
-    x001 -> x002 [style="solid"];
-    x002 -> x003 [style="solid"];
-  }`);
+  globalThis.document = dom.window.document;
+  globalThis.DOMParser = dom.window.DOMParser;
+  globalThis.CustomEvent = dom.window.CustomEvent;
+  globalThis.localStorage = { getItem: () => null };
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options) => (await fetchMore(url, options)) ?? new Response(JSON.stringify({ pack: { id: 'pack', platform: 'darwin', version: '1.3', proof: true, installedAt: '2026-11-01' }, status: null, programmes }));
+  const container = dom.window.document.querySelector('#panel');
+  mount(container, { context: { theme: 'light', project: { name: 'fictif', path: '/dossier' } }, onContextChange: () => () => {} });
+  await new Promise((resolve) => setImmediate(resolve));
   const opened = [];
-  const unmount = mountExplanation(container, (source) => opened.push(source));
-  const click = (selector) => container.querySelector(selector).dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-  assert.match(container.querySelector('.pmc-open-states').textContent, /1 point/);
-  click('[data-node="x002"]');
-  assert.equal(container.querySelector('.pmc-inspector').hidden, false);
-  assert.match(container.querySelector('.pmc-inspector').textContent, /Dépend de/);
-  assert.match(container.querySelector('.pmc-inspector').textContent, /Faux/);
-  click('.pmc-inspector strong');
-  assert.equal(container.querySelector('.pmc-inspector').hidden, false);
-  click('.pmc-stage svg');
-  assert.equal(container.querySelector('.pmc-inspector').hidden, true);
-  assert.equal(container.querySelectorAll('[aria-pressed="true"], .is-dim').length, 0);
-  click('[data-node="x002"]');
-  click('.pmc-canvas');
-  assert.equal(container.querySelector('.pmc-inspector').hidden, true);
-  click('[data-node="x002"]');
-  click('.pmc-inspector [data-select-node="x001"]');
-  assert.match(container.querySelector('.pmc-inspector').textContent, /Donnée fournie/);
-  assert.match(container.querySelector('.pmc-inspector').textContent, /Donnée non établie/);
-  click('[data-open-source]');
-  assert.deepEqual(opened, ['https://example.test/test_prime.catala_fr#L10']);
-  click('[data-mode="written"]');
-  assert.equal(container.dataset.mode, 'written');
-  assert.equal(container.querySelectorAll('.pmc-written .pmc-phase').length, 3);
-  click('.pmc-written [data-select-node="x002"]');
-  assert.equal(container.dataset.mode, 'graph');
-  assert.equal(container.querySelector('[data-mode="graph"]').getAttribute('aria-selected'), 'true');
-  click('[data-legend]');
-  assert.equal(container.querySelector('.pmc-legend').hidden, false);
-  const ticks = [];
-  dom.window.setTimeout = (callback) => { ticks.push(callback); return ticks.length; };
-  click('[data-replay]');
-  assert.equal(container.querySelectorAll('.pmc-node.is-waiting').length, 2);
-  assert.equal(container.querySelector('[data-node="x001"]').getAttribute('aria-hidden'), 'true');
-  ticks.shift()();
-  assert.equal(container.querySelector('[data-node="x001"]').classList.contains('is-waiting'), false);
-  assert.equal(container.querySelector('[data-node="x003"]').classList.contains('is-waiting'), true);
-  assert.equal(container.querySelector('[data-node="x002"]').getAttribute('aria-pressed'), 'true');
-  assert.match(container.querySelector('.pmc-stage').style.transform, /translate/);
-  unmount();
-  assert.equal(container.querySelectorAll('.is-waiting').length, 0);
-  click('[data-node="x001"]');
-  assert.equal(container.querySelector('.pmc-inspector').hidden, true);
-  dom.window.close();
-});
+  window.addEventListener('piecemaker:open-in-editor', (event) => opened.push(event.detail));
+  const click = (element) => element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+  return { dom, container, opened, click, close: () => { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); } };
+}
 
 test('the panel reloads after verification notifications for its project and stops on unmount', async () => {
   const { mount, unmount } = await import('./client.ts');
@@ -93,154 +59,72 @@ test('the panel reloads after verification notifications for its project and sto
   } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
 });
 
-test('keeps the written tab and program controls available for a stale trace', async () => {
-  const { mount, unmount } = await import('./client.ts');
-  const dom = new JSDOM('<div id="panel"></div>');
-  globalThis.window = dom.window;
-  globalThis.document = dom.window.document;
-  globalThis.CustomEvent = dom.window.CustomEvent;
-  globalThis.localStorage = { getItem: () => null };
-  const previousFetch = globalThis.fetch;
-  globalThis.fetch = async () => new Response(JSON.stringify({ pack: null, status: null, programmes: [{ nom: 'regle-demo', enCours: false, perimee: true, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr' }], journaux: [], verification: null, preuve: null, catleg: null, explication: null, graphe: null }] }), { headers: { 'Content-Type': 'application/json' } });
-  const container = dom.window.document.querySelector('#panel');
+
+test('shows each rule with its legal basis and no code checks', async () => {
+  const view = await open([program()]);
   try {
-    mount(container, { context: { theme: 'light', project: { name: 'fictif', path: '/dossier-fictif' } }, onContextChange: () => () => {} });
-    await new Promise((resolve) => setImmediate(resolve));
-    const graphTab = container.querySelector('[data-mode="graph"]');
-    const writtenTab = container.querySelector('[data-mode="written"]');
-    assert.ok(graphTab && writtenTab);
-    assert.equal(container.querySelector('.pmc-explanation').hidden, false);
-    writtenTab.click();
-    assert.equal(container.querySelector('.pmc-explanation').hidden, true);
-    assert.equal(container.querySelector('.pmc-written').hidden, false);
-    assert.match(container.querySelector('.pmc-written').textContent, /Contrôles et fichiers/);
-    assert.match(container.querySelector('.pmc-written').textContent, /demo.catala_fr/);
-    assert.ok(container.querySelector('.pmc-explanation [data-kind="control"]'));
-    assert.equal(container.querySelector('.pmc-explanation [data-node^="x"]'), null);
-    unmount(container);
-  } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
+    const written = view.container.querySelector('.pmc-written');
+    assert.equal(written.hidden, false);
+    assert.match(view.container.querySelector('.pmc-run').textContent, /Raisonnement vérifié/);
+    const card = written.querySelector('[data-card="x002"]');
+    assert.equal(card.querySelector('h3').textContent, 'Sanction possible');
+    assert.equal(card.querySelector('.pmc-value').textContent, 'Vrai');
+    assert.match(card.textContent, /Article 1217/);
+    assert.match(card.textContent, /Passage juridique fictif/);
+    assert.match(card.querySelector('.pmc-application').textContent, /Inexécution/);
+    assert.doesNotMatch(view.container.textContent, /Étape|typecheck|Contrôles|clerk|test_demo|catleg/i);
+    assert.match(written.textContent, /Autres sources citées/);
+  } finally { view.close(); }
 });
 
-test('separates the views, orders steps and keeps each source context through refresh', async () => {
-  const { mount, unmount } = await import('./client.ts');
-  const dom = new JSDOM('<div id="panel"></div>');
-  globalThis.window = dom.window;
-  globalThis.document = dom.window.document;
-  globalThis.DOMParser = dom.window.DOMParser;
-  globalThis.CustomEvent = dom.window.CustomEvent;
-  globalThis.localStorage = { getItem: () => null };
-  const previousFetch = globalThis.fetch;
-  const contenu = ['## Première', '', 'Pièce : [Attestation fictive](../../../pieces/attestation.md).', '', '```catala', 'définition premiere égal à vrai', '```', '', '## Seconde', '', 'Pièce : <img src=x onerror=alert(1)> Document fictif.', '', '```catala', 'définition seconde égal à premiere', '```'].join('\n');
-  const graphe = `digraph G {
-    x003 [label=<<table><tr><td>reponse</td></tr><tr><td>= Vrai</td></tr></table>>, shape=plaintext, URL="https://example.test/demo.catala_fr#L14"];
-    x001 [label=<<table><tr><td>donnee</td></tr><tr><td>= Vrai</td></tr></table>>, URL="https://example.test/demo.catala_fr#L999"];
-    x002 [label=<<table><tr><td>premiere</td></tr><tr><td>= Vrai</td></tr></table>>, URL="https://example.test/demo.catala_fr#L6"];
-    subgraph cluster_inputs { x001; }
-    x001 -> x003 [style="solid"];
-    x002 -> x003 [style="solid"];
-  }`;
-  const snapshot = { pack: null, status: null, programmes: [{ nom: 'regle-demo', enCours: false, perimee: false, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier-fictif/demo.catala_fr', contenu }], journaux: [], verification: null, preuve: null, catleg: null, explication: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', finished_utc: '2026-11-05T10:00:00Z' }, graphe }] };
-  globalThis.fetch = async () => new Response(JSON.stringify(snapshot));
-  const container = dom.window.document.querySelector('#panel');
+test('opens cited articles and pieces in the editor without leaving the written view', async () => {
+  const requests = [];
+  const view = await open([program()], async (url, options) => url.endsWith('/citation') ? (requests.push(JSON.parse(options.body)), new Response(JSON.stringify({ token: 'a'.repeat(64) }))) : null);
   try {
-    mount(container, { context: { theme: 'light', project: { name: 'fictif', path: '/dossier-fictif' } }, onContextChange: () => () => {} });
+    const links = () => [...view.container.querySelectorAll('.pmc-written [data-open-reference]')];
+    view.click(links().find((link) => link.textContent === 'Article 1217'));
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(container.querySelectorAll('[role="tab"]').length, 2);
-    assert.equal(container.querySelector('.pmc-written').hidden, true);
-    assert.equal(container.querySelector('.pmc-explanation details.pmc-part'), null);
-    container.querySelector('[role="tab"][data-mode="written"]').click();
-    assert.equal(container.querySelector('.pmc-explanation').hidden, true);
-    assert.deepEqual([...container.querySelectorAll('.pmc-written-step h3')].map((heading) => heading.textContent), ['Étape 1 · premiere', 'Réponse · Étape 2 · reponse', 'Contrôles et références hors trace']);
-    const contexts = ['x002', 'x003'].map((id) => container.querySelector(`.pmc-written .pmc-phase header [data-select-node="${id}"]`).closest('.pmc-phase').querySelector('.pmc-source-text').textContent);
-    assert.match(contexts[0], /Attestation fictive/);
-    assert.doesNotMatch(contexts[0], /Document fictif/);
-    assert.match(contexts[1], /Document fictif/);
-    assert.doesNotMatch(contexts[1], /Attestation fictive/);
-    assert.equal(container.querySelectorAll('img, script, [onerror]').length, 0);
-    snapshot.programmes[0].perimee = true;
-    window.dispatchEvent(new CustomEvent('piecemaker:catala-updated', { detail: { projectPath: '/dossier-fictif' } }));
+    assert.match(view.opened.at(-1).path, /^piecemaker:\/\/citation\/a{64}\/LEGIARTI000032041431$/);
+    assert.equal(requests[0].citation, 'Passage juridique fictif.');
+    assert.equal(view.container.querySelector('.pmc-written').hidden, false);
+    view.click(links().find((link) => link.textContent === 'Attestation de Jean Dupont'));
+    assert.deepEqual(view.opened.at(-1), { path: '/dossier/pieces/attestation.md', passage: { quote: 'Société Exemple SAS n’a pas livré.' } });
+    const count = view.opened.length;
+    view.click(links().find((link) => link.textContent === 'Hors dossier'));
+    assert.equal(view.opened.length, count);
+    view.click(links().find((link) => link.textContent === 'Décision fictive'));
     await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(container.querySelector('[role="tab"][data-mode="written"]').getAttribute('aria-selected'), 'true');
-    assert.equal(container.querySelector('.pmc-written').hidden, false);
-    assert.match(container.querySelector('.pmc-written').textContent, /Contrôles et fichiers/);
-  } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
+    assert.match(view.opened.at(-1).path, /\/abcdef0123456789abcdef01$/);
+  } finally { view.close(); }
 });
 
-test('opens cited pieces and sources while keeping local links inside the dossier', async () => {
-  const { mount, unmount } = await import('./client.ts');
-  const dom = new JSDOM('<div id="panel"></div>');
-  globalThis.window = dom.window;
-  globalThis.document = dom.window.document;
-  globalThis.DOMParser = dom.window.DOMParser;
-  globalThis.CustomEvent = dom.window.CustomEvent;
-  globalThis.localStorage = { getItem: () => null };
-  const previousFetch = globalThis.fetch;
-  const contenu = ['## Fait', '', '[Attestation fictive](../../../pieces/attestation.md)', '[Article 1218](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041431)', 'Citation : « Passage juridique fictif. »', '[Hors dossier](../../../../hors-dossier.md)', '[Chemin encodé](../../../pieces/..%2f..%2fhors-dossier.md)', '[Protocole refusé](javascript:alert%281%29)', '', '```catala', 'définition fait égal à vrai', '```', '', '## Autre fondement', '[Jurisprudence fictive](https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001)', 'Pièce 99'].join('\n');
-  const graphe = 'digraph G { x001 [label=<<table><tr><td>fait</td></tr><tr><td>= Vrai</td></tr></table>>, URL="https://example.test/demo.catala_fr#L11"]; }';
-  const citationRequests = [];
-  globalThis.fetch = async (url, options) => {
-    if (url.endsWith('/citation')) { citationRequests.push(JSON.parse(options.body)); return new Response(JSON.stringify({ token: 'a'.repeat(64) })); }
-    return new Response(JSON.stringify({ pack: null, status: null, programmes: [{ nom: 'demo', enCours: false, perimee: false, fichiers: [{ nom: 'demo.catala_fr', chemin: '/dossier/.piecemaker/catala/demo/demo.catala_fr', contenu }], journaux: [{ nom: 'typecheck.log', chemin: '/dossier/.piecemaker/catala/demo/resultats/typecheck.log', contenu: 'demo.catala_fr:14: Type incompatible : entier attendu, date reçue.' }], verification: { finished_utc: '2026-11-05T10:00:00Z', started_utc: '2026-11-05T09:59:58Z', passed: false, checks: [{ name: 'typecheck', command: 'catala typecheck demo.catala_fr', exit_code: 1, seconds: 2, passed: false }] }, tests: { 'test-results': [{ file: 'demo.catala_fr', tests: { scopes: [{ scope_name: 'Exemple', success: false, errors: ['Assertion fictive non satisfaite'], time: 0.1 }] } }], coverage: { regle: 'non couverte' } }, preuve: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', conflits: 0, obligations: 3, started_utc: '2026-11-05T09:59:58Z', finished_utc: '2026-11-05T10:00:00Z', checks: [] }, catleg: { date_controle: '2026-11-05', passed: false, fichiers: [{ fichier: 'demo.catala_fr', passed: false, articles: ['LEGIARTI000032041431'], messages: ['Article à revoir : version abrogée'] }] }, explication: { passed: true, fichier: 'demo.catala_fr', scope: 'Exemple', finished_utc: '2026-11-05T10:00:00Z' }, graphe }] }));
-  };
-  const opened = [];
-  const external = [];
-  window.addEventListener('piecemaker:open-in-editor', (event) => opened.push(event.detail.path));
-  window.open = (...args) => external.push(args);
-  const container = document.querySelector('#panel');
+test('the graph details a node with its card and opens its sources', async () => {
+  const view = await open([program()]);
   try {
-    mount(container, { context: { theme: 'light', project: { name: 'fictif', path: '/dossier' } }, onContextChange: () => () => {} });
-    await new Promise((resolve) => setImmediate(resolve));
-    const open = (title) => {
-      const card = [...container.querySelectorAll('.pmc-node')].find((node) => node.dataset.title === title);
-      assert.ok(card, `${title} doit être montré`);
-      card.querySelector('[data-open-reference]').click();
-    };
-    open('Attestation fictive');
-    assert.deepEqual(opened, ['/dossier/pieces/attestation.md']);
-    open('Article 1218');
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.match(opened.at(-1), /^piecemaker:\/\/citation\/a{64}\/LEGIARTI000032041431$/);
-    assert.equal(citationRequests[0].citation, 'Passage juridique fictif.');
-    assert.equal(external.length, 0);
-    open('Jurisprudence fictive');
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.match(opened.at(-1), /JURITEXT000000000001$/);
-    const article = container.querySelector('[data-kind="article"][data-title="Article 1218"]');
-    assert.match(article.textContent, /2026-11-05/);
-    assert.match(article.textContent, /version abrogée/);
-    assert.match(article.textContent, /Version applicable non établie/);
-    const check = [...container.querySelectorAll('[data-kind="control"]')].find((node) => node.dataset.title === 'Typage et invariants');
-    assert.equal(check.dataset.tone, 'ko');
-    const rule = container.querySelector('[data-node="x001"]');
-    assert.equal(rule.querySelector(`[data-select-node="${check.dataset.node}"]`), null);
-    assert.match(check.textContent, /Type incompatible : entier attendu, date reçue/);
-    assert.equal(container.querySelector(`[data-relation="control"][data-from="${check.dataset.node}"][data-to="x001"]`), null);
-    const vigour = [...container.querySelectorAll('[data-kind="control"]')].find((node) => node.dataset.title === 'Vigueur · demo.catala fr');
-    assert.ok(container.querySelector(`[data-relation="control"][data-from="${vigour.dataset.node}"][data-to="${article.dataset.node}"]`));
-    assert.ok([...container.querySelector('[data-result]').options].some((option) => option.value === check.dataset.node));
-    assert.equal(container.querySelector('[data-title="Jurisprudence fictive"]').dataset.kind, 'jurisprudence');
-    check.querySelector('[data-open-reference]').click();
-    assert.equal(opened.at(-1), '/dossier/.piecemaker/catala/demo/resultats/typecheck.log');
-    const proof = [...container.querySelectorAll('[data-kind="control"]')].find((node) => node.dataset.title === 'Preuve');
-    assert.match(proof.textContent, /3 obligations produites/);
-    const tests = [...container.querySelectorAll('[data-kind="control"]')].find((node) => node.dataset.title === 'Scénarios et couverture des tests');
-    tests.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    assert.match(tests.textContent, /Assertion fictive non satisfaite/);
-    assert.match(container.querySelector('.pmc-inspector').textContent, /Assertion fictive non satisfaite/);
-    assert.match(container.querySelector('.pmc-inspector').textContent, /non couverte/);
-    const missing = [...container.querySelectorAll('.pmc-node')].find((node) => node.dataset.title === 'Pièce 99');
-    missing.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    assert.match(missing.textContent, /renseignez le chemin/);
-    assert.match(container.querySelector('.pmc-inspector').textContent, /Lien absent du programme/);
-    container.querySelector('[role="tab"][data-mode="written"]').click();
-    container.querySelector(`.pmc-written [data-open-reference="${article.dataset.node}"]`).click();
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(external.length, 0);
-    for (const title of ['Hors dossier', 'Chemin encodé', 'Protocole refusé']) open(title);
-    assert.equal(opened.length, 5);
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.equal(external.length, 0);
-    assert.match(container.querySelector('.pmc-written').textContent, /Attestation fictive/);
-    assert.match(container.querySelector('.pmc-written').textContent, /Article 1218/);
-  } finally { unmount(container); globalThis.fetch = previousFetch; dom.window.close(); }
+    view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
+    assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
+    assert.deepEqual([...view.container.querySelectorAll('[data-node]')].map((node) => node.dataset.kind), ['fact', 'rule']);
+    view.click(view.container.querySelector('[data-node="x001"]'));
+    const inspector = view.container.querySelector('.pmc-inspector');
+    assert.equal(inspector.hidden, false);
+    assert.match(inspector.textContent, /Attestation de Jean Dupont/);
+    assert.ok(view.container.querySelector('[data-node="x002"]').classList.contains('is-dim'));
+    view.click(inspector.querySelector('[data-open-reference]'));
+    assert.equal(view.opened.at(-1).path, '/dossier/pieces/attestation.md');
+    view.click(view.dom.window.document.querySelector('#outside'));
+    assert.equal(inspector.hidden, true);
+    assert.equal(view.container.querySelectorAll('.is-dim').length, 0);
+  } finally { view.close(); }
+});
+
+test('asks for a verification when the trace is missing or stale', async () => {
+  const view = await open([program({ perimee: true }), program({ nom: 'autre', graphe: null, explication: null, verification: null })]);
+  try {
+    assert.match(view.container.querySelector('.pmc-run').textContent, /Modifié depuis la vérification/);
+    assert.match(view.container.querySelector('.pmc-written').textContent, /lancez la vérification/);
+    const select = view.container.querySelector('[data-program-choice]');
+    select.value = 'autre';
+    select.dispatchEvent(new view.dom.window.Event('change', { bubbles: true }));
+    assert.match(view.container.querySelector('.pmc-run').textContent, /Jamais vérifié/);
+  } finally { view.close(); }
 });
