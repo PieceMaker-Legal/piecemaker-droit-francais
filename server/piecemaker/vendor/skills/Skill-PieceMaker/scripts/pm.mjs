@@ -76,6 +76,12 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   catala preuve --scope CHAMP [--fichier F] [--programme NOM]
   catala expliquer --scope CHAMP [--fichier F] [--programme NOM]
       graphe des formules et conditions pour un champ sans entrées ;
+  catala exceptions --scope CHAMP --variable V [--fichier F] [--programme NOM]
+      arbre des exceptions d'une variable
+  catala executer --scope CHAMP [--fichier F] [--programme NOM]
+      exécute un scénario et affiche sa trace
+  catala squelette --scope CHAMP [--fichier F] [--programme NOM]
+      squelette de test Catala, entrées à leur valeur par défaut
   catala catleg [--fichier F] [--au AAAA-MM-JJ] [--programme NOM]
       expiration actuelle ; --au compare aussi les périodes officielles à la date indiquée
   catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]

@@ -78,9 +78,16 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 | `pm catala formater` | `catala-format --in-place` | fichiers réécrits |
 | `pm catala preuve --scope <Champ> [--fichier F]` | `catala proof`, sans compilation OCaml | `resultats/preuve.json` |
 | `pm catala expliquer --programme <nom> --fichier test_prime.catala_fr --scope Exemple` | Graphe des formules et conditions d’une exécution | `resultats/explication.dot`, `explication.json` |
+| `pm catala squelette --scope <Champ> [--fichier F]` | `catala testcase generate` puis `write -l fr`, dans un dossier temporaire avec la stdlib en `_build/libcatala` | test en sortie, entrées par défaut |
+| `pm catala executer --scope <Scenario> [--fichier F]` | `catala interpret --whole-program --trace --stdlib` | trace en sortie (200 lignes), `resultats/execution.log` |
+| `pm catala exceptions --scope <Champ> --variable <v> [--fichier F]` | `catala exceptions` | arbre en sortie, `resultats/exceptions.log` |
 | `pm catala catleg [--fichier F] [--au AAAA-MM-JJ]` | vigueur des articles cités, identifiants PISTE de PieceMaker | `resultats/catleg.json` |
 | `pm catala lister` / `env` | programmes et dernier bilan / pack, état, Python | sortie |
 | `pm catala exec <outil> -- <args>` | lance un outil du pack (LSP, DAP, autres) | code de sortie |
+
+Le typage passe `--message-format=gnu` au compilateur : une ligne par erreur, mots-clés français et correction proposée. Le bilan affiche au plus 8 lignes d'erreur sous chaque contrôle en échec, et les tests faux sous la forme `fichier:ligne › Scenario : message`. Le format est bloqué tant que le typage échoue, pour ne pas répéter les mêmes erreurs.
+
+Le skill fournit `references/syntaxe.md` : un modèle vérifié avec les pièges rencontrés (bloc `catala-metadata`, place de `#[test]`, `égal à`, `sous condition … conséquence`, module et champ de même nom qui cassent les tests Python, parenthèses entre `et` et `ou`, noms réservés). Le site catala-lang.org peut être inaccessible à l'agent.
 
 Les tests passent par `clerk runtest --whole-program`, puis `clerk report --json`. Cette voie conserve le bilan sans compiler de modules OCaml.
 

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { catalaHomes, findCatalaPack, listPrograms, pisteCredentials, runCatala, selectProgram, sharedPython, toolCommand } from './catala.mjs';
+import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, runCatala, selectProgram, sharedPython, toolCommand } from './catala.mjs';
 import { run } from './pm.mjs';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
@@ -279,7 +279,7 @@ test('independent checks finish despite compilation failure and stale reports ar
     };
     await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => { release(); return { passed: false, status: 'failed', message: 'Citation introuvable', results: [] }; } } });
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
-    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['typecheck', 'failed'], ['format', 'passed'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
+    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['typecheck', 'failed'], ['format', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
     assert.equal(report.passed, false);
     assert.ok(!calls.some((call) => ['proof', 'explain', 'runtest'].includes(call.args[0])));
     for (const file of ['preuve.json', 'tests.json', 'explication.json']) assert.equal(fs.existsSync(path.join(directory, 'resultats', file)), false);
@@ -304,5 +304,58 @@ test('a failed Python scenario does not prevent the remaining scenarios from run
     assert.equal(executed.length, 2);
     assert.equal(report.checks.find((entry) => entry.name === 'tests-python').status, 'failed');
     assert.match(fs.readFileSync(path.join(directory, 'resultats', 'tests-python.log'), 'utf8'), /test_variante.catala_fr: code 0/);
+  } finally { cleanup(); }
+});
+
+test('compilation errors are shown once per line, numbering removed, and capped', () => {
+  const output = 'x.catala_fr:3.5-3.8: [ERROR] 1/2: Syntax error\nx.catala_fr:3.5-3.8: [ERROR] 1/2: Syntax error\nnoise\nx.catala_fr:9.1-9.2: [WARNING] Unused\n';
+  assert.deepEqual(compilerErrors(output), ['x.catala_fr:3.5-3.8: [ERROR] Syntax error', 'x.catala_fr:9.1-9.2: [WARNING] Unused']);
+  assert.deepEqual(compilerErrors(output, 1), ['x.catala_fr:3.5-3.8: [ERROR] Syntax error', '… 1 autre(s) ligne(s) dans le journal.']);
+});
+
+test('verifier prints the compiler error lines under the failed typecheck', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    program(dossier, 'prime');
+    const { runner, calls } = fakeRun();
+    const run = async (command, args, options) => (args[0] === 'typecheck' ? { code: 1, stdout: 'prime.catala_fr:4.3-4.6: [ERROR] Syntax error\nMaybe you wanted to write: "égal à"?\n', stderr: '' } : runner(command, args, options));
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => ({ passed: true, status: 'passed', results: [] }) } });
+    assert.match(text, /typecheck : échec[^\n]*\n  prime\.catala_fr:4\.3-4\.6: \[ERROR\] Syntax error/);
+    assert.ok(calls.every((call) => call.command !== 'catala-format'));
+  } finally { cleanup(); }
+});
+
+test('exceptions, executer and squelette call Catala with the expected arguments', async () => {
+  const { home, dossier, pack, root, cleanup } = scratch();
+  try {
+    const stdlib = path.join(root, 'stdlib');
+    fs.mkdirSync(stdlib);
+    fs.writeFileSync(path.join(stdlib, 'Date_fr.catala_fr'), '');
+    pack.env.CATALA_STDLIB = stdlib;
+    fs.writeFileSync(path.join(home, 'catala', 'pack.json'), JSON.stringify(pack));
+    const directory = program(dossier, 'prime');
+    const calls = [];
+    const run = async (command, args, options) => {
+      calls.push({ args, cwd: options.cwd, input: options.input, libcatala: fs.existsSync(path.join(options.cwd, '_build', 'libcatala', 'Date_fr.catala_fr')), tests: fs.existsSync(path.join(options.cwd, 'test_prime.catala_fr')) });
+      if (args[1] === 'write') return { code: 0, stdout: '#[testcase.test_code]\n> éditeur de tests métier\n\n```catala\nchamp d\'application Essai:  \n```\n', stderr: '' };
+      return { code: 0, stdout: args[0] === 'testcase' ? '{"tests":[]}' : 'montant = 10 €', stderr: '' };
+    };
+    const deps = { env: { PIECEMAKER_HOME: home }, homeDir: home, run };
+    await assert.rejects(() => runCatala({ commande: 'exceptions', cwd: dossier, flags: { scope: 'Prime' }, deps }), /--variable/);
+    await assert.rejects(() => runCatala({ commande: 'executer', cwd: dossier, flags: {}, deps }), /--scope/);
+    await assert.rejects(() => runCatala({ commande: 'executer', cwd: dossier, flags: { scope: 'JeanDupont', fichier: 'absent.catala_fr' }, deps }), /--fichier parmi/);
+    assert.match(await runCatala({ commande: 'exceptions', cwd: dossier, flags: { scope: 'Prime', variable: 'montant' }, deps }), /Prime\.montant/);
+    assert.deepEqual(calls.at(-1).args, ['exceptions', '--color=never', '-I', '.', 'prime.catala_fr', '-s', 'Prime', '-v', 'montant']);
+    assert.match(await runCatala({ commande: 'executer', cwd: dossier, flags: { scope: 'JeanDupont', fichier: 'test_prime.catala_fr' }, deps }), /montant = 10 €/);
+    assert.deepEqual(calls.at(-1).args, ['interpret', '--color=never', '--message-format=gnu', `--stdlib=${stdlib}`, '--whole-program', '--trace', '-I', '.', 'test_prime.catala_fr', '-s', 'JeanDupont']);
+    assert.ok(fs.existsSync(path.join(directory, 'resultats', 'execution.log')));
+    const skeleton = await runCatala({ commande: 'squelette', cwd: dossier, flags: { scope: 'Prime' }, deps });
+    const [generate, write] = calls.slice(-2);
+    assert.equal(generate.args.slice(0, 2).join(' '), 'testcase generate');
+    assert.ok(generate.libcatala && !generate.tests);
+    assert.equal(write.input, '{"tests":[]}');
+    assert.doesNotMatch(skeleton, /testcase\.|éditeur/);
+    assert.match(skeleton, /champ d'application Essai:\n```/);
+    assert.equal(fs.existsSync(generate.cwd), false);
   } finally { cleanup(); }
 });

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exec'];
+export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
 const NAME = /^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$/u;
 const NAME_SHAPE = 'minuscules, chiffres et tirets (ex. prime-anciennete)';
@@ -121,9 +121,10 @@ export function packEnv(pack, env = process.env) {
   return { ...env, ...pack.env, PATH: [...(pack.path || []), env.PATH || ''].join(path.delimiter) };
 }
 
-export function runProcess(command, args, { cwd, env, inherit = false } = {}) {
+export function runProcess(command, args, { cwd, env, inherit = false, input } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: inherit ? 'inherit' : ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: inherit ? 'inherit' : [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
+    if (input !== undefined) child.stdin.end(input);
     let stdout = '';
     let stderr = '';
     child.stdout?.setEncoding('utf8');
@@ -150,10 +151,15 @@ function writeResult(directory, file, content) {
   fs.renameSync(temporary, target);
 }
 
-async function check(context, directory, name, tool, args, judge = (result) => result.code === 0) {
+export function compilerErrors(output, limit = 8) {
+  const lines = [...new Set(output.split('\n').map((line) => line.trim()).filter((line) => /\[(?:ERROR|WARNING)\]/.test(line)).map((line) => line.replace(/\[(ERROR|WARNING)\] \d+\/\d+: /, '[$1] ')))];
+  return lines.length > limit ? [...lines.slice(0, limit), `… ${lines.length - limit} autre(s) ligne(s) dans le journal.`] : lines;
+}
+
+async function check(context, directory, name, tool, args, judge = (result) => result.code === 0, input) {
   const { command, args: argv } = toolCommand(context.pack, tool, args, context.platform, context.env);
   const started = Date.now();
-  const result = await context.run(command, argv, { cwd: directory, env: packEnv(context.pack, context.env) });
+  const result = await context.run(command, argv, { cwd: directory, env: packEnv(context.pack, context.env), ...(input === undefined ? {} : { input }) });
   const seconds = Math.round((Date.now() - started) / 10) / 100;
   writeResult(directory, `${name}.log`, `${result.stdout}${result.stderr}`);
   return { entry: { name, command: [tool, ...args].join(' '), exit_code: result.code, seconds, passed: judge(result) }, result };
@@ -242,11 +248,14 @@ async function verifier(context, program, flags = {}) {
   const missing = (message) => ({ exit_code: null, passed: false, status: 'missing', message });
   const blocked = (message) => ({ exit_code: null, passed: false, status: 'blocked', message });
   const execution = async () => {
-    const typed = await record('typecheck', 'clerk typecheck', async () => context.pack
-      ? (await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--catala-opts=--check-invariants'])).entry
-      : missing('Pack Catala absent.'));
+    const typed = await record('typecheck', 'clerk typecheck', async () => {
+      if (!context.pack) return missing('Pack Catala absent.');
+      const { entry, result } = await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--color=never', '--catala-opts=--check-invariants', '--catala-opts=--message-format=gnu']);
+      return entry.passed ? entry : { ...entry, errors: compilerErrors(`${result.stdout}${result.stderr}`) };
+    });
     await record('format', 'catala-format', async () => {
       if (!context.pack) return missing('Pack Catala absent.');
+      if (!typed.passed) return blocked('Compilation non validée.');
       const unformatted = [], logs = [];
       for (const file of files) {
         const { result } = await check(context, program.directory, 'format', 'catala-format', [file]);
@@ -263,7 +272,9 @@ async function verifier(context, program, flags = {}) {
       if (!tests.length) return missing('Aucun scénario #[test].');
       const tested = await clerkTests(context, program, tests);
       scopes = tested.scopes;
-      return { ...tested.entry, message: scopes.filter((scope) => !scope.success).map((scope) => `${scope.file} › ${scope.scope_name}`).join(', ') };
+      const failed = scopes.filter((scope) => !scope.success);
+      const errors = failed.flatMap((scope) => (scope.errors || []).map((error) => `${scope.file}:${error.location?.range?.start?.line ?? '?'} › ${scope.scope_name} : ${error.message}`));
+      return { ...tested.entry, message: failed.map((scope) => `${scope.file} › ${scope.scope_name}`).join(', '), ...(errors.length ? { errors: errors.slice(0, 8) } : {}) };
     });
     await record('tests-python', 'clerk run --backend=python + python --test', async () => {
       if (!typed.passed) return blocked('Compilation non validée.');
@@ -326,7 +337,7 @@ async function verifier(context, program, flags = {}) {
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed), sources_sha256: digest, checks };
   writeResult(program.directory, 'verification.json', report);
   const labels = { passed: 'ok', failed: 'échec', blocked: 'bloqué', missing: 'non effectué' };
-  return [`Programme ${program.name} : ${report.passed ? 'vérifié' : 'à corriger'}.`, ...checks.map((entry) => `- ${entry.name} : ${labels[entry.status]}${entry.message ? ` — ${entry.message}` : ''}${entry.files?.length ? ` (${entry.files.join(', ')})` : ''}`), `Détail : .piecemaker/catala/${program.name}/resultats/`].join('\n');
+  return [`Programme ${program.name} : ${report.passed ? 'vérifié' : 'à corriger'}.`, ...checks.map((entry) => `- ${entry.name} : ${labels[entry.status]}${entry.message ? ` — ${entry.message}` : ''}${entry.files?.length ? ` (${entry.files.join(', ')})` : ''}${entry.errors?.length ? `\n  ${entry.errors.join('\n  ')}` : ''}`), `Détail : .piecemaker/catala/${program.name}/resultats/`].join('\n');
 }
 
 async function formater(context, program) {
@@ -374,6 +385,65 @@ async function expliquer(context, program, flags) {
   writeResult(program.directory, 'explication.json', report);
   if (!report.passed) throw new Error(`Explication échouée :\n${result.stdout}${result.stderr}\nDétail : .piecemaker/catala/${program.name}/resultats/explication.log`);
   return `Explication ${file} › ${flags.scope} : graphe des formules et conditions appliquées.\nGraphe : .piecemaker/catala/${program.name}/resultats/explication.dot`;
+}
+
+function chosenFile(program, flags, fallback) {
+  const files = sourceFiles(program.directory);
+  const file = flags.fichier && flags.fichier !== true ? String(flags.fichier) : fallback();
+  if (!files.includes(file)) throw new TypeError(`Indiquez --fichier parmi : ${files.join(', ')}.`);
+  return file;
+}
+
+function requireScope(flags, hint = 'ChampDApplication') {
+  if (!flags.scope || flags.scope === true) throw new TypeError(`Indiquez --scope <${hint}>.`);
+  return String(flags.scope);
+}
+
+async function exceptions(context, program, flags) {
+  const scope = requireScope(flags);
+  if (!flags.variable || flags.variable === true) throw new TypeError('Indiquez --variable <nom>.');
+  const file = chosenFile(program, flags, () => defaultProofFile(program));
+  const { entry, result } = await check(context, program.directory, 'exceptions', 'catala', ['exceptions', '--color=never', '-I', '.', file, '-s', scope, '-v', String(flags.variable)]);
+  const output = `${result.stdout}${result.stderr}`;
+  if (!entry.passed) throw new Error(`Arbre des exceptions indisponible :\n${compilerErrors(output).join('\n')}`);
+  return `Arbre des exceptions ${file} › ${scope}.${flags.variable} :\n${output.trim()}`;
+}
+
+async function executer(context, program, flags) {
+  const scope = requireScope(flags, 'ChampSansEntrees');
+  const files = sourceFiles(program.directory);
+  const file = chosenFile(program, flags, () => (files.length === 1 ? files[0] : null));
+  const stdlib = context.pack.env?.CATALA_STDLIB ? [`--stdlib=${context.pack.env.CATALA_STDLIB}`] : [];
+  const { entry, result } = await check(context, program.directory, 'execution', 'catala', ['interpret', '--color=never', '--message-format=gnu', ...stdlib, '--whole-program', '--trace', '-I', '.', file, '-s', scope]);
+  const output = `${result.stdout}${result.stderr}`.trim();
+  const lines = output.split('\n');
+  const shown = lines.length > 200 ? [...lines.slice(0, 200), `… trace tronquée : ${lines.length - 200} ligne(s) de plus dans resultats/execution.log.`] : lines;
+  if (!entry.passed) throw new Error(`Exécution échouée ${file} › ${scope} :\n${shown.join('\n')}`);
+  return `Exécution ${file} › ${scope} (trace) :\n${shown.join('\n')}`;
+}
+
+async function squelette(context, program, flags) {
+  const scope = requireScope(flags);
+  const file = chosenFile(program, flags, () => defaultProofFile(program));
+  const stdlib = context.pack.env?.CATALA_STDLIB;
+  if (!stdlib || !fs.existsSync(stdlib)) throw new Error('Bibliothèque standard Catala introuvable dans le pack.');
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-catala-squelette-'));
+  try {
+    for (const source of sourceFiles(program.directory).filter((name) => !isTestFile(program.directory, name))) {
+      fs.mkdirSync(path.dirname(path.join(work, source)), { recursive: true });
+      fs.copyFileSync(path.join(program.directory, source), path.join(work, source));
+    }
+    fs.mkdirSync(path.join(work, '_build', 'libcatala'), { recursive: true });
+    for (const name of fs.readdirSync(stdlib)) if (SOURCE.test(name)) fs.copyFileSync(path.join(stdlib, name), path.join(work, '_build', 'libcatala', name));
+    const generated = await check(context, work, 'squelette', 'catala', ['testcase', 'generate', '--color=never', '--message-format=gnu', '--whole-program', '--default-values', '-I', '.', file, '-s', scope]);
+    if (!generated.entry.passed) throw new Error(`Squelette impossible :\n${compilerErrors(`${generated.result.stdout}${generated.result.stderr}`).join('\n')}`);
+    const written = await check(context, work, 'squelette', 'catala', ['testcase', 'write', '--color=never', '-l', 'fr'], undefined, generated.result.stdout);
+    if (!written.entry.passed) throw new Error(`Squelette impossible :\n${written.result.stdout}${written.result.stderr}`);
+    const text = written.result.stdout.split('\n').filter((line) => !/^#\[testcase\./.test(line) && !/éditeur de tests métier/.test(line)).join('\n').replace(/^\n+/, '').replace(/[ \t]+$/gm, '');
+    return `Squelette de test pour ${file} › ${scope}, entrées à leur valeur par défaut. Copiez-le dans test_<module>.catala_fr, renommez le champ par scénario, fixez les entrées avec les faits du dossier et ajoutez une assertion par résultat :\n\n${text.trim()}\n`;
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
 }
 
 async function catleg(context, program, flags) {
@@ -464,5 +534,8 @@ export async function runCatala({ commande, cwd, programme, flags = {}, args = [
   if (commande === 'preuve') return preuve(context, program, flags);
   if (commande === 'catleg') return catleg(context, program, flags);
   if (commande === 'expliquer') return expliquer(context, program, flags);
+  if (commande === 'exceptions') return exceptions(context, program, flags);
+  if (commande === 'executer') return executer(context, program, flags);
+  if (commande === 'squelette') return squelette(context, program, flags);
   throw new TypeError(`pm catala attend ${CATALA_COMMANDS.join(', ')}.`);
 }
