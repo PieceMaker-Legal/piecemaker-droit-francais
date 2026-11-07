@@ -68,7 +68,7 @@ test('shows each rule with its legal basis and no code checks', async () => {
     assert.match(view.container.querySelector('.pmc-run').textContent, /Raisonnement vérifié/);
     const card = written.querySelector('[data-card="x002"]');
     assert.equal(card.querySelector('h3').textContent, 'Sanction possible');
-    assert.equal(card.querySelector('.pmc-value').textContent, 'Vrai');
+    assert.equal(card.querySelector('.pmc-result .pmc-value').textContent, 'Vrai');
     assert.match(card.textContent, /Article 1217/);
     assert.match(card.textContent, /Passage juridique fictif/);
     assert.match(card.querySelector('.pmc-application').textContent, /Inexécution/);
@@ -103,12 +103,14 @@ test('the graph details a node with its card and opens its sources', async () =>
   try {
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
-    assert.deepEqual([...view.container.querySelectorAll('[data-node]')].map((node) => node.dataset.kind), ['fact', 'rule']);
-    view.click(view.container.querySelector('[data-node="x001"]'));
+    assert.deepEqual([...view.container.querySelectorAll('[data-node]')].map((node) => node.dataset.kind), ['rule', 'law', 'fact']);
+    view.click(view.container.querySelector('[data-node][data-kind="law"]'));
+    assert.match(view.container.querySelector('.pmc-inspector').textContent, /Sanction possible/);
+    view.click(view.container.querySelector('[data-node][data-kind="fact"]'));
     const inspector = view.container.querySelector('.pmc-inspector');
     assert.equal(inspector.hidden, false);
     assert.match(inspector.textContent, /Attestation de Jean Dupont/);
-    assert.ok(view.container.querySelector('[data-node="x002"]').classList.contains('is-dim'));
+    assert.match(inspector.textContent, /Fait du dossier/);
     view.click(inspector.querySelector('[data-open-reference]'));
     assert.equal(view.opened.at(-1).path, '/dossier/pieces/attestation.md');
     view.click(view.dom.window.document.querySelector('#outside'));

@@ -69,9 +69,11 @@ test('writes each rule with its basis, its value and how it applies', () => {
   const model = reasoning(dot, [module], citations);
   const document = new JSDOM(reasoningText(model)).window.document;
   const cards = [...document.querySelectorAll('[data-card]')];
-  assert.equal(cards[0].querySelector('.pmc-kind').textContent, 'Réponse');
+  assert.equal(cards[0].querySelector('.pmc-kind').textContent, 'Question');
   assert.equal(cards[0].querySelector('h3').textContent, 'Résolution possible');
-  assert.equal(cards[0].querySelector('.pmc-value').textContent, 'Vrai');
+  assert.match(cards[0].querySelector('[data-part="law"]').textContent, /Résolution possible si :\s*Condition Mise en demeure/);
+  assert.match(cards[0].querySelector('[data-part="facts"]').textContent, /Fait Mise en demeure Établi/);
+  assert.match(cards[0].querySelector('.pmc-result').textContent, /Vrai Toutes les conditions sont remplies\./);
   const link = cards[0].querySelector('[data-open-reference]');
   assert.equal(link.dataset.target, 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041472');
   assert.equal(link.dataset.origin, module.chemin);
@@ -83,14 +85,16 @@ test('writes each rule with its basis, its value and how it applies', () => {
   assert.deepEqual(reasoningIssues(model).map((entry) => [entry.id, entry.title]), [[model.steps[0].id, 'Pièce 2, lettre']]);
 });
 
-test('draws facts before rules with links to their sources', () => {
+test('draws the rule, then the law it requires, then the facts', () => {
   const model = reasoning(dot, [module], citations);
   const document = new JSDOM(reasoningGraph(model)).window.document;
   const nodes = [...document.querySelectorAll('[data-node]')];
-  assert.deepEqual(nodes.map((node) => node.dataset.kind), ['fact', 'answer']);
+  assert.deepEqual(nodes.map((node) => [node.dataset.kind, node.dataset.level]), [['answer', '0'], ['law', '1'], ['fact', '2']]);
   assert.ok(parseFloat(nodes[0].style.left) < parseFloat(nodes[1].style.left));
-  assert.equal(document.querySelectorAll('[data-from][data-to]').length, 1);
-  assert.equal(nodes[1].querySelector('[data-open-reference]').textContent, 'Article 1226');
+  assert.equal(document.querySelectorAll('[data-from][data-to]').length, 2);
+  assert.equal(nodes[0].querySelector('[data-open-reference]').textContent, 'Article 1226');
+  assert.equal(nodes[2].querySelector('[data-open-reference]').textContent, 'Pièce 2, lettre');
+  assert.match(nodes[1].textContent, /Remplie/);
   assert.equal(reasoningGraph(reasoning('digraph G {}')), '');
 });
 
@@ -102,4 +106,31 @@ test('flags a rule without legal basis and escapes trace text', () => {
   const document = new JSDOM(reasoningText(model) + reasoningGraph(model)).window.document;
   assert.equal(document.querySelectorAll('img, script, [onerror]').length, 0);
   assert.throws(() => reasoning('digraph G { x001 [label=<a>]; x002 [label=<b>]; x001 -> x002 [style="solid"]; x002 -> x001 [style="solid"]; }'), /cycle/);
+});
+
+test('follows the depth of the Catala rules and separates exceptions', () => {
+  const model = reasoning(`digraph G {
+    x001 [label=<<table><tr><td>inexécution</td><td>true</td></tr></table>>, style="filled"];
+    x002 [label=<<table><tr><td>force_majeure</td><td>false</td></tr></table>>, style="filled"];
+    x003 [label=<<table><tr><td>inexécution_grave</td></tr><tr><td>inexécution</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>];
+    x004 [label=<<table><tr><td>résolution_possible</td></tr><tr><td>inexécution_grave et non force_majeure</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>];
+    subgraph cluster_inputs { x001; x002; }
+    x001 -> x003 [style="solid"];
+    x003 -> x004 [style="solid"];
+    x002 -> x004 [style="solid"];
+  }`);
+  const document = new JSDOM(reasoningGraph(model)).window.document;
+  const nodes = [...document.querySelectorAll('[data-node]')].map((node) => [node.dataset.kind, node.dataset.level, node.querySelector('strong, a')?.textContent]);
+  assert.deepEqual(nodes, [
+    ['rule', '0', 'Résolution possible'],
+    ['law', '1', 'Inexécution grave'],
+    ['law', '2', 'Inexécution'],
+    ['fact', '3', 'Inexécution'],
+    ['exception', '1', 'Force majeure'],
+    ['fact', '2', 'Force majeure'],
+  ]);
+  assert.equal(document.querySelectorAll('.is-sauf').length, 1);
+  assert.match(document.querySelector('[data-kind="exception"]').textContent, /Sauf.*Exception écartée/);
+  const card = new JSDOM(reasoningText(model)).window.document.querySelector('[data-card="x004"]');
+  assert.match(card.querySelector('.pmc-result').textContent, /Toutes les conditions sont remplies/);
 });

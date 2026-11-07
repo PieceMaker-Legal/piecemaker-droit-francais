@@ -18,14 +18,20 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   };
   const select = (id: string) => {
     const branch = new Set(id ? [id] : nodes.map((node) => node.dataset.node!));
-    for (let pass = 0; pass < nodes.length; pass++) for (const wire of wires) if (branch.has(wire.dataset.to!)) branch.add(wire.dataset.from!);
+    const down = new Set(branch);
+    for (let pass = 0; pass < nodes.length; pass++) for (const wire of wires) {
+      if (branch.has(wire.dataset.to!)) branch.add(wire.dataset.from!);
+      if (down.has(wire.dataset.from!)) down.add(wire.dataset.to!);
+    }
+    down.forEach((item) => branch.add(item));
     nodes.forEach((node) => {
       node.classList.toggle('is-dim', !branch.has(node.dataset.node!));
       node.setAttribute('aria-pressed', String(node.dataset.node === id));
     });
     wires.forEach((wire) => wire.classList.toggle('is-dim', !branch.has(wire.dataset.from!) || !branch.has(wire.dataset.to!)));
     if (!inspector) return;
-    const card = id ? view.querySelector<HTMLElement>(`.pmc-cards [data-card="${id}"]`) : null;
+    const chosen = nodes.find((node) => node.dataset.node === id);
+    const card = chosen ? view.querySelector<HTMLElement>(`.pmc-cards [data-card="${chosen.dataset.card}"]`) : null;
     inspector.hidden = !card;
     if (card) inspector.innerHTML = `<button class="pmc-close" data-close-node aria-label="Fermer le détail">×</button>${card.outerHTML}`;
   };
@@ -46,7 +52,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     if (link) {
       event.preventDefault();
       if (link.closest('.pmc-written')) goto(link.dataset.goto!);
-      else select(link.dataset.goto!);
+      else select(nodes.find((node) => node.dataset.node === link.dataset.goto) ? link.dataset.goto! : nodes.find((node) => node.dataset.card === link.dataset.goto)?.dataset.node ?? '');
       return;
     }
     const button = target.closest<HTMLElement>('button');

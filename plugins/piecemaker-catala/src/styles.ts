@@ -62,6 +62,16 @@ export const STYLES = `
 .pmc-graph{position:relative}.pmc-graph svg{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 .pmc-wire{color:var(--muted);stroke-width:1.6;opacity:.6;transition:opacity .2s}
 .pmc [data-kind=fact]{--kind:#2f9e7c}.pmc [data-kind=condition]{--kind:#d99a2b}.pmc [data-kind=rule]{--kind:#3b82f6}.pmc [data-kind=answer]{--kind:#7c3aed}
+.pmc [data-kind=law]{--kind:#7c6ee6}.pmc [data-kind=exception]{--kind:#c45b5b}
+.pmc-node[data-kind=exception]{border-style:dashed}.pmc-wire.is-sauf{stroke-dasharray:5 4}
+.pmc-column{position:absolute;top:14px;color:var(--muted);font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.pmc-chips{display:flex;flex-direction:column;gap:2px;margin-top:2px}
+.pmc-chip{align-self:flex-start;color:#7c6ee6;font-size:12px;font-weight:500;text-decoration:none}.pmc-chip:hover{text-decoration:underline}.pmc-chip:before{content:'§ '}.pmc-chip[data-kind=piece]{color:#2f9e7c}.pmc-chip[data-kind=piece]:before{content:'▤ '}
+.pmc-part{margin-top:4px}.pmc-lead{margin:4px 0 2px;color:var(--ink)}
+.pmc-law,.pmc-law ul,.pmc-application ul{margin:2px 0;padding-left:18px}.pmc-law li{margin:4px 0}.pmc-law .pmc-chips{display:inline-flex;flex-direction:row;flex-wrap:wrap;gap:8px;margin-left:8px}
+.pmc-law [data-clause=not]>.pmc-kind,.pmc-application [data-tone] > .pmc-kind{color:var(--ink)}
+.pmc-facts{padding-left:18px}.pmc-facts .pmc-kind{color:#2f9e7c}
+.pmc-result{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:2px 0 0;color:var(--ink)}
 .pmc-node{position:absolute;display:flex;flex-direction:column;gap:4px;padding:10px 12px;border:1.5px solid color-mix(in srgb,var(--kind) 65%,var(--border));border-radius:12px;background:color-mix(in srgb,var(--kind) 7%,var(--surface));cursor:pointer;outline:none;user-select:none;transition:opacity .2s,box-shadow .2s}
 .pmc-node[data-kind=answer]{border-width:2.5px}
 .pmc-node .pmc-kind{color:var(--kind)}.pmc-node strong{color:var(--ink);font-weight:600;line-height:1.35}.pmc-node .pmc-value{align-self:flex-start}
