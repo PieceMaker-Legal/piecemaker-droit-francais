@@ -10,7 +10,7 @@ import { locateSourcePassages } from './harness/source-passages.js';
 
 export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
   const inspect = async (cwd: string, id: string, quote: string, content: string) => {
-    if (!/^(?:LEGIARTI|JURITEXT|CETATEXT)\d{12}$/.test(id) && !path.isAbsolute(id)) throw new Error('Source absente du programme Catala.');
+    if (!/^(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) && !/^[0-9a-f]{24}$/i.test(id) && !path.isAbsolute(id)) throw new Error('Source absente du programme Catala.');
     if (quote && !content.includes(quote) && !content.replace(/^>\s?/gm, '').includes(quote)) throw new Error('Citation absente du programme Catala.');
     const info = await connectors.source(cwd, id);
     if (!info) throw new Error(path.isAbsolute(id) ? 'Pièce ou texte converti indisponible dans le dossier.' : 'Texte officiel indisponible.');
@@ -18,7 +18,7 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
     const quotes = quote ? [{ quote, verification: { verified } }] : [];
     const source = info.validity ? `Validité : ${info.validity.from} → ${info.validity.to ?? 'en vigueur'}\n\n${info.text}` : info.text;
     const token = await store.save({ sessionId: `catala:${cwd}`, title: info.title, source, citation: { ref: 1, ...(info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id }), verified, quotes }, ranges: locateSourcePassages(source, quotes) });
-    return { token, verified, status: !quote ? 'missing' : verified ? 'passed' : 'failed', message: !quote ? 'Aucun extrait cité.' : verified ? 'Citation retrouvée dans la source.' : 'Citation non retrouvée dans la source.' };
+    return { token, title: info.title, verified, status: !quote ? 'missing' : verified ? 'passed' : 'failed', message: !quote ? 'Aucun extrait cité.' : verified ? 'Citation retrouvée dans la source.' : 'Citation non retrouvée dans la source.' };
   };
   const entries = (files: Array<{ nom: string; chemin: string; contenu: string }>) => files.flatMap((file) => {
     const found = new Map<string, { target: string; quote: string; origin: string; label: string; kind: string }>();
@@ -39,9 +39,11 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
           let id: string;
           if (/^https?:/i.test(ref.target)) {
             const url = new URL(ref.target);
-            const legal = /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname) && url.pathname.match(/\/(LEGIARTI\d{12}|JURITEXT\d{12}|CETATEXT\d{12})(?:\/|$)/)?.[1];
-            if (!legal) { results.push({ ...ref, verified: false, status: 'missing', message: 'Source non prise en charge par le contrôle existant.' }); continue; }
-            id = legal;
+            const legal = /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname) && url.pathname.match(/\/(LEGIARTI\d+|JURITEXT\d+|CETATEXT\d+|CONSTEXT\d+)(?:\/|$)/)?.[1];
+            const judilibre = /^www\.courdecassation\.fr$/.test(url.hostname) && url.pathname.match(/^\/decision\/([0-9a-f]{24})\/?$/i)?.[1];
+            const sourceId = legal || judilibre;
+            if (!sourceId) { results.push({ ...ref, verified: false, status: 'missing', message: 'Source non prise en charge par le contrôle existant.' }); continue; }
+            id = sourceId;
           } else {
             id = fileURLToPath(new URL(ref.target, pathToFileURL(ref.origin)));
             if (!id.startsWith(path.resolve(cwd) + path.sep)) throw new Error('Pièce hors du dossier.');

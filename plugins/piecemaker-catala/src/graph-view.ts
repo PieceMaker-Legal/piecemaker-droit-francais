@@ -1,4 +1,4 @@
-export function mountExplanation(view: HTMLElement, openReference: (target: string, origin: string, quote: string) => void) {
+export function mountExplanation(view: HTMLElement, openReference: (target: string, origin: string, quote: string, id: string) => void) {
   const canvas = view.querySelector<HTMLElement>('.pmc-canvas');
   const stage = view.querySelector<HTMLElement>('.pmc-stage');
   const inspector = view.querySelector<HTMLElement>('.pmc-inspector');
@@ -18,12 +18,15 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   };
   const select = (id: string) => {
     const branch = new Set(id ? [id] : nodes.map((node) => node.dataset.node!));
-    const down = new Set(branch);
-    for (let pass = 0; pass < nodes.length; pass++) for (const wire of wires) {
-      if (branch.has(wire.dataset.to!)) branch.add(wire.dataset.from!);
-      if (down.has(wire.dataset.from!)) down.add(wire.dataset.to!);
+    if (id) {
+      for (let queue = [id], guard = 0; queue.length && guard < nodes.length * nodes.length; guard++) {
+        const current = queue.pop()!;
+        for (const wire of wires) {
+          const other = wire.dataset.from === current ? wire.dataset.to : wire.dataset.to === current ? wire.dataset.from : undefined;
+          if (other && !branch.has(other)) { branch.add(other); queue.push(other); }
+        }
+      }
     }
-    down.forEach((item) => branch.add(item));
     nodes.forEach((node) => {
       node.classList.toggle('is-dim', !branch.has(node.dataset.node!));
       node.setAttribute('aria-pressed', String(node.dataset.node === id));
@@ -47,7 +50,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     if (!view.contains(target)) { select(''); return; }
     if (moved) { moved = false; event.preventDefault(); return; }
     const reference = target.closest<HTMLElement>('[data-open-reference]');
-    if (reference) { event.preventDefault(); openReference(reference.dataset.target ?? '', reference.dataset.origin ?? '', reference.dataset.quote ?? ''); return; }
+    if (reference) { event.preventDefault(); openReference(reference.dataset.target ?? '', reference.dataset.origin ?? '', reference.dataset.quote ?? '', reference.dataset.id ?? ''); return; }
     const link = target.closest<HTMLElement>('[data-goto]');
     if (link) {
       event.preventDefault();

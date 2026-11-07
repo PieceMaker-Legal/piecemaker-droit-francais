@@ -29,7 +29,7 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
   const text = sections.map((section) => section.lines.join('\n').trim()).filter(Boolean).join('\n\n');
   const references: Array<{ label: string; target: string; kind: string }> = [];
   const add = (label: string, target: string, kind?: string) => {
-    const category = kind ?? (/\bjurisprudence\b|\barrêt\b|\/(?:juri|ceta)\/id\//i.test(label + ' ' + target) ? 'jurisprudence' : /^pièce\b|\.(?:pdf|docx?)(?:[?#]|$)/i.test(label + ' ' + target) ? 'piece' : /legifrance\.gouv\.fr|\barticle\b/i.test(target + ' ' + label) ? 'article' : /^[a-z][\w+.-]*:/i.test(target) ? 'reference' : 'piece');
+    const category = kind ?? (/\bjurisprudence\b|\barrêt\b|\/(?:juri|ceta|cons)\/id\/|courdecassation\.fr\/decision\//i.test(label + ' ' + target) ? 'jurisprudence' : /^pièce\b|\.(?:pdf|docx?)(?:[?#]|$)/i.test(label + ' ' + target) ? 'piece' : /legifrance\.gouv\.fr|\barticle\b/i.test(target + ' ' + label) ? 'article' : /^[a-z][\w+.-]*:/i.test(target) ? 'reference' : 'piece');
     if (!references.some((entry) => entry.label === label && entry.target === target)) references.push({ label, target, kind: category });
   };
   const definitions = new Map([...file.contenu.matchAll(/^\s{0,3}\[([^\]]+)\]:\s*<?([^\s>]+)>?/gm)].map((match) => [match[1].toLowerCase(), match[2]]));
@@ -39,15 +39,15 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
     if (target) add(match[1], target);
   }
   for (const match of text.matchAll(/https?:\/\/[^\s<>\])]+/g)) if (!references.some((entry) => entry.target === match[0])) add(match[0], match[0]);
-  for (const match of text.matchAll(/\b(?:LEGIARTI|JURITEXT|CETATEXT|JORFTEXT|JORFARTI)\d+\b/g)) {
+  for (const match of text.matchAll(/\b(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT|JORFTEXT|JORFARTI)\d+\b/g)) {
     const id = match[0];
     const heading = text.split('\n').find((line) => /^#{1,6}\s/.test(line) && line.includes(id));
     const label = heading?.replace(/^#{1,6}\s*/, '').split('|')[0].trim() || id;
-    if (!references.some((entry) => entry.target.includes(id))) add(label, `https://www.legifrance.gouv.fr/${id.startsWith('LEGIARTI') ? 'codes/article_lc' : id.startsWith('JURI') ? 'juri/id' : id.startsWith('CETA') ? 'ceta/id' : 'jorf/id'}/${id}`, /^(?:JURI|CETA)/.test(id) ? 'jurisprudence' : 'article');
+    if (!references.some((entry) => entry.target.includes(id))) add(label, `https://www.legifrance.gouv.fr/${id.startsWith('LEGIARTI') ? 'codes/article_lc' : id.startsWith('JURI') ? 'juri/id' : id.startsWith('CETA') ? 'ceta/id' : id.startsWith('CONS') ? 'cons/id' : 'jorf/id'}/${id}`, /^(?:JURI|CETA|CONS)/.test(id) ? 'jurisprudence' : 'article');
   }
   for (const match of text.matchAll(/\b(?:[Aa]rticles?\s+(?:[LRD]\.\s*)?\d+[\w.−-]*|[Pp]ièce\s+(?:n[°ºo]\s*)?\d+)\b/g)) if (!references.some((entry) => entry.label.toLowerCase().includes(match[0].toLowerCase()))) add(match[0], '', /^pièce/i.test(match[0]) ? 'piece' : 'article');
   return { text, references: references.map((entry) => {
-    const marker = entry.target.match(/(?:LEGIARTI|JURITEXT|CETATEXT|JORFARTI|JORFTEXT)\d+/)?.[0] ?? (entry.target || entry.label);
+    const marker = entry.target.match(/(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT|JORFARTI|JORFTEXT)\d+/)?.[0] ?? (entry.target || entry.label);
     const rows = text.split('\n');
     const quoted = (at: number) => {
       const following = rows.slice(at + 1);

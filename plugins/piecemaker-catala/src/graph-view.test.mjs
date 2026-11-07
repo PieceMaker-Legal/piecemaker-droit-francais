@@ -65,13 +65,14 @@ test('shows each rule with its legal basis and no code checks', async () => {
   try {
     const written = view.container.querySelector('.pmc-written');
     assert.equal(written.hidden, false);
-    assert.match(view.container.querySelector('.pmc-run').textContent, /Raisonnement vérifié/);
+    assert.match(view.container.querySelector('.pmc-run').textContent, /Recalculer/);
+    assert.doesNotMatch(view.container.querySelector('.pmc-run').textContent, /vérifié|vérification/i);
     const card = written.querySelector('[data-card="x002"]');
     assert.equal(card.querySelector('h3').textContent, 'Sanction possible');
-    assert.equal(card.querySelector('.pmc-result .pmc-value').textContent, 'Vrai');
+    assert.equal(card.querySelector('[data-part="projection"] .pmc-value').textContent, 'Vrai');
     assert.match(card.textContent, /Article 1217/);
     assert.match(card.textContent, /Passage juridique fictif/);
-    assert.match(card.querySelector('.pmc-application').textContent, /Inexécution/);
+    assert.match(card.querySelector('[data-part="justification"]').textContent, /Inexécution/);
     assert.doesNotMatch(view.container.textContent, /Étape|typecheck|Contrôles|clerk|test_demo|catleg/i);
     assert.match(written.textContent, /Autres sources citées/);
   } finally { view.close(); }
@@ -103,8 +104,8 @@ test('the graph details a node with its card and opens its sources', async () =>
   try {
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
-    assert.deepEqual([...view.container.querySelectorAll('[data-node]')].map((node) => node.dataset.kind), ['rule', 'law', 'fact']);
-    view.click(view.container.querySelector('[data-node][data-kind="law"]'));
+    assert.deepEqual([...view.container.querySelectorAll('[data-node]')].map((node) => node.dataset.kind), ['rule', 'fact']);
+    view.click(view.container.querySelector('[data-node][data-kind="rule"]'));
     assert.match(view.container.querySelector('.pmc-inspector').textContent, /Sanction possible/);
     view.click(view.container.querySelector('[data-node][data-kind="fact"]'));
     const inspector = view.container.querySelector('.pmc-inspector');
@@ -122,11 +123,11 @@ test('the graph details a node with its card and opens its sources', async () =>
 test('asks for a verification when the trace is missing or stale', async () => {
   const view = await open([program({ perimee: true }), program({ nom: 'autre', graphe: null, explication: null, verification: null })]);
   try {
-    assert.match(view.container.querySelector('.pmc-run').textContent, /Modifié depuis la vérification/);
-    assert.match(view.container.querySelector('.pmc-written').textContent, /lancez la vérification/);
+    assert.match(view.container.querySelector('.pmc-run').textContent, /Raisonnement à recalculer/);
+    assert.match(view.container.querySelector('.pmc-written').textContent, /Aucun raisonnement calculé pour ce scénario/);
     const select = view.container.querySelector('[data-program-choice]');
     select.value = 'autre';
     select.dispatchEvent(new view.dom.window.Event('change', { bubbles: true }));
-    assert.match(view.container.querySelector('.pmc-run').textContent, /Jamais vérifié/);
+    assert.match(view.container.querySelector('.pmc-run').textContent, /Aucun raisonnement calculé/);
   } finally { view.close(); }
 });

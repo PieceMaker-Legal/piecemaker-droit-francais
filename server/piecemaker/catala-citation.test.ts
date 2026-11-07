@@ -26,6 +26,7 @@ test('opens declared Catala references in the citation reader without inventing 
       assert.equal(saved?.citation.verified, verified);
       assert.equal(saved?.sessionId, 'catala:/dossier-fictif');
       assert.equal(saved?.citation.article_id, 'LEGIARTI000000000001');
+      assert.equal(saved?.title, 'Article fictif');
       assert.match(saved!.source, /Validité : 2020-01-01/);
       if (verified) assert.equal(saved!.source.slice(saved!.ranges[0].start, saved!.ranges[0].end), quote);
     }
@@ -56,5 +57,22 @@ test('checks all declared quotations, retains missing and failed citations and s
     for (const entry of result.results) if ('token' in entry) assert.equal((await store.read(entry.token))?.citation.verified, entry.verified);
     const empty = await service.verify(home, [{ nom: 'vide.catala_fr', chemin: origin, contenu: 'Aucune source.' }]);
     assert.equal(empty.status, 'missing');
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
+test('verifies Judilibre and constitutional decisions through the existing source connector', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-decisions-'));
+  try {
+    const requested: string[] = [];
+    const service = createCatalaCitation({ source: async (_cwd, id) => { requested.push(id); return { kind: 'decision', title: 'Cour fictive, 12 mars 2026', text: 'Extrait exact.' }; }, match: (text, quote) => text.includes(quote) ? quote : null }, createCitationStore(home));
+    const ids = ['abcdef0123456789abcdef01', 'CONSTEXT000000000001'];
+    const urls = [`https://www.courdecassation.fr/decision/${ids[0]}`, `https://www.legifrance.gouv.fr/cons/id/${ids[1]}`];
+    const contenu = urls.map((url, index) => `## Décision ${index}\n[Jurisprudence fictive](${url})\nCitation : « Extrait exact. »`).join('\n');
+    const report = await service.verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu }]);
+    assert.equal(report.passed, true);
+    assert.deepEqual(requested, ids);
+    assert.ok(report.results.every((entry) => 'title' in entry && entry.title === 'Cour fictive, 12 mars 2026'));
+    const rejected = await service.verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu: contenu.replace('www.courdecassation.fr', 'www.courdecassation.fr.example.test') }]);
+    assert.equal(rejected.passed, false);
   } finally { await rm(home, { recursive: true, force: true }); }
 });

@@ -10,7 +10,7 @@ type Check = { name: string; command: string; exit_code: number | null; seconds:
 type Report = { started_utc: string; finished_utc: string; passed: boolean; checks: Check[] };
 type Proof = Report & { fichier: string; scope: string; conflits: number; obligations?: number };
 type Catleg = { date_controle: string; passed: boolean; fichiers: Array<{ fichier: string; passed: boolean; skipped?: boolean; articles?: string[]; versions?: Array<{ id: string; au: string; debut?: string; fin?: string | null; valide: boolean | null }>; messages: string[] }> };
-type Program = { nom: string; enCours: boolean; perimee: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; tests?: { 'test-results': Array<{ file: string; tests: { scopes: Array<{ scope_name: string; success: boolean; errors?: unknown[] }> } }> } | null; citations?: { results: Array<{ origin: string; target: string; quote: string; label?: string; title?: string; kind?: string; status: string; message: string }> } | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string }) | null; graphe: string | null };
+type Program = { nom: string; enCours: boolean; perimee: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; tests?: { 'test-results': Array<{ file: string; tests: { scopes: Array<{ scope_name: string; success: boolean; errors?: unknown[] }> } }> } | null; citations?: { results: Array<{ origin: string; target: string; quote: string; label?: string; title?: string; id?: string; kind?: string; status: string; message: string }> } | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string }) | null; graphe: string | null };
 export type CatalaSnapshot = {
   pack: { id: string; platform: string; version: string; proof: boolean; installedAt: string } | null;
   status: { state: string; id?: string; step?: string; error?: string; updatedAt?: string } | null;
@@ -20,7 +20,13 @@ export type CatalaSnapshot = {
 const cleanups = new WeakMap<HTMLElement, () => void>();
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const pill = (tone: string, label: string) => `<span class="pmc-pill pmc-${tone}">${escape(label)}</span>`;
-const verdict = (program: Program) => program.perimee ? pill('warn', 'Modifié depuis la vérification') : program.verification ? program.verification.passed ? pill('ok', 'Raisonnement vérifié') : pill('ko', 'Vérification à reprendre') : pill('muted', 'Jamais vérifié');
+const freshness = (program: Program) => program.perimee ? pill('warn', 'Raisonnement à recalculer') : program.explication?.passed && program.graphe ? '' : pill('muted', 'Aucun raisonnement calculé');
+const analysed = (program: Program) => {
+  const date = program.explication?.finished_utc;
+  if (!date) return '';
+  const value = new Date(date);
+  return Number.isNaN(value.getTime()) ? '' : `Analysé le ${new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeStyle: 'short' }).format(value)}`;
+};
 
 export function mount(container: HTMLElement, api: Host) {
   const style = document.createElement('style');
@@ -51,10 +57,11 @@ export function mount(container: HTMLElement, api: Host) {
     catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results); }
     const issues = reasoningIssues(model);
     const graph = reasoningGraph(model);
-    const empty = `<p class="pmc-muted">${failure ? escape(failure) : 'Aucune exécution du raisonnement : lancez la vérification.'}</p>`;
+    const empty = `<p class="pmc-muted">${failure ? escape(failure) : 'Aucun raisonnement calculé pour ce scénario.'}</p>`;
     const choice = data!.programmes.length > 1 ? `<select data-program-choice aria-label="Raisonnement">${data!.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.nom)}</option>`).join('')}</select>` : '';
     const open = issues.length ? `<details class="pmc-open-states"><summary class="pmc-warn">${issues.length} point${issues.length > 1 ? 's' : ''} à examiner</summary><ul>${issues.map((entry) => `<li>${entry.id ? `<a href="#" class="pmc-link" data-goto="${entry.id}">${escape(entry.title)}</a>` : escape(entry.title)} : ${escape(entry.issue)}</li>`).join('')}</ul></details>` : '';
-    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-view-head"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement"><button role="tab" data-mode="written" aria-selected="${viewMode === 'written'}">Vue écrite</button><button role="tab" data-mode="graph" aria-selected="${viewMode === 'graph'}">Graphe</button></div>${choice}</div>${open}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-legend"><span data-kind="answer">Question</span><span data-kind="law">Condition (droit)</span><span data-kind="exception">Exception</span><span data-kind="fact">Fait du dossier</span><span class="pmc-ok">Remplie</span><span class="pmc-ko">Non remplie</span></div><div class="pmc-canvas" aria-label="Graphe du raisonnement"><div class="pmc-stage">${graph}</div><aside class="pmc-inspector" aria-label="Détail" hidden></aside><div class="pmc-tools"><button data-zoom="1.2" aria-label="Zoomer">+</button><button data-zoom="0.833333" aria-label="Dézoomer">−</button><button data-fit>Ajuster</button></div></div>` : empty}</div><div class="pmc-cards" hidden>${model.steps.map((step) => reasoningCard(step, model)).join('')}</div></section>`;
+    const scenario = program.explication?.scope ? `<span class="pmc-scenario">Scénario : <strong>${escape(program.explication.scope)}</strong></span>` : '';
+    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-view-head"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement"><button role="tab" data-mode="written" aria-selected="${viewMode === 'written'}">Raisonnement</button><button role="tab" data-mode="graph" aria-selected="${viewMode === 'graph'}">Graphe</button></div>${scenario}${choice}</div>${open}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-legend"><span data-kind="answer">Conclusion</span><span data-kind="rule">Règle</span><span data-kind="condition">Condition</span><span data-kind="fact">Fait</span><span data-kind="exception">Exception</span><span class="pmc-ok">Remplie</span><span class="pmc-ko">Non remplie</span></div><div class="pmc-canvas" aria-label="Graphe du raisonnement"><div class="pmc-stage">${graph}</div><aside class="pmc-inspector" aria-label="Détail" hidden></aside><div class="pmc-tools"><button data-zoom="1.2" aria-label="Zoomer">+</button><button data-zoom="0.833333" aria-label="Dézoomer">−</button><button data-fit>Ajuster</button></div></div>` : empty}</div><div class="pmc-cards" hidden>${model.steps.map((step) => reasoningCard(step, model)).join('')}</div></section>`;
   };
   const paint = () => {
     stopGraph();
@@ -65,15 +72,15 @@ export function mount(container: HTMLElement, api: Host) {
     const program = shown();
     if (!program) { panel.innerHTML = `${warning}<p class="pmc-muted">Aucun programme Catala dans ce dossier : un programme est un dossier .piecemaker/catala/&lt;nom&gt;/ avec clerk.toml.</p>`; return; }
     const running = program.enCours || verifying === program.nom;
-    const run = `<div class="pmc-run"><button data-refresh>Actualiser</button><button class="pmc-primary" data-verify="${escape(program.nom)}"${running || verifying || !data.pack ? ' disabled' : ''}>${running ? 'Vérification en cours…' : 'Vérifier'}</button><span class="pmc-tally">${verdict(program)}</span></div>${data.pack ? '' : '<p class="pmc-muted">Catala n’est pas installé : la vérification est impossible.</p>'}`;
+    const run = `<div class="pmc-run"><button data-refresh>Actualiser</button><button class="pmc-primary" data-verify="${escape(program.nom)}"${running || verifying || !data.pack ? ' disabled' : ''}>${running ? 'Analyse en cours…' : 'Recalculer'}</button><span class="pmc-tally">${freshness(program)}</span><span class="pmc-analysed">${analysed(program)}</span></div>${data.pack ? '' : '<p class="pmc-muted">Le calcul du raisonnement n’est pas disponible sur ce poste.</p>'}`;
     panel.innerHTML = `${warning}${run}${explanationPart(program)}`;
     const view = panel.querySelector<HTMLElement>('.pmc-view');
-    if (view) stopGraph = mountExplanation(view, (target, origin, quote) => {
-      let legalId: string | undefined;
+    if (view) stopGraph = mountExplanation(view, (target, origin, quote, id) => {
+      let legalId = id && (/^(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) || /^[0-9a-f]{24}$/i.test(id)) ? id : undefined;
       try {
         const url = new URL(target);
-        if (url.protocol === 'https:' && /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname)) legalId = url.pathname.match(/\/(LEGIARTI\d{12}|JURITEXT\d{12}|CETATEXT\d{12}|CONSTEXT\d{12})(?:\/|$)/)?.[1];
-        if (url.protocol === 'https:' && url.hostname === 'www.courdecassation.fr') legalId = url.pathname.match(/^\/decision\/([a-f\d]{24})(?:\/|$)/i)?.[1];
+        if (!legalId && url.protocol === 'https:' && /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname)) legalId = url.pathname.match(/\/(LEGIARTI\d+|JURITEXT\d+|CETATEXT\d+|CONSTEXT\d+)(?:\/|$)/)?.[1];
+        if (!legalId && url.protocol === 'https:' && url.hostname === 'www.courdecassation.fr') legalId = url.pathname.match(/^\/decision\/([a-f\d]{24})(?:\/|$)/i)?.[1];
       } catch {}
       if (legalId && context.project) {
         const projectPath = context.project.path;
@@ -83,6 +90,7 @@ export function mount(container: HTMLElement, api: Host) {
         return;
       }
       if (/^https?:\/\//i.test(target)) { error = 'Cette référence ne peut pas être ouverte par le lecteur interne. Renseignez un lien officiel vers l’article ou la décision.'; paint(); return; }
+      if (!target) return;
       const project = context.project?.path.replaceAll('\\', '/').replace(/\/$/, '');
       if (!project || ![...program.fichiers, ...program.journaux].some((file) => file.chemin === origin)) return;
       try {
