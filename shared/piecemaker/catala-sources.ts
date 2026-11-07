@@ -48,15 +48,20 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
   for (const match of text.matchAll(/\b(?:[Aa]rticles?\s+(?:[LRD]\.\s*)?\d+[\w.−-]*|[Pp]ièce\s+(?:n[°ºo]\s*)?\d+)\b/g)) if (!references.some((entry) => entry.label.toLowerCase().includes(match[0].toLowerCase()))) add(match[0], '', /^pièce/i.test(match[0]) ? 'piece' : 'article');
   return { text, references: references.map((entry) => {
     const marker = entry.target.match(/(?:LEGIARTI|JURITEXT|CETATEXT|JORFARTI|JORFTEXT)\d+/)?.[0] ?? (entry.target || entry.label);
-    const linked = entry.target ? text.split('\n').findIndex((line) => line.includes(entry.target)) : -1;
-    const at = linked >= 0 ? linked : text.split('\n').findIndex((line) => line.includes(marker));
-    if (at < 0) return { ...entry, origin: file.chemin, quote: '' };
-    const following = text.split('\n').slice(at + 1);
-    while (following[0] === '') following.shift();
-    const literal = /^Citation : « ([\s\S]*?) »(?:\n|$)/.exec(following.join('\n'))?.[1];
-    const quote: string[] = [];
-    for (const line of following) { if (!/^>\s?/.test(line)) break; quote.push(line.replace(/^>\s?/, '')); }
-    return { ...entry, origin: file.chemin, quote: literal ?? quote.join('\n') };
+    const rows = text.split('\n');
+    const quoted = (at: number) => {
+      const following = rows.slice(at + 1);
+      while (following[0] === '') following.shift();
+      const literal = /^Citation : « ([\s\S]*?) »(?:\n|$)/.exec(following.join('\n'))?.[1];
+      const quote: string[] = [];
+      for (const line of following) { if (!/^>\s?/.test(line)) break; quote.push(line.replace(/^>\s?/, '')); }
+      return literal ?? quote.join('\n');
+    };
+    const own = rows.flatMap((line, index) => entry.target && line.includes(`[${entry.label}](${entry.target}`) ? [index] : []);
+    const linked = rows.flatMap((line, index) => entry.target && line.includes(entry.target) ? [index] : []);
+    const candidates = [...own, ...linked, ...(linked.length ? [] : rows.flatMap((line, index) => line.includes(marker) ? [index] : []))];
+    if (!candidates.length) return { ...entry, origin: file.chemin, quote: '' };
+    return { ...entry, origin: file.chemin, quote: candidates.map(quoted).find(Boolean) ?? '' };
   }) };
 }
 
