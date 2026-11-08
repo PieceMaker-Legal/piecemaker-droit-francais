@@ -28,9 +28,9 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   const quotation = (source: Source) => source.quote ? `<q>${escape(source.quote)}</q>` : '';
   const value = (step: Step) => (step.value.startsWith('{') || step.value.startsWith('[')) ? '' : `<span class="pmc-value pmc-neutral">${escape(step.value || 'Indéterminé')}</span>`;
   const support = (step: Step): string => {
-    if (step.kind === 'rule') return `<p class="pmc-prior-result">Résultat déjà obtenu : <a href="#" class="pmc-link" data-goto="${step.id}">${escape(step.title)}</a> ${value(step)}${incomplete.has(step.id) ? '<span class="pmc-warn">Justification à compléter</span>' : ''}</p>`;
+    if (step.kind === 'rule') return `<p class="pmc-prior-result">Résultat déjà obtenu : <button type="button" class="pmc-text-action" data-goto="${step.id}">${escape(step.title)}</button> ${value(step)}${incomplete.has(step.id) ? '<span class="pmc-warn">Justification à compléter</span>' : ''}</p>`;
     const pieces = step.sources.filter((source) => source.kind === 'piece');
-    return `<div class="pmc-observation"><p><a href="#" class="pmc-link" data-goto="${step.id}">${escape(step.title)}</a> : ${value(step)}</p>${pieces.map(quotation).join('')}<div data-part="evidence">${references(pieces)}${!pieces.length ? '<p class="pmc-warn">Pièce à rattacher</p>' : ''}${pieces.some((source) => source.status === 'failed') ? '<p class="pmc-warn">Citation non retrouvée dans la pièce</p>' : ''}</div>${step.issue && pieces.length ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</div>`;
+    return `<div class="pmc-observation"><p><button type="button" class="pmc-text-action" data-goto="${step.id}">${escape(step.title)}</button> : ${value(step)}</p>${pieces.map(quotation).join('')}<div data-part="evidence">${references(pieces)}${!pieces.length ? '<p class="pmc-warn">Pièce à rattacher</p>' : ''}${pieces.some((source) => source.status === 'failed') ? '<p class="pmc-warn">Citation non retrouvée dans la pièce</p>' : ''}</div>${step.issue && pieces.length ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</div>`;
   };
   const condition = (clause: Clause, owner: Step): string => {
     if (clause.kind !== 'leaf') {

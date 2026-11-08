@@ -265,6 +265,8 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     try { return decodeURIComponent(new URL(node.source).pathname).endsWith(`/${file.nom}`); } catch { return false; }
   }));
   const documents = activeFiles.map((file) => documentSources(file, citations, linked, notes));
+  const authoredSources = documents.flatMap((document) => [...document.blocks.flatMap((block) => block.sources), ...document.trailing]);
+  const articleNames = new Map(activeFiles.flatMap((file) => [...(file.contenu ?? '').matchAll(/^#{1,6}\s+(.+?)\s*\|\s*((?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+)/gm)].map((match) => [match[2], match[1].trim()])));
   const located = (source: string): Source[] => {
     let selected: File[];
     try {
@@ -275,7 +277,10 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     if (selected.length !== 1) return [];
     return sourceContext(source, selected).references.filter((entry) => entry.target).map((entry) => {
       const cited = citationOf(citations, entry.origin, entry.target, entry.quote);
-      return { ...entry, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}) };
+      const authored = authoredSources.find((item) => item.target === entry.target && item.label !== item.target);
+      const id = entry.target.match(/(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+/)?.[0];
+      const label = authored?.label ?? (id ? articleNames.get(id) : undefined) ?? entry.label;
+      return { ...entry, label, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}) };
     });
   };
   const enrich = (entry: NativeOrigin): Origin => {
@@ -381,16 +386,22 @@ const label = (clause: Clause) => {
   return clause.kind === 'not' ? 'La condition suivante doit être fausse' : core ? capital(core) : 'Condition';
 };
 const sourceName = (source: Source) => {
-  if (source.kind !== 'piece' && source.title) {
+  if (source.kind === 'piece' || source.kind === 'origin') {
+    let filename = source.target.replaceAll('\\', '/').split(/[?#]/)[0].split('/').pop() || 'Document';
+    try { filename = decodeURIComponent(filename); } catch {}
+    return { main: filename, note: '' };
+  }
+  if (source.title) {
     const match = /^(.*?),\s*(article\s+.+)$/i.exec(source.title);
     if (match) return { main: capital(match[2]), note: match[1] };
     return { main: source.title, note: '' };
   }
-  return { main: source.label, note: '' };
+  const named = source.label && source.label !== source.target && !/^(?:https?:|file:|(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+)/.test(source.label);
+  return { main: named ? source.label : source.kind === 'article' ? 'Article — intitulé à préciser' : source.kind === 'jurisprudence' ? 'Décision — intitulé à préciser' : 'Document — intitulé à préciser', note: '' };
 };
 const sourceLink = (source: Source, chip = false) => {
   const { main, note } = sourceName(source);
-  return `<a href="#" class="${chip ? 'pmc-chip' : 'pmc-link'}" data-kind="${escape(source.kind)}" data-open-reference data-target="${escape(source.target)}" data-origin="${escape(source.origin)}" data-quote="${escape(source.quote)}"${source.id ? ` data-id="${escape(source.id)}"` : ''}${source.status === 'failed' ? ' data-citation="failed" title="Citation non retrouvée dans la source"' : ` title="${escape(source.title ?? source.label)}"`}>${escape(main)}${note ? `<span class="pmc-code">${escape(note)}</span>` : ''}</a>`;
+  return `<button type="button" class="pmc-reference${chip ? ' pmc-chip' : ''}" data-kind="${escape(source.kind)}" data-open-reference data-target="${escape(source.target)}" data-origin="${escape(source.origin)}" data-quote="${escape(source.quote)}"${source.id ? ` data-id="${escape(source.id)}"` : ''}${source.status === 'failed' ? ' data-citation="failed"' : ''} title="${escape(source.status === 'failed' ? `${main} · citation non retrouvée` : `Afficher ${main}`)}">${escape(main)}${note ? `<span class="pmc-code">${escape(note)}</span>` : ''}</button>`;
 };
 const sourceItem = (source: Source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}${source.quote ? `<q>${escape(source.quote)}</q>` : ''}${source.status === 'failed' ? '<span class="pmc-warn">Citation non retrouvée dans la source</span>' : ''}</li>`;
 const sourceList = (sources: Source[]) => sources.length ? `<ul class="pmc-sources">${sources.map(sourceItem).join('')}</ul>` : '';
@@ -402,7 +413,7 @@ function writer(model: Reasoning) {
   const title = (clause: Clause) => {
     const leaf = inner(clause);
     const rule = leaf.kind === 'leaf' ? steps.get(leaf.ref) : undefined;
-    if (rule?.kind === 'rule') return `<a href="#" class="pmc-link" data-goto="${rule.id}">${escape(rule.title)}</a>`;
+    if (rule?.kind === 'rule') return `<button type="button" class="pmc-text-action" data-goto="${rule.id}">${escape(rule.title)}</button>`;
     if (rule) return `<strong>${escape(rule.title)}</strong>`;
     return `<strong>${escape(capital(human(leaf.text)))}</strong>`;
   };
@@ -435,7 +446,7 @@ function writer(model: Reasoning) {
       const step = stepOf(clause);
       const prefix = clause.kind === 'not' ? '<span class="pmc-op">Non</span> ' : '';
       if (step?.kind === 'fact') return factLine(step, prefix);
-      if (step?.kind === 'rule') return `<li data-tone="${tone(step.value)}">${prefix}<span class="pmc-op">Règle</span> <a href="#" class="pmc-link" data-goto="${step.id}">${escape(step.title)}</a> ${pill(tone(step.value), step.value)}</li>`;
+      if (step?.kind === 'rule') return `<li data-tone="${tone(step.value)}">${prefix}<span class="pmc-op">Règle</span> <button type="button" class="pmc-text-action" data-goto="${step.id}">${escape(step.title)}</button> ${pill(tone(step.value), step.value)}</li>`;
       return `<li>${prefix}${title(clause)}</li>`;
     }
     const prefix = clause.kind === 'not' ? '<span class="pmc-op">Non</span> ' : `<span class="pmc-op">${escape(label(clause))}</span> `;
@@ -448,7 +459,7 @@ function writer(model: Reasoning) {
       return facts.length ? `<ul class="pmc-justification">${facts.map((fact) => factLine(fact)).join('')}</ul>` : '';
     }
     const parents = step.parents.map((id) => steps.get(id)!).filter(Boolean);
-    return parents.length ? `<ul class="pmc-justification">${parents.map((parent) => parent.kind === 'fact' ? factLine(parent) : `<li><a href="#" class="pmc-link" data-goto="${parent.id}">${escape(parent.title)}</a> ${pill(tone(parent.value), parent.value)}</li>`).join('')}</ul>` : '';
+    return parents.length ? `<ul class="pmc-justification">${parents.map((parent) => parent.kind === 'fact' ? factLine(parent) : `<li><button type="button" class="pmc-text-action" data-goto="${parent.id}">${escape(parent.title)}</button> ${pill(tone(parent.value), parent.value)}</li>`).join('')}</ul>` : '';
   };
   const projection = (step: Step) => {
     const value = step.value ? pill(tone(step.value), step.value) : pill('warn', 'Indéterminé');
@@ -464,7 +475,7 @@ function writer(model: Reasoning) {
     if (application) return `<section class="pmc-rule" data-card="${step.id}" data-kind="${application.kind}"><header><span class="pmc-kind">${application.kind === 'exception' ? 'Exception de droit' : 'Condition de droit'}</span><h3>${escape(application.title)}</h3></header>${applicationMarkup(application, sourceLink)}<div class="pmc-part" data-part="scenario"><h4>Dans ce scénario</h4>${factPill(step)}</div>${step.clause ? `<details><summary>Conditions de cette qualification</summary>${rulePart(step)}</details>` : ''}${notes}</section>`;
     if (step.kind === 'fact') {
       const used = model.steps.filter((rule) => rule.parents.includes(step.id));
-      return `<section class="pmc-rule" data-card="${step.id}" data-kind="fact" data-tone="${tone(step.value)}"><header><span class="pmc-kind">Donnée du scénario</span><h3>${escape(step.title)}</h3>${factPill(step)}</header><div class="pmc-part" data-part="justification"><h4>Pièces citées</h4>${step.sources.some((source) => source.kind === 'piece') ? sourceList(step.sources.filter((source) => source.kind === 'piece')) : '<p class="pmc-muted">Aucune pièce rattachée à cette donnée.</p>'}${notes}${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}${used.length ? `<h4>Retenu pour</h4><ul class="pmc-sources">${used.map((rule) => `<li><a href="#" class="pmc-link" data-goto="${rule.id}">${escape(rule.title)}</a></li>`).join('')}</ul>` : ''}</div></section>`;
+      return `<section class="pmc-rule" data-card="${step.id}" data-kind="fact" data-tone="${tone(step.value)}"><header><span class="pmc-kind">Donnée du scénario</span><h3>${escape(step.title)}</h3>${factPill(step)}</header><div class="pmc-part" data-part="justification"><h4>Pièces citées</h4>${step.sources.some((source) => source.kind === 'piece') ? sourceList(step.sources.filter((source) => source.kind === 'piece')) : '<p class="pmc-muted">Aucune pièce rattachée à cette donnée.</p>'}${notes}${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}${used.length ? `<h4>Retenu pour</h4><ul class="pmc-sources">${used.map((rule) => `<li><button type="button" class="pmc-text-action" data-goto="${rule.id}">${escape(rule.title)}</button></li>`).join('')}</ul>` : ''}</div></section>`;
     }
     return `<section class="pmc-rule" data-card="${step.id}" data-kind="${step.answer ? 'answer' : 'rule'}" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${step.answer ? 'Conclusion' : 'Règle'}</span><h3>${escape(step.notes.question || step.title)}</h3></header><div class="pmc-part" data-part="rule"><h4>La règle</h4>${rulePart(step)}</div><div class="pmc-part" data-part="projection"><h4>Projection au scénario</h4>${projection(step)}</div><div class="pmc-part" data-part="justification"><h4>Justification</h4>${notes}${justification(step) || '<p class="pmc-muted">Aucun élément de fait à l’appui de cette solution.</p>'}</div>${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</section>`;
   };

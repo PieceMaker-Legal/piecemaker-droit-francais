@@ -93,10 +93,10 @@ test('opens cited articles and pieces in the editor without leaving the written 
     assert.match(view.opened.at(-1).path, /^piecemaker:\/\/citation\/a{64}\/LEGIARTI000032041431$/);
     assert.equal(requests[0].citation, 'Passage juridique fictif.');
     assert.equal(view.container.querySelector('.pmc-written').hidden, false);
-    view.click(links().find((link) => link.textContent === 'Attestation de Jean Dupont'));
+    view.click(links().find((link) => link.textContent === 'attestation.md'));
     assert.deepEqual(view.opened.at(-1), { path: '/dossier/pieces/attestation.md', passage: { quote: 'Société Exemple SAS n’a pas livré.' } });
     const count = view.opened.length;
-    view.click(links().find((link) => link.textContent === 'Hors dossier'));
+    view.click(links().find((link) => link.textContent === 'hors-dossier.md'));
     assert.equal(view.opened.length, count);
     view.click(links().find((link) => link.textContent === 'Décision fictive'));
     await new Promise((resolve) => setImmediate(resolve));
@@ -116,7 +116,7 @@ test('the graph details a node with its card and opens its sources', async () =>
     view.click(view.container.querySelector('[data-condition="x001"] [data-goto="x001"]'));
     const inspector = view.container.querySelector('.pmc-inspector');
     assert.equal(inspector.hidden, false);
-    assert.match(inspector.textContent, /Attestation de Jean Dupont/);
+    assert.match(inspector.textContent, /attestation\.md/);
     assert.match(inspector.textContent, /Condition de droit/);
     assert.equal(view.container.querySelectorAll('.pmc-map .is-selected').length, 1);
     view.click(view.container.querySelector('[data-map-zoom=in]'));

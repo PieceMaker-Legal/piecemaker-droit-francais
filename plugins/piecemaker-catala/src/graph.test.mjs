@@ -95,13 +95,15 @@ test('writes the rule, then its projection, then its justification', () => {
   assert.match(card.querySelector('[data-part="rule"]').textContent, /Mise en demeure/);
   assert.equal(card.querySelector('[data-part="projection"] .pmc-value').textContent, 'Vrai');
   assert.match(card.querySelector('[data-part="justification"]').textContent, /Mise en demeure Vrai/);
-  assert.match(card.querySelector('[data-part="justification"]').textContent, /Pièce 2, lettre/);
+  assert.match(card.querySelector('[data-part="justification"]').textContent, /lettre-jean-dupont\.md/);
   const link = card.querySelector('[data-part="rule"] [data-open-reference]');
   assert.equal(link.getAttribute('data-target'), 'https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041472');
   assert.equal(link.getAttribute('data-origin'), module.chemin);
   assert.equal(link.getAttribute('data-id'), 'LEGIARTI000032041472');
   assert.match(document.body.textContent, /Autres sources citées/);
-  assert.doesNotMatch(document.body.textContent, /Étape|Niveau|catala|test_resolution|LEGIARTI000032041472/);
+  const visible = document.cloneNode(true);
+  visible.querySelectorAll('.pmc-native').forEach((detail) => detail.remove());
+  assert.doesNotMatch(visible.body.textContent, /Étape|Niveau|catala|test_resolution|LEGIARTI000032041472/);
   const fact = new JSDOM(reasoningCard(model.steps[0], model)).window.document;
   assert.match(fact.body.textContent, /Citation non retrouvée dans la source/);
   assert.deepEqual(reasoningIssues(model).map((entry) => [entry.id, entry.title]), [[model.steps[0].id, 'Pièce 2, lettre']]);
@@ -146,7 +148,7 @@ test('uses the native position of an input to connect its piece without Concerne
   const factNode = graph.querySelector('[data-condition="x001"]');
   assert.ok(factNode.querySelector('[data-target="../../../pieces/reception-fictive.md"]'));
   assert.equal(graph.querySelectorAll('[data-node][data-kind="origin"]').length, 0);
-  assert.match(reasoningCard(fact, model), /Pièce fictive de réception/);
+  assert.match(reasoningCard(fact, model), /reception-fictive\.md/);
 });
 
 test('builds a graph from native JSON when DOT is unavailable and preserves the applied rule and its exception', () => {
@@ -290,6 +292,8 @@ test('uses the native doc and its quote in the qualification card without mixing
     '  définition participation_suffisante égal à séances_constatées >= 3',
     '  définition prime_due égal à participation_suffisante',
     '```',
+    '## Références',
+    '[Article 1 du règlement fictif](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001)',
   ].join('\n');
   const model = reasoning(`digraph G {
     x001 [label=<<table><tr><td>séances_constatées</td><td>4</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L5"];
@@ -305,4 +309,12 @@ test('uses the native doc and its quote in the qualification card without mixing
   assert.match(card.querySelector('[data-part="facts"]').textContent, /Séances constatées.*4/);
   assert.match(card.querySelector('[data-part="evidence"] [data-quote]').dataset.quote, /quatre séances/);
   assert.doesNotMatch(card.textContent, /Autre article/);
+  assert.equal(document.querySelectorAll('a').length, 0);
+  assert.doesNotMatch(document.querySelector('.pmc-map').textContent, /https?:|\.\.\//);
+  const documentButton = card.querySelector('[data-part="evidence"] [data-open-reference]');
+  assert.equal(documentButton.tagName, 'BUTTON');
+  assert.equal(documentButton.textContent, 'presence-fictive.md');
+  assert.equal(documentButton.getAttribute('type'), 'button');
+  assert.ok(!documentButton.title.includes('http'));
+  assert.equal(card.querySelector('[data-part="law"] [data-open-reference]').textContent, 'Article 1 du règlement fictif');
 });
