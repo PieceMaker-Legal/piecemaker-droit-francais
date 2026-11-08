@@ -4,6 +4,8 @@ Le graphe relie la conclusion d’un scénario à ses conditions, ses données, 
 
 L’objectif vient de [05-map-law.md](recherche-memoire-raisonnement/05-map-law.md) : rendre chaque élément et son soutien consultables, puis montrer ce qui reste à rechercher.
 
+Le [tableau de rédaction et son exemple coloré](catala-redaction.html) détaillent les possibilités. Le violet distingue les ajouts PieceMaker.
+
 ## Ce qui vient de Catala
 
 | Élément | Sortie native utilisée | Portée |
