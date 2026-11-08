@@ -337,6 +337,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   const used = new Set<string>();
   for (const step of steps.values()) {
     step.sources = unique([...step.origins.filter((origin) => origin.selected).flatMap((origin) => origin.sources), ...located(nodes.get(step.id)!.source), ...(step.name ? linked.get(key(step.name)) ?? [] : [])]);
+    if (step.kind === 'rule' && !step.answer && !step.expression && !step.parents.length && step.sources.some((source) => source.kind === 'piece') && !step.sources.some(legal)) step.kind = 'fact';
     step.sources.forEach((source) => used.add(identity(source)));
     step.origins.flatMap((origin) => origin.sources).forEach((source) => used.add(identity(source)));
   }

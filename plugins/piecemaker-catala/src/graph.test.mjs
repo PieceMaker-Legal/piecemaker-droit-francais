@@ -299,10 +299,10 @@ test('uses the native doc and its quote in the qualification card without mixing
     x001 [label=<<table><tr><td>séances_constatées</td><td>4</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L5"];
     x002 [label=<<table><tr><td>participation_suffisante</td></tr><tr><td>séances_constatées &gt;= 3</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L7"];
     x003 [label=<<table><tr><td>prime_due</td></tr><tr><td>participation_suffisante</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L8"];
-    subgraph cluster_inputs { x001; }
     x001 -> x002 [style="solid"];
     x002 -> x003 [style="solid"];
   }`, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }]);
+  assert.equal(model.steps.find((step) => step.id === 'x001').kind, 'fact');
   const document = new JSDOM(reasoningGraph(model)).window.document;
   const card = document.querySelector('[data-node="x002"]');
   assert.match(card.querySelector('[data-part="law"] q').textContent, /trois séances/);
