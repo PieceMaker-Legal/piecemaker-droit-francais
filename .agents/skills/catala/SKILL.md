@@ -1,6 +1,6 @@
 ---
 name: catala
-description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — typecheck, format, tests clerk, tests Python, preuve d'absence de conflit entre exceptions, explication d’une exécution, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
+description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — fiche de syntaxe vérifiée, typecheck, format, tests clerk, tests Python, squelette de test, trace d'exécution, arbre des exceptions, preuve d'absence de conflit entre exceptions, explication d’une exécution, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
 ---
 
 # Catala
@@ -22,11 +22,13 @@ Un programme Catala vit dans `.piecemaker/catala/<nom>/`. `<nom>` s'écrit en mi
 
 ## Écrire le programme
 
+Lisez d'abord `references/syntaxe.md` : modèle vérifié, pièges fréquents, mots-clés et bibliothèque standard. Partez de ce modèle, pas de mémoire.
+
 1. Créez `clerk.toml` avec `[project]` et `name = "<nom>"`.
 2. Écrivez le module : `> Module Nom` en tête, nom de fichier en minuscules (`nom.catala_fr`).
 3. Mettez les déclarations exposées aux autres fichiers dans des blocs ` ```catala-metadata `. Un module n'expose que ces blocs. Sinon les tests échouent à la compilation (« Could not resolve reference »).
 4. Mettez les définitions dans des blocs ` ```catala `. Citez le texte en Markdown au-dessus du bloc qui le code.
-5. Reprenez les pièces et citations du dossier dans le Markdown associé à chaque règle ou donnée. Écrivez les extraits sous la forme `Citation : « passage exact »` après leur lien. Évitez les lignes commençant par `>` : Catala les réserve à ses directives. Titrez chaque article cité `## Article 1218 | LEGIARTI000032041431`. catleg lit ces titres.
+5. Reprenez les pièces et citations du dossier dans le Markdown associé à chaque règle ou donnée. Écrivez les extraits sous la forme `Citation : « passage exact »` après leur lien. Évitez les lignes commençant par `>` : Catala les réserve à ses directives. Titrez chaque article cité `## Article 1218 | LEGIARTI000032041431`. catleg lit ces titres. Placez l'article ou la décision qui fonde une règle juste avant le bloc ` ```catala ` de cette règle : le volet les rattache à elle. Pour rattacher une pièce ou une source à une donnée ou à une autre règle, écrivez dans sa section `Concerne : <identifiant>` (plusieurs identifiants séparés par des virgules). Le volet montre les sources non rattachées à part. Nommez les identifiants en français, avec les accents (`mise_en_demeure`, `résolution_possible`) : le volet les affiche tels quels à l'avocat.
 6. Écrivez les tests dans `test_<module>.catala_fr` : `> Usage de Nom`, un champ d'application `#[test]` par scénario, avec `assertion`. Utilisez des faits fictifs ou ceux du dossier, jamais d'autres.
 7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala preuve` le détecte.
 
@@ -50,12 +52,15 @@ Une citation Markdown extérieure ne remplace pas la balise `quote` obligatoire.
 
 ## Vérifier
 
-1. `pm catala verifier --programme <nom>` : typage avec invariants, format, tests Clerk/Python, preuves de tous les champs métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande. Corrigez et relancez jusqu'à « vérifié ».
+1. `pm catala verifier --programme <nom>` : typage avec invariants, format, tests Clerk/Python, preuves de tous les champs métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande. Sous un contrôle en échec, le bilan donne une ligne par erreur (`fichier:ligne.colonne: [ERROR] message`) ou par test faux (`fichier:ligne › Scenario : message`). Tant que la compilation échoue, les contrôles qui en dépendent, format compris, sont bloqués : corrigez d'abord la compilation. Corrigez et relancez jusqu'à « vérifié ».
 2. `pm catala formater --programme <nom>` réécrit les fichiers au format officiel.
 3. `pm catala preuve --scope <Champ> [--fichier F]` prouve l'absence de conflit et d'erreur. Le mode `--whole-program` est refusé : Catala 1.3 peut y masquer des conflits. Le vérificateur inventorie les champs métier avec `catala dependency-graph` puis prouve chaque champ séparément. Une commande `preuve` isolée ne couvre pas les champs appelés. Un `[WARNING]` est un échec : lisez le contre-exemple.
 4. `pm catala catleg [--fichier F] [--au AAAA-MM-JJ]` vérifie la vigueur des articles cités, avec les identifiants PISTE de PieceMaker.
 5. `pm catala lister` montre les programmes et leur dernier bilan. `pm catala env` montre le pack, son état d'installation et le Python utilisé.
-6. `pm catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> -- <arguments>` lance un outil du pack avec son environnement (LSP et débogueur pour un éditeur, commandes non couvertes).
+6. `pm catala squelette --scope <Champ> [--fichier F]` génère un test dont les entrées ont leur valeur par défaut. Copiez-le dans `test_<module>.catala_fr`, puis fixez les faits et ajoutez les assertions.
+7. `pm catala executer --scope <Scenario> [--fichier F]` exécute un champ sans entrées et affiche sa trace : valeur de chaque variable et règle appliquée. Utilisez-la pour comprendre un test qui échoue.
+8. `pm catala exceptions --scope <Champ> --variable <v> [--fichier F]` affiche l'arbre des exceptions d'une variable. Utilisez-le pour contrôler la hiérarchie avant la preuve.
+9. `pm catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> -- <arguments>` lance un outil du pack avec son environnement (LSP et débogueur pour un éditeur, commandes non couvertes).
 
 ## Expliquer une exécution
 
@@ -63,7 +68,7 @@ Une citation Markdown extérieure ne remplace pas la balise `quote` obligatoire.
 
 Choisissez un champ sans entrées : ses données doivent être fixées dans le scénario. Indiquez `--fichier` quand le programme contient plusieurs fichiers.
 
-La vérification produit déjà le graphe. Utilisez `expliquer` pour choisir un autre scénario. Le volet affiche le graphe et ses états ouverts, sans surveillance des fichiers. Les flèches pointillées représentent les conditions. Aucun Graphviz n’est nécessaire.
+La vérification produit déjà le graphe. Utilisez `expliquer` pour choisir un autre scénario. Le volet présente chaque règle avec son fondement, sa valeur Vrai ou Faux dans le scénario et les faits qui la justifient, en vue écrite et en graphe. Aucun Graphviz n’est nécessaire.
 
 L’explication concerne cette exécution seulement. Elle ne remplace ni les tests, ni la preuve du programme, ni la justification des faits.
 
