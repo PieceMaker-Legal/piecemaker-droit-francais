@@ -73,7 +73,7 @@ test('shows each rule with its legal basis and documentation errors', async () =
     assert.doesNotMatch(view.container.querySelector('.pmc-run').textContent, /vérifié|vérification/i);
     const card = written.querySelector('[data-card="x002"]');
     assert.equal(card.querySelector('h3').textContent, 'Sanction possible');
-    assert.equal(card.querySelector('[data-part="projection"] .pmc-value').textContent, 'Vrai');
+    assert.equal(card.querySelector('[data-part="projection"] .pmc-value').textContent, 'Oui');
     assert.match(card.textContent, /Article 1217/);
     assert.match(card.textContent, /Passage juridique fictif/);
     assert.match(card.querySelector('[data-part="justification"]').textContent, /Inexécution/);
@@ -109,16 +109,16 @@ test('the graph details a node with its card and opens its sources', async () =>
   try {
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
-    assert.ok(view.container.querySelector('[data-node] [data-part=evidence] [data-kind=piece]'));
+    assert.ok(view.container.querySelector('[data-node="x001"] [data-kind=piece]'));
     assert.equal(view.container.querySelectorAll('[data-node][data-kind=origin]').length, 0);
-    view.click(view.container.querySelector('[data-node][data-kind="rule"]'));
+    view.click(view.container.querySelector('[data-node="x002"][data-kind="conclusion"]'));
     assert.match(view.container.querySelector('.pmc-inspector').textContent, /Sanction possible/);
-    view.click(view.container.querySelector('[data-condition="x001"] [data-goto="x001"]'));
+    view.click(view.container.querySelector('[data-node="x001"]'));
     const inspector = view.container.querySelector('.pmc-inspector');
     assert.equal(inspector.hidden, false);
     assert.match(inspector.textContent, /attestation\.md/);
-    assert.match(inspector.textContent, /Condition de droit/);
     assert.equal(view.container.querySelectorAll('.pmc-map .is-selected').length, 1);
+    assert.equal(view.container.querySelectorAll('.pmc-map .is-dim').length, 0);
     view.click(view.container.querySelector('[data-map-zoom=in]'));
     assert.ok(Number(view.container.querySelector('.pmc-map').dataset.scale) > 1);
     view.click(inspector.querySelector('[data-open-reference][data-kind=piece]'));
@@ -157,7 +157,7 @@ test('changes the graph using stored Catala scenarios without recomputing or hid
     };
     const initial = requests;
     choose('SansDemande');
-    assert.equal(view.container.querySelector('[data-node="x002"] .pmc-value').textContent, 'Faux');
+    assert.equal(view.container.querySelector('[data-node="x002"] .pmc-value').textContent, 'Non');
     choose('TestErrone');
     assert.match(view.container.querySelector('.pmc-explanation').textContent, /ne produit pas de graphe/);
     assert.equal(view.container.querySelectorAll('[data-node]').length, 0);
@@ -170,10 +170,10 @@ test('shows a native JSON graph when the scenario has no DOT and keeps its prove
   const provenance = { trace: [{ element: { kind: 'scope_call', name: 'Demo', decl_pos: position }, pos: position, value: {}, trace: [{ element: { kind: 'scope_var', name: 'sanction_possible', output: true, decl_pos: position }, pos: position, value: true, trace: [{ element: { kind: 'exception' }, pos: position, value: true }] }] }], definitions: [], dependencies: [], issues: ['Graphe issu de la trace JSON.'] };
   const view = await open([program({ graphe: '', scenarios: [{ fichier: 'test_demo.catala_fr', scope: 'Test', passed: true, test_reussi: true, graphe: '', message: '', provenance }] })]);
   try {
-    assert.ok(view.container.querySelector('[data-node][data-kind="answer"]'));
+    assert.ok(view.container.querySelector('[data-node][data-kind="conclusion"]'));
     assert.doesNotMatch(view.container.querySelector('.pmc-map-summary').textContent, /trace JSON/);
     assert.doesNotMatch(view.container.querySelector('.pmc-map').textContent, /Origine native|Ligne 9/);
-    view.click(view.container.querySelector('[data-node][data-kind="answer"]'));
+    view.click(view.container.querySelector('[data-node][data-kind="conclusion"]'));
     view.click(view.container.querySelector('.pmc-inspector .pmc-native summary'));
     assert.match(view.container.querySelector('.pmc-inspector').textContent, /Origine native Catala.*Article 1217/s);
     assert.equal(view.container.querySelector('.pmc-inspector .pmc-native').open, true);
@@ -181,34 +181,14 @@ test('shows a native JSON graph when the scenario has no DOT and keeps its prove
   } finally { view.close(); }
 });
 
-test('redraws links at card boundaries after resize and releases its observer', async () => {
+test('highlights the selected node with its ancestors and the facts below it', async () => {
   const { mountExplanation } = await import('./graph-view.ts');
-  const dom = new JSDOM('<main><div class="pmc-map"><svg><g data-from="a" data-to="b"><path/><text>requiert</text></g></svg><div data-node="a"></div><div data-node="b"></div></div></main>');
-  let redraw;
-  let disconnected = false;
-  dom.window.ResizeObserver = class { constructor(callback) { redraw = callback; } observe() {} disconnect() { disconnected = true; } };
+  const dom = new JSDOM('<main><div class="pmc-map"><ul class="pmc-tree"><li><article data-node="a" data-card="a"></article><ul><li><article data-node="b" data-card="b"></article><ul><li><article data-node="c" data-card="c"></article></li></ul></li><li><article data-node="d" data-card="d"></article></li></ul></li></ul></div><aside class="pmc-inspector" hidden></aside><div class="pmc-cards"><section data-card="b">Détail B</section></div></main>');
   const view = dom.window.document.querySelector('main');
-  const canvas = view.querySelector('.pmc-map');
-  const [from, to] = view.querySelectorAll('[data-node]');
-  canvas.getBoundingClientRect = () => ({ left: 100, top: 50 });
-  from.getBoundingClientRect = () => ({ left: 300, right: 350, top: 90, bottom: 170, width: 50, height: 80 });
-  let targetLeft = 450;
-  let targetTop = 140;
-  to.getBoundingClientRect = () => ({ left: targetLeft, right: targetLeft + 50, top: targetTop, bottom: targetTop + 100, width: 50, height: 100 });
   const stop = mountExplanation(view, () => {});
   try {
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 140 H 350$/);
-    targetLeft = 550;
-    redraw();
-
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 140 H 450$/);
-    const edge = view.querySelector('g');
-    for (const [route, expected] of [['requires', /^M 250 80 .* H 450$/], ['supports', /^M 200 80 .* H 500$/], ['consequence', /^M 225 120 .* V 250$/]]) {
-      edge.dataset.route = route;
-      if (route === 'consequence') targetTop = 300;
-      redraw();
-      assert.match(view.querySelector('path').getAttribute('d'), expected);
-    }
+    view.querySelector('[data-node="b"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    assert.deepEqual([...view.querySelectorAll('.is-dim')].map((node) => node.dataset.node), ['d']);
+    assert.match(view.querySelector('.pmc-inspector').textContent, /Détail B/);
   } finally { stop(); dom.window.close(); }
-  assert.equal(disconnected, true);
 });

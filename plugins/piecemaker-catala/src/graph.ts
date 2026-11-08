@@ -1,5 +1,5 @@
 import { sourceContext } from './source-context.js';
-import { reasoningMap } from './reasoning-map.js';
+import { display, formula, reasoningMap } from './reasoning-map.js';
 import { nativeExecution, type NativeOrigin, type NativeProvenance } from './native-provenance.js';
 import { applicationMarkup, conditionApplication } from './condition-application.js';
 
@@ -10,8 +10,8 @@ export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: 
 type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
 type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
 export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
-export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string };
-export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
+export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string };
+export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; type: string; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
 export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[] };
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
@@ -257,7 +257,7 @@ const lawOf = (clause: Clause, steps: Map<string, Step>) => unique(leaves(clause
 
 export function reasoning(dot: string, files: File[] = [], citations: Citation[] = [], coverage?: Coverage, provenance?: NativeProvenance): Reasoning {
   const native = provenance ? nativeExecution(provenance) : null;
-  const fallback = !dot.trim() || dot.trim() === 'digraph G {}';
+  const fallback = !dot.trim() || dot.trim() === 'digraph G {}' || Boolean(native?.variables.length);
   const { nodes, edges } = parseDot(fallback && native?.variables.length ? native.dot : dot);
   const linked = new Map<string, Source[]>();
   const notes = new Map<string, Notes>();
@@ -266,6 +266,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   }));
   const documents = activeFiles.map((file) => documentSources(file, citations, linked, notes));
   const authoredSources = documents.flatMap((document) => [...document.blocks.flatMap((block) => block.sources), ...document.trailing]);
+  const types = new Map(activeFiles.flatMap((file) => [...(file.contenu ?? '').matchAll(/^\s*(?:entrée|interne|résultat|contexte|input|internal|output|context)\s+(\S+)\s+contenu\s+(\S+)/gm)].map((match) => [key(match[1]), match[2]])));
   const articleNames = new Map(activeFiles.flatMap((file) => [...(file.contenu ?? '').matchAll(/^#{1,6}\s+(.+?)\s*\|\s*((?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+)/gm)].map((match) => [match[2], match[1].trim()])));
   const located = (source: string): Source[] => {
     let selected: File[];
@@ -291,7 +292,10 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
       selected[selected.length - 1] = selected.at(-1)!.slice(0, entry.endColumn - 1);
       selected[0] = selected[0].slice(Math.max(0, entry.column - 1));
     }
-    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n') };
+    const opened = /\b(?:définition|règle|definition|rule)\b/.test(content[entry.line - 1] ?? '');
+    const end = content.findIndex((line, at) => at >= entry.line && (/^\s*(?:```|#\[|étiquette\b|exception\b|label\b)/.test(line) || (opened || at > entry.line) && /^\s*(?:définition|règle|definition|rule)\b/.test(line) || !line.trim()));
+    const body = content.slice(entry.line - 1, end < 0 ? undefined : end).join('\n').slice(Math.max(0, entry.column - 1));
+    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n'), body };
   };
   const steps = new Map<string, Step>();
   for (const [id, node] of nodes) {
@@ -325,7 +329,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
         if (file.length === 1 && line) origins.push(enrich({ file: file[0].chemin, line, column: 1, endLine: line, endColumn: (file[0].contenu?.split(/\r?\n/)[line - 1]?.length ?? 0) + 1, headings: node.headings, role: 'definition', selected: true, label: '', expression: '', overrides: '' }));
       } catch {}
     }
-    steps.set(id, { id, kind, answer: node.kind === 'conclusion' || Boolean(fallback && variable?.output && !edges.some((edge) => edge.from === id)), conditional: false, name: kind === 'condition' ? '' : head, title: capital(human(head)), formula: kind === 'condition' ? '' : human(expression), expression, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '', clause: null, notes: notes.get(key(head)) ?? emptyNotes(), tests: coverage?.scopes.filter((scope) => tests.has(scope.index)).map((scope) => scope.name) ?? [], origins });
+    steps.set(id, { id, kind, type: types.get(key(head)) ?? '', answer: node.kind === 'conclusion' || Boolean(fallback && variable?.output && !edges.some((edge) => edge.from === id)), conditional: false, name: kind === 'condition' ? '' : head, title: capital(human(head)), formula: kind === 'condition' ? '' : human(expression), expression, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '', clause: null, notes: notes.get(key(head)) ?? emptyNotes(), tests: coverage?.scopes.filter((scope) => tests.has(scope.index)).map((scope) => scope.name) ?? [], origins });
   }
   for (const step of [...steps.values()].filter((entry) => entry.answer)) {
     const twin = step.parents.map((id) => steps.get(id)!).find((parent) => parent.kind === 'rule' && key(parent.name) === key(step.name));
@@ -374,9 +378,9 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   return { steps: [...steps.values()].sort((a, b) => a.level - b.level), others, nativeIssues: provenance?.issues ?? [] };
 }
 
-const FACT: Record<string, [string, string]> = { Vrai: ['neutral', 'Vrai'], Faux: ['neutral', 'Faux'], Disputé: ['warn', 'Contesté'] };
+const FACT: Record<string, [string, string]> = { Vrai: ['neutral', 'Oui'], Faux: ['neutral', 'Non'], Disputé: ['warn', 'Contesté'] };
 const pill = (kind: string, label: string) => `<span class="pmc-value pmc-${kind}">${escape(label)}</span>`;
-const factPill = (step: Step) => pill(...(FACT[step.value] ?? (/^(?:Indéterminé|null|None|)$/.test(step.value) ? ['warn', 'Indéterminé'] : ['neutral', step.value])) as [string, string]);
+const factPill = (step: Step) => pill(...(FACT[step.value] ?? (/^(?:Indéterminé|null|None|)$/.test(step.value) ? ['warn', 'Indéterminé'] : ['neutral', display(step)])) as [string, string]);
 const clausePill = (clause: Clause) => {
   if (!clause.met) return '';
   const labels = clause.kind === 'not' ? { ok: 'Condition négative remplie', ko: 'Condition négative non remplie' } : { ok: 'Remplie', ko: 'Non remplie' };
@@ -436,6 +440,8 @@ function writer(model: Reasoning) {
     if (!step.clause) {
       if (step.expression) return `${foundation}<p class="pmc-formula">${escape(human(step.expression))}</p>`;
       if (step.conditional) return `${foundation}<p class="pmc-formula">Cette définition dépend d’une condition d’application.</p>`;
+      const written = formula(step, human);
+      if (written) return `${foundation}<p class="pmc-formula">${escape(written)}</p>`;
       return foundation || '<p class="pmc-muted">Aucune condition ni aucun fondement déclaré.</p>';
     }
     return `${foundation}<ul class="pmc-conditions">${roots(step.clause).map((clause) => ruleBranch(clause, excluded)).join('')}</ul>`;
@@ -447,7 +453,7 @@ function writer(model: Reasoning) {
       const step = stepOf(clause);
       const prefix = clause.kind === 'not' ? '<span class="pmc-op">Non</span> ' : '';
       if (step?.kind === 'fact') return factLine(step, prefix);
-      if (step?.kind === 'rule') return `<li data-tone="${tone(step.value)}">${prefix}<span class="pmc-op">Règle</span> <button type="button" class="pmc-text-action" data-goto="${step.id}">${escape(step.title)}</button> ${pill(tone(step.value), step.value)}</li>`;
+      if (step?.kind === 'rule') return `<li data-tone="${tone(step.value)}">${prefix}<span class="pmc-op">Règle</span> <button type="button" class="pmc-text-action" data-goto="${step.id}">${escape(step.title)}</button> ${pill(tone(step.value), display(step))}</li>`;
       return `<li>${prefix}${title(clause)}</li>`;
     }
     const prefix = clause.kind === 'not' ? '<span class="pmc-op">Non</span> ' : `<span class="pmc-op">${escape(label(clause))}</span> `;
@@ -460,10 +466,10 @@ function writer(model: Reasoning) {
       return facts.length ? `<ul class="pmc-justification">${facts.map((fact) => factLine(fact)).join('')}</ul>` : '';
     }
     const parents = step.parents.map((id) => steps.get(id)!).filter(Boolean);
-    return parents.length ? `<ul class="pmc-justification">${parents.map((parent) => parent.kind === 'fact' ? factLine(parent) : `<li><button type="button" class="pmc-text-action" data-goto="${parent.id}">${escape(parent.title)}</button> ${pill(tone(parent.value), parent.value)}</li>`).join('')}</ul>` : '';
+    return parents.length ? `<ul class="pmc-justification">${parents.map((parent) => parent.kind === 'fact' ? factLine(parent) : `<li><button type="button" class="pmc-text-action" data-goto="${parent.id}">${escape(parent.title)}</button> ${pill(tone(parent.value), display(parent))}</li>`).join('')}</ul>` : '';
   };
   const projection = (step: Step) => {
-    const value = step.value ? pill(tone(step.value), step.value) : pill('warn', 'Indéterminé');
+    const value = step.value ? pill(tone(step.value), display(step)) : pill('warn', 'Indéterminé');
     const reason = step.clause && step.clause.met === 'ok' ? (step.clause.kind === 'any' ? 'L’une des conditions est remplie.' : 'Les conditions sont remplies.')
       : step.clause && step.clause.met === 'ko' ? (step.clause.kind === 'any' ? 'Aucune condition n’est remplie.' : 'Au moins une condition n’est pas remplie.')
       : step.conditional ? 'Une condition d’application sélectionne cette définition.' : '';
