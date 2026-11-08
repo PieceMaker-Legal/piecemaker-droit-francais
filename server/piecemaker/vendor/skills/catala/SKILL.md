@@ -36,6 +36,20 @@ Lisez d'abord `references/syntaxe.md` : modèle vérifié, pièges fréquents, m
 
 Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destiné au graphe. Séparez les faits, leur qualification, les conditions et les exceptions. Une valeur de scénario ne prouve aucun fait.
 
+## Documentation obligatoire du raisonnement
+
+1. Ajoutez un attribut natif `#[doc="…"]` à chaque définition et règle exécutable, y compris dans les scénarios.
+2. Dans chaque `#[doc]`, indiquez `source: URL ou chemin` et une balise `quote: « passage exact »` non vide.
+3. Pour une règle, citez son fondement juridique. Pour une donnée factuelle, citez la pièce qui la soutient.
+4. Pour une qualification ou un calcul, citez le fondement de l’opération et gardez les dépendances vers les faits distincts.
+5. Conservez les titres juridiques avec identifiant. Utilisez les inclusions natives de PDF seulement comme annexes documentaires.
+6. Lancez `pm catala verifier`. Corrigez chaque erreur `#[doc] manquant` et `quote manquante ou vide dans #[doc]`.
+7. Si une source ou citation manque, signalez le manque et recherchez-la. N’inventez aucun passage pour satisfaire le contrôle.
+
+`doc` est un attribut natif Catala. `quote` est une convention PieceMaker dans son texte, pas un attribut natif spécialisé.
+Le graphe et le contrôle des citations lisent cette annotation. Un `#[doc]` précis prime sur les sources du texte voisin.
+Une citation Markdown extérieure ne remplace pas la balise `quote` obligatoire. Les anciens liens restent lisibles pour compatibilité.
+
 ## Vérifier
 
 1. `pm catala verifier --programme <nom>` : typage avec invariants, format, tests Clerk/Python, preuves de tous les champs métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande. Sous un contrôle en échec, le bilan donne une ligne par erreur (`fichier:ligne.colonne: [ERROR] message`) ou par test faux (`fichier:ligne › Scenario : message`). Tant que la compilation échoue, les contrôles qui en dépendent, format compris, sont bloqués : corrigez d'abord la compilation. Corrigez et relancez jusqu'à « vérifié ».

@@ -60,11 +60,13 @@ test('the panel reloads after verification notifications for its project and sto
 });
 
 
-test('shows each rule with its legal basis and no code checks', async () => {
-  const view = await open([program()]);
+test('shows each rule with its legal basis and documentation errors', async () => {
+  const view = await open([program({ verification: { passed: false, checks: [{ name: 'documentation', passed: false, errors: ['demo.catala_fr:9: #[doc] manquant', 'demo.catala_fr:12: quote manquante dans #[doc]'] }] } })]);
   try {
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
     view.click(view.container.querySelector('[role=tab][data-mode=written]'));
+    assert.match(view.container.querySelector('.pmc-warning').textContent, /doc.*manquant/);
+    assert.match(view.container.querySelector('.pmc-warning').textContent, /quote manquante/);
     const written = view.container.querySelector('.pmc-written');
     assert.equal(written.hidden, false);
     assert.match(view.container.querySelector('.pmc-run').textContent, /Recalculer/);

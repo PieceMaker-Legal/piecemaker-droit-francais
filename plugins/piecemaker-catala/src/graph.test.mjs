@@ -270,3 +270,31 @@ test('preserves a conditional dependency without claiming that a dashed link pro
   assert.equal(graph.querySelector('[data-node="x011"] .pmc-value').textContent, 'Vrai');
   assert.ok(graph.querySelector('[data-from="x010"][data-to="x011"][data-relation="si"]'));
 });
+
+test('uses the native doc and its quote in the qualification card without mixing nearby sources', () => {
+  const content = [
+    '# Autre article | LEGIARTI000000000009',
+    '```catala',
+    "champ d'application Attribution:",
+    '  #[doc="source: ../../../pieces/presence-fictive.md\\nquote: « Jean Dupont a participé à quatre séances. »"]',
+    '  définition séances_constatées égal à 4',
+    '  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001\\nquote: « La participation doit atteindre trois séances. »"]',
+    '  définition participation_suffisante égal à séances_constatées >= 3',
+    '  définition prime_due égal à participation_suffisante',
+    '```',
+  ].join('\n');
+  const model = reasoning(`digraph G {
+    x001 [label=<<table><tr><td>séances_constatées</td><td>4</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L5"];
+    x002 [label=<<table><tr><td>participation_suffisante</td></tr><tr><td>séances_constatées &gt;= 3</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L7"];
+    x003 [label=<<table><tr><td>prime_due</td></tr><tr><td>participation_suffisante</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L8"];
+    subgraph cluster_inputs { x001; }
+    x001 -> x002 [style="solid"];
+    x002 -> x003 [style="solid"];
+  }`, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }]);
+  const document = new JSDOM(reasoningGraph(model)).window.document;
+  const card = document.querySelector('[data-node="x002"]');
+  assert.match(card.querySelector('[data-part="law"] q').textContent, /trois séances/);
+  assert.match(card.querySelector('[data-part="facts"]').textContent, /Séances constatées.*4/);
+  assert.match(card.querySelector('[data-part="evidence"] [data-quote]').dataset.quote, /quatre séances/);
+  assert.doesNotMatch(card.textContent, /Autre article/);
+});

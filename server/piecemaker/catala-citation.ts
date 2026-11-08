@@ -11,7 +11,7 @@ import { locateSourcePassages } from './harness/source-passages.js';
 export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
   const inspect = async (cwd: string, id: string, quote: string, content: string) => {
     if (!/^(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) && !/^[0-9a-f]{24}$/i.test(id) && !path.isAbsolute(id)) throw new Error('Source absente du programme Catala.');
-    if (quote && !content.includes(quote) && !content.replace(/^>\s?/gm, '').includes(quote)) throw new Error('Citation absente du programme Catala.');
+    if (quote && !content.includes(quote) && !sourceContext('https://catala.local/source.catala_fr', [{ nom: 'source.catala_fr', chemin: '/source.catala_fr', contenu: content }], true).text.replace(/^>\s?/gm, '').includes(quote)) throw new Error('Citation absente du programme Catala.');
     const info = await connectors.source(cwd, id);
     if (!info) throw new Error(path.isAbsolute(id) ? 'Pièce ou texte converti indisponible dans le dossier.' : 'Texte officiel indisponible.');
     const verified = Boolean(quote && connectors.match(info.text, quote));

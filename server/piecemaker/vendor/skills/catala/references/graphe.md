@@ -13,6 +13,26 @@
 11. Pour examiner une autre exécution sans entrée, lancez `pm catala expliquer --fichier F --scope S`.
 12. Contrôlez la hiérarchie avec `pm catala exceptions`. Contrôlez les conflits avec `pm catala preuve`.
 
+## Annotation obligatoire et citation
+
+Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir une balise `quote` non vide.
+Le vérificateur produit une erreur localisée pour chacun de ces manques. Cette obligation couvre aussi les définitions des scénarios.
+
+````catala
+champ d'application Exemple:
+  #[doc="source: https://example.org/texte-fictif\nquote: « La condition requise est définie par ce texte fictif. »"]
+  définition condition_juridique égal à donnée_observée
+````
+
+`#[doc]` appartient à Catala. Le contenu `source: …` et `quote: « … »` suit la convention PieceMaker.
+Écrivez le lien après `source:` sans crochets Markdown dans l’attribut : le formateur du pack refuse certains liens avec crochets.
+Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait, indiquez le lien de la pièce et son passage exact.
+Les liens fictifs de l’exemple ne constituent pas des références vérifiées.
+
+La même annotation alimente le contrôle des citations et le graphe. Le graphe la rattache à la définition par sa position native.
+Une annotation ne doit pas déborder sur la définition suivante. Les sources voisines et `Concerne` restent des solutions de compatibilité.
+Une inclusion PDF native peut compléter le document ; elle ne remplace pas la source et `quote` dans `#[doc]`.
+
 Placez chaque définition sous le texte ou la décision qui la fonde. Un même champ peut être défini par plusieurs blocs, répartis sous les différentes sources. Gardez les étiquettes et exceptions dans Catala.
 
 Dans un scénario, définissez les faits comme des données intermédiaires sous les sections de leurs pièces, puis passez ces données au champ métier. La trace conserve ainsi leur origine. Une déclaration de champ donne seulement son contexte ; elle ne prouve pas l’origine factuelle de sa valeur.

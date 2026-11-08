@@ -1,4 +1,6 @@
-export function sourceContext(source: string, files: Array<{ nom: string; chemin: string; contenu?: string }>, wholeDocument = false) {
+import { catalaDocumentation } from '../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
+
+export function sourceContext(source: string, files: Array<{ nom: string; chemin: string; contenu?: string }>, wholeDocument = false): { text: string; references: Array<{ label: string; target: string; kind: string; origin: string; quote: string }> } {
   let location: URL;
   try { location = new URL(source); } catch { return { text: '', references: [] }; }
   let filename = '';
@@ -7,6 +9,10 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
   const file = matches.length === 1 ? matches[0] : undefined;
   const line = Number(location.hash.match(/^#L(\d+)/)?.[1]);
   if (!file?.contenu || (!line && !wholeDocument)) return { text: '', references: [] };
+  const documentation = catalaDocumentation(file.contenu).entries.filter((entry) => entry.hasDoc);
+  const annotated = documentation.find((entry) => entry.startLine <= line && line <= entry.endLine);
+  const documentContext = (text: string) => sourceContext('https://catala.local/doc.md', [{ nom: 'doc.md', chemin: file.chemin, contenu: text }], true);
+  if (!wholeDocument && annotated) return documentContext(annotated.doc);
   const lines = file.contenu.split(/\r?\n/);
   const sections = [{ level: 0, lines: [] as string[] }];
   let catala = false;
@@ -38,6 +44,7 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
     const target = definitions.get((match[2] || match[1]).toLowerCase());
     if (target) add(match[1], target);
   }
+  for (const match of text.matchAll(/^source\s*:\s*([^\s<>]+)\s*$/gim)) add(match[1], match[1]);
   for (const match of text.matchAll(/https?:\/\/[^\s<>\])]+/g)) if (!references.some((entry) => entry.target === match[0])) add(match[0], match[0]);
   for (const match of text.matchAll(/\b(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT|JORFTEXT|JORFARTI)\d+\b/g)) {
     const id = match[0];
@@ -46,13 +53,13 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
     if (!references.some((entry) => entry.target.includes(id))) add(label, `https://www.legifrance.gouv.fr/${id.startsWith('LEGIARTI') ? 'codes/article_lc' : id.startsWith('JURI') ? 'juri/id' : id.startsWith('CETA') ? 'ceta/id' : id.startsWith('CONS') ? 'cons/id' : 'jorf/id'}/${id}`, /^(?:JURI|CETA|CONS)/.test(id) ? 'jurisprudence' : 'article');
   }
   for (const match of text.matchAll(/\b(?:[Aa]rticles?\s+(?:[LRD]\.\s*)?\d+[\w.−-]*|[Pp]ièce\s+(?:n[°ºo]\s*)?\d+)\b/g)) if (!references.some((entry) => entry.label.toLowerCase().includes(match[0].toLowerCase()))) add(match[0], '', /^pièce/i.test(match[0]) ? 'piece' : 'article');
-  return { text, references: references.map((entry) => {
+  const extracted = references.map((entry) => {
     const marker = entry.target.match(/(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT|JORFARTI|JORFTEXT)\d+/)?.[0] ?? (entry.target || entry.label);
     const rows = text.split('\n');
     const quoted = (at: number) => {
       const following = rows.slice(at + 1);
       while (following[0] === '') following.shift();
-      const literal = /^Citation : « ([\s\S]*?) »(?:\n|$)/.exec(following.join('\n'))?.[1];
+      const literal = /^(?:Citation|quote)\s*:\s*«\s*([\s\S]*?)\s*»(?:\n|$)/i.exec(following.join('\n'))?.[1];
       const quote: string[] = [];
       for (const line of following) { if (!/^>\s?/.test(line)) break; quote.push(line.replace(/^>\s?/, '')); }
       return literal ?? quote.join('\n');
@@ -62,6 +69,7 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
     const candidates = [...own, ...linked, ...(linked.length ? [] : rows.flatMap((line, index) => line.includes(marker) ? [index] : []))];
     if (!candidates.length) return { ...entry, origin: file.chemin, quote: '' };
     return { ...entry, origin: file.chemin, quote: candidates.map(quoted).find(Boolean) ?? '' };
-  }) };
+  });
+  const native = wholeDocument ? documentation.flatMap((entry) => documentContext(entry.doc).references) : [];
+  return { text: [text, ...(wholeDocument ? documentation.map((entry) => entry.doc) : [])].filter(Boolean).join('\n\n'), references: [...extracted, ...native].filter((entry, index, all) => all.findIndex((other) => other.target === entry.target && other.label === entry.label && other.quote === entry.quote) === index) };
 }
-

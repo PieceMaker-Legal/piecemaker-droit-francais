@@ -14,3 +14,23 @@ test('keeps a distinct quotation for each labelled link to the same source', () 
   const contenu = '[Pièce 3, prix](../../../pieces/contrat.md)\nCitation : « Le prix est de 1 000 euros. »\n\n[Pièce 3, délai](../../../pieces/contrat.md)\nCitation : « Livraison sous 30 jours. »\n';
   assert.deepEqual(quotes(contenu), [['Pièce 3, prix', 'Le prix est de 1 000 euros.'], ['Pièce 3, délai', 'Livraison sous 30 jours.']]);
 });
+
+test('binds native doc sources and quote to their own definitions within one block', () => {
+  const content = [
+    '# Article fictif | LEGIARTI000000000009',
+    '```catala',
+    "champ d'application Exemple:",
+    '  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001\\nquote: « Passage juridique exact. »"]',
+    '  définition condition égal à vrai',
+    '  #[doc="source: ../../../pieces/attestation.md\\nquote: « Jean Dupont a reçu le message. »"]',
+    '  définition réception égal à vrai',
+    '  définition sans_annotation égal à faux',
+    '```',
+  ].join('\n');
+  const files = [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }];
+  const context = (line: number) => sourceContext(`https://catala.local/demo.catala_fr#L${line}`, files).references;
+  assert.deepEqual(context(5).map((entry) => [entry.target, entry.quote]), [['https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001', 'Passage juridique exact.']]);
+  assert.deepEqual(context(7).map((entry) => [entry.kind, entry.quote]), [['piece', 'Jean Dupont a reçu le message.']]);
+  assert.ok(context(8).every((entry) => !entry.quote));
+  assert.equal(sourceContext('https://catala.local/demo.catala_fr', files, true).references.filter((entry) => entry.quote).length, 2);
+});

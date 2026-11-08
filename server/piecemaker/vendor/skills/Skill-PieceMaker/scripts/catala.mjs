@@ -4,6 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { catalaDocumentation } from './catala-documentation.mjs';
+
 export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
 const NAME = /^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$/u;
@@ -246,6 +248,10 @@ async function verifier(context, program, flags = {}) {
     checks.push(entry);
     return entry;
   };
+  await record('documentation', 'Présence de #[doc] et quote', async () => {
+    const errors = files.flatMap((file) => catalaDocumentation(fs.readFileSync(path.join(program.directory, file), 'utf8')).errors.map((error) => `${file}:${error.line}: ${error.message}`));
+    return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
+  });
   const missing = (message) => ({ exit_code: null, passed: false, status: 'missing', message });
   const blocked = (message) => ({ exit_code: null, passed: false, status: 'blocked', message });
   const execution = async () => {
@@ -344,7 +350,7 @@ async function verifier(context, program, flags = {}) {
   ]);
   const changed = digest !== sourcesDigest(program.directory, sourceFiles(program.directory));
   if (changed) { checks.push({ name: 'sources', command: '', exit_code: 1, seconds: 0, passed: false, status: 'blocked', message: 'Code modifié pendant la vérification : relancez verifier.' }); writeResult(program.directory, 'explication.dot', ''); }
-  const order = ['typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
+  const order = ['documentation', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
   checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed), sources_sha256: digest, checks };
   writeResult(program.directory, 'verification.json', report);

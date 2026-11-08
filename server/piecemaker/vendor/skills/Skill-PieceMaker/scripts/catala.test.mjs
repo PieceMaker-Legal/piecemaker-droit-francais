@@ -160,7 +160,7 @@ test('verifier runs every check inside the pack environment and writes the resul
     assert.equal(explanation.passed, true);
     assert.equal(explanation.sources_sha256, report.sources_sha256);
     assert.equal(explanation.scope, 'JeanDupont');
-    assert.deepEqual(report.checks.map((entry) => entry.name), ['typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
+    assert.deepEqual(report.checks.map((entry) => entry.name), ['documentation', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
     const proof = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json')));
     assert.deepEqual(proof.scopes.map((entry) => entry.scope), ['Prime', 'AutrePrime']);
     assert.equal(proof.obligations, 2);
@@ -316,7 +316,6 @@ test('expliquer refuses to label an old execution as current when sources change
   } finally { cleanup(); }
 });
 
-
 test('independent checks finish despite compilation failure and stale reports are removed', { timeout: 5000 }, async () => {
   const { home, dossier, cleanup } = scratch();
   try {
@@ -332,7 +331,7 @@ test('independent checks finish despite compilation failure and stale reports ar
     };
     await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => { release(); return { passed: false, status: 'failed', message: 'Citation introuvable', results: [] }; } } });
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
-    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['typecheck', 'failed'], ['format', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
+    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['documentation', 'passed'], ['typecheck', 'failed'], ['format', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
     assert.equal(report.passed, false);
     assert.ok(!calls.some((call) => ['proof', 'explain', 'runtest'].includes(call.args[0])));
     for (const file of ['preuve.json', 'tests.json', 'explication.json']) assert.equal(fs.existsSync(path.join(directory, 'resultats', file)), false);
@@ -410,5 +409,37 @@ test('exceptions, executer and squelette call Catala with the expected arguments
     assert.doesNotMatch(skeleton, /testcase\.|éditeur/);
     assert.match(skeleton, /champ d'application Essai:\n```/);
     assert.equal(fs.existsSync(generate.cwd), false);
+  } finally { cleanup(); }
+});
+
+test('verifier requires doc and a nonempty quote on every definition and rule', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime');
+    const { runner } = fakeRun();
+    const cases = [
+      ['', '#[doc] manquant'],
+      ['#[doc="Source : référence fictive."]\n', 'quote manquante'],
+      ['#[doc="quote: «   »"]\n', 'quote manquante'],
+      ['#[doc="Sans citation"]\n#[doc="quote: « Passage exact. »"]\n', 'quote manquante'],
+      ['#[doc="Source : référence fictive.\\nquote: « Passage exact. »"]\n', null],
+    ];
+    for (const [annotation, message] of cases) {
+      fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\nCitation : « Une citation extérieure ne suffit pas. »\n\n```catala\nchamp d\'application Prime:\n' + annotation + 'définition montant égal à 10 €\n```\n');
+      const output = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
+      const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'));
+      const check = report.checks.find((entry) => entry.name === 'documentation');
+      assert.equal(check.passed, !message);
+      if (message) {
+        assert.equal(report.passed, false);
+        assert.ok(check.errors.some((error) => error.includes('prime.catala_fr:') && error.includes(message)));
+        assert.ok(output.includes(message));
+      }
+    }
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n#[doc="quote: « Passage exact. »"]\ndéfinition montant égal à 10 €\ndéfinition autre égal à 20 €\ndéclaration taux contenu décimal égal à 0.1\n```\n');
+    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
+    const check = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation');
+    assert.equal(check.errors.length, 2);
+    assert.match(check.errors[0], /doc.*manquant/);
   } finally { cleanup(); }
 });

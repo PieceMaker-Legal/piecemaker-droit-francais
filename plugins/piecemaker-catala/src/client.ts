@@ -7,7 +7,7 @@ import { STYLES } from './styles.js';
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
 type Host = { readonly context: Context; onContextChange(callback: (context: Context) => void): () => void };
 type File = { nom: string; chemin: string; contenu?: string };
-type Check = { name: string; command: string; exit_code: number | null; seconds: number; passed: boolean; status?: string; message?: string; files?: string[] };
+type Check = { name: string; command: string; exit_code: number | null; errors?: string[]; seconds: number; passed: boolean; status?: string; message?: string; files?: string[] };
 type Report = { started_utc: string; finished_utc: string; passed: boolean; checks: Check[] };
 type Proof = Report & { fichier: string; scope: string; conflits: number; obligations?: number };
 type Catleg = { date_controle: string; passed: boolean; fichiers: Array<{ fichier: string; passed: boolean; skipped?: boolean; articles?: string[]; versions?: Array<{ id: string; au: string; debut?: string; fin?: string | null; valide: boolean | null }>; messages: string[] }> };
@@ -82,7 +82,9 @@ export function mount(container: HTMLElement, api: Host) {
     if (!program) { panel.innerHTML = `${warning}<p class="pmc-muted">Aucun programme Catala dans ce dossier : un programme est un dossier .piecemaker/catala/&lt;nom&gt;/ avec clerk.toml.</p>`; return; }
     const running = program.enCours || verifying === program.nom;
     const run = `<div class="pmc-run"><button data-refresh>Actualiser</button><button class="pmc-primary" data-verify="${escape(program.nom)}"${running || verifying || !data.pack ? ' disabled' : ''}>${running ? 'Analyse en cours…' : 'Recalculer'}</button><span class="pmc-tally">${freshness(program)}</span><span class="pmc-analysed">${analysed(program)}</span></div>${data.pack ? '' : '<p class="pmc-muted">Le calcul du raisonnement n’est pas disponible sur ce poste.</p>'}`;
-    panel.innerHTML = `${warning}${run}${explanationPart(program)}`;
+    const documentationErrors = program.verification?.checks.find((check) => check.name === 'documentation')?.errors ?? [];
+    const documentation = documentationErrors.length ? `<div class="pmc-warning"><strong>Documentation du raisonnement à compléter</strong><ul>${documentationErrors.map((message) => `<li>${escape(message)}</li>`).join('')}</ul></div>` : '';
+    panel.innerHTML = `${warning}${run}${documentation}${explanationPart(program)}`;
     const view = panel.querySelector<HTMLElement>('.pmc-view');
     if (view) stopGraph = mountExplanation(view, (target, origin, quote, id) => {
       let legalId = id && (/^(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) || /^[0-9a-f]{24}$/i.test(id)) ? id : undefined;

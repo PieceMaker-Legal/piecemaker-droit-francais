@@ -63,10 +63,10 @@ Catala prévoit des mécanismes documentaires pour les fondements et documents. 
 | Mécanisme natif | Fonction | Limite |
 |---|---|---|
 | Titre avec identifiant | Conserve notamment les identifiants `LEGIARTI`, `JORFARTI` et `CETATEXT`. Le rendu HTML français génère le lien officiel reconnu. | Ne valide ni la référence ni son applicabilité. |
-| `#[doc="…"]` | Attache du texte documentaire à une déclaration ou définition. Une citation peut figurer dans le bloc Catala. | Aucun schéma source, citation ou pièce n’est imposé. Le volet ne lit pas encore cette annotation comme une source structurée. |
+| `#[doc="…"]` | Attache du texte documentaire à une déclaration ou définition. Une citation peut figurer dans le bloc Catala. | Aucun schéma source, citation ou pièce n’est imposé. Le volet lit la source et la balise `quote` de cette annotation, avec priorité sur les sources voisines. |
 | `#[description="…"]`, `#[label="…"]` | Documente certains éléments du programme. | Ne constitue pas un contrôle des fondements. |
 | `> Inclusion: annexe-fictive.pdf` | Reconnaît un PDF documentaire ; le rendu LaTeX prévoit son inclusion. | Le typage ne vérifie pas l’existence du PDF ni son lien probatoire. Le graphe ne lit pas encore cette directive comme une pièce rattachée. |
-| Attributs d’extension | Le compilateur permet à un plugin d’enregistrer ses propres attributs. | Un contrôle de source obligatoire demanderait une extension spécifique. Aucun attribut natif `source` ou `citation` n’a été trouvé. |
+| Attributs d’extension | Le compilateur permet à un plugin d’enregistrer ses propres attributs. | PieceMaker impose désormais `#[doc]` sur chaque définition ou règle et `quote` dans chaque annotation. Aucun attribut natif `source` ou `citation` n’a été trouvé. |
 
 Vérification : lecture du commit embarqué `e86fc2f5af14af40d80bfba655ef1d8cd6dee93c` et comparaison avec `master` au commit `9f2be04`. Les mécanismes examinés sont présents dans les deux versions.
 
@@ -75,6 +75,28 @@ Deux fichiers fictifs ont passé le typage du pack 1.3.0 : l’un avec annotatio
 Le code prévoit aussi une sélection de page pour le PDF. L’essai `@ p. 2` échoue avec `int_of_string` dans le pack testé. Aucune génération PDF complète n’a été exécutée.
 
 Références : [structure documentaire](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/surface/ast.mli#L282), [attributs et extensions](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/desugared/name_resolution.ml#L221), [rendu des annexes PDF](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/literate/latex.ml#L262).
+
+## Obligation de rédaction et balise quote
+
+Chaque définition ou règle exécutable doit porter un attribut natif `#[doc]`, y compris dans les scénarios.
+Chaque annotation `#[doc]` doit contenir une balise `quote: « passage exact »` non vide.
+La référence s’écrit `source: URL ou chemin` dans la même annotation. Ces deux balises sont des conventions PieceMaker.
+
+`pm catala verifier` produit deux erreurs distinctes, avec fichier et ligne :
+
+- `#[doc] manquant pour cette définition ou règle.`
+- `quote manquante ou vide dans #[doc].`
+
+Une citation placée seulement dans le Markdown extérieur ne satisfait pas cette obligation. Les contrôles de calcul restent exécutés pour permettre le diagnostic.
+Le volet affiche les erreurs de documentation. Le bilan ne peut pas être réussi si ces erreurs restent présentes.
+
+Le même lecteur alimente les cartes du graphe et le contrôle des citations. Une annotation précise prime sur le contexte documentaire voisin.
+Les anciennes sources Markdown restent lisibles. La règle de présence de `doc` et `quote` ne valide ni le passage cité ni sa pertinence.
+
+Le formateur du pack refuse certains liens Markdown avec crochets dans les attributs. La forme `source: URL ou chemin`, sans crochets, passe le formatage.
+
+Implantation commune : `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs`.
+Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecemaker/catala-sources.ts` exploite ses positions.
 
 ## Ce que PieceMaker ajoute
 
