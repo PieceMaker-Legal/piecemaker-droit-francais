@@ -1,6 +1,6 @@
 import { citeCatala, loadCatala, verifyCatala } from './api.js';
 import { mountExplanation } from './graph-view.js';
-import { reasoning, reasoningCard, reasoningGraph, reasoningIssues, reasoningText, type Reasoning } from './graph.js';
+import { reasoning, reasoningCard, reasoningGraph, reasoningIssues, reasoningText, type Reasoning, type Coverage } from './graph.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
@@ -10,7 +10,8 @@ type Check = { name: string; command: string; exit_code: number | null; seconds:
 type Report = { started_utc: string; finished_utc: string; passed: boolean; checks: Check[] };
 type Proof = Report & { fichier: string; scope: string; conflits: number; obligations?: number };
 type Catleg = { date_controle: string; passed: boolean; fichiers: Array<{ fichier: string; passed: boolean; skipped?: boolean; articles?: string[]; versions?: Array<{ id: string; au: string; debut?: string; fin?: string | null; valide: boolean | null }>; messages: string[] }> };
-type Program = { nom: string; enCours: boolean; perimee: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; tests?: { 'test-results': Array<{ file: string; tests: { scopes: Array<{ scope_name: string; success: boolean; errors?: unknown[] }> } }> } | null; citations?: { results: Array<{ origin: string; target: string; quote: string; label?: string; title?: string; id?: string; kind?: string; status: string; message: string }> } | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string }) | null; graphe: string | null };
+type Scenario = { fichier: string; scope: string; passed: boolean; test_reussi: boolean; graphe: string; message: string };
+type Program = { nom: string; enCours: boolean; perimee: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; tests?: { coverage?: Coverage; 'test-results': Array<{ file: string; tests: { scopes: Array<{ scope_name: string; success: boolean; errors?: unknown[] }> } }> } | null; citations?: { results: Array<{ origin: string; target: string; quote: string; label?: string; title?: string; id?: string; kind?: string; status: string; message: string }> } | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string }) | null; graphe: string | null; scenarios?: Scenario[] };
 export type CatalaSnapshot = {
   pack: { id: string; platform: string; version: string; proof: boolean; installedAt: string } | null;
   status: { state: string; id?: string; step?: string; error?: string; updatedAt?: string } | null;
@@ -46,22 +47,28 @@ export function mount(container: HTMLElement, api: Host) {
   let stopped = false;
   let stopGraph = () => {};
   let sequence = 0;
-  let viewMode = 'written';
+  let viewMode = 'graph';
+  let chosenScenario = '';
 
   const shown = () => data?.programmes.find((entry) => entry.nom === chosen) ?? data?.programmes[0];
   const explanationPart = (program: Program) => {
-    const traced = !program.perimee && program.explication?.passed && program.graphe;
+    const scenarios = program.scenarios ?? [];
+    const selected = scenarios.find((scenario) => `${scenario.fichier}:${scenario.scope}` === chosenScenario)
+      ?? scenarios.find((scenario) => scenario.scope === program.explication?.scope && scenario.fichier === program.explication?.fichier)
+      ?? scenarios.find((scenario) => scenario.passed) ?? scenarios[0];
+    const traced = selected ? selected.passed && selected.graphe : !program.perimee && program.explication?.passed && program.graphe;
+    const dot = selected?.graphe ?? program.graphe;
     let model: Reasoning;
-    let failure = '';
-    try { model = reasoning(traced ? program.graphe! : 'digraph G {}', program.fichiers, program.citations?.results); }
-    catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results); }
+    let failure = selected && !selected.passed ? 'Ce scénario ne produit pas de graphe. Corrigez son exécution Catala.' : '';
+    try { model = reasoning(traced ? dot! : 'digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage); }
+    catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage); }
     const issues = reasoningIssues(model);
     const graph = reasoningGraph(model);
     const empty = `<p class="pmc-muted">${failure ? escape(failure) : 'Aucun raisonnement calculé pour ce scénario.'}</p>`;
     const choice = data!.programmes.length > 1 ? `<select data-program-choice aria-label="Raisonnement">${data!.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.nom)}</option>`).join('')}</select>` : '';
     const open = issues.length ? `<details class="pmc-open-states"><summary class="pmc-warn">${issues.length} point${issues.length > 1 ? 's' : ''} à examiner</summary><ul>${issues.map((entry) => `<li>${entry.id ? `<a href="#" class="pmc-link" data-goto="${entry.id}">${escape(entry.title)}</a>` : escape(entry.title)} : ${escape(entry.issue)}</li>`).join('')}</ul></details>` : '';
-    const scenario = program.explication?.scope ? `<span class="pmc-scenario">Scénario : <strong>${escape(program.explication.scope)}</strong></span>` : '';
-    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-view-head"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement"><button role="tab" data-mode="written" aria-selected="${viewMode === 'written'}">Raisonnement</button><button role="tab" data-mode="graph" aria-selected="${viewMode === 'graph'}">Graphe</button></div>${scenario}${choice}</div>${open}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-legend"><span data-kind="answer">Conclusion</span><span data-kind="rule">Règle</span><span data-kind="condition">Condition</span><span data-kind="fact">Fait</span><span data-kind="exception">Exception</span><span class="pmc-ok">Remplie</span><span class="pmc-ko">Non remplie</span></div><div class="pmc-canvas" aria-label="Graphe du raisonnement"><div class="pmc-stage">${graph}</div><aside class="pmc-inspector" aria-label="Détail" hidden></aside><div class="pmc-tools"><button data-zoom="1.2" aria-label="Zoomer">+</button><button data-zoom="0.833333" aria-label="Dézoomer">−</button><button data-fit>Ajuster</button></div></div>` : empty}</div><div class="pmc-cards" hidden>${model.steps.map((step) => reasoningCard(step, model)).join('')}</div></section>`;
+    const scenario = scenarios.length ? `<label class="pmc-scenario">Scénario : <select data-scenario-choice aria-label="Scénario Catala">${scenarios.map((entry) => `<option value="${escape(`${entry.fichier}:${entry.scope}`)}"${entry === selected ? ' selected' : ''}>${escape(entry.scope)} — ${entry.test_reussi ? 'test réussi' : 'test en échec'}</option>`).join('')}</select></label>` : program.explication?.scope ? `<span class="pmc-scenario">Scénario : <strong>${escape(program.explication.scope)}</strong></span>` : '';
+    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-view-head"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement"><button role="tab" data-mode="written" aria-selected="${viewMode === 'written'}">Raisonnement</button><button role="tab" data-mode="graph" aria-selected="${viewMode === 'graph'}">Graphe</button></div>${scenario}${choice}</div>${open}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-legend"><span data-kind="answer">Conclusion</span><span data-kind="rule">Règle</span><span data-kind="condition">ET / OU / NON</span><span data-kind="fact">Donnée</span><span data-kind="article">Texte</span><span data-kind="jurisprudence">Jurisprudence</span><span data-kind="piece">Pièce</span><span data-kind="action">Point ouvert</span></div><div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div><aside class="pmc-inspector" aria-label="Détail" hidden></aside>` : empty}</div><div class="pmc-cards" hidden>${model.steps.map((step) => reasoningCard(step, model)).join('')}</div></section>`;
   };
   const paint = () => {
     stopGraph();
@@ -109,11 +116,7 @@ export function mount(container: HTMLElement, api: Host) {
     const tab = (event.target as Element).closest<HTMLElement>('[role="tab"][data-mode]');
     if (!tab) return;
     viewMode = tab.dataset.mode ?? 'written';
-    const view = tab.closest<HTMLElement>('.pmc-view')!;
-    view.dataset.mode = viewMode;
-    view.querySelectorAll<HTMLElement>('[role="tab"]').forEach((item) => item.setAttribute('aria-selected', String(item === tab)));
-    view.querySelector<HTMLElement>('.pmc-explanation')!.hidden = viewMode !== 'graph';
-    view.querySelector<HTMLElement>('.pmc-written')!.hidden = viewMode !== 'written';
+    paint();
   });
   const apply = (next: CatalaSnapshot | null) => {
     const text = JSON.stringify(next);
@@ -133,7 +136,8 @@ export function mount(container: HTMLElement, api: Host) {
 
   panel.addEventListener('change', (event) => {
     const select = event.target as HTMLSelectElement;
-    if (select.hasAttribute('data-program-choice')) { chosen = select.value; paint(); }
+    if (select.hasAttribute('data-program-choice')) { chosen = select.value; chosenScenario = ''; paint(); }
+    if (select.hasAttribute('data-scenario-choice')) { chosenScenario = select.value; paint(); }
   });
   panel.addEventListener('click', (event) => {
     const button = (event.target as Element).closest<HTMLElement>('button');
@@ -150,7 +154,7 @@ export function mount(container: HTMLElement, api: Host) {
   const unsubscribe = api.onContextChange((next) => {
     const changed = next.project?.path !== context.project?.path;
     context = next;
-    if (changed) { chosen = undefined; error = ''; data = null; serialized = ''; load(); }
+    if (changed) { chosen = undefined; chosenScenario = ''; error = ''; data = null; serialized = ''; load(); }
     paint();
   });
   const updated = (event: Event) => {

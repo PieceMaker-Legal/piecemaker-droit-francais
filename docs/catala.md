@@ -154,3 +154,9 @@ Les pièces passent par le lecteur existant du dossier. Aucun extrait absent ou 
 `citations.json` conserve les résultats et les jetons du lecteur interne. Le graphe affiche les erreurs sur leurs références.
 Le lecteur réutilise ces résultats tant que le programme reste inchangé. Aucun contrôle sémantique supplémentaire n’est ajouté.
 La commande CLI joint le serveur local pour ce contrôle ; serveur absent, le bilan signale l’indisponibilité.
+
+## Graphe du raisonnement
+
+Le volet ouvre le graphe en premier. Il relie conclusion, conditions, données, sources et points ouverts, avec des nœuds partagés. Les valeurs Vrai/Faux décrivent le scénario et ne valent pas preuve. La vérification conserve les traces des scénarios Clerk ; le volet permet de choisir entre ces scénarios sans nouveau calcul.
+
+Détail des sorties natives Catala, des ajouts PieceMaker, de la rédaction et des limites : [graphe du raisonnement](graphe-catala.md).

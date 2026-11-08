@@ -207,6 +207,7 @@ async function pythonTests(context, program, tests) {
 
 async function clerkTests(context, program, tests) {
   const started = Date.now();
+  const digest = sourcesDigest(program.directory, sourceFiles(program.directory));
   const reports = [];
   let failed = false;
   for (const [index, file] of tests.entries()) {
@@ -218,7 +219,7 @@ async function clerkTests(context, program, tests) {
   }
   const { entry, result } = await check(context, program.directory, 'tests', 'clerk', ['report', '--json', '--code-coverage', ...reports]);
   const summary = testSummary(result.stdout);
-  if (summary.report) writeResult(program.directory, 'tests.json', summary.report);
+  if (summary.report) writeResult(program.directory, 'tests.json', { ...summary.report, sources_sha256: digest });
   return { entry: { ...entry, command: 'clerk runtest --whole-program + clerk report --json', seconds: Math.round((Date.now() - started) / 10) / 100, passed: !failed && reports.length === tests.length && entry.passed && summary.scopes.length > 0 && summary.scopes.every((scope) => scope.success) }, scopes: summary.scopes };
 }
 
@@ -228,7 +229,7 @@ async function verifier(context, program, flags = {}) {
   const started = context.now();
   const digest = sourcesDigest(program.directory, files);
   const previous = readJson(path.join(program.directory, 'resultats', 'explication.json'));
-  for (const file of ['preuve.json', 'catleg.json', 'citations.json', 'tests.json', 'explication.json', 'explication.dot']) fs.rmSync(path.join(program.directory, 'resultats', file), { force: true });
+  for (const file of ['preuve.json', 'catleg.json', 'citations.json', 'tests.json', 'explication.json', 'explication.dot', 'scenarios.json']) fs.rmSync(path.join(program.directory, 'resultats', file), { force: true });
   const checks = [];
   const record = async (name, command, work) => {
     let entry;
@@ -307,12 +308,23 @@ async function verifier(context, program, flags = {}) {
     });
     await record('explication', 'catala explain', async () => {
       if (!typed.passed) return blocked('Compilation non validée.');
-      const candidates = scopes.filter((scope) => scope.success && tests.some((file) => path.basename(file) === scope.file));
-      const selected = candidates.find((scope) => scope.scope_name === previous?.scope && scope.file === path.basename(previous?.fichier ?? '')) ?? candidates[0];
-      const matching = selected ? tests.filter((file) => path.basename(file) === selected.file) : [];
-      if (!selected || matching.length !== 1) return blocked('Aucun scénario réussi identifiable pour expliquer son exécution.');
-      await expliquer(context, program, { fichier: matching[0], scope: selected.scope_name });
-      return { passed: true };
+      const scenarios = [], logs = [];
+      for (const scope of scopes) {
+        const matching = tests.filter((file) => path.basename(file) === scope.file);
+        if (matching.length !== 1) continue;
+        const trace = await explainScenario(context, program, matching[0], scope.scope_name);
+        scenarios.push({ ...trace.report, test_reussi: scope.success, graphe: trace.graphe, message: trace.message });
+        logs.push(`${matching[0]} › ${scope.scope_name}\n${trace.message || 'Graphe calculé.'}`);
+      }
+      writeResult(program.directory, 'scenarios.json', { sources_sha256: digest, scenarios });
+      writeResult(program.directory, 'explication.log', logs.join('\n'));
+      const valid = scenarios.filter((scenario) => scenario.test_reussi && scenario.passed);
+      const selected = valid.find((scenario) => scenario.scope === previous?.scope && scenario.fichier === previous?.fichier) ?? valid[0];
+      if (!selected) return blocked('Aucun scénario réussi identifiable pour expliquer son exécution.');
+      const { graphe, message, test_reussi, ...report } = selected;
+      writeResult(program.directory, 'explication.json', report);
+      writeResult(program.directory, 'explication.dot', graphe);
+      return { passed: scenarios.every((scenario) => scenario.passed), message: scenarios.filter((scenario) => !scenario.passed).map((scenario) => `${scenario.fichier} › ${scenario.scope}`).join(', ') };
     });
   };
   await Promise.all([
@@ -377,14 +389,19 @@ async function expliquer(context, program, flags) {
   const files = sourceFiles(program.directory);
   const file = flags.fichier && flags.fichier !== true ? String(flags.fichier) : files.length === 1 ? files[0] : null;
   if (!file || !files.includes(file)) throw new TypeError(`Indiquez --fichier parmi : ${files.join(', ')}.`);
-  const started = context.now();
-  const digest = sourcesDigest(program.directory, files);
-  const { entry, result } = await check(context, program.directory, 'explication', 'catala', ['explain', '--color=never', '--whole-program', '--conditions', '--dot', '-I', '.', file, '-s', String(flags.scope), '-o', '-']);
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed && /^digraph\s/.test(result.stdout.trim()) && digest === sourcesDigest(program.directory, sourceFiles(program.directory)), sources_sha256: digest, checks: [entry] };
-  writeResult(program.directory, 'explication.dot', report.passed ? result.stdout : '');
+  const { report, graphe, message } = await explainScenario(context, program, file, String(flags.scope));
+  writeResult(program.directory, 'explication.dot', graphe);
   writeResult(program.directory, 'explication.json', report);
-  if (!report.passed) throw new Error(`Explication échouée :\n${result.stdout}${result.stderr}\nDétail : .piecemaker/catala/${program.name}/resultats/explication.log`);
+  if (!report.passed) throw new Error(`Explication échouée :\n${message}\nDétail : .piecemaker/catala/${program.name}/resultats/explication.log`);
   return `Explication ${file} › ${flags.scope} : graphe des formules et conditions appliquées.\nGraphe : .piecemaker/catala/${program.name}/resultats/explication.dot`;
+}
+
+async function explainScenario(context, program, file, scope) {
+  const started = context.now();
+  const digest = sourcesDigest(program.directory, sourceFiles(program.directory));
+  const { entry, result } = await check(context, program.directory, 'explication', 'catala', ['explain', '--color=never', '--whole-program', '--conditions', '--dot', '-I', '.', file, '-s', scope, '-o', '-']);
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope, passed: entry.passed && /^digraph\s/.test(result.stdout.trim()) && digest === sourcesDigest(program.directory, sourceFiles(program.directory)), sources_sha256: digest, checks: [entry] };
+  return { report, graphe: report.passed ? result.stdout : '', message: report.passed ? '' : `${result.stdout}${result.stderr}` || 'Trace indisponible ou sources modifiées pendant le calcul.' };
 }
 
 function chosenFile(program, flags, fallback) {

@@ -30,7 +30,7 @@ function program(dossier, name, files = { 'prime.catala_fr': MODULE, 'test_prime
   return directory;
 }
 
-function fakeRun({ testsPass = true, proofOutput = 'No errors found during the proof mode run.\n' } = {}) {
+function fakeRun({ testsPass = true, proofOutput = 'No errors found during the proof mode run.\n', scopes = [{ scope_name: 'JeanDupont', success: testsPass, errors: [], time: 0.1 }] } = {}) {
   const calls = [];
   const runner = async (command, args, options) => {
     calls.push({ command: path.basename(command), args, cwd: options.cwd, env: options.env });
@@ -38,7 +38,6 @@ function fakeRun({ testsPass = true, proofOutput = 'No errors found during the p
     if (tool === 'catala-format') return { code: 0, stdout: fs.readFileSync(path.join(options.cwd, args.at(-1)), 'utf8'), stderr: '' };
     if (tool === 'clerk' && args[0] === 'runtest') fs.writeFileSync(path.join(options.cwd, args.find((arg) => arg.startsWith('--report=')).slice(9)), 'report');
     if (tool === 'clerk' && args[0] === 'report') {
-      const scopes = [{ scope_name: 'JeanDupont', success: testsPass, errors: [], time: 0.1 }];
       return { code: testsPass ? 0 : 1, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, 'test_prime.catala_fr'), tests: { scopes, 'inline-tests': [] } }], coverage: {} }), stderr: '' };
     }
     if (tool === 'catala' && args[0] === 'dependency-graph') return { code: 0, stdout: JSON.stringify({ inter_scopes: { nodes: { 1: 'Prime', 2: 'AutrePrime' } } }), stderr: '' };
@@ -63,6 +62,33 @@ test('the pack and the shared Python are found under the components roots', () =
   } finally {
     cleanup();
   }
+});
+
+test('verifier stores every test scenario and keeps failed assertions distinct from trace results', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime');
+    const scopes = [
+      { scope_name: 'AvecDemande', success: true, errors: [] },
+      { scope_name: 'SansDemande', success: true, errors: [] },
+      { scope_name: 'AssertionFausse', success: false, errors: [{ message: 'Assertion fausse.' }] },
+    ];
+    const { runner } = fakeRun({ scopes });
+    const run = async (command, args, options) => {
+      if (args[0] === 'explain') {
+        const scope = args[args.indexOf('-s') + 1];
+        return { code: scope === 'AssertionFausse' ? 1 : 0, stdout: scope === 'AssertionFausse' ? '' : `digraph G { x001 [label=<${scope}>] }`, stderr: scope === 'AssertionFausse' ? 'Assertion fausse.' : '' };
+      }
+      return runner(command, args, options);
+    };
+    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } });
+    const saved = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'scenarios.json'), 'utf8'));
+    assert.deepEqual(saved.scenarios.map((scenario) => [scenario.scope, scenario.test_reussi, scenario.passed]), [['AvecDemande', true, true], ['SansDemande', true, true], ['AssertionFausse', false, false]]);
+    assert.match(saved.scenarios[1].graphe, /SansDemande/);
+    assert.equal(saved.scenarios[2].graphe, '');
+    assert.match(saved.scenarios[2].message, /Assertion fausse/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'tests.json'), 'utf8')).sources_sha256, saved.sources_sha256);
+  } finally { cleanup(); }
 });
 
 test('PISTE credentials are mapped to the catleg variables', () => {

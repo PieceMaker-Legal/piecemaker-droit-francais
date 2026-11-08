@@ -54,6 +54,8 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, se
       const digest = catala.sourcesDigest(directory, files);
       const perimee = explanation?.sources_sha256 !== digest;
       const citationReport = readJson(path.join(results, 'citations.json'));
+      const scenarios = readJson(path.join(results, 'scenarios.json'));
+      const tests = readJson(path.join(results, 'tests.json'));
       const journaux = fs.existsSync(results) ? fs.readdirSync(results).filter((file) => file.endsWith('.log') && fs.lstatSync(path.join(results, file)).isFile()).sort() : [];
       return {
         nom,
@@ -62,11 +64,12 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, se
         fichiers: files.map((file) => ({ nom: file.split(path.sep).join('/'), chemin: path.join(directory, file), contenu: fs.readFileSync(path.join(directory, file), 'utf8') })),
         journaux: journaux.map((file) => ({ nom: file, chemin: path.join(results, file), contenu: fs.readFileSync(path.join(results, file), 'utf8') })),
         verification: readJson(path.join(results, 'verification.json')),
-        tests: readJson(path.join(results, 'tests.json')),
+        tests: tests?.sources_sha256 === digest ? tests : null,
         preuve: readJson(path.join(results, 'preuve.json')),
         catleg: readJson(path.join(results, 'catleg.json')),
         citations: citationReport?.sources_sha256 === digest ? citationReport : null,
         explication: explanation,
+        scenarios: scenarios?.sources_sha256 === digest ? scenarios.scenarios : [],
         graphe: !perimee && fs.existsSync(path.join(results, 'explication.dot')) ? fs.readFileSync(path.join(results, 'explication.dot'), 'utf8') : null,
       };
     });

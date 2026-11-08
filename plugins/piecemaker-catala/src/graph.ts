@@ -1,17 +1,21 @@
 import { sourceContext } from './source-context.js';
+import { reasoningMap } from './reasoning-map.js';
 
 type File = { nom: string; chemin: string; contenu?: string };
 type Citation = { origin: string; target: string; quote: string; status: string; title?: string; id?: string };
 export type Source = { label: string; target: string; kind: string; origin: string; quote: string; status: string; title?: string; id?: string };
 export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: string; refs: string[]; members: Clause[]; met: string };
-export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; answer: boolean; exception: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null };
+type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
+type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
+export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
+export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[] };
 export type Reasoning = { steps: Step[]; others: Source[] };
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const key = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').normalize('NFC').trim().toLowerCase().replace(/[\s_]+/g, '_');
 const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const tone = (value: string) => value === 'Vrai' ? 'ok' : value === 'Faux' ? 'ko' : /^(?:Indéterminé|Disputé|null|None)$/i.test(value) ? 'warn' : 'neutral';
-const legal = (source: Source) => source.kind !== 'piece';
+const legal = (source: Source) => source.kind === 'article' || source.kind === 'jurisprudence';
 const identity = (source: Source) => JSON.stringify([source.origin, source.label, source.target, source.quote]);
 const unique = (sources: Source[]) => sources.filter((source, index) => sources.findIndex((other) => identity(other) === identity(source)) === index);
 const OPERATORS = new Map([['et', 'et'], ['and', 'et'], ['ou', 'ou'], ['or', 'ou'], ['non', 'non'], ['not', 'non']]);
@@ -129,14 +133,15 @@ function parseDot(dot: string) {
 }
 
 function citationOf(sources: Citation[], origin: string, target: string, quote: string) {
-  return sources.find((entry) => entry.origin === origin && entry.target === target && entry.quote === quote)
-    ?? sources.find((entry) => entry.origin === origin && entry.target === target);
+  return sources.find((entry) => entry.origin === origin && entry.target === target && entry.quote === quote);
 }
 
-function documentSources(file: File, citations: Citation[], linked: Map<string, Source[]>) {
-  type Section = { sources: Source[]; concerned: string[]; blocks: Array<{ start: number; end: number }> };
+const emptyNotes = (): Notes => ({ question: '', justification: '', recherche: '', demarches: [] });
+
+function documentSources(file: File, citations: Citation[], linked: Map<string, Source[]>, notes: Map<string, Notes>) {
+  type Section = { sources: Source[]; concerned: string[]; blocks: Array<{ start: number; end: number }>; notes: Notes };
   const sections: Section[] = [];
-  let current: Section = { sources: [], concerned: [], blocks: [] };
+  let current: Section = { sources: [], concerned: [], blocks: [], notes: emptyNotes() };
   let lines: string[] = [];
   let fence = '';
   let catala = false;
@@ -153,6 +158,11 @@ function documentSources(file: File, citations: Citation[], linked: Map<string, 
     if (!text.trim()) return;
     current.sources.push(...found(text));
     for (const match of text.matchAll(/^Concerne\s*:\s*(.+)$/gim)) current.concerned.push(...match[1].split(',').map(key).filter(Boolean));
+    for (const [label, field] of [['Question', 'question'], ['Justification', 'justification'], ['À rechercher', 'recherche']] as const) {
+      const value = text.match(new RegExp(`^${label}\\s*:\\s*(.+)$`, 'im'))?.[1];
+      if (value) current.notes[field] = value;
+    }
+    current.notes.demarches.push(...[...text.matchAll(/^Démarche\s*:\s*(.+)$/gim)].map((match) => match[1]));
   };
   (file.contenu ?? '').split(/\r?\n/).forEach((line, index) => {
     const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
@@ -165,7 +175,7 @@ function documentSources(file: File, citations: Citation[], linked: Map<string, 
       return;
     }
     if (marker) { commit(); fence = marker[1]; catala = marker[2].trim() === 'catala'; blockStart = index + 1; return; }
-    if (/^#{1,6}\s/.test(line)) { commit(); sections.push(current); current = { sources: [], concerned: [], blocks: [] }; return; }
+    if (/^#{1,6}\s/.test(line)) { commit(); sections.push(current); current = { sources: [], concerned: [], blocks: [], notes: emptyNotes() }; return; }
     lines.push(line);
   });
   commit();
@@ -174,7 +184,16 @@ function documentSources(file: File, citations: Citation[], linked: Map<string, 
   let carry: Source[] = [];
   for (const section of sections) {
     const sources = unique([...carry, ...section.sources]);
-    if (section.concerned.length) for (const name of section.concerned) linked.set(name, [...(linked.get(name) ?? []), ...section.sources]);
+    for (const name of section.concerned) {
+      linked.set(name, [...(linked.get(name) ?? []), ...section.sources]);
+      const previous = notes.get(name) ?? emptyNotes();
+      notes.set(name, {
+        question: section.notes.question || previous.question,
+        justification: section.notes.justification || previous.justification,
+        recherche: section.notes.recherche || previous.recherche,
+        demarches: [...previous.demarches, ...section.notes.demarches],
+      });
+    }
     if (section.blocks.length) {
       for (const block of section.blocks) blocks.push({ ...block, sources });
       carry = [];
@@ -232,10 +251,14 @@ const inner = (clause: Clause) => clause.kind === 'not' ? clause.members[0] : cl
 const children = (clause: Clause) => inner(clause).kind === 'leaf' ? [] : inner(clause).members;
 const lawOf = (clause: Clause, steps: Map<string, Step>) => unique(leaves(clause).flatMap((leaf) => leaf.refs.flatMap((id) => steps.get(id)?.sources.filter(legal) ?? [])));
 
-export function reasoning(dot: string, files: File[] = [], citations: Citation[] = []): Reasoning {
+export function reasoning(dot: string, files: File[] = [], citations: Citation[] = [], coverage?: Coverage): Reasoning {
   const { nodes, edges } = parseDot(dot);
   const linked = new Map<string, Source[]>();
-  const documents = new Map(files.map((file) => [file.nom.split('/').pop()!, documentSources(file, citations, linked)]));
+  const notes = new Map<string, Notes>();
+  const activeFiles = files.filter((file) => !/#\[test\]/.test(file.contenu ?? '') || [...nodes.values()].some((node) => {
+    try { return decodeURIComponent(new URL(node.source).pathname).endsWith(`/${file.nom}`); } catch { return false; }
+  }));
+  const documents = new Map(activeFiles.map((file) => [file.nom.split('/').pop()!, documentSources(file, citations, linked, notes)]));
   const located = (source: string) => {
     try {
       const url = new URL(source);
@@ -252,7 +275,18 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     const kind = node.kind === 'input' ? 'fact' : node.kind === 'condition' ? 'condition' : 'rule';
     const head = kind === 'condition' ? body.slice(0, equal >= 0 ? equal : undefined).join(' ') : body[0] ?? '';
     const expression = kind === 'condition' ? head : body.slice(1, equal >= 0 ? equal : body.length > 1 ? -1 : undefined).join(' ');
-    steps.set(id, { id, kind, answer: node.kind === 'conclusion', exception: false, name: kind === 'condition' ? '' : head, title: capital(human(head)), formula: kind === 'condition' ? '' : human(expression), expression, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '', clause: null });
+    const tests = new Set<number>();
+    if (coverage && node.source) {
+      const url = new URL(node.source);
+      const file = files.find((entry) => decodeURIComponent(url.pathname).endsWith(`/${entry.nom}`));
+      const line = Number(url.hash.match(/^#L(\d+)/)?.[1]) - 1;
+      const visit = (ranges: CoveredRange[]) => { for (const range of ranges) {
+        if (range.range.start.line <= line && line <= range.range.end.line) range.reached_by.forEach((index) => tests.add(index));
+        visit(range.subtree);
+      } };
+      if (file) for (const location of coverage.locations) if (location.file === file.chemin) visit(location.tree);
+    }
+    steps.set(id, { id, kind, answer: node.kind === 'conclusion', conditional: false, name: kind === 'condition' ? '' : head, title: capital(human(head)), formula: kind === 'condition' ? '' : human(expression), expression, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '', clause: null, notes: notes.get(key(head)) ?? emptyNotes(), tests: coverage?.scopes.filter((scope) => tests.has(scope.index)).map((scope) => scope.name) ?? [] });
   }
   for (const step of [...steps.values()].filter((entry) => entry.answer)) {
     const twin = step.parents.map((id) => steps.get(id)!).find((parent) => parent.kind === 'rule' && key(parent.name) === key(step.name));
@@ -270,7 +304,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   const find = (name: string) => named.get(key(name));
   for (const step of steps.values()) {
     if (step.kind !== 'rule') continue;
-    step.exception = !step.expression && edges.some((edge) => edge.to === step.id && edge.dashed);
+    step.conditional = !step.expression && edges.some((edge) => edge.to === step.id && edge.dashed);
     const conditions = step.parents.map((id) => steps.get(id)!).filter((parent) => parent.kind === 'condition');
     const parts = [...conditions.map((condition) => parseClause(condition.expression, find) ?? { kind: 'leaf' as const, text: condition.expression, ref: condition.id, refs: condition.parents, members: [], met: '' }), parseClause(step.expression, find)].filter((part): part is Clause => Boolean(part));
     step.clause = parts.length ? conjunction('all', parts) : null;
@@ -280,8 +314,9 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   for (const step of [...steps.values()]) if (step.kind === 'condition') steps.delete(step.id);
   for (const step of steps.values()) {
     step.parents = step.parents.filter((id) => steps.has(id));
-    if (step.kind === 'fact' && step.value === 'Disputé') step.issue = 'Fait contesté : tranchez-le au vu des pièces.';
-    if (step.kind === 'fact' && /^(?:Indéterminé|null|None)$/.test(step.value)) step.issue = 'Fait non établi : indiquez la pièce qui l’établit.';
+    if (step.kind === 'fact' && !step.sources.some((source) => source.kind === 'piece')) step.issue = 'Hypothèse du scénario : recherchez une pièce pour justifier cette donnée.';
+    if (step.kind === 'fact' && /\b(?:Disputé|Contesté)(?!\p{L})/iu.test(step.value)) step.issue = 'Fait contesté : tranchez-le au vu des pièces.';
+    if (step.kind === 'fact' && (!step.value || /\b(?:Indéterminé|Inconnu|null|None)(?!\p{L})/iu.test(step.value))) step.issue = 'Fait non établi : indiquez la pièce qui l’établit.';
     if (step.kind === 'rule' && !step.sources.some(legal) && !(step.clause && roots(step.clause).some((clause) => lawOf(clause, steps).length))) step.issue = 'Aucun article ni aucune décision rattaché à cette règle.';
   }
   const levels = new Map<string, number>();
@@ -298,9 +333,9 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   return { steps: [...steps.values()].sort((a, b) => a.level - b.level), others };
 }
 
-const FACT: Record<string, [string, string]> = { Vrai: ['ok', 'Établi'], Faux: ['ko', 'Non établi'], Disputé: ['warn', 'Contesté'] };
+const FACT: Record<string, [string, string]> = { Vrai: ['neutral', 'Vrai'], Faux: ['neutral', 'Faux'], Disputé: ['warn', 'Contesté'] };
 const pill = (kind: string, label: string) => `<span class="pmc-value pmc-${kind}">${escape(label)}</span>`;
-const factPill = (step: Step) => pill(...(FACT[step.value] ?? (/^(?:Indéterminé|null|None|)$/.test(step.value) ? ['warn', 'À établir'] : ['neutral', step.value])) as [string, string]);
+const factPill = (step: Step) => pill(...(FACT[step.value] ?? (/^(?:Indéterminé|null|None|)$/.test(step.value) ? ['warn', 'Indéterminé'] : ['neutral', step.value])) as [string, string]);
 const clausePill = (clause: Clause) => {
   if (!clause.met) return '';
   const labels = clause.kind === 'not' ? { ok: 'Exception écartée', ko: 'Exception retenue' } : { ok: 'Remplie', ko: 'Non remplie' };
@@ -353,12 +388,12 @@ function writer(model: Reasoning) {
     const foundation = basis.length ? sourceList(basis) : '';
     if (!step.clause) {
       if (step.expression) return `${foundation}<p class="pmc-formula">${escape(human(step.expression))}</p>`;
-      if (step.exception) return `${foundation}<p class="pmc-formula">Cette solution est retenue par exception.</p>`;
+      if (step.conditional) return `${foundation}<p class="pmc-formula">Cette définition dépend d’une condition d’application.</p>`;
       return foundation || '<p class="pmc-muted">Aucune condition ni aucun fondement déclaré.</p>';
     }
     return `${foundation}<ul class="pmc-conditions">${roots(step.clause).map((clause) => ruleBranch(clause, excluded)).join('')}</ul>`;
   };
-  const factLine = (fact: Step, prefix = '') => `<li data-tone="${tone(fact.value)}">${prefix}<strong>${escape(fact.title)}</strong> ${factPill(fact)}${chips(fact.sources.filter((source) => !legal(source)))}${fact.issue ? `<span class="pmc-warn"> ${escape(fact.issue)}</span>` : ''}</li>`;
+  const factLine = (fact: Step, prefix = '') => `<li data-tone="${tone(fact.value)}">${prefix}<strong>${escape(fact.title)}</strong> ${factPill(fact)}${chips(fact.sources.filter((source) => source.kind === 'piece'))}${fact.issue ? `<span class="pmc-warn"> ${escape(fact.issue)}</span>` : ''}</li>`;
   const justifyBranch = (clause: Clause): string => {
     const members = children(clause);
     if (!members.length) {
@@ -373,7 +408,7 @@ function writer(model: Reasoning) {
   };
   const justification = (step: Step) => {
     if (step.clause) return `<ul class="pmc-justification">${roots(step.clause).map(justifyBranch).join('')}</ul>`;
-    if (step.exception) {
+    if (step.conditional) {
       const facts = step.parents.map((id) => steps.get(id)!).filter((parent) => parent.kind === 'fact');
       return facts.length ? `<ul class="pmc-justification">${facts.map((fact) => factLine(fact)).join('')}</ul>` : '';
     }
@@ -384,15 +419,16 @@ function writer(model: Reasoning) {
     const value = step.value ? pill(tone(step.value), step.value) : pill('warn', 'Indéterminé');
     const reason = step.clause && step.clause.met === 'ok' ? (step.clause.kind === 'any' ? 'L’une des conditions est remplie.' : 'Les conditions sont remplies.')
       : step.clause && step.clause.met === 'ko' ? (step.clause.kind === 'any' ? 'Aucune condition n’est remplie.' : 'Au moins une condition n’est pas remplie.')
-      : step.exception ? 'La solution est écartée par une exception.' : '';
+      : step.conditional ? 'Une condition d’application sélectionne cette définition.' : '';
     return `<div class="pmc-projection" data-tone="${tone(step.value)}">${value}<span>${escape(reason)}</span></div>`;
   };
   const card = (step: Step) => {
+    const notes = `${step.notes.justification ? `<p>${escape(step.notes.justification)}</p>` : ''}${step.tests.length ? `<p class="pmc-muted">Exercé par les tests : ${step.tests.map(escape).join(', ')}.</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${step.notes.demarches.length ? `<h4>Démarches effectuées</h4><ul>${step.notes.demarches.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}`;
     if (step.kind === 'fact') {
       const used = model.steps.filter((rule) => rule.parents.includes(step.id));
-      return `<section class="pmc-rule" data-card="${step.id}" data-kind="fact" data-tone="${tone(step.value)}"><header><span class="pmc-kind">Fait du dossier</span><h3>${escape(step.title)}</h3>${factPill(step)}</header><div class="pmc-part" data-part="justification"><h4>Pièces</h4>${step.sources.some((source) => !legal(source)) ? sourceList(step.sources.filter((source) => !legal(source))) : '<p class="pmc-muted">Aucune pièce rattachée à ce fait.</p>'}${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}${used.length ? `<h4>Retenu pour</h4><ul class="pmc-sources">${used.map((rule) => `<li><a href="#" class="pmc-link" data-goto="${rule.id}">${escape(rule.title)}</a></li>`).join('')}</ul>` : ''}</div></section>`;
+      return `<section class="pmc-rule" data-card="${step.id}" data-kind="fact" data-tone="${tone(step.value)}"><header><span class="pmc-kind">Donnée du scénario</span><h3>${escape(step.title)}</h3>${factPill(step)}</header><div class="pmc-part" data-part="justification"><h4>Pièces citées</h4>${step.sources.some((source) => source.kind === 'piece') ? sourceList(step.sources.filter((source) => source.kind === 'piece')) : '<p class="pmc-muted">Aucune pièce rattachée à cette donnée.</p>'}${notes}${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}${used.length ? `<h4>Retenu pour</h4><ul class="pmc-sources">${used.map((rule) => `<li><a href="#" class="pmc-link" data-goto="${rule.id}">${escape(rule.title)}</a></li>`).join('')}</ul>` : ''}</div></section>`;
     }
-    return `<section class="pmc-rule" data-card="${step.id}" data-kind="${step.answer ? 'answer' : 'rule'}" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${step.answer ? 'Conclusion' : 'Règle'}</span><h3>${escape(step.title)}</h3></header><div class="pmc-part" data-part="rule"><h4>La règle</h4>${rulePart(step)}</div><div class="pmc-part" data-part="projection"><h4>Projection au scénario</h4>${projection(step)}</div><div class="pmc-part" data-part="justification"><h4>Justification</h4>${justification(step) || '<p class="pmc-muted">Aucun élément de fait à l’appui de cette solution.</p>'}</div>${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</section>`;
+    return `<section class="pmc-rule" data-card="${step.id}" data-kind="${step.answer ? 'answer' : 'rule'}" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${step.answer ? 'Conclusion' : 'Règle'}</span><h3>${escape(step.notes.question || step.title)}</h3></header><div class="pmc-part" data-part="rule"><h4>La règle</h4>${rulePart(step)}</div><div class="pmc-part" data-part="projection"><h4>Projection au scénario</h4>${projection(step)}</div><div class="pmc-part" data-part="justification"><h4>Justification</h4>${notes}${justification(step) || '<p class="pmc-muted">Aucun élément de fait à l’appui de cette solution.</p>'}</div>${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</section>`;
   };
   return { steps, card, title };
 }
@@ -415,106 +451,6 @@ export function reasoningIssues(model: Reasoning) {
   ];
 }
 
-type GraphNode = {
-  id: string;
-  card: string;
-  kind: string;
-  tone: string;
-  html: string;
-  height: number;
-  level: number;
-  parent: string;
-  dashed: boolean;
-  issue: string;
-  children: GraphNode[];
-  column: number;
-  y: number;
-};
-
 export function reasoningGraph(model: Reasoning) {
-  const rules = ordered(model);
-  if (!rules.length) return '';
-  const { steps, title } = writer(model);
-  const WIDTH = 260;
-  const GAP_X = 56;
-  const GAP_Y = 14;
-  const PAD = 20;
-  const lines = (text: string) => Math.max(1, Math.ceil(text.length / 30));
-  const measure = (name: string, sources: Source[], pills: number) => 20 + lines(name) * 18 + pills * 24 + sources.reduce((total, source) => total + lines(sourceName(source).main) * 17 + 2, 0);
-  let count = 0;
-  const create = (node: Omit<GraphNode, 'id' | 'children' | 'column' | 'y'>, id = `n${count++}`): GraphNode => ({ ...node, id, children: [], column: 0, y: 0 });
-  const factNode = (fact: Step, level: number, parent: string, dashed = false, state = ''): GraphNode => create({
-    card: fact.id, kind: dashed ? 'exception' : 'fact', tone: tone(fact.value), parent, dashed, issue: fact.issue, level,
-    height: measure(fact.title, fact.sources.filter((source) => !legal(source)), 1),
-    html: `<span class="pmc-node-title">${dashed ? '<span class="pmc-op">Sauf</span> ' : ''}${escape(fact.title)}</span>${state || factPill(fact)}${chips(fact.sources.filter((source) => !legal(source)))}`,
-  });
-  const ruleNode = (rule: Step, kind: string, level: number, parent: string, dashed = false, entry?: Clause): GraphNode => {
-    const basis = rule.sources.filter(legal);
-    const state = entry ? clausePill(entry) : '';
-    const node = create({
-      card: rule.id, kind, tone: entry?.met || tone(rule.value), parent, dashed, issue: rule.issue, level,
-      height: measure(rule.title, basis, state ? 2 : 1),
-      html: `<a href="#" class="pmc-node-title pmc-link" data-goto="${rule.id}">${escape(rule.title)}</a>${pill(tone(rule.value), rule.value)}${state}${chips(basis)}`,
-    });
-    if (rule.clause) for (const clause of roots(rule.clause)) node.children.push(clauseNode(clause, level + 1, node.id, rule.id));
-    const covered = new Set(leaves(rule.clause).flatMap((leaf) => leaf.refs));
-    for (const parentStep of rule.parents.map((id) => steps.get(id)!).filter((step) => !covered.has(step.id))) {
-      node.children.push(parentStep.kind === 'fact' ? factNode(parentStep, level + 1, node.id, rule.exception) : ruleNode(parentStep, 'rule', level + 1, node.id, false, undefined));
-    }
-    return node;
-  };
-  const clauseNode = (entry: Clause, level: number, parent: string, card: string): GraphNode => {
-    const members = children(entry);
-    const target = steps.get(inner(entry).ref);
-    if (!members.length && target?.kind === 'rule') return ruleNode(target, entry.kind === 'not' ? 'exception' : 'rule', level, parent, entry.kind === 'not', entry);
-    if (!members.length && target?.kind === 'fact') return factNode(target, level, parent, entry.kind === 'not', entry.kind === 'not' ? clausePill(entry) : '');
-    const law = lawOf(entry, steps);
-    const node = create({
-      card, kind: entry.kind === 'not' ? 'exception' : 'condition', tone: entry.met, parent,
-      dashed: entry.kind === 'not', issue: '', level, height: measure(members.length ? label(entry) : titleText(entry), law, entry.met ? 1 : 0),
-      html: `<span class="pmc-node-title">${escape(label(entry))}${members.length ? '' : ` ${escape(titleText(entry))}`}</span>${clausePill(entry)}${chips(law)}`,
-    });
-    for (const member of members) node.children.push(clauseNode(member, level + 1, node.id, card));
-    return node;
-  };
-  const titleText = (entry: Clause) => {
-    const leaf = inner(entry);
-    const step = leaf.kind === 'leaf' ? steps.get(leaf.ref) : undefined;
-    return step?.title ?? capital(human(leaf.text));
-  };
-  const used = new Set(model.steps.flatMap((step) => step.parents));
-  const rootsNodes = rules.filter((step) => step.answer || !used.has(step.id)).map((rule) => ruleNode(rule, rule.answer ? 'answer' : 'rule', 0, ''));
-  if (!rootsNodes.length) return '';
-  const maxLevel = Math.max(...flatten(rootsNodes).map((node) => node.level));
-  for (const node of flatten(rootsNodes)) node.column = maxLevel - node.level;
-  let cursor = PAD;
-  const layout = (node: GraphNode) => {
-    if (!node.children.length) {
-      node.y = cursor;
-      cursor += node.height + GAP_Y;
-      return node.y + node.height / 2;
-    }
-    const centers = node.children.map(layout);
-    const center = (centers[0] + centers.at(-1)!) / 2;
-    node.y = Math.max(node.children[0].y, center - node.height / 2);
-    return node.y + node.height / 2;
-  };
-  for (const node of rootsNodes) { layout(node); cursor += 18; }
-  const left = (column: number) => PAD + column * (WIDTH + GAP_X);
-  const all = flatten(rootsNodes);
-  const total = { width: left(maxLevel) + WIDTH + PAD, height: cursor };
-  const wires = all.filter((node) => node.parent).map((node) => {
-    const from = all.find((item) => item.id === node.parent);
-    if (!from) return '';
-    const x1 = left(node.column) + WIDTH, y1 = node.y + node.height / 2;
-    const x2 = left(from.column), y2 = from.y + from.height / 2;
-    const bend = Math.max((x2 - x1) / 2, 18);
-    return `<path class="pmc-wire${node.dashed ? ' is-sauf' : ''}" data-from="${node.id}" data-to="${from.id}" d="M${x1} ${y1} C${x1 + bend} ${y1} ${x2 - bend} ${y2} ${x2} ${y2}" fill="none" stroke="currentColor" marker-end="url(#pmc-arrow)"/>`;
-  }).join('');
-  const boxes = all.map((node) => `<article class="pmc-node" data-node="${node.id}" data-card="${node.card}" data-kind="${node.kind}" data-tone="${node.tone}" data-level="${node.level}"${node.issue ? ` data-issue="${escape(node.issue)}"` : ''} style="left:${left(node.column)}px;top:${node.y}px;width:${WIDTH}px;min-height:${node.height}px" tabindex="0" role="button" aria-pressed="false">${node.html}</article>`).join('');
-  return `<div class="pmc-graph" data-width="${total.width}" style="width:${total.width}px;height:${total.height}px"><svg aria-hidden="true" width="${total.width}" height="${total.height}"><defs><marker id="pmc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10z" fill="var(--muted)"/></marker></defs>${wires}</svg>${boxes}</div>`;
-}
-
-function flatten(nodes: GraphNode[]): GraphNode[] {
-  return nodes.flatMap((node) => [node, ...flatten(node.children)]);
+  return reasoningMap(model, human, sourceLink);
 }

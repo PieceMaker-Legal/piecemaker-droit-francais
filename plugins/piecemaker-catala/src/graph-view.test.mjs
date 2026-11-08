@@ -63,6 +63,8 @@ test('the panel reloads after verification notifications for its project and sto
 test('shows each rule with its legal basis and no code checks', async () => {
   const view = await open([program()]);
   try {
+    assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
+    view.click(view.container.querySelector('[role=tab][data-mode=written]'));
     const written = view.container.querySelector('.pmc-written');
     assert.equal(written.hidden, false);
     assert.match(view.container.querySelector('.pmc-run').textContent, /Recalculer/);
@@ -82,6 +84,7 @@ test('opens cited articles and pieces in the editor without leaving the written 
   const requests = [];
   const view = await open([program()], async (url, options) => url.endsWith('/citation') ? (requests.push(JSON.parse(options.body)), new Response(JSON.stringify({ token: 'a'.repeat(64) }))) : null);
   try {
+    view.click(view.container.querySelector('[role=tab][data-mode=written]'));
     const links = () => [...view.container.querySelectorAll('.pmc-written [data-open-reference]')];
     view.click(links().find((link) => link.textContent === 'Article 1217'));
     await new Promise((resolve) => setImmediate(resolve));
@@ -104,14 +107,17 @@ test('the graph details a node with its card and opens its sources', async () =>
   try {
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
-    assert.deepEqual([...view.container.querySelectorAll('[data-node]')].map((node) => node.dataset.kind), ['rule', 'fact']);
+    assert.ok(view.container.querySelector('[data-node][data-kind=piece]'));
+    assert.ok(view.container.querySelector('[data-node][data-kind=action]'));
     view.click(view.container.querySelector('[data-node][data-kind="rule"]'));
     assert.match(view.container.querySelector('.pmc-inspector').textContent, /Sanction possible/);
     view.click(view.container.querySelector('[data-node][data-kind="fact"]'));
     const inspector = view.container.querySelector('.pmc-inspector');
     assert.equal(inspector.hidden, false);
     assert.match(inspector.textContent, /Attestation de Jean Dupont/);
-    assert.match(inspector.textContent, /Fait du dossier/);
+    assert.match(inspector.textContent, /Donnée du scénario/);
+    assert.equal(view.container.querySelectorAll('.pmc-map .is-selected').length, 1);
+    assert.ok(view.container.querySelector('.pmc-map .is-dim'));
     view.click(inspector.querySelector('[data-open-reference]'));
     assert.equal(view.opened.at(-1).path, '/dossier/pieces/attestation.md');
     view.click(view.dom.window.document.querySelector('#outside'));
@@ -130,4 +136,52 @@ test('asks for a verification when the trace is missing or stale', async () => {
     select.dispatchEvent(new view.dom.window.Event('change', { bubbles: true }));
     assert.match(view.container.querySelector('.pmc-run').textContent, /Aucun raisonnement calculé/);
   } finally { view.close(); }
+});
+
+test('changes the graph using stored Catala scenarios without recomputing or hiding a failed test', async () => {
+  let requests = 0;
+  const scenarios = [
+    { fichier: 'test_demo.catala_fr', scope: 'Test', passed: true, test_reussi: true, graphe, message: '' },
+    { fichier: 'test_demo.catala_fr', scope: 'SansDemande', passed: true, test_reussi: true, graphe: graphe.replaceAll('true', 'false'), message: '' },
+    { fichier: 'test_demo.catala_fr', scope: 'TestErrone', passed: false, test_reussi: false, graphe: '', message: 'Assertion fausse.' },
+  ];
+  const view = await open([program({ scenarios })], async () => { requests++; return null; });
+  try {
+    const choose = (scope) => {
+      const select = view.container.querySelector('[data-scenario-choice]');
+      select.value = `test_demo.catala_fr:${scope}`;
+      select.dispatchEvent(new view.dom.window.Event('change', { bubbles: true }));
+    };
+    const initial = requests;
+    choose('SansDemande');
+    assert.equal(view.container.querySelector('[data-node="x002"] .pmc-value').textContent, 'Faux');
+    choose('TestErrone');
+    assert.match(view.container.querySelector('.pmc-explanation').textContent, /ne produit pas de graphe/);
+    assert.equal(view.container.querySelectorAll('[data-node]').length, 0);
+    assert.equal(requests, initial);
+  } finally { view.close(); }
+});
+
+test('redraws links at card boundaries after resize and releases its observer', async () => {
+  const { mountExplanation } = await import('./graph-view.ts');
+  const dom = new JSDOM('<main><div class="pmc-map"><svg><g data-from="a" data-to="b"><path/><text>requiert</text></g></svg><div data-node="a"></div><div data-node="b"></div></div></main>');
+  let redraw;
+  let disconnected = false;
+  dom.window.ResizeObserver = class { constructor(callback) { redraw = callback; } observe() {} disconnect() { disconnected = true; } };
+  const view = dom.window.document.querySelector('main');
+  const canvas = view.querySelector('.pmc-map');
+  const [from, to] = view.querySelectorAll('[data-node]');
+  canvas.getBoundingClientRect = () => ({ left: 100, top: 50 });
+  from.getBoundingClientRect = () => ({ right: 350, top: 90, height: 80 });
+  let targetLeft = 450;
+  to.getBoundingClientRect = () => ({ left: targetLeft, top: 140, height: 100 });
+  const stop = mountExplanation(view, () => {});
+  try {
+    assert.match(view.querySelector('path').getAttribute('d'), /^M 250 80 .* 350 140$/);
+    targetLeft = 550;
+    redraw();
+    assert.match(view.querySelector('path').getAttribute('d'), /^M 250 80 .* 450 140$/);
+    assert.equal(view.querySelector('text').getAttribute('x'), '350');
+  } finally { stop(); dom.window.close(); }
+  assert.equal(disconnected, true);
 });

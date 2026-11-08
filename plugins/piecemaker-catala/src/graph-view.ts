@@ -1,37 +1,49 @@
 export function mountExplanation(view: HTMLElement, openReference: (target: string, origin: string, quote: string, id: string) => void) {
-  const canvas = view.querySelector<HTMLElement>('.pmc-canvas');
-  const stage = view.querySelector<HTMLElement>('.pmc-stage');
   const inspector = view.querySelector<HTMLElement>('.pmc-inspector');
-  const graph = view.querySelector<HTMLElement>('.pmc-graph');
-  const nodes = [...view.querySelectorAll<HTMLElement>('.pmc-graph [data-node]')];
-  const wires = [...view.querySelectorAll<SVGPathElement>('.pmc-graph [data-from]')];
-  let zoom = 1;
-  let pan = { x: 0, y: 0 };
-  let drag: { x: number; y: number; left: number; top: number } | null = null;
-  let moved = false;
-  const transform = () => { if (stage) stage.style.transform = `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`; };
-  const fit = () => {
-    if (!canvas?.clientWidth || !graph) return;
-    zoom = Math.min(1, Math.max(.2, (canvas.clientWidth - 40) / Number(graph.dataset.width)));
-    pan = { x: 20, y: 20 };
-    transform();
+  const nodes = [...view.querySelectorAll<HTMLElement>('[data-node]')];
+  const canvas = view.querySelector<HTMLElement>('.pmc-map');
+  const edges = [...view.querySelectorAll<SVGGElement>('[data-from][data-to]')];
+  const draw = () => {
+    if (!canvas) return;
+    const bounds = canvas.getBoundingClientRect();
+    const svg = canvas.querySelector('svg')!;
+    svg.setAttribute('width', String(canvas.scrollWidth));
+    svg.setAttribute('height', String(canvas.scrollHeight));
+    for (const edge of edges) {
+      const from = nodes.find((node) => node.dataset.node === edge.dataset.from)?.getBoundingClientRect();
+      const to = nodes.find((node) => node.dataset.node === edge.dataset.to)?.getBoundingClientRect();
+      if (!from || !to) continue;
+      const x1 = from.right - bounds.left, y1 = from.top + from.height / 2 - bounds.top;
+      const x2 = to.left - bounds.left, y2 = to.top + to.height / 2 - bounds.top;
+      const middle = (x1 + x2) / 2;
+      edge.querySelector('path')!.setAttribute('d', `M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}`);
+      const text = edge.querySelector('text')!;
+      text.setAttribute('x', String(middle));
+      text.setAttribute('y', String((y1 + y2) / 2 - 5));
+    }
   };
+  const Observer = view.ownerDocument.defaultView?.ResizeObserver;
+  const observer = Observer ? new Observer(draw) : null;
+  if (canvas) observer?.observe(canvas);
+  nodes.forEach((node) => observer?.observe(node));
+  draw();
   const select = (id: string) => {
-    const branch = new Set(id ? [id] : nodes.map((node) => node.dataset.node!));
-    if (id) {
-      for (let queue = [id], guard = 0; queue.length && guard < nodes.length * nodes.length; guard++) {
-        const current = queue.pop()!;
-        for (const wire of wires) {
-          const other = wire.dataset.from === current ? wire.dataset.to : wire.dataset.to === current ? wire.dataset.from : undefined;
-          if (other && !branch.has(other)) { branch.add(other); queue.push(other); }
-        }
+    const related = new Set(id ? [id] : []);
+    for (const direction of ['from', 'to'] as const) {
+      const queue = id ? [id] : [];
+      const seen = new Set(queue);
+      for (let at = 0; at < queue.length; at++) for (const edge of edges) {
+        const next = edge.dataset[direction === 'from' ? 'to' : 'from']!;
+        if (edge.dataset[direction] === queue[at] && !seen.has(next)) { seen.add(next); related.add(next); queue.push(next); }
       }
     }
     nodes.forEach((node) => {
-      node.classList.toggle('is-dim', !branch.has(node.dataset.node!));
-      node.setAttribute('aria-pressed', String(node.dataset.node === id));
+      const on = node.dataset.node === id;
+      node.classList.toggle('is-selected', on);
+      node.classList.toggle('is-dim', Boolean(id) && !related.has(node.dataset.node!));
+      if (node.hasAttribute('aria-pressed')) node.setAttribute('aria-pressed', String(on));
     });
-    wires.forEach((wire) => wire.classList.toggle('is-dim', !branch.has(wire.dataset.from!) || !branch.has(wire.dataset.to!)));
+    edges.forEach((edge) => edge.classList.toggle('is-dim', Boolean(id) && !(related.has(edge.dataset.from!) && related.has(edge.dataset.to!))));
     if (!inspector) return;
     const chosen = nodes.find((node) => node.dataset.node === id);
     const card = chosen ? view.querySelector<HTMLElement>(`.pmc-cards [data-card="${chosen.dataset.card}"]`) : null;
@@ -48,26 +60,16 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const click = (event: MouseEvent) => {
     const target = event.target as Element;
     if (!view.contains(target)) { select(''); return; }
-    if (moved) { moved = false; event.preventDefault(); return; }
     const reference = target.closest<HTMLElement>('[data-open-reference]');
     if (reference) { event.preventDefault(); openReference(reference.dataset.target ?? '', reference.dataset.origin ?? '', reference.dataset.quote ?? '', reference.dataset.id ?? ''); return; }
     const link = target.closest<HTMLElement>('[data-goto]');
     if (link) {
       event.preventDefault();
       if (link.closest('.pmc-written')) goto(link.dataset.goto!);
-      else select(nodes.find((node) => node.dataset.node === link.dataset.goto) ? link.dataset.goto! : nodes.find((node) => node.dataset.card === link.dataset.goto)?.dataset.node ?? '');
+      else select(nodes.find((node) => node.dataset.card === link.dataset.goto)?.dataset.node ?? '');
       return;
     }
-    const button = target.closest<HTMLElement>('button');
-    if (button?.hasAttribute('data-close-node')) { select(''); return; }
-    if (button?.dataset.zoom && canvas) {
-      const next = Math.max(.2, Math.min(2.5, zoom * Number(button.dataset.zoom)));
-      pan = { x: canvas.clientWidth / 2 - (canvas.clientWidth / 2 - pan.x) * next / zoom, y: canvas.clientHeight / 2 - (canvas.clientHeight / 2 - pan.y) * next / zoom };
-      zoom = next;
-      transform();
-      return;
-    }
-    if (button?.hasAttribute('data-fit')) { fit(); return; }
+    if (target.closest<HTMLElement>('button')?.hasAttribute('data-close-node')) { select(''); return; }
     const node = target.closest<HTMLElement>('[data-node]');
     if (node) select(node.dataset.node!);
     else if (!target.closest('.pmc-inspector')) select('');
@@ -77,51 +79,12 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     const node = (event.target as Element).closest<HTMLElement>('[data-node]');
     if (node && (event.target as Element) === node && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); select(node.dataset.node!); }
   };
-  const down = (event: PointerEvent) => {
-    if (event.button !== 0 || (event.target as Element).closest('button, a, .pmc-inspector')) return;
-    moved = false;
-    drag = { x: event.clientX, y: event.clientY, left: pan.x, top: pan.y };
-  };
-  const move = (event: PointerEvent) => {
-    if (!drag || !canvas) return;
-    const x = event.clientX - drag.x, y = event.clientY - drag.y;
-    if (Math.abs(x) + Math.abs(y) > 4) moved = true;
-    if (!moved) return;
-    canvas.setPointerCapture(event.pointerId);
-    pan = { x: drag.left + x, y: drag.top + y };
-    transform();
-  };
-  const up = () => { drag = null; };
-  const wheel = (event: WheelEvent) => {
-    if (!canvas || (event.target as Element).closest('.pmc-inspector')) return;
-    event.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const x = event.clientX - rect.left, y = event.clientY - rect.top;
-    const next = Math.max(.2, Math.min(2.5, zoom * Math.exp(-event.deltaY / 300)));
-    pan = { x: x - (x - pan.x) * next / zoom, y: y - (y - pan.y) * next / zoom };
-    zoom = next;
-    transform();
-  };
   view.ownerDocument.addEventListener('click', click);
   view.addEventListener('keydown', key);
-  canvas?.addEventListener('pointerdown', down);
-  canvas?.addEventListener('pointermove', move);
-  canvas?.addEventListener('pointerup', up);
-  canvas?.addEventListener('pointercancel', up);
-  canvas?.addEventListener('wheel', wheel, { passive: false });
-  let width = 0;
-  const observer = canvas && globalThis.ResizeObserver ? new ResizeObserver(() => { if (!width && canvas.clientWidth) fit(); width = canvas.clientWidth; }) : null;
-  if (canvas) observer?.observe(canvas);
-  fit();
   return () => {
     observer?.disconnect();
     select('');
     view.ownerDocument.removeEventListener('click', click);
     view.removeEventListener('keydown', key);
-    canvas?.removeEventListener('pointerdown', down);
-    canvas?.removeEventListener('pointermove', move);
-    canvas?.removeEventListener('pointerup', up);
-    canvas?.removeEventListener('pointercancel', up);
-    canvas?.removeEventListener('wheel', wheel);
   };
 }

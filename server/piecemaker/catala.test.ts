@@ -102,6 +102,9 @@ test('vérifie un programme et renvoie le bilan et les journaux', async () => {
   assert.equal(verified.tests['test-results'][0].tests.scopes[0].success, true);
   assert.equal(verified.enCours, false);
   assert.equal(verified.explication.passed, true);
+  assert.equal(verified.scenarios.length, 1);
+  assert.equal(verified.scenarios[0].scope, 'JeanDupont');
+  assert.equal(verified.scenarios[0].test_reussi, true);
   assert.equal(verified.perimee, false);
   assert.match(verified.journaux.find((file: { nom: string }) => file.nom === 'typecheck.log').contenu, /ok/);
 });
@@ -128,6 +131,8 @@ test('ne calcule rien à la lecture du volet et produit une nouvelle trace seule
   const stale = await read();
   assert.equal(stale.perimee, true);
   assert.equal(stale.graphe, null);
+  assert.deepEqual(stale.scenarios, []);
+  assert.equal(stale.tests, null);
   assert.equal(explanations, before + 1);
   await verify();
   const updated = await read();
