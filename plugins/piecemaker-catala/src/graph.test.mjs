@@ -107,31 +107,81 @@ test('writes the rule, then its projection, then its justification', () => {
   assert.deepEqual(reasoningIssues(model).map((entry) => [entry.id, entry.title]), [[model.steps[0].id, 'Pièce 2, lettre']]);
 });
 
-test('links the conclusion, data, citations and open actions in one graph', () => {
+test('keeps the argument readable and attaches references directly to rules and facts', () => {
   const model = reasoning(dot, [module], citations);
   const document = new JSDOM(reasoningGraph(model)).window.document;
-  const relation = (from, to) => document.querySelector(`[data-from="${from}"][data-to="${to}"]`);
-  assert.ok(relation('x002', 'x001'));
-  const piece = document.querySelector('[data-node][data-kind="piece"]');
-  assert.match(piece.textContent, /Citation non retrouvée/);
-  assert.ok(relation('x001', piece.dataset.node));
-  const basis = [...document.querySelectorAll('[data-kind="article"][data-node]')].find((node) => node.textContent.includes('Article 1226'));
-  assert.ok(relation('x002', basis.dataset.node));
-  assert.equal(document.querySelector('[data-node="x002"]').dataset.open, 'true');
-  assert.ok([...document.querySelectorAll('[data-node][data-kind="action"]')].some((node) => /Corriger la citation/.test(node.textContent)));
+  assert.ok(document.querySelector('[data-from="x002"][data-to="x001"]'));
+  const rule = document.querySelector('[data-node="x002"]');
+  const fact = document.querySelector('[data-node="x001"]');
+  assert.ok(rule.querySelector('[data-kind="article"][data-open-reference]'));
+  assert.ok(fact.querySelector('[data-kind="piece"][data-open-reference]'));
+  assert.equal(fact.dataset.kind, 'condition');
+  assert.match(fact.querySelector('[data-part="law"]').textContent, /Fondement à préciser/);
+  assert.match(fact.querySelector('[data-part="facts"]').textContent, /Société Exemple SAS est mise en demeure de livrer/);
+  assert.match(fact.querySelector('[data-part="evidence"]').textContent, /Citation non retrouvée/);
+  assert.match(fact.querySelector('.pmc-case-value').textContent, /Vrai/);
+  assert.equal(rule.dataset.open, 'true');
+  assert.equal(document.querySelectorAll('[data-node][data-kind="origin"], [data-node][data-kind="action"]').length, 0);
+  assert.match(document.querySelector('.pmc-unused').textContent, /Article 1104/);
   const otherQuote = citations.map((citation) => ({ ...citation, quote: 'Autre passage fictif.', status: 'passed' }));
-  const unchecked = new JSDOM(reasoningGraph(reasoning(dot, [module], otherQuote))).window.document;
-  assert.match(unchecked.querySelector('[data-node][data-kind="piece"]').textContent, /Citation à vérifier/);
-  assert.doesNotMatch(unchecked.querySelector('[data-node][data-kind="piece"]').textContent, /Extrait retrouvé/);
+  const unchecked = reasoning(dot, [module], otherQuote);
+  assert.equal(unchecked.steps.find((step) => step.kind === 'fact').sources[0].status, '');
   assert.equal(reasoningGraph(reasoning('digraph G {}')), '');
+});
+
+test('uses the native position of an input to connect its piece without Concerne', () => {
+  const file = { nom: 'test_resolution.catala_fr', chemin: '/dossiers/exemple/.piecemaker/catala/resolution/test_resolution.catala_fr', contenu: '> Usage de Resolution\n\n## Pièce fictive de réception\n[Pièce 2](../../../pieces/reception-fictive.md)\nCitation : « La demande a été reçue. »\n\n```catala\nchamp d\'application Scenario:\n  définition donnée égal à vrai\n```\n' };
+  const homonym = { ...file, nom: 'autre/test_resolution.catala_fr', chemin: file.chemin.replace('/test_resolution', '/autre/test_resolution'), contenu: file.contenu.replace('reception-fictive.md', 'autre-piece-fictive.md') };
+  const model = reasoning(dot.replace('test_resolution.catala_fr#L8', 'test_resolution.catala_fr#L9').replace('style="filled"];', 'tooltip="Pièce fictive de réception&#10;", style="filled"];'), [module, file, homonym]);
+  const fact = model.steps.find((step) => step.kind === 'fact');
+  assert.equal(fact.sources[0].target, '../../../pieces/reception-fictive.md');
+  assert.match(fact.origins[0].headings.join(' '), /Pièce fictive de réception/);
+  const graph = new JSDOM(reasoningGraph(model)).window.document;
+  const factNode = graph.querySelector('[data-node="x001"]');
+  assert.ok(factNode.querySelector('[data-target="../../../pieces/reception-fictive.md"]'));
+  assert.equal(graph.querySelectorAll('[data-node][data-kind="origin"]').length, 0);
+  assert.match(reasoningCard(fact, model), /Pièce fictive de réception/);
+});
+
+test('builds a graph from native JSON when DOT is unavailable and preserves the applied rule and its exception', () => {
+  const position = (line, heading) => ({ file: module.chemin, start: { line, character: 3 }, end: { line, character: 30 }, law_headings: [heading] });
+  const rulePosition = (pos) => ({ filename: pos.file, start_line: pos.start.line, start_column: pos.start.character, end_line: pos.end.line, end_column: pos.end.character, law_headings: pos.law_headings });
+  const base = position(16, 'Article 1226 du code civil');
+  const exception = position(17, 'Exception fictive');
+  const provenance = {
+    trace: [{ element: { kind: 'scope_call', name: 'RésolutionUnilatérale', decl_pos: base }, pos: base, value: {}, trace: [
+      { element: { kind: 'scope_var', name: 'mise_en_demeure', input: 'only_input', decl_pos: base }, pos: base, value: true },
+      { element: { kind: 'scope_var', name: 'résolution_possible', output: true, decl_pos: base }, pos: base, value: false, trace: [{ element: { kind: 'exception' }, pos: exception, value: true }] },
+    ] }],
+    definitions: [{ fichier: module.chemin, scope: 'RésolutionUnilatérale', variable: 'résolution_possible', trees: [{ label: 'principe', rules: [{ pos: rulePosition(base) }], exceptions: [{ label: 'exception', rules: [{ pos: rulePosition(exception), condition_pos: rulePosition(exception), condition_text: 'mise_en_demeure' }], exceptions: [] }] }] }],
+    dependencies: [{ fichier: module.chemin, intra_scopes: { RésolutionUnilatérale: { nodes: { 1: 'mise_en_demeure', 2: 'résolution_possible' }, edges: [{ from: 1, to: 2 }] } } }],
+    issues: [],
+  };
+  const model = reasoning('digraph G {}', [module], [], undefined, provenance);
+  const answer = model.steps.find((step) => step.answer);
+  assert.equal(answer.value, 'Faux');
+  assert.equal(answer.parents.length, 1);
+  assert.ok(answer.origins.some((origin) => origin.label === 'principe' && !origin.selected));
+  assert.ok(answer.origins.some((origin) => origin.label === 'exception' && origin.selected));
+  const graph = new JSDOM(reasoningGraph(model)).window.document;
+  assert.ok(graph.querySelector('[data-relation="sauf"]'));
+  const condition = graph.querySelector('[data-kind="exception"][data-node]');
+  assert.ok(condition);
+  assert.ok(condition.querySelector('[data-part="law"] [data-kind="article"]'));
+  assert.match(condition.querySelector('[data-part="law"] q').textContent, /résoudre le contrat/);
+  assert.match(condition.querySelector('[data-part="facts"]').textContent, /Société Exemple SAS est mise en demeure de livrer/);
+  assert.ok(condition.querySelector('[data-part="evidence"] [data-kind="piece"]'));
+  assert.doesNotMatch(graph.querySelector('.pmc-map').textContent, /Origine native|colonne|Autre définition/);
+  assert.match(reasoningCard(answer, model), /appliquée au scénario/);
+  assert.match(reasoningCard(answer, model), /autre règle/);
 });
 
 test('distinguishes statutes, case law and other references without treating a website as legal authority', () => {
   const file = { ...module, contenu: `${module.contenu}\n## Sources\nConcerne : résolution_possible\n[Décision fictive](https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001)\n[Documentation](https://example.org/explication)\n` };
   const graph = new JSDOM(reasoningGraph(reasoning(dot, [file], citations))).window.document;
-  assert.ok(graph.querySelector('[data-node][data-kind="article"]'));
-  assert.match(graph.querySelector('[data-node][data-kind="jurisprudence"]').textContent, /Jurisprudence.*Décision fictive/);
-  assert.match(graph.querySelector('[data-node][data-kind="reference"]').textContent, /Autre référence.*Documentation/);
+  assert.ok(graph.querySelector('[data-open-reference][data-kind="article"]'));
+  assert.match(graph.querySelector('[data-open-reference][data-kind="jurisprudence"]').textContent, /Décision fictive/);
+  assert.match(graph.querySelector('[data-open-reference][data-kind="reference"]').textContent, /Documentation/);
   const webOnly = { ...module, contenu: '## Sources\nConcerne : résolution_possible\n[Documentation](https://example.org/explication)\n' };
   assert.match(reasoning(dot, [webOnly]).steps.find((step) => step.kind === 'rule').issue, /Aucun article ni aucune décision/);
 });
@@ -145,10 +195,10 @@ test('shares supporting nodes and preserves authored questions, research and nat
   assert.ok(graph.querySelector('[data-from="x004"][data-to="x001"]'));
   assert.ok(graph.querySelector('[data-from="x002"][data-to="x001"]'));
   assert.match(graph.querySelector('[data-node="x002"]').textContent, /Peut-on retenir cette solution/);
-  assert.match(graph.querySelector('[data-node="x002"]').textContent, /AvecDemande, SansDemande/);
-  assert.ok([...graph.querySelectorAll('[data-kind="action"]')].some((node) => /Obtenir la preuve de réception/.test(node.textContent)));
+  assert.match(graph.querySelector('[data-node="x002"]').textContent, /Obtenir la preuve de réception/);
   const card = new JSDOM(reasoningCard(model.steps.find((step) => step.id === 'x002'), model)).window.document;
   assert.match(card.body.textContent, /Démarches effectuées.*réponse attendue/s);
+  assert.match(card.body.textContent, /AvecDemande, SansDemande/);
 });
 
 test('keeps unknown and disputed facts open without changing their scenario values', () => {
@@ -184,14 +234,19 @@ test('follows the depth of the Catala rules and separates exceptions', () => {
     x002 -> x004 [style="solid"];
   }`);
   const document = new JSDOM(reasoningGraph(model)).window.document;
-  const groups = [...document.querySelectorAll('[data-kind="condition"][data-node]')];
-  assert.ok(groups.some((node) => node.querySelector('.pmc-node-title').textContent === 'ET'));
-  assert.ok(groups.some((node) => node.querySelector('.pmc-node-title').textContent === 'NON'));
-  const not = groups.find((node) => node.querySelector('.pmc-node-title').textContent === 'NON');
-  assert.ok(document.querySelector(`[data-from="${not.dataset.node}"][data-to="x002"][data-relation="écarte"]`));
-  assert.equal(document.querySelectorAll('[data-node="x001"]').length, 1);
+  const groups = [...document.querySelectorAll('[data-kind="group"][data-node]')];
+  assert.ok(groups.some((node) => node.querySelector('.pmc-node-title').textContent === 'Toutes ces conditions'));
+  assert.ok(groups.some((node) => node.querySelector('.pmc-node-title').textContent === 'Cette condition doit être fausse'));
+  const not = groups.find((node) => node.querySelector('.pmc-node-title').textContent === 'Cette condition doit être fausse');
+  assert.ok(document.querySelector(`[data-from="${not.dataset.node}"][data-to="x002"][data-relation="non"]`));
+  assert.equal(document.querySelectorAll('[data-node="x001"]').length, 0);
+  const qualification = document.querySelector('[data-node="x003"]');
+  assert.equal(qualification.dataset.kind, 'condition');
+  assert.match(qualification.querySelector('[data-part="facts"]').textContent, /Inexécution.*Vrai/);
+  assert.match(qualification.querySelector('[data-part="law"]').textContent, /Fondement à préciser/);
+  assert.match(qualification.querySelector('[data-part="evidence"]').textContent, /Pièce à rattacher/);
   const card = new JSDOM(reasoningText(model)).window.document.querySelector('[data-card="x004"]');
-  assert.match(card.querySelector('[data-part="rule"]').textContent, /Sauf\s*Force majeure/);
+  assert.match(card.querySelector('[data-part="rule"]').textContent, /Non\s*Force majeure/);
   assert.match(card.querySelector('[data-part="projection"]').textContent, /Les conditions sont remplies/);
 });
 
@@ -213,5 +268,5 @@ test('preserves a conditional dependency without claiming that a dashed link pro
   const graph = new JSDOM(reasoningGraph(model)).window.document;
   assert.equal(graph.querySelector('[data-node="x010"] .pmc-value').textContent, 'Faux');
   assert.equal(graph.querySelector('[data-node="x011"] .pmc-value').textContent, 'Vrai');
-  assert.ok(graph.querySelector('[data-from="x010"][data-to="x011"][data-relation="condition appliquée"]'));
+  assert.ok(graph.querySelector('[data-from="x010"][data-to="x011"][data-relation="si"]'));
 });

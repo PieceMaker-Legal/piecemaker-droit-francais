@@ -400,8 +400,60 @@ async function explainScenario(context, program, file, scope) {
   const started = context.now();
   const digest = sourcesDigest(program.directory, sourceFiles(program.directory));
   const { entry, result } = await check(context, program.directory, 'explication', 'catala', ['explain', '--color=never', '--whole-program', '--conditions', '--dot', '-I', '.', file, '-s', scope, '-o', '-']);
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope, passed: entry.passed && /^digraph\s/.test(result.stdout.trim()) && digest === sourcesDigest(program.directory, sourceFiles(program.directory)), sources_sha256: digest, checks: [entry] };
-  return { report, graphe: report.passed ? result.stdout : '', message: report.passed ? '' : `${result.stdout}${result.stderr}` || 'Trace indisponible ou sources modifiées pendant le calcul.' };
+  const provenance = await nativeProvenance(context, program, file, scope);
+  const dotPassed = entry.passed && /^digraph\s/.test(result.stdout.trim());
+  if (!dotPassed && provenance.trace.length) provenance.issues.push('Explication DOT indisponible : graphe issu de la trace JSON et des dépendances Catala.');
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope, passed: (dotPassed || provenance.trace.length > 0) && digest === sourcesDigest(program.directory, sourceFiles(program.directory)), sources_sha256: digest, checks: [entry], provenance };
+  return { report, graphe: report.passed && dotPassed ? result.stdout : '', message: report.passed ? '' : `${result.stdout}${result.stderr}` || 'Trace indisponible ou sources modifiées pendant le calcul.' };
+}
+
+async function nativeProvenance(context, program, file, scope) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-catala-trace-'));
+  const traceFile = path.join(directory, 'trace.json');
+  const data = { trace: [], definitions: [], dependencies: [], issues: [] };
+  try {
+    const execution = await check(context, program.directory, 'provenance', 'catala', ['interpret', '--color=never', '--whole-program', `--trace=${traceFile}`, '--trace-format=json', '-I', '.', file, '-s', scope]);
+    const trace = readJson(traceFile);
+    if (!execution.entry.passed || !Array.isArray(trace) || !trace.length) { data.issues.push('Trace JSON Catala indisponible pour ce scénario.'); return data; }
+    data.trace = trace;
+    const files = sourceFiles(program.directory);
+    const declarations = new Map();
+    const visit = (events) => {
+      for (const event of events) {
+        for (const position of [event.pos, event.element?.decl_pos, event.element?.cons_pos]) if (position?.file) position.file = path.resolve(program.directory, position.file);
+        if (event.element?.kind === 'scope_call') {
+          const declaration = event.element.decl_pos;
+          const name = files.find((name) => path.resolve(program.directory, name) === declaration?.file);
+          if (name) for (const variable of event.trace ?? []) {
+            if (variable.element?.kind !== 'scope_var' || variable.element.input === 'only_input') continue;
+            const entry = { fichier: declaration.file, scope: event.element.name, variable: variable.element.name, file: name };
+            declarations.set(JSON.stringify([entry.fichier, entry.scope, entry.variable]), entry);
+          }
+        }
+        visit(event.trace ?? []);
+      }
+    };
+    visit(trace);
+    for (const name of new Set([...declarations.values()].map((entry) => entry.file))) {
+      const listed = await check(context, program.directory, 'provenance-dependances', 'catala', ['dependency-graph', '--color=never', '-I', '.', name]);
+      try {
+        if (!listed.entry.passed) throw new Error();
+        const graph = JSON.parse(listed.result.stdout);
+        if (!graph.intra_scopes) throw new Error();
+        data.dependencies.push({ fichier: path.resolve(program.directory, name), intra_scopes: graph.intra_scopes });
+      } catch { data.issues.push(`Dépendances Catala indisponibles pour ${name}.`); }
+    }
+    for (const declaration of declarations.values()) {
+      const result = await check(context, program.directory, 'provenance-definitions', 'catala', ['exceptions', '--color=never', '--output-format=json', '-I', '.', declaration.file, '-s', declaration.scope, '-v', declaration.variable]);
+      try {
+        if (!result.entry.passed) throw new Error();
+        const definitions = JSON.parse(result.result.stdout);
+        if (!Array.isArray(definitions.trees)) throw new Error();
+        data.definitions.push({ fichier: declaration.fichier, ...definitions });
+      } catch { data.issues.push(`Définitions Catala indisponibles pour ${declaration.scope}.${declaration.variable}.`); }
+    }
+    return data;
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 }
 
 function chosenFile(program, flags, fallback) {

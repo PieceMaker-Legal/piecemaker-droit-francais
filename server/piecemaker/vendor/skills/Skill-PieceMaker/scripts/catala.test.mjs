@@ -91,6 +91,33 @@ test('verifier stores every test scenario and keeps failed assertions distinct f
   } finally { cleanup(); }
 });
 
+test('expliquer retains native provenance and succeeds through JSON when explain cannot render the program', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime');
+    const position = { file: 'prime.catala_fr', start: { line: 4, character: 1 }, end: { line: 4, character: 10 }, law_headings: ['Texte fictif'] };
+    const { runner } = fakeRun();
+    const run = async (command, args, options) => {
+      if (args[0] === 'explain') return { code: 1, stdout: '', stderr: 'Explication indisponible.' };
+      if (args[0] === 'interpret') {
+        fs.writeFileSync(args.find((arg) => arg.startsWith('--trace=')).slice(8), JSON.stringify([{ element: { kind: 'scope_call', name: 'Prime', decl_pos: position }, pos: position, value: {}, trace: [{ element: { kind: 'scope_var', name: 'montant', decl_pos: position, output: true }, pos: position, value: 10 }] }]));
+        return { code: 0, stdout: '', stderr: '' };
+      }
+      if (args[0] === 'dependency-graph') return { code: 0, stdout: JSON.stringify({ intra_scopes: { Prime: { nodes: { 1: 'montant' }, edges: [] } } }), stderr: '' };
+      if (args[0] === 'exceptions') return { code: 0, stdout: JSON.stringify({ scope: 'Prime', variable: 'montant', trees: [] }), stderr: '' };
+      return runner(command, args, options);
+    };
+    await runCatala({ commande: 'expliquer', cwd: dossier, flags: { fichier: 'test_prime.catala_fr', scope: 'JeanDupont' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run } });
+    const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'explication.json'), 'utf8'));
+    assert.equal(report.passed, true);
+    assert.equal(report.provenance.trace[0].trace[0].value, 10);
+    assert.equal(report.provenance.definitions[0].variable, 'montant');
+    assert.equal(report.provenance.dependencies[0].intra_scopes.Prime.nodes[1], 'montant');
+    assert.match(report.provenance.issues[0], /DOT indisponible/);
+    assert.equal(fs.readFileSync(path.join(directory, 'resultats', 'explication.dot'), 'utf8'), '');
+  } finally { cleanup(); }
+});
+
 test('PISTE credentials are mapped to the catleg variables', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-catala-piste-'));
   try {

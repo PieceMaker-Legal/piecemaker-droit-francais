@@ -14,8 +14,8 @@ L’objectif vient de [05-map-law.md](recherche-memoire-raisonnement/05-map-law.
 | Contexte documentaire | Titres Markdown conservés dans les positions et explications | Catala conserve l’emplacement du texte associé ; il ne vérifie pas le fondement cité. |
 | Scénarios et assertions | `#[test]`, `clerk runtest`, `clerk report --json` | Distingue test réussi et test en échec. |
 | Passages exercés par les tests | `coverage.locations`, `reached_by` et `coverage.scopes` du rapport Clerk | Indique quels scénarios ont exercé le passage correspondant au nœud. |
-| Inventaire des champs et dépendances statiques | `catala dependency-graph` | Sert au contrôle des champs métier par le vérificateur. Cette sortie ne dessine pas le graphe affiché. |
-| Hiérarchie des exceptions | `catala exceptions` | Reste accessible par `pm catala exceptions`. Le volet ne reconstruit pas cet arbre complet. |
+| Inventaire des champs et dépendances statiques | `catala dependency-graph` | Sert au contrôle des champs métier et aux relations du graphe de repli JSON. |
+| Hiérarchie des exceptions | `catala exceptions` | Fournit les définitions et conditions des variables rencontrées. Leurs positions et fondements restent dans le détail. |
 | Contrôle des conflits et erreurs | `catala proof`, avec Z3 dans les packs compatibles | Porte sur les obligations produites pour le programme. |
 | Génération d’un scénario initial | `catala testcase generate` et `testcase write`, via `pm catala squelette` | Produit un point de départ. L’agent doit fixer les données et les assertions. |
 
@@ -23,14 +23,14 @@ Catala ne vérifie pas les faits du dossier. Un test réussi signifie que les as
 
 ## Provenance native : vérification approfondie
 
-Une vérification avec le pack Catala 1.3.0 confirme une provenance plus précise que celle actuellement exploitée par le volet.
+Le volet exploite les positions et titres du pack Catala 1.3.0 pour relier les éléments à leur origine documentaire.
 
 | Mécanisme natif | Précision obtenue | État dans le volet |
 |---|---|---|
 | Titres juridiques avec identifiant | Le compilateur reconnaît un titre suivi de `\| LEGIARTI…`, son niveau et son éventuel marqueur d’archive. | Les identifiants sont relus dans le Markdown. |
-| Contexte du nœud DOT | Le fichier, la ligne et les titres parents accompagnent les nœuds. Les titres figurent dans les infobulles. | Le lecteur utilise le fichier et la ligne ; il ne lit pas les infobulles. |
-| Arbre des exceptions en JSON | Chaque définition conserve sa position complète et ses titres. Chaque condition conserve aussi sa position et son expression. | Cette sortie structurée n’alimente pas encore le graphe. |
-| Trace d’exécution en JSON | Les événements portent valeurs, positions, titres, appels de champs et définitions sélectionnées. | Le graphe utilise encore le DOT, pas cette trace structurée. |
+| Contexte du nœud DOT | Le fichier, la ligne et les titres parents accompagnent les nœuds. Les titres figurent dans les infobulles. | Le lecteur utilise le fichier, la ligne et les titres des infobulles. |
+| Arbre des exceptions en JSON | Chaque définition conserve sa position complète et ses titres. Chaque condition conserve aussi sa position et son expression. | Le détail distingue les définitions appliquées, les autres définitions et les conditions. Une exception sélectionnée par Catala peut produire une relation « sauf ». |
+| Trace d’exécution en JSON | Les événements portent valeurs, positions, titres, appels de champs et définitions sélectionnées. | La trace enrichit les origines du DOT. Si le DOT échoue, la trace et les dépendances natives fournissent le graphe. |
 | Définitions réparties sous plusieurs sources | Une règle générale et ses exceptions peuvent définir la même variable sous des textes distincts. | Une formule globale ne permet pas cette précision. |
 
 Les titres et positions sont natifs. Les mentions `Source :`, `Citation :` et `Concerne :` restent des conventions PieceMaker. Les attributs expérimentaux `#[source = "…"]` et `#[citation = "…"]` ont produit des avertissements « Unrecognised attribute » dans le pack testé.
@@ -46,11 +46,11 @@ L’arbre des exceptions contient notamment `rules[].pos`, `condition_pos`, `con
 
 Un exemple fictif a réparti trois définitions de la même variable sous deux textes et une jurisprudence. Deux données intermédiaires du scénario ont été définies sous deux sections de pièces. Les contrôles exécutables ont confirmé la hiérarchie, les positions des conditions et les titres des deux pièces dans la trace.
 
-Sur cet exemple, `interpret` a réussi, tandis que `explain` a échoué avec une variable interne non définie. La sortie JSON de l’interpréteur reste donc une piste distincte du plugin d’explication, à intégrer et à tester avant de remplacer le DOT.
+Sur cet exemple, `interpret` a réussi, tandis que `explain` a échoué avec une variable interne non définie. Le volet utilise alors la trace JSON et les dépendances Catala. Le détail signale ce repli.
 
-Le lecteur actuel ne rattache automatiquement les sources trouvées à une position qu’aux nœuds classés comme règles. Les données d’entrée dépendent encore des rattachements `Concerne`. Cette restriction appartient à PieceMaker ; elle ne démontre pas une limite générale de la provenance Catala.
+Le lecteur rattache les sources trouvées aux positions des règles et des données. Une donnée définie sous une section de pièce peut donc retrouver sa pièce sans `Concerne`. Les noms de fichiers identiques dans des répertoires distincts ne suffisent pas à établir un rattachement.
 
-Pour améliorer le graphe, la priorité est d’exploiter les positions et titres natifs des définitions et conditions, puis les événements de la trace JSON. `Concerne` peut compléter les liens transversaux. Il ne doit pas remplacer systématiquement une origine déjà fournie par Catala.
+Le détail de chaque carte conserve les positions et les sources natives. Les origines du compilateur ne deviennent pas des nœuds du graphe principal. Le graphe distingue une déclaration, qui donne le contexte du champ, de la définition qui fixe sa valeur. `Concerne` complète les liens transversaux ; il ne remplace pas une origine déjà fournie par Catala.
 
 Références : [programmation littéraire](https://book.catala-lang.org/en/5-1-literate-programming.html), [méthode de rédaction avec les juristes](https://book.catala-lang.org/fr/3-5-lawyers-agile.html), code du compilateur au tag `1.3.0` : `compiler/surface/lexer_common.ml`, `compiler/desugared/print.ml` et `compiler/plugins/explain.ml`.
 
@@ -58,25 +58,33 @@ Références : [programmation littéraire](https://book.catala-lang.org/en/5-1-l
 
 | Ajout | Comportement |
 |---|---|
-| Graphe à nœuds partagés | Une donnée ou une source commune garde un seul nœud, avec plusieurs relations. |
+| Graphe à nœuds partagés | Une même condition garde une seule carte, avec plusieurs relations. Ses données factuelles sont intégrées à cette carte. |
 | Lecture depuis la conclusion | Les relations conduisent vers les conditions, données et sources utilisées. |
 | Groupes `ET`, `OU`, `NON` | PieceMaker lit les expressions booléennes simples présentes dans la trace pour expliciter les relations. |
 | Conditions d’application | Les dépendances pointillées de la trace restent identifiées. Une négation `NON` reste distincte de la sélection d’une définition conditionnelle. Un lien pointillé ne prouve pas, à lui seul, une exception. |
-| Sources visibles comme nœuds | Les pièces et fondements deviennent des appuis reliés aux éléments concernés. |
-| Origine distinguée | Les nœuds séparent textes, jurisprudence, pièces et autres références. Une simple page web ne remplace pas un fondement juridique. |
+| Sources attachées aux éléments | Chaque condition ou exception réunit son fondement juridique, le fait invoqué et sa pièce dans trois parties distinctes. |
+| Origine distinguée | Les références distinguent textes, jurisprudence, pièces et autres références. Une simple page web ne remplace pas un fondement juridique. |
 | Valeur distincte de la preuve | `Vrai` reste « Vrai » et `Faux` reste « Faux ». Aucune de ces valeurs n’est renommée « Établi ». |
-| Données sans pièce | Le graphe affiche « Hypothèse du scénario » et demande une justification. |
+| Données sans pièce | La carte indique « Pièce à rattacher ». Le détail précise que la donnée reste une hypothèse du scénario. |
 | États inconnus ou contestés | Les valeurs correspondantes restent visibles et créent un point ouvert. PieceMaker ne les remplace pas par un booléen. |
-| Points ouverts | Une donnée sans pièce, un fondement absent, une citation à vérifier ou une recherche déclarée devient un nœud lié. |
+| Points ouverts | Une donnée sans pièce, un fondement absent, une citation à vérifier ou une recherche déclarée est signalé sur sa carte. Aucun nœud technique supplémentaire n’est créé. |
 | Remontée des manques | Un manque dans les appuis fait apparaître « Justification à compléter » sur les règles qui en dépendent. |
 | Choix du scénario | Le volet charge les traces conservées lors de la vérification, sans relancer Catala à chaque sélection. |
 | Test en échec visible | Le scénario reste dans la liste. Si Catala ne produit pas de trace valide, le volet annonce l’absence de graphe. |
 | Inspection d’un nœud | La sélection montre le détail et atténue les éléments sans relation avec le nœud choisi. |
 | Navigation dans les sources | Les pièces et références juridiques utilisent les lecteurs et contrôles de citation PieceMaker existants. |
 
-PieceMaker dispose les nœuds en colonnes. Les relations sont dessinées en SVG et suivent les dimensions des cartes. Aucun Graphviz n’est nécessaire.
+PieceMaker dispose les nœuds en colonnes. Les relations sont dessinées en SVG et suivent les dimensions des cartes. La vue se place sur la conclusion à l’ouverture. Les commandes de zoom et d’ajustement restent disponibles. Aucun Graphviz n’est nécessaire.
 
-Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet.
+Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
+
+Chaque carte de condition ou d’exception sépare le droit du fait invoqué pour son application. Le résultat du scénario figure à part.
+
+Les données factuelles utilisées seulement par une qualification figurent dans sa carte. Elles ne deviennent pas des conditions de droit autonomes.
+
+Sans fait distinct, la carte indique « Aucun fait distinct renseigné ». Sans source précise, elle indique « Fondement à préciser » ou « Pièce à rattacher ».
+
+Une entrée booléenne ne suffit pas à rédiger un fait. Le graphe utilise la donnée distincte ou la citation déclarée dans le programme.
 
 ## Rédaction nécessaire dans le programme
 
@@ -87,7 +95,7 @@ Une section `Concerne : identifiant` rattache ses pièces et explications au nœ
 | Champ | Rôle dans PieceMaker |
 |---|---|
 | `Question : …` | Libellé de la question sur le nœud. |
-| `Justification : …` | Explication rédigée par l’agent, visible dans le graphe et son détail. |
+| `Justification : …` | Explication rédigée par l’agent, visible dans le détail de la carte. |
 | `À rechercher : …` | Démarche nécessaire, affichée comme point ouvert. |
 | `Démarche : …` | Démarche effectuée et résultat déclaré, conservés dans le détail. Plusieurs lignes sont possibles. |
 
@@ -110,8 +118,8 @@ Pour un fait inconnu, l’agent doit tester les hypothèses pertinentes ou coder
 | Fichier | Contenu |
 |---|---|
 | `tests.json` | Rapport Clerk, couverture native et empreinte des sources ajoutée par PieceMaker. |
-| `scenarios.json` | Rapports et graphes des scénarios identifiés dans le rapport Clerk. Ce regroupement appartient à PieceMaker. |
-| `explication.dot` et `explication.json` | Trace principale, compatible avec la commande `pm catala expliquer`. |
+| `scenarios.json` | Rapports, graphes et provenance native des scénarios identifiés dans le rapport Clerk. Chaque provenance conserve trace, arbres des définitions, dépendances et indisponibilités. Ce regroupement appartient à PieceMaker. |
+| `explication.dot` et `explication.json` | Trace principale et provenance native, compatibles avec `pm catala expliquer`. Le DOT peut être vide si le graphe utilise le repli JSON. |
 | `citations.json` | Contrôle des citations par les services PieceMaker existants. |
 
 Les calculs des scénarios restent séquentiels. Le choix d’un scénario dans le volet ne déclenche aucun calcul ni aucune recherche.
@@ -133,12 +141,14 @@ L’empreinte des fichiers Catala empêche d’utiliser les scénarios, citation
 ## Implantation
 
 - Lecture du DOT, sources et notes : `plugins/piecemaker-catala/src/graph.ts`.
+- Lecture de la trace JSON et des arbres natifs : `plugins/piecemaker-catala/src/native-provenance.ts`.
+- Regroupement condition, fondement et fait : `plugins/piecemaker-catala/src/condition-application.ts`.
 - Construction du graphe partagé : `plugins/piecemaker-catala/src/reasoning-map.ts`.
 - Relations SVG, sélection et détail : `plugins/piecemaker-catala/src/graph-view.ts`.
 - Choix des scénarios : `plugins/piecemaker-catala/src/client.ts`.
 - Vérification et conservation des traces : `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala.mjs`.
 - Transmission des résultats actuels : `server/piecemaker/catala.ts`.
 
-Les tests ciblés couvrent les libellés Vrai/Faux, les appuis partagés, les points ouverts, les notes, la couverture, le choix des scénarios et la fraîcheur des résultats.
+Les tests ciblés couvrent les libellés Vrai/Faux, les appuis partagés, les points ouverts, les notes, la couverture, le choix des scénarios et la fraîcheur des résultats. Ils vérifient aussi les origines natives des données, le choix de la définition appliquée, les exceptions, les chemins relatifs et le repli JSON lorsque le DOT échoue.
 
 Un essai local fictif sous Catala 1.3 a aussi exécuté trois scénarios avec typage, format, tests Clerk, tests Python et preuve réussis. Les contrôles de citations et de vigueur n’ont pas été validés sur cet exemple sans fondement juridique.

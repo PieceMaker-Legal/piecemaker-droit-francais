@@ -6,6 +6,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const draw = () => {
     if (!canvas) return;
     const bounds = canvas.getBoundingClientRect();
+    const scale = Number(canvas.dataset.scale ?? 1);
     const svg = canvas.querySelector('svg')!;
     svg.setAttribute('width', String(canvas.scrollWidth));
     svg.setAttribute('height', String(canvas.scrollHeight));
@@ -13,8 +14,8 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       const from = nodes.find((node) => node.dataset.node === edge.dataset.from)?.getBoundingClientRect();
       const to = nodes.find((node) => node.dataset.node === edge.dataset.to)?.getBoundingClientRect();
       if (!from || !to) continue;
-      const x1 = from.right - bounds.left, y1 = from.top + from.height / 2 - bounds.top;
-      const x2 = to.left - bounds.left, y2 = to.top + to.height / 2 - bounds.top;
+      const x1 = (from.right - bounds.left) / scale, y1 = (from.top + from.height / 2 - bounds.top) / scale;
+      const x2 = (to.left - bounds.left) / scale, y2 = (to.top + to.height / 2 - bounds.top) / scale;
       const middle = (x1 + x2) / 2;
       edge.querySelector('path')!.setAttribute('d', `M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}`);
       const text = edge.querySelector('text')!;
@@ -27,6 +28,9 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   if (canvas) observer?.observe(canvas);
   nodes.forEach((node) => observer?.observe(node));
   draw();
+  const scroll = view.querySelector<HTMLElement>('.pmc-map-scroll');
+  const answer = nodes.find((node) => node.dataset.kind === 'answer');
+  if (scroll && answer) scroll.scrollTop = Math.max(0, scroll.scrollTop + answer.getBoundingClientRect().top - scroll.getBoundingClientRect().top - scroll.clientHeight / 3);
   const select = (id: string) => {
     const related = new Set(id ? [id] : []);
     for (const direction of ['from', 'to'] as const) {
@@ -60,6 +64,16 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const click = (event: MouseEvent) => {
     const target = event.target as Element;
     if (!view.contains(target)) { select(''); return; }
+    const zoom = target.closest<HTMLElement>('[data-map-zoom]');
+    if (zoom && canvas && scroll) {
+      const scale = Number(canvas.dataset.scale ?? 1);
+      const next = zoom.dataset.mapZoom === 'fit' ? Math.min(1, (scroll.clientWidth - 40) / canvas.scrollWidth, (scroll.clientHeight - 40) / canvas.scrollHeight) : scale * (zoom.dataset.mapZoom === 'in' ? 1.2 : 1 / 1.2);
+      canvas.dataset.scale = String(Math.max(.4, Math.min(2, next)));
+      canvas.style.zoom = canvas.dataset.scale;
+      draw();
+      if (answer) scroll.scrollTop = Math.max(0, scroll.scrollTop + answer.getBoundingClientRect().top - scroll.getBoundingClientRect().top - scroll.clientHeight / 3);
+      return;
+    }
     const reference = target.closest<HTMLElement>('[data-open-reference]');
     if (reference) { event.preventDefault(); openReference(reference.dataset.target ?? '', reference.dataset.origin ?? '', reference.dataset.quote ?? '', reference.dataset.id ?? ''); return; }
     const link = target.closest<HTMLElement>('[data-goto]');

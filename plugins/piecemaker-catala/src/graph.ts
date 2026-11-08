@@ -1,5 +1,7 @@
 import { sourceContext } from './source-context.js';
 import { reasoningMap } from './reasoning-map.js';
+import { nativeExecution, type NativeOrigin, type NativeProvenance } from './native-provenance.js';
+import { applicationMarkup, conditionApplication } from './condition-application.js';
 
 type File = { nom: string; chemin: string; contenu?: string };
 type Citation = { origin: string; target: string; quote: string; status: string; title?: string; id?: string };
@@ -8,8 +10,9 @@ export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: 
 type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
 type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
 export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
-export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[] };
-export type Reasoning = { steps: Step[]; others: Source[] };
+export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string };
+export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
+export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[] };
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const key = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').normalize('NFC').trim().toLowerCase().replace(/[\s_]+/g, '_');
@@ -95,7 +98,7 @@ export const human = (text: string) => PHRASES.reduce((value, [pattern, replacem
   .replace(/\s+/g, ' ').trim();
 
 function parseDot(dot: string) {
-  const nodes = new Map<string, { lines: string[]; kind: string; source: string }>();
+  const nodes = new Map<string, { lines: string[]; kind: string; source: string; headings: string[] }>();
   const inputs = new Set(dot.match(/subgraph\s+cluster_inputs\s*\{([^}]*)\}/)?.[1].match(/\bx\d+\b/g) ?? []);
   const plain = (html: string) => new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
   const edges: Array<{ from: string; to: string; dashed: boolean }> = [];
@@ -126,7 +129,8 @@ function parseDot(dot: string) {
     if (!label) throw new Error('Libellé Catala absent.');
     const lines = (new DOMParser().parseFromString(label.replace(/<\/(?:td|tr)>|<br\s*\/?\s*>|<hr\s*\/?\s*>/gi, '\n'), 'text/html').body.textContent || '').split('\n').map((line) => line.trim()).filter(Boolean);
     const kind = /style\s*=\s*"[^"]*dashed/.test(attributes) ? 'condition' : inputs.has(match[1]) ? 'input' : /shape\s*=\s*plaintext/.test(attributes) ? 'conclusion' : 'calculation';
-    nodes.set(match[1], { lines, kind, source: plain(attributes.match(/\bURL\s*=\s*"((?:\\.|[^"\\])*)"/)?.[1] ?? '') });
+    const headings = plain(attributes.match(/\btooltip\s*=\s*"((?:\\.|[^"\\])*)"/)?.[1] ?? '').split(/\n[»\s]*/).filter(Boolean);
+    nodes.set(match[1], { lines, kind, source: plain(attributes.match(/\bURL\s*=\s*"((?:\\.|[^"\\])*)"/)?.[1] ?? ''), headings });
   }
   if (edges.some((edge) => !nodes.has(edge.from) || !nodes.has(edge.to))) throw new Error('Graphe Catala invalide.');
   return { nodes, edges };
@@ -251,20 +255,38 @@ const inner = (clause: Clause) => clause.kind === 'not' ? clause.members[0] : cl
 const children = (clause: Clause) => inner(clause).kind === 'leaf' ? [] : inner(clause).members;
 const lawOf = (clause: Clause, steps: Map<string, Step>) => unique(leaves(clause).flatMap((leaf) => leaf.refs.flatMap((id) => steps.get(id)?.sources.filter(legal) ?? [])));
 
-export function reasoning(dot: string, files: File[] = [], citations: Citation[] = [], coverage?: Coverage): Reasoning {
-  const { nodes, edges } = parseDot(dot);
+export function reasoning(dot: string, files: File[] = [], citations: Citation[] = [], coverage?: Coverage, provenance?: NativeProvenance): Reasoning {
+  const native = provenance ? nativeExecution(provenance) : null;
+  const fallback = !dot.trim() || dot.trim() === 'digraph G {}';
+  const { nodes, edges } = parseDot(fallback && native?.variables.length ? native.dot : dot);
   const linked = new Map<string, Source[]>();
   const notes = new Map<string, Notes>();
   const activeFiles = files.filter((file) => !/#\[test\]/.test(file.contenu ?? '') || [...nodes.values()].some((node) => {
     try { return decodeURIComponent(new URL(node.source).pathname).endsWith(`/${file.nom}`); } catch { return false; }
   }));
-  const documents = new Map(activeFiles.map((file) => [file.nom.split('/').pop()!, documentSources(file, citations, linked, notes)]));
-  const located = (source: string) => {
+  const documents = activeFiles.map((file) => documentSources(file, citations, linked, notes));
+  const located = (source: string): Source[] => {
+    let selected: File[];
     try {
       const url = new URL(source);
-      const line = Number(url.hash.match(/^#L(\d+)/)?.[1]);
-      return documents.get(decodeURIComponent(url.pathname).split('/').pop() ?? '')?.blocks.find((block) => block.start < line && line < block.end)?.sources ?? [];
+      const pathname = decodeURIComponent(url.pathname).replace(/^\/(\w:)/, '$1');
+      selected = activeFiles.filter((file) => url.protocol === 'file:' ? file.chemin.replaceAll('\\', '/') === pathname : pathname.endsWith(`/${file.nom.replaceAll('\\', '/')}`));
     } catch { return []; }
+    if (selected.length !== 1) return [];
+    return sourceContext(source, selected).references.filter((entry) => entry.target).map((entry) => {
+      const cited = citationOf(citations, entry.origin, entry.target, entry.quote);
+      return { ...entry, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}) };
+    });
+  };
+  const enrich = (entry: NativeOrigin): Origin => {
+    const source = `${new URL(`file:///${entry.file.replaceAll('\\', '/').replace(/^\/+/, '')}`).href}#L${entry.line}`;
+    const content = files.find((file) => file.chemin === entry.file)?.contenu?.split(/\r?\n/) ?? [];
+    const selected = content.slice(entry.line - 1, entry.endLine);
+    if (selected.length) {
+      selected[selected.length - 1] = selected.at(-1)!.slice(0, entry.endColumn - 1);
+      selected[0] = selected[0].slice(Math.max(0, entry.column - 1));
+    }
+    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n') };
   };
   const steps = new Map<string, Step>();
   for (const [id, node] of nodes) {
@@ -286,7 +308,19 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
       } };
       if (file) for (const location of coverage.locations) if (location.file === file.chemin) visit(location.tree);
     }
-    steps.set(id, { id, kind, answer: node.kind === 'conclusion', conditional: false, name: kind === 'condition' ? '' : head, title: capital(human(head)), formula: kind === 'condition' ? '' : human(expression), expression, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '', clause: null, notes: notes.get(key(head)) ?? emptyNotes(), tests: coverage?.scopes.filter((scope) => tests.has(scope.index)).map((scope) => scope.name) ?? [] });
+    const matches = native?.variables.filter((variable) => key(variable.name) === key(head) && human(variable.value) === value) ?? [];
+    const variable = fallback ? native?.variables.find((variable) => variable.id === id) : matches.length === 1 ? matches[0] : undefined;
+    const origins = variable?.origins.filter((entry) => entry.file && entry.line > 0).map(enrich) ?? [];
+    if (!origins.some((entry) => entry.selected && entry.role === 'definition') && node.source) {
+      try {
+        const url = new URL(node.source);
+        const path = decodeURIComponent(url.pathname);
+        const file = files.filter((entry) => path.endsWith(`/${entry.nom}`));
+        const line = Number(url.hash.match(/^#L(\d+)/)?.[1]);
+        if (file.length === 1 && line) origins.push(enrich({ file: file[0].chemin, line, column: 1, endLine: line, endColumn: (file[0].contenu?.split(/\r?\n/)[line - 1]?.length ?? 0) + 1, headings: node.headings, role: 'definition', selected: true, label: '', expression: '', overrides: '' }));
+      } catch {}
+    }
+    steps.set(id, { id, kind, answer: node.kind === 'conclusion' || Boolean(fallback && variable?.output && !edges.some((edge) => edge.from === id)), conditional: false, name: kind === 'condition' ? '' : head, title: capital(human(head)), formula: kind === 'condition' ? '' : human(expression), expression, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '', clause: null, notes: notes.get(key(head)) ?? emptyNotes(), tests: coverage?.scopes.filter((scope) => tests.has(scope.index)).map((scope) => scope.name) ?? [], origins });
   }
   for (const step of [...steps.values()].filter((entry) => entry.answer)) {
     const twin = step.parents.map((id) => steps.get(id)!).find((parent) => parent.kind === 'rule' && key(parent.name) === key(step.name));
@@ -297,8 +331,9 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   }
   const used = new Set<string>();
   for (const step of steps.values()) {
-    step.sources = unique([...(step.kind === 'rule' ? located(nodes.get(step.id)!.source) : []), ...(step.name ? linked.get(key(step.name)) ?? [] : [])]);
+    step.sources = unique([...step.origins.filter((origin) => origin.selected).flatMap((origin) => origin.sources), ...located(nodes.get(step.id)!.source), ...(step.name ? linked.get(key(step.name)) ?? [] : [])]);
     step.sources.forEach((source) => used.add(identity(source)));
+    step.origins.flatMap((origin) => origin.sources).forEach((source) => used.add(identity(source)));
   }
   const named = new Map([...steps.values()].filter((step) => step.name).map((step) => [key(step.name), step]));
   const find = (name: string) => named.get(key(name));
@@ -330,7 +365,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   for (const step of steps.values()) step.level = levels.get(step.id)!;
   const all = [...[...documents.values()].flatMap((document) => [...document.blocks.flatMap((block) => block.sources), ...document.trailing]), ...[...linked.values()].flat()];
   const others = all.filter((source, index) => !used.has(identity(source)) && all.findIndex((other) => identity(other) === identity(source)) === index);
-  return { steps: [...steps.values()].sort((a, b) => a.level - b.level), others };
+  return { steps: [...steps.values()].sort((a, b) => a.level - b.level), others, nativeIssues: provenance?.issues ?? [] };
 }
 
 const FACT: Record<string, [string, string]> = { Vrai: ['neutral', 'Vrai'], Faux: ['neutral', 'Faux'], Disputé: ['warn', 'Contesté'] };
@@ -338,12 +373,12 @@ const pill = (kind: string, label: string) => `<span class="pmc-value pmc-${kind
 const factPill = (step: Step) => pill(...(FACT[step.value] ?? (/^(?:Indéterminé|null|None|)$/.test(step.value) ? ['warn', 'Indéterminé'] : ['neutral', step.value])) as [string, string]);
 const clausePill = (clause: Clause) => {
   if (!clause.met) return '';
-  const labels = clause.kind === 'not' ? { ok: 'Exception écartée', ko: 'Exception retenue' } : { ok: 'Remplie', ko: 'Non remplie' };
+  const labels = clause.kind === 'not' ? { ok: 'Condition négative remplie', ko: 'Condition négative non remplie' } : { ok: 'Remplie', ko: 'Non remplie' };
   return pill(clause.met, (labels as Record<string, string>)[clause.met] ?? 'À établir');
 };
 const label = (clause: Clause) => {
   const core = inner(clause).kind === 'any' ? 'l’une des conditions' : inner(clause).kind === 'all' ? 'les conditions suivantes' : '';
-  return clause.kind === 'not' ? 'Sauf' : core ? capital(core) : 'Condition';
+  return clause.kind === 'not' ? 'La condition suivante doit être fausse' : core ? capital(core) : 'Condition';
 };
 const sourceName = (source: Source) => {
   if (source.kind !== 'piece' && source.title) {
@@ -379,7 +414,7 @@ function writer(model: Reasoning) {
   const ruleBranch = (clause: Clause, excluded: Set<string>): string => {
     const members = children(clause);
     const extra = sourcesOf(clause).filter((source) => !excluded.has(identity(source)));
-    if (!members.length) return `<li data-op="${clause.kind}">${clause.kind === 'not' ? '<span class="pmc-op">Sauf</span> ' : ''}${title(clause)}${chips(extra)}</li>`;
+    if (!members.length) return `<li data-op="${clause.kind}">${clause.kind === 'not' ? '<span class="pmc-op">Non</span> ' : ''}${title(clause)}${chips(extra)}</li>`;
     return `<li data-op="${clause.kind}"><span class="pmc-op">${escape(label(clause))}</span>${chips(extra)}<ul>${members.map((member) => ruleBranch(member, excluded)).join('')}</ul></li>`;
   };
   const rulePart = (step: Step) => {
@@ -398,12 +433,12 @@ function writer(model: Reasoning) {
     const members = children(clause);
     if (!members.length) {
       const step = stepOf(clause);
-      const prefix = clause.kind === 'not' ? '<span class="pmc-op">Sauf</span> ' : '';
+      const prefix = clause.kind === 'not' ? '<span class="pmc-op">Non</span> ' : '';
       if (step?.kind === 'fact') return factLine(step, prefix);
       if (step?.kind === 'rule') return `<li data-tone="${tone(step.value)}">${prefix}<span class="pmc-op">Règle</span> <a href="#" class="pmc-link" data-goto="${step.id}">${escape(step.title)}</a> ${pill(tone(step.value), step.value)}</li>`;
       return `<li>${prefix}${title(clause)}</li>`;
     }
-    const prefix = clause.kind === 'not' ? '<span class="pmc-op">Sauf</span> ' : `<span class="pmc-op">${escape(label(clause))}</span> `;
+    const prefix = clause.kind === 'not' ? '<span class="pmc-op">Non</span> ' : `<span class="pmc-op">${escape(label(clause))}</span> `;
     return `<li data-tone="${clause.met}">${prefix}${clausePill(clause)}<ul>${members.map(justifyBranch).join('')}</ul></li>`;
   };
   const justification = (step: Step) => {
@@ -423,7 +458,10 @@ function writer(model: Reasoning) {
     return `<div class="pmc-projection" data-tone="${tone(step.value)}">${value}<span>${escape(reason)}</span></div>`;
   };
   const card = (step: Step) => {
-    const notes = `${step.notes.justification ? `<p>${escape(step.notes.justification)}</p>` : ''}${step.tests.length ? `<p class="pmc-muted">Exercé par les tests : ${step.tests.map(escape).join(', ')}.</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${step.notes.demarches.length ? `<h4>Démarches effectuées</h4><ul>${step.notes.demarches.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}`;
+    const native = step.origins.length || model.nativeIssues.length ? `<details class="pmc-native"><summary>Origine native Catala</summary>${model.nativeIssues.map((issue) => `<p class="pmc-warn">${escape(issue)}</p>`).join('')}${step.origins.map((entry) => `<section><h4>${entry.role === 'declaration' ? 'Déclaration' : entry.role === 'condition' ? 'Condition' : 'Définition'}${entry.selected ? ' · appliquée au scénario' : ' · autre règle'}</h4>${sourceLink({ kind: 'origin', label: entry.headings.join(' › ') || 'Passage du programme', target: entry.file, origin: entry.file, quote: entry.text, status: '' })}<p class="pmc-muted">Ligne ${entry.line}, colonne ${entry.column} à ligne ${entry.endLine}, colonne ${entry.endColumn}</p>${entry.expression ? `<p>${escape(human(entry.expression))}</p>` : ''}${sourceList(entry.sources)}</section>`).join('')}</details>` : '';
+    const notes = `${native}${step.notes.justification ? `<p>${escape(step.notes.justification)}</p>` : ''}${step.tests.length ? `<p class="pmc-muted">Exercé par les tests : ${step.tests.map(escape).join(', ')}.</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${step.notes.demarches.length ? `<h4>Démarches effectuées</h4><ul>${step.notes.demarches.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}`;
+    const application = conditionApplication(step, model);
+    if (application) return `<section class="pmc-rule" data-card="${step.id}" data-kind="${application.kind}"><header><span class="pmc-kind">${application.kind === 'exception' ? 'Exception de droit' : 'Condition de droit'}</span><h3>${escape(application.title)}</h3></header>${applicationMarkup(application, sourceLink)}<div class="pmc-part" data-part="scenario"><h4>Dans ce scénario</h4>${factPill(step)}</div>${step.clause ? `<details><summary>Conditions de cette qualification</summary>${rulePart(step)}</details>` : ''}${notes}</section>`;
     if (step.kind === 'fact') {
       const used = model.steps.filter((rule) => rule.parents.includes(step.id));
       return `<section class="pmc-rule" data-card="${step.id}" data-kind="fact" data-tone="${tone(step.value)}"><header><span class="pmc-kind">Donnée du scénario</span><h3>${escape(step.title)}</h3>${factPill(step)}</header><div class="pmc-part" data-part="justification"><h4>Pièces citées</h4>${step.sources.some((source) => source.kind === 'piece') ? sourceList(step.sources.filter((source) => source.kind === 'piece')) : '<p class="pmc-muted">Aucune pièce rattachée à cette donnée.</p>'}${notes}${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}${used.length ? `<h4>Retenu pour</h4><ul class="pmc-sources">${used.map((rule) => `<li><a href="#" class="pmc-link" data-goto="${rule.id}">${escape(rule.title)}</a></li>`).join('')}</ul>` : ''}</div></section>`;

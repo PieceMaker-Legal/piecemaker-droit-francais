@@ -13,6 +13,12 @@
 11. Pour examiner une autre exécution sans entrée, lancez `pm catala expliquer --fichier F --scope S`.
 12. Contrôlez la hiérarchie avec `pm catala exceptions`. Contrôlez les conflits avec `pm catala preuve`.
 
+Placez chaque définition sous le texte ou la décision qui la fonde. Un même champ peut être défini par plusieurs blocs, répartis sous les différentes sources. Gardez les étiquettes et exceptions dans Catala.
+
+Dans un scénario, définissez les faits comme des données intermédiaires sous les sections de leurs pièces, puis passez ces données au champ métier. La trace conserve ainsi leur origine. Une déclaration de champ donne seulement son contexte ; elle ne prouve pas l’origine factuelle de sa valeur.
+
+Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans le détail. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
+
 Pour expliquer un nœud, ajoutez une section Markdown dans le fichier Catala. Les champs suivants restent du texte pour Catala :
 
 ```markdown

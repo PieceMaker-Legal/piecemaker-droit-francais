@@ -107,17 +107,18 @@ test('the graph details a node with its card and opens its sources', async () =>
   try {
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
-    assert.ok(view.container.querySelector('[data-node][data-kind=piece]'));
-    assert.ok(view.container.querySelector('[data-node][data-kind=action]'));
+    assert.ok(view.container.querySelector('[data-node][data-kind=condition] [data-part=evidence] [data-kind=piece]'));
+    assert.equal(view.container.querySelectorAll('[data-node][data-kind=origin]').length, 0);
     view.click(view.container.querySelector('[data-node][data-kind="rule"]'));
     assert.match(view.container.querySelector('.pmc-inspector').textContent, /Sanction possible/);
-    view.click(view.container.querySelector('[data-node][data-kind="fact"]'));
+    view.click(view.container.querySelector('[data-node][data-kind="condition"]'));
     const inspector = view.container.querySelector('.pmc-inspector');
     assert.equal(inspector.hidden, false);
     assert.match(inspector.textContent, /Attestation de Jean Dupont/);
-    assert.match(inspector.textContent, /Donnée du scénario/);
+    assert.match(inspector.textContent, /Condition de droit/);
     assert.equal(view.container.querySelectorAll('.pmc-map .is-selected').length, 1);
-    assert.ok(view.container.querySelector('.pmc-map .is-dim'));
+    view.click(view.container.querySelector('[data-map-zoom=in]'));
+    assert.ok(Number(view.container.querySelector('.pmc-map').dataset.scale) > 1);
     view.click(inspector.querySelector('[data-open-reference]'));
     assert.equal(view.opened.at(-1).path, '/dossier/pieces/attestation.md');
     view.click(view.dom.window.document.querySelector('#outside'));
@@ -159,6 +160,22 @@ test('changes the graph using stored Catala scenarios without recomputing or hid
     assert.match(view.container.querySelector('.pmc-explanation').textContent, /ne produit pas de graphe/);
     assert.equal(view.container.querySelectorAll('[data-node]').length, 0);
     assert.equal(requests, initial);
+  } finally { view.close(); }
+});
+
+test('shows a native JSON graph when the scenario has no DOT and keeps its provenance in the inspector', async () => {
+  const position = { file: '/dossier/.piecemaker/catala/demo/demo.catala_fr', start: { line: 9, character: 1 }, end: { line: 9, character: 50 }, law_headings: ['Article 1217'] };
+  const provenance = { trace: [{ element: { kind: 'scope_call', name: 'Demo', decl_pos: position }, pos: position, value: {}, trace: [{ element: { kind: 'scope_var', name: 'sanction_possible', output: true, decl_pos: position }, pos: position, value: true, trace: [{ element: { kind: 'exception' }, pos: position, value: true }] }] }], definitions: [], dependencies: [], issues: ['Graphe issu de la trace JSON.'] };
+  const view = await open([program({ graphe: '', scenarios: [{ fichier: 'test_demo.catala_fr', scope: 'Test', passed: true, test_reussi: true, graphe: '', message: '', provenance }] })]);
+  try {
+    assert.ok(view.container.querySelector('[data-node][data-kind="answer"]'));
+    assert.doesNotMatch(view.container.querySelector('.pmc-map-summary').textContent, /trace JSON/);
+    assert.doesNotMatch(view.container.querySelector('.pmc-map').textContent, /Origine native|Ligne 9/);
+    view.click(view.container.querySelector('[data-node][data-kind="answer"]'));
+    view.click(view.container.querySelector('.pmc-inspector .pmc-native summary'));
+    assert.match(view.container.querySelector('.pmc-inspector').textContent, /Origine native Catala.*Article 1217/s);
+    assert.equal(view.container.querySelector('.pmc-inspector .pmc-native').open, true);
+    assert.match(view.container.querySelector('.pmc-inspector .pmc-native').textContent, /trace JSON/);
   } finally { view.close(); }
 });
 
