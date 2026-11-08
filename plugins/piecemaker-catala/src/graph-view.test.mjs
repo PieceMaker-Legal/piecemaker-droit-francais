@@ -191,16 +191,24 @@ test('redraws links at card boundaries after resize and releases its observer', 
   const canvas = view.querySelector('.pmc-map');
   const [from, to] = view.querySelectorAll('[data-node]');
   canvas.getBoundingClientRect = () => ({ left: 100, top: 50 });
-  from.getBoundingClientRect = () => ({ left: 300, right: 350, top: 90, height: 80 });
+  from.getBoundingClientRect = () => ({ left: 300, right: 350, top: 90, bottom: 170, width: 50, height: 80 });
   let targetLeft = 450;
-  to.getBoundingClientRect = () => ({ left: targetLeft, top: 140, height: 100 });
+  let targetTop = 140;
+  to.getBoundingClientRect = () => ({ left: targetLeft, right: targetLeft + 50, top: targetTop, bottom: targetTop + 100, width: 50, height: 100 });
   const stop = mountExplanation(view, () => {});
   try {
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 118 H 350 /);
+    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 140 H 350$/);
     targetLeft = 550;
     redraw();
 
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 118 H 450 /);
+    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 140 H 450$/);
+    const edge = view.querySelector('g');
+    for (const [route, expected] of [['requires', /^M 250 80 .* H 450$/], ['supports', /^M 200 80 .* H 500$/], ['consequence', /^M 225 120 .* V 250$/]]) {
+      edge.dataset.route = route;
+      if (route === 'consequence') targetTop = 300;
+      redraw();
+      assert.match(view.querySelector('path').getAttribute('d'), expected);
+    }
   } finally { stop(); dom.window.close(); }
   assert.equal(disconnected, true);
 });

@@ -118,6 +118,8 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Inspection d’un nœud | La sélection montre le détail et atténue les éléments sans relation avec le nœud choisi. |
 | Navigation dans les sources | Les pièces et références juridiques utilisent les lecteurs et contrôles de citation PieceMaker existants. |
 
+PieceMaker dessine des cases distinctes pour la règle, les conditions, les faits et les conséquences. Les flèches relient chaque condition à sa règle et à ses appuis ; une flèche descend de la règle vers la conséquence. Les groupes d’application restent transparents, sans cadre de tableau.
+
 PieceMaker présente chaque application de règle dans une ligne à trois colonnes : règle de droit, conditions, faits et pièces. Une flèche conduit à sa conséquence, placée en dessous. Les résultats réutilisés renvoient à leur démonstration précédente. Les liens entre applications descendent dans la marge. La lecture commence en haut ; l’ajustement porte sur la largeur pour conserver un texte lisible. Aucun Graphviz n’est nécessaire.
 
 Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.

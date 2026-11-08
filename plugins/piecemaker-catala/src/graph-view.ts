@@ -14,17 +14,34 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       const from = nodes.find((node) => node.dataset.node === edge.dataset.from)?.getBoundingClientRect();
       const to = nodes.find((node) => node.dataset.node === edge.dataset.to)?.getBoundingClientRect();
       if (!from || !to) continue;
-      const result = nodes.find((node) => node.dataset.node === edge.dataset.from)?.querySelector('.pmc-consequence')?.getBoundingClientRect() ?? from;
-      const x1 = (result.left - bounds.left) / scale, y1 = (result.top + result.height / 2 - bounds.top) / scale;
-      const x2 = (to.left - bounds.left) / scale, y2 = (to.top + 28 - bounds.top) / scale;
-      const lane = 14 + edges.indexOf(edge) % 4 * 10;
-      edge.querySelector('path')!.setAttribute('d', `M ${x1} ${y1} H ${lane} V ${y2} H ${x2} m -5 -4 l 5 4 l -5 4`);
+      const source = canvas.querySelector<HTMLElement>(`[data-flow-anchor="${edge.dataset.anchorFrom}"]`)?.getBoundingClientRect() ?? nodes.find((node) => node.dataset.node === edge.dataset.from)?.querySelector('.pmc-consequence')?.getBoundingClientRect() ?? from;
+      const target = canvas.querySelector<HTMLElement>(`[data-flow-anchor="${edge.dataset.anchorTo}"]`)?.getBoundingClientRect() ?? to;
+      let path: string;
+      if (edge.dataset.route === 'consequence') {
+        const x1 = (source.left + source.width / 2 - bounds.left) / scale, y1 = (source.bottom - bounds.top) / scale;
+        const x2 = (target.left + target.width / 2 - bounds.left) / scale, y2 = (target.top - bounds.top) / scale;
+        const middle = (y1 + y2) / 2;
+        path = `M ${x1} ${y1} V ${middle} H ${x2} V ${y2}`;
+      } else if (edge.dataset.route) {
+        const backwards = edge.dataset.route === 'supports';
+        const x1 = ((backwards ? source.left : source.right) - bounds.left) / scale, y1 = (source.top + source.height / 2 - bounds.top) / scale;
+        const x2 = ((backwards ? target.right : target.left) - bounds.left) / scale, y2 = (target.top + target.height / 2 - bounds.top) / scale;
+        const middle = (x1 + x2) / 2;
+        path = `M ${x1} ${y1} H ${middle} V ${y2} H ${x2}`;
+      } else {
+        const x1 = (source.left - bounds.left) / scale, y1 = (source.top + source.height / 2 - bounds.top) / scale;
+        const x2 = (target.left - bounds.left) / scale, y2 = (target.top + target.height / 2 - bounds.top) / scale;
+        const lane = 14 + edges.indexOf(edge) % 4 * 10;
+        path = `M ${x1} ${y1} H ${lane} V ${y2} H ${x2}`;
+      }
+      edge.querySelector('path')!.setAttribute('d', path);
     }
   };
   const Observer = view.ownerDocument.defaultView?.ResizeObserver;
   const observer = Observer ? new Observer(draw) : null;
   if (canvas) observer?.observe(canvas);
   nodes.forEach((node) => observer?.observe(node));
+  view.querySelectorAll<HTMLElement>('[data-flow-anchor]').forEach((box) => observer?.observe(box));
   draw();
   const scroll = view.querySelector<HTMLElement>('.pmc-map-scroll');
   const select = (id: string, detailId?: string) => {

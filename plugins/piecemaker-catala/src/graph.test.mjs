@@ -119,6 +119,10 @@ test('keeps the argument readable and attaches references directly to rules and 
   assert.ok(rule.querySelector('.pmc-inference-grid [data-part="condition"]'));
   assert.ok(rule.querySelector('.pmc-inference-grid [data-part="facts"]'));
   assert.ok(rule.querySelector('.pmc-inference-grid + .pmc-inference-down + .pmc-consequence'));
+  assert.ok(rule.querySelector('[data-part="law"].pmc-flow-box'));
+  assert.ok(rule.querySelector('[data-part="condition"].pmc-flow-box'));
+  assert.ok(rule.querySelector('[data-part="facts"].pmc-flow-box'));
+  for (const route of ['requires', 'supports', 'consequence']) assert.ok(document.querySelector(`[data-route="${route}"] path[marker-end]`));
   assert.match(fact.querySelector('[data-part="facts"]').textContent, /Société Exemple SAS est mise en demeure de livrer/);
   assert.match(fact.querySelector('[data-part="evidence"]').textContent, /Citation non retrouvée/);
   assert.match(fact.querySelector('[data-part="facts"] .pmc-value').textContent, /Vrai/);
