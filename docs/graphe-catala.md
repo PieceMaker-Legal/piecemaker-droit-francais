@@ -56,6 +56,26 @@ Le détail de chaque carte conserve les positions et les sources natives. Les or
 
 Références : [programmation littéraire](https://book.catala-lang.org/en/5-1-literate-programming.html), [méthode de rédaction avec les juristes](https://book.catala-lang.org/fr/3-5-lawyers-agile.html), code du compilateur au tag `1.3.0` : `compiler/surface/lexer_common.ml`, `compiler/desugared/print.ml` et `compiler/plugins/explain.ml`.
 
+## Sources natives : précisions après contrôle du compilateur
+
+Catala prévoit des mécanismes documentaires pour les fondements et documents. Ils ne rendent pas leur présence obligatoire.
+
+| Mécanisme natif | Fonction | Limite |
+|---|---|---|
+| Titre avec identifiant | Conserve notamment les identifiants `LEGIARTI`, `JORFARTI` et `CETATEXT`. Le rendu HTML français génère le lien officiel reconnu. | Ne valide ni la référence ni son applicabilité. |
+| `#[doc="…"]` | Attache du texte documentaire à une déclaration ou définition. Une citation peut figurer dans le bloc Catala. | Aucun schéma source, citation ou pièce n’est imposé. Le volet ne lit pas encore cette annotation comme une source structurée. |
+| `#[description="…"]`, `#[label="…"]` | Documente certains éléments du programme. | Ne constitue pas un contrôle des fondements. |
+| `> Inclusion: annexe-fictive.pdf` | Reconnaît un PDF documentaire ; le rendu LaTeX prévoit son inclusion. | Le typage ne vérifie pas l’existence du PDF ni son lien probatoire. Le graphe ne lit pas encore cette directive comme une pièce rattachée. |
+| Attributs d’extension | Le compilateur permet à un plugin d’enregistrer ses propres attributs. | Un contrôle de source obligatoire demanderait une extension spécifique. Aucun attribut natif `source` ou `citation` n’a été trouvé. |
+
+Vérification : lecture du commit embarqué `e86fc2f5af14af40d80bfba655ef1d8cd6dee93c` et comparaison avec `master` au commit `9f2be04`. Les mécanismes examinés sont présents dans les deux versions.
+
+Deux fichiers fictifs ont passé le typage du pack 1.3.0 : l’un avec annotations `doc` et inclusion d’un PDF absent ; l’autre sans source. Cela confirme que ces éléments restent facultatifs au typage.
+
+Le code prévoit aussi une sélection de page pour le PDF. L’essai `@ p. 2` échoue avec `int_of_string` dans le pack testé. Aucune génération PDF complète n’a été exécutée.
+
+Références : [structure documentaire](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/surface/ast.mli#L282), [attributs et extensions](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/desugared/name_resolution.ml#L221), [rendu des annexes PDF](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/literate/latex.ml#L262).
+
 ## Ce que PieceMaker ajoute
 
 | Ajout | Comportement |
