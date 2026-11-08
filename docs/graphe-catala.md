@@ -21,6 +21,39 @@ L’objectif vient de [05-map-law.md](recherche-memoire-raisonnement/05-map-law.
 
 Catala ne vérifie pas les faits du dossier. Un test réussi signifie que les assertions passent. Le résultat métier du test peut être `faux`.
 
+## Provenance native : vérification approfondie
+
+Une vérification avec le pack Catala 1.3.0 confirme une provenance plus précise que celle actuellement exploitée par le volet.
+
+| Mécanisme natif | Précision obtenue | État dans le volet |
+|---|---|---|
+| Titres juridiques avec identifiant | Le compilateur reconnaît un titre suivi de `\| LEGIARTI…`, son niveau et son éventuel marqueur d’archive. | Les identifiants sont relus dans le Markdown. |
+| Contexte du nœud DOT | Le fichier, la ligne et les titres parents accompagnent les nœuds. Les titres figurent dans les infobulles. | Le lecteur utilise le fichier et la ligne ; il ne lit pas les infobulles. |
+| Arbre des exceptions en JSON | Chaque définition conserve sa position complète et ses titres. Chaque condition conserve aussi sa position et son expression. | Cette sortie structurée n’alimente pas encore le graphe. |
+| Trace d’exécution en JSON | Les événements portent valeurs, positions, titres, appels de champs et définitions sélectionnées. | Le graphe utilise encore le DOT, pas cette trace structurée. |
+| Définitions réparties sous plusieurs sources | Une règle générale et ses exceptions peuvent définir la même variable sous des textes distincts. | Une formule globale ne permet pas cette précision. |
+
+Les titres et positions sont natifs. Les mentions `Source :`, `Citation :` et `Concerne :` restent des conventions PieceMaker. Les attributs expérimentaux `#[source = "…"]` et `#[citation = "…"]` ont produit des avertissements « Unrecognised attribute » dans le pack testé.
+
+Deux commandes natives permettent d’obtenir les informations structurées :
+
+```sh
+pm catala exec catala -- exceptions fichier.catala_fr -s Champ -v variable --output-format=json
+pm catala exec catala -- interpret test_fichier.catala_fr -s Scenario --whole-program --trace=trace.json --trace-format=json
+```
+
+L’arbre des exceptions contient notamment `rules[].pos`, `condition_pos`, `condition_text`, `law_headings` et les exceptions imbriquées. La trace d’exécution contient notamment `element`, `pos`, `value` et les événements imbriqués dans `trace`.
+
+Un exemple fictif a réparti trois définitions de la même variable sous deux textes et une jurisprudence. Deux données intermédiaires du scénario ont été définies sous deux sections de pièces. Les contrôles exécutables ont confirmé la hiérarchie, les positions des conditions et les titres des deux pièces dans la trace.
+
+Sur cet exemple, `interpret` a réussi, tandis que `explain` a échoué avec une variable interne non définie. La sortie JSON de l’interpréteur reste donc une piste distincte du plugin d’explication, à intégrer et à tester avant de remplacer le DOT.
+
+Le lecteur actuel ne rattache automatiquement les sources trouvées à une position qu’aux nœuds classés comme règles. Les données d’entrée dépendent encore des rattachements `Concerne`. Cette restriction appartient à PieceMaker ; elle ne démontre pas une limite générale de la provenance Catala.
+
+Pour améliorer le graphe, la priorité est d’exploiter les positions et titres natifs des définitions et conditions, puis les événements de la trace JSON. `Concerne` peut compléter les liens transversaux. Il ne doit pas remplacer systématiquement une origine déjà fournie par Catala.
+
+Références : [programmation littéraire](https://book.catala-lang.org/en/5-1-literate-programming.html), [méthode de rédaction avec les juristes](https://book.catala-lang.org/fr/3-5-lawyers-agile.html), code du compilateur au tag `1.3.0` : `compiler/surface/lexer_common.ml`, `compiler/desugared/print.ml` et `compiler/plugins/explain.ml`.
+
 ## Ce que PieceMaker ajoute
 
 | Ajout | Comportement |
