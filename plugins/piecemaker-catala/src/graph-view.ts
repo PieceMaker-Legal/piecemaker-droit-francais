@@ -14,13 +14,11 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       const from = nodes.find((node) => node.dataset.node === edge.dataset.from)?.getBoundingClientRect();
       const to = nodes.find((node) => node.dataset.node === edge.dataset.to)?.getBoundingClientRect();
       if (!from || !to) continue;
-      const x1 = (from.right - bounds.left) / scale, y1 = (from.top + from.height / 2 - bounds.top) / scale;
-      const x2 = (to.left - bounds.left) / scale, y2 = (to.top + to.height / 2 - bounds.top) / scale;
-      const middle = (x1 + x2) / 2;
-      edge.querySelector('path')!.setAttribute('d', `M ${x1} ${y1} C ${middle} ${y1}, ${middle} ${y2}, ${x2} ${y2}`);
-      const text = edge.querySelector('text')!;
-      text.setAttribute('x', String(middle));
-      text.setAttribute('y', String((y1 + y2) / 2 - 5));
+      const result = nodes.find((node) => node.dataset.node === edge.dataset.from)?.querySelector('.pmc-consequence')?.getBoundingClientRect() ?? from;
+      const x1 = (result.left - bounds.left) / scale, y1 = (result.top + result.height / 2 - bounds.top) / scale;
+      const x2 = (to.left - bounds.left) / scale, y2 = (to.top + 28 - bounds.top) / scale;
+      const lane = 14 + edges.indexOf(edge) % 4 * 10;
+      edge.querySelector('path')!.setAttribute('d', `M ${x1} ${y1} H ${lane} V ${y2} H ${x2} m -5 -4 l 5 4 l -5 4`);
     }
   };
   const Observer = view.ownerDocument.defaultView?.ResizeObserver;
@@ -29,9 +27,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   nodes.forEach((node) => observer?.observe(node));
   draw();
   const scroll = view.querySelector<HTMLElement>('.pmc-map-scroll');
-  const answer = nodes.find((node) => node.dataset.kind === 'answer');
-  if (scroll && answer) scroll.scrollTop = Math.max(0, scroll.scrollTop + answer.getBoundingClientRect().top - scroll.getBoundingClientRect().top - scroll.clientHeight / 3);
-  const select = (id: string) => {
+  const select = (id: string, detailId?: string) => {
     const related = new Set(id ? [id] : []);
     for (const direction of ['from', 'to'] as const) {
       const queue = id ? [id] : [];
@@ -50,7 +46,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     edges.forEach((edge) => edge.classList.toggle('is-dim', Boolean(id) && !(related.has(edge.dataset.from!) && related.has(edge.dataset.to!))));
     if (!inspector) return;
     const chosen = nodes.find((node) => node.dataset.node === id);
-    const card = chosen ? view.querySelector<HTMLElement>(`.pmc-cards [data-card="${chosen.dataset.card}"]`) : null;
+    const card = chosen ? view.querySelector<HTMLElement>(`.pmc-cards [data-card="${detailId ?? chosen.dataset.card}"]`) : null;
     inspector.hidden = !card;
     if (card) inspector.innerHTML = `<button class="pmc-close" data-close-node aria-label="Fermer le détail">×</button>${card.outerHTML}`;
   };
@@ -67,11 +63,10 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     const zoom = target.closest<HTMLElement>('[data-map-zoom]');
     if (zoom && canvas && scroll) {
       const scale = Number(canvas.dataset.scale ?? 1);
-      const next = zoom.dataset.mapZoom === 'fit' ? Math.min(1, (scroll.clientWidth - 40) / canvas.scrollWidth, (scroll.clientHeight - 40) / canvas.scrollHeight) : scale * (zoom.dataset.mapZoom === 'in' ? 1.2 : 1 / 1.2);
+      const next = zoom.dataset.mapZoom === 'fit' ? Math.min(1, (scroll.clientWidth - 40) / canvas.scrollWidth) : scale * (zoom.dataset.mapZoom === 'in' ? 1.2 : 1 / 1.2);
       canvas.dataset.scale = String(Math.max(.4, Math.min(2, next)));
       canvas.style.zoom = canvas.dataset.scale;
       draw();
-      if (answer) scroll.scrollTop = Math.max(0, scroll.scrollTop + answer.getBoundingClientRect().top - scroll.getBoundingClientRect().top - scroll.clientHeight / 3);
       return;
     }
     const reference = target.closest<HTMLElement>('[data-open-reference]');
@@ -80,7 +75,12 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     if (link) {
       event.preventDefault();
       if (link.closest('.pmc-written')) goto(link.dataset.goto!);
-      else select(nodes.find((node) => node.dataset.card === link.dataset.goto)?.dataset.node ?? '');
+      else {
+        const destination = nodes.find((node) => node.dataset.card === link.dataset.goto);
+        const owner = link.closest<HTMLElement>('[data-node]');
+        select(destination?.dataset.node ?? owner?.dataset.node ?? '', link.dataset.goto);
+        destination?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+      }
       return;
     }
     if (target.closest<HTMLElement>('button')?.hasAttribute('data-close-node')) { select(''); return; }

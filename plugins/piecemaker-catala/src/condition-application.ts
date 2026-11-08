@@ -25,7 +25,7 @@ export function conditionApplication(step: Step, model: Reasoning, predicate?: C
     const definition = owner.origins.find((origin) => origin.selected && origin.role === 'definition' && origin.overrides);
     return definition && owner.origins.some((origin) => origin.role === 'condition' && origin.overrides === definition.key && nameKey(origin.expression) === nameKey(step.name));
   });
-  return { kind: exception ? 'exception' : 'condition', title: step.notes.question || step.title, basis, pieces, facts: statements, folded: facts.map((fact) => fact.id) };
+  return { kind: exception ? 'exception' : 'condition', title: step.notes.question || step.title, basis, pieces, facts: statements };
 }
 
 export function applicationMarkup(application: NonNullable<ReturnType<typeof conditionApplication>>, sourceLink: (source: Source) => string) {

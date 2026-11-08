@@ -109,11 +109,11 @@ test('the graph details a node with its card and opens its sources', async () =>
   try {
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
-    assert.ok(view.container.querySelector('[data-node][data-kind=condition] [data-part=evidence] [data-kind=piece]'));
+    assert.ok(view.container.querySelector('[data-node] [data-part=evidence] [data-kind=piece]'));
     assert.equal(view.container.querySelectorAll('[data-node][data-kind=origin]').length, 0);
     view.click(view.container.querySelector('[data-node][data-kind="rule"]'));
     assert.match(view.container.querySelector('.pmc-inspector').textContent, /Sanction possible/);
-    view.click(view.container.querySelector('[data-node][data-kind="condition"]'));
+    view.click(view.container.querySelector('[data-condition="x001"] [data-goto="x001"]'));
     const inspector = view.container.querySelector('.pmc-inspector');
     assert.equal(inspector.hidden, false);
     assert.match(inspector.textContent, /Attestation de Jean Dupont/);
@@ -121,7 +121,7 @@ test('the graph details a node with its card and opens its sources', async () =>
     assert.equal(view.container.querySelectorAll('.pmc-map .is-selected').length, 1);
     view.click(view.container.querySelector('[data-map-zoom=in]'));
     assert.ok(Number(view.container.querySelector('.pmc-map').dataset.scale) > 1);
-    view.click(inspector.querySelector('[data-open-reference]'));
+    view.click(inspector.querySelector('[data-open-reference][data-kind=piece]'));
     assert.equal(view.opened.at(-1).path, '/dossier/pieces/attestation.md');
     view.click(view.dom.window.document.querySelector('#outside'));
     assert.equal(inspector.hidden, true);
@@ -191,16 +191,16 @@ test('redraws links at card boundaries after resize and releases its observer', 
   const canvas = view.querySelector('.pmc-map');
   const [from, to] = view.querySelectorAll('[data-node]');
   canvas.getBoundingClientRect = () => ({ left: 100, top: 50 });
-  from.getBoundingClientRect = () => ({ right: 350, top: 90, height: 80 });
+  from.getBoundingClientRect = () => ({ left: 300, right: 350, top: 90, height: 80 });
   let targetLeft = 450;
   to.getBoundingClientRect = () => ({ left: targetLeft, top: 140, height: 100 });
   const stop = mountExplanation(view, () => {});
   try {
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 250 80 .* 350 140$/);
+    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 118 H 350 /);
     targetLeft = 550;
     redraw();
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 250 80 .* 450 140$/);
-    assert.equal(view.querySelector('text').getAttribute('x'), '350');
+
+    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 118 H 450 /);
   } finally { stop(); dom.window.close(); }
   assert.equal(disconnected, true);
 });

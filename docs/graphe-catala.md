@@ -102,8 +102,8 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 
 | Ajout | Comportement |
 |---|---|
-| Graphe à nœuds partagés | Une même condition garde une seule carte, avec plusieurs relations. Ses données factuelles sont intégrées à cette carte. |
-| Lecture depuis la conclusion | Les relations conduisent vers les conditions, données et sources utilisées. |
+| Graphe à nœuds partagés | Chaque application de règle garde une carte et sa conséquence. Les données factuelles figurent dans les applications qu’elles soutiennent. |
+| Lecture juridique | La règle, les conditions et leurs appuis sont alignés horizontalement. La conséquence apparaît en dessous. |
 | Groupes `ET`, `OU`, `NON` | PieceMaker lit les expressions booléennes simples présentes dans la trace pour expliciter les relations. |
 | Conditions d’application | Les dépendances pointillées de la trace restent identifiées. Une négation `NON` reste distincte de la sélection d’une définition conditionnelle. Un lien pointillé ne prouve pas, à lui seul, une exception. |
 | Sources attachées aux éléments | Chaque condition ou exception réunit son fondement juridique, le fait invoqué et sa pièce dans trois parties distinctes. |
@@ -118,13 +118,13 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Inspection d’un nœud | La sélection montre le détail et atténue les éléments sans relation avec le nœud choisi. |
 | Navigation dans les sources | Les pièces et références juridiques utilisent les lecteurs et contrôles de citation PieceMaker existants. |
 
-PieceMaker dispose les nœuds en colonnes. Les relations sont dessinées en SVG et suivent les dimensions des cartes. La vue se place sur la conclusion à l’ouverture. Les commandes de zoom et d’ajustement restent disponibles. Aucun Graphviz n’est nécessaire.
+PieceMaker présente chaque application de règle dans une ligne à trois colonnes : règle de droit, conditions, faits et pièces. Une flèche conduit à sa conséquence, placée en dessous. Les résultats réutilisés renvoient à leur démonstration précédente. Les liens entre applications descendent dans la marge. La lecture commence en haut ; l’ajustement porte sur la largeur pour conserver un texte lisible. Aucun Graphviz n’est nécessaire.
 
 Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
 
-Chaque carte de condition ou d’exception sépare le droit du fait invoqué pour son application. Le résultat du scénario figure à part.
+Chaque carte d’application sépare horizontalement la règle, les conditions et les faits invoqués. La conséquence du scénario figure en dessous. Les groupes ET, OU et NON restent dans les conditions ; ils ne deviennent plus des cartes isolées.
 
-Les données factuelles utilisées seulement par une qualification figurent dans sa carte. Elles ne deviennent pas des conditions de droit autonomes.
+Les faits et leurs pièces figurent en face de la condition concernée. Un résultat intermédiaire est désigné comme résultat déjà obtenu, avec un lien vers sa démonstration. Il n’est pas présenté comme une nouvelle pièce.
 
 Sans fait distinct, la carte indique « Aucun fait distinct renseigné ». Sans source précise, elle indique « Fondement à préciser » ou « Pièce à rattacher ».
 
