@@ -40,7 +40,7 @@ Dans un scénario, définissez les faits comme des données intermédiaires sous
 Présentez chaque application sur une ligne horizontale : règle de droit, conditions, faits et pièces. Placez la conséquence juridique en dessous.
 Si cette conséquence sert ensuite, désignez-la comme résultat réutilisé et reliez sa démonstration. Ne la présentez pas comme une pièce.
 
-Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans le détail. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
+Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque case doit citer son document avec une citation exacte, y compris une condition : le graphe signale toute case sans document. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans le détail. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
 
 Pour expliquer un nœud, ajoutez une section Markdown dans le fichier Catala. Les champs suivants restent du texte pour Catala :
 
@@ -59,7 +59,7 @@ Citation : « Extrait fictif établissant seulement l’envoi. »
 
 `Concerne` rattache les sources et ces explications à un identifiant. Employez des identifiants distincts pour des notions distinctes dans un programme.
 
-`Question` nomme le nœud. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
+Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. N’en inventez pas : sans objectif déclaré, demandez-le. `Question` nomme le nœud. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
 
 Répétez `Démarche` pour conserver les démarches effectuées et leurs résultats. N’inventez aucune démarche ni aucun résultat. Actualisez `À rechercher` lorsque la collecte progresse.
 

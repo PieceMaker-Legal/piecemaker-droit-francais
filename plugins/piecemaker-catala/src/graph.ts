@@ -12,7 +12,7 @@ type CoveredRange = { range: { start: { line: number }; end: { line: number } };
 export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
 export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string };
 export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; type: string; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
-export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[] };
+export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[]; objective?: string };
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const key = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').normalize('NFC').trim().toLowerCase().replace(/[\s_]+/g, '_');
@@ -375,7 +375,8 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   for (const step of steps.values()) step.level = levels.get(step.id)!;
   const all = [...[...documents.values()].flatMap((document) => [...document.blocks.flatMap((block) => block.sources), ...document.trailing]), ...[...linked.values()].flat()];
   const others = all.filter((source, index) => !used.has(identity(source)) && all.findIndex((other) => identity(other) === identity(source)) === index);
-  return { steps: [...steps.values()].sort((a, b) => a.level - b.level), others, nativeIssues: provenance?.issues ?? [] };
+  const objective = activeFiles.map((file) => (file.contenu ?? '').match(/^Objectif\s*:\s*(.+)$/im)?.[1]?.trim() ?? '').find(Boolean) ?? '';
+  return { steps: [...steps.values()].sort((a, b) => a.level - b.level), others, nativeIssues: provenance?.issues ?? [], objective };
 }
 
 const FACT: Record<string, [string, string]> = { Vrai: ['neutral', 'Oui'], Faux: ['neutral', 'Non'], Disputé: ['warn', 'Contesté'] };
@@ -391,6 +392,7 @@ const label = (clause: Clause) => {
   return clause.kind === 'not' ? 'La condition suivante doit être fausse' : core ? capital(core) : 'Condition';
 };
 const sourceName = (source: Source) => {
+  if (source.kind === 'piece' && source.title && !/\.[a-z0-9]{2,5}$/i.test(source.title)) return { main: source.title, note: '' };
   if (source.kind === 'piece' || source.kind === 'origin') {
     let filename = source.target.replaceAll('\\', '/').split(/[?#]/)[0].split('/').pop() || 'Document';
     try { filename = decodeURIComponent(filename); } catch {}

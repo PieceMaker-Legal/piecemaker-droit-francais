@@ -1,11 +1,7 @@
-import type { Reasoning, Source, Step } from './graph.js';
-
-type Relation = '' | 'si' | 'selon' | 'sauf';
+import type { Clause, Reasoning, Source, Step } from './graph.js';
+import { conditionApplication } from './condition-application.js';
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
-const legal = (source: Source) => source.kind === 'article' || source.kind === 'jurisprudence';
-const fold = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s_]+/g, '_');
-const words = (text: string) => new Set((text.match(/[\p{L}_][\p{L}\p{N}_]*/gu) ?? []).map(fold));
 const container = (step: Step) => step.answer && (step.value.startsWith('{') || step.name.includes('|'));
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const date = (text: string) => text.replace(/\|?(\d{4})-(\d{2})-(\d{2})\|?/g, (_, year, month, day) => `${Number(day) === 1 ? '1er' : Number(day)} ${MONTHS[Number(month) - 1]} ${year}`);
@@ -41,17 +37,6 @@ export function tone(step: Step) {
 const definition = (step: Step) => step.origins.find((origin) => origin.selected && origin.role === 'definition' && !origin.overrides)?.body
   ?? step.origins.find((origin) => origin.selected && origin.role === 'definition')?.body ?? '';
 
-function relation(owner: Step, child: Step): Relation {
-  const name = fold(child.name);
-  if (owner.origins.some((origin) => origin.selected && origin.role === 'condition' && origin.overrides && words(origin.expression || origin.text).has(name))) return 'sauf';
-  const text = definition(owner);
-  const condition = text.match(/\bsi\s+([\s\S]+?)\s+alors\b/)?.[1];
-  if (condition && words(condition).has(name)) return 'si';
-  const subject = text.match(/\bselon\s+([\p{L}_][\p{L}\p{N}_]*)/u)?.[1];
-  if (subject && fold(subject) === name) return 'selon';
-  return '';
-}
-
 export function formula(step: Step, human: (text: string) => string) {
   const text = definition(step).replace(/\s+/g, ' ').match(/(?:^|\s)égal à\s+(.+)$/)?.[1]?.trim() ?? step.expression;
   const plain = text.replace(/^qualifier de\s*\((.*)\)$/, '$1').replace(/^qualifier de\s+/, '');
@@ -61,59 +46,63 @@ export function formula(step: Step, human: (text: string) => string) {
     .replace(/>=/g, '≥').replace(/<=/g, '≤').replace(/\s\*\s/g, ' × ').replace(/\s\/\s/g, ' ÷ ').replace(/\s=\s/g, ' = ');
 }
 
-const KINDS: Record<string, [string, string]> = {
-  conclusion: ['✓', 'Conclusion'],
-  condition: ['◆', 'Condition'],
-  calcul: ['∑', 'Calcul'],
-  fait: ['●', 'Fait établi par pièce'],
-  hypothese: ['◎', 'Hypothèse du scénario'],
-};
-const RELATIONS: Record<Exclude<Relation, ''>, string> = { si: 'Applicable si', selon: 'Selon', sauf: 'Sauf' };
-const ORDER: Record<string, number> = { si: 0, selon: 1, condition: 2, calcul: 3, fait: 4, hypothese: 4, sauf: 5 };
-
-export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source, chip?: boolean) => string) {
-  const shown = model.steps.filter((step) => !container(step));
-  if (!shown.length) return '';
-  const steps = new Map(shown.map((step) => [step.id, step]));
-  const parents = (step: Step) => step.parents.map((id) => steps.get(id)).filter((parent): parent is Step => Boolean(parent));
-  const used = new Set(shown.flatMap((step) => step.parents));
-  const kind = (step: Step, root: boolean) => root && step.kind === 'rule' && !/^(?:argent|money|date|décimal|decimal|entier|integer|durée|duration)$/i.test(step.type) ? 'conclusion'
-    : step.kind === 'rule' ? (/^(?:argent|money|date|décimal|decimal|entier|integer|durée|duration)$/i.test(step.type) || /^\$|^\|?\d{4}-|^-?\d/.test(step.value) ? 'calcul' : 'condition')
-    : step.sources.some((source) => source.kind === 'piece') ? 'fait' : 'hypothese';
-  const size = (step: Step, seen = new Set<string>()): number => seen.has(step.id) ? 0 : (seen.add(step.id), 1 + parents(step).reduce((total, parent) => total + size(parent, seen), 0));
-  const outputs = model.steps.filter(container).flatMap((step) => step.parents).map((id) => steps.get(id)).filter((step): step is Step => Boolean(step));
-  const roots = (outputs.length ? outputs : shown).filter((step) => !used.has(step.id) && step.kind === 'rule');
-  const ordered = [...new Set(roots.length ? roots : shown.filter((step) => !used.has(step.id)))].sort((a, b) => Number(Boolean(b.notes.question)) - Number(Boolean(a.notes.question)) || size(b) - size(a));
-  const rendered = new Set<string>();
-  const pill = (step: Step) => `<span class="pmc-value pmc-${tone(step)}">${escape(display(step))}</span>`;
-  const chips = (sources: Source[]) => sources.length ? `<div class="pmc-node-refs">${sources.map((source) => sourceLink(source, true)).join('')}</div>` : '';
-  const node = (step: Step, root: boolean, link: Relation) => {
-    const type = kind(step, root);
-    const [icon, label] = link === 'sauf' ? ['⚖', 'Exception'] : KINDS[type];
-    const pieces = step.sources.filter((source) => source.kind === 'piece' && !/PROJECTION|\.catala_/i.test(source.target));
-    const law = step.sources.filter(legal);
-    const others = step.sources.filter((source) => !legal(source) && source.kind !== 'piece' && source.kind !== 'origin');
-    const quote = (type === 'fait' || type === 'hypothese' ? pieces : [...law, ...pieces]).find((source) => source.quote)?.quote ?? '';
-    const expression = type === 'fait' || type === 'hypothese' ? '' : formula(step, human);
-    const question = step.notes.question && step.notes.question !== step.title ? step.notes.question : '';
-    const failed = step.sources.some((source) => source.status === 'failed');
-    const open = type === 'hypothese' || tone(step) === 'warn';
-    return `<article class="pmc-node" data-node="${step.id}" data-card="${step.id}" data-kind="${type}" data-tone="${tone(step)}" data-open="${open}" tabindex="0" role="button" aria-pressed="false"><header><span class="pmc-node-kind">${icon} ${label}</span>${pill(step)}</header><h3>${escape(question || step.title)}</h3>${question ? `<p class="pmc-node-name">${escape(step.title)}</p>` : ''}${expression ? `<p class="pmc-node-formula">${escape(expression)}</p>` : ''}${quote ? `<q>${escape(quote)}</q>` : ''}${chips([...law, ...others, ...pieces])}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : type === 'hypothese' ? '<p class="pmc-warn">Pièce à produire pour établir ce point.</p>' : ''}${(type === 'condition' || type === 'conclusion') && !step.sources.length ? '<p class="pmc-warn">Aucune source rattachée à cette règle.</p>' : ''}${failed ? '<p class="pmc-warn">Citation non retrouvée dans la source.</p>' : ''}</article>`;
+export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source) => string) {
+  if (!model.steps.length) return '';
+  const steps = new Map(model.steps.map((step) => [step.id, step]));
+  const rules = model.steps.filter((step) => step.kind === 'rule' && !container(step));
+  const displayed: Step[] = [];
+  const visited = new Set<string>();
+  const visit = (step: Step) => {
+    if (visited.has(step.id) || container(step)) return;
+    visited.add(step.id);
+    for (const id of step.parents) { const parent = steps.get(id); if (parent?.kind === 'rule') visit(parent); }
+    displayed.push(step);
   };
-  const branch = (step: Step, root: boolean, link: Relation): string => {
-    const tag = link ? `<span class="pmc-relation" data-relation="${link}">${RELATIONS[link]}</span>` : '';
-    if (rendered.has(step.id)) return `<li data-relation="${link}">${tag}<button type="button" class="pmc-node-ref" data-goto="${step.id}"><span>↑ ${escape(step.notes.question || step.title)}</span>${pill(step)}<span class="pmc-muted">voir plus haut</span></button></li>`;
-    rendered.add(step.id);
-    const children = parents(step).map((parent) => ({ parent, link: relation(step, parent) }))
-      .sort((a, b) => (ORDER[a.link || kind(a.parent, false)] ?? 9) - (ORDER[b.link || kind(b.parent, false)] ?? 9));
-    const cumulative = children.length > 1 && /\b(?:cumul|et)\b/.test(definition(step)) && !/\bselon\b/.test(definition(step));
-    const list = children.length ? `<ul>${cumulative ? '<li class="pmc-tree-note">Toutes ces conditions doivent être réunies</li>' : ''}${children.map((child) => branch(child.parent, false, child.link)).join('')}</ul>` : '';
-    return `<li data-relation="${link}">${tag}${node(step, root, link)}${list}</li>`;
+  const used = new Set(rules.flatMap((step) => step.parents));
+  rules.filter((step) => step.answer || !used.has(step.id)).forEach(visit);
+  (rules.length ? rules : model.steps).forEach(visit);
+  const incomplete = new Set<string>();
+  for (const step of model.steps) if (step.issue || step.notes.recherche || step.sources.some((source) => source.status === 'failed') || step.parents.some((id) => incomplete.has(id))) incomplete.add(step.id);
+  const links = displayed.flatMap((step) => step.parents.filter((id) => visited.has(id) && steps.get(id)?.kind === 'rule').map((id) => ({ from: id, to: step.id })));
+  const internalLinks: Array<{ owner: string; from: string; to: string; route: string }> = [];
+  let conditionIndex = 0;
+  const warn = (text: string) => `<p class="pmc-warn">${escape(text)}</p>`;
+  const documents = (sources: Source[], missing: string) => sources.length ? `<ul class="pmc-docs">${sources.map((source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}${source.quote ? `<q>${escape(source.quote)}</q>` : '<span class="pmc-warn">Citation exacte à indiquer</span>'}${source.status === 'failed' ? '<span class="pmc-warn">Citation non retrouvée dans le document</span>' : ''}</li>`).join('')}</ul>` : warn(missing);
+  const value = (step: Step) => (step.value.startsWith('{') || step.value.startsWith('[')) ? '' : `<span class="pmc-value pmc-${tone(step)}">${escape(display(step))}</span>`;
+  const support = (step: Step): string => {
+    if (step.kind === 'rule') return `<p class="pmc-prior-result">Résultat de la règle : <button type="button" class="pmc-text-action" data-goto="${step.id}">${escape(step.notes.question || step.title)}</button> ${value(step)}${incomplete.has(step.id) ? '<span class="pmc-warn">Justification à compléter</span>' : ''}</p>`;
+    const pieces = step.sources.filter((source) => source.kind === 'piece');
+    return `<div class="pmc-observation"><p><button type="button" class="pmc-text-action" data-goto="${step.id}">${escape(step.title)}</button> ${value(step)}</p><div data-part="evidence">${documents(pieces, 'Pièce à rattacher')}</div>${step.issue ? warn(step.issue) : ''}</div>`;
   };
-  const [main, ...rest] = ordered;
-  const tree = main ? `<ul class="pmc-tree">${branch(main, true, '')}</ul>` : '';
-  const others = rest.length ? `<section class="pmc-tree-others"><h3>Autres résultats calculés</h3><ul class="pmc-tree">${rest.map((step) => branch(step, false, '')).join('')}</ul></section>` : '';
-  const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} source${model.others.length > 1 ? 's' : ''} à rattacher</summary><div class="pmc-node-refs">${model.others.map((source) => sourceLink(source, true)).join('')}</div></details>` : '';
-  const legend = `<div class="pmc-map-summary">Lecture de haut en bas : la conclusion, puis les conditions qui la commandent, jusqu’aux faits et aux pièces.<span><b data-kind="conclusion">✓ Conclusion</b><b data-kind="condition">◆ Condition</b><b data-kind="calcul">∑ Calcul</b><b data-kind="fait">● Fait établi par pièce</b><b data-kind="hypothese">◎ Hypothèse à établir</b><b data-kind="sauf">⚖ Sauf : exception</b></span><span><i class="pmc-value pmc-ok">Confirmé</i><i class="pmc-value pmc-ko">Réfuté</i><i class="pmc-value pmc-warn">Inconnu</i> Cliquez sur une case pour lire la règle, sa source et ses pièces.</span></div>`;
-  return `${legend}${unused}<div class="pmc-map" data-layout="tree" aria-label="Arbre du raisonnement, de la conclusion vers les faits">${tree}${others}</div>`;
+  const row = (kind: string, title: string, law: string, facts: string, owner: Step, id = '') => {
+    const anchor = `${owner.id}-condition-${conditionIndex++}`;
+    internalLinks.push({ owner: owner.id, from: `${owner.id}-law`, to: anchor, route: 'requires' }, { owner: owner.id, from: `${anchor}-proof`, to: anchor, route: 'supports' });
+    return `<li class="pmc-condition-row" data-condition="${id}" data-relation="${kind === 'Exception' ? 'sauf' : 'si'}"><section class="pmc-flow-box" data-part="condition" data-flow-anchor="${anchor}"><span class="pmc-box-kind">${kind}</span><h4>${escape(title)}</h4>${law}</section><section class="pmc-flow-box" data-part="facts" data-flow-anchor="${anchor}-proof"><span class="pmc-box-kind">Faits et pièces</span>${facts}</section></li>`;
+  };
+  const condition = (clause: Clause, owner: Step): string => {
+    if (clause.kind !== 'leaf') {
+      const title = clause.kind === 'all' ? 'Toutes ces conditions doivent être réunies' : clause.kind === 'any' ? 'Au moins une de ces conditions doit être réunie' : 'La condition suivante doit être fausse';
+      return `<li class="pmc-condition-group" data-op="${clause.kind}"><p>${title}</p><ul>${clause.members.map((member) => condition(member, owner)).join('')}</ul></li>`;
+    }
+    const referenced = steps.get(clause.ref);
+    const supporting = (referenced ? [referenced] : clause.refs.map((id) => steps.get(id))).filter((step): step is Step => Boolean(step));
+    const application = referenced ? conditionApplication(referenced, model) : null;
+    const foundation = referenced?.kind === 'rule' ? referenced.sources.filter((source) => source.kind !== 'origin') : application?.basis ?? [];
+    const title = referenced ? referenced.notes.question || referenced.title : human(clause.text);
+    return row(application?.kind === 'exception' ? 'Exception' : 'Condition', title, documents(foundation, 'Fondement de la condition à préciser : article, jurisprudence ou doctrine et citation exacte'), supporting.length ? supporting.map(support).join('') : warn('Application au dossier à préciser'), owner, referenced?.id ?? '');
+  };
+  const card = (step: Step) => {
+    const exception = step.origins.some((origin) => origin.selected && origin.role === 'definition' && origin.overrides);
+    const foundation = step.sources.filter((source) => source.kind !== 'origin');
+    const inputs = step.clause ? condition(step.clause, step) : step.parents.length ? step.parents.map((id) => condition({ kind: 'leaf', text: '', ref: id, refs: [id], members: [], met: '' }, step)).join('') : `<li class="pmc-condition-row"><section data-part="condition"><p>Aucune condition dans cette définition.</p></section><section data-part="facts"><p>Valeur fixée par la définition appliquée.</p></section></li>`;
+    const calculation = step.kind === 'rule' ? formula(step, human) : '';
+    const open = Boolean(step.notes.recherche || !foundation.length || incomplete.has(step.id));
+    internalLinks.push({ owner: step.id, from: `${step.id}-law`, to: `${step.id}-outcome`, route: 'consequence' });
+    const facts = step.kind === 'fact' ? row('Donnée', step.title, '', support(step), step, step.id) : inputs;
+    return `<article class="pmc-map-node pmc-inference" data-node="${step.id}" data-card="${step.id}" data-kind="${step.answer ? 'answer' : exception ? 'exception' : step.kind}" data-open="${open}" tabindex="0" role="button" aria-pressed="false"><div class="pmc-inference-grid"><section class="pmc-major pmc-flow-box" data-part="law" data-flow-anchor="${step.id}-law"><div class="pmc-inference-heading"><span>${exception ? 'Exception de droit appliquée' : step.kind === 'fact' ? 'Donnée du scénario' : 'Règle de droit'}</span><h3>${escape(step.notes.question || step.title)}</h3></div>${documents(foundation, 'Fondement juridique à préciser : article, jurisprudence ou doctrine et citation exacte')}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}</section><section class="pmc-application-table"><ul class="pmc-conditions">${facts}</ul></section></div><div class="pmc-inference-down" aria-hidden="true"></div><div class="pmc-consequence pmc-flow-box" data-flow-anchor="${step.id}-outcome"><span>${step.answer ? 'Conséquence juridique finale' : 'Conséquence'}</span><strong>${escape(step.title)}</strong>${value(step)}${calculation ? `<code class="pmc-calculation">${escape(calculation)}</code>` : ''}</div>${step.notes.recherche ? warn(`À rechercher : ${step.notes.recherche}`) : ''}</article>`;
+  };
+  const objective = `<section class="pmc-objective" data-part="objective"><span>Objectif</span>${model.objective ? `<strong>${escape(model.objective)}</strong>` : warn('Objectif à déclarer : ajoutez une ligne « Objectif : … » dans le programme.')}</section>`;
+  const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, '')}</details>` : '';
+  const cards = displayed.map(card).join('');
+  return `${objective}<div class="pmc-map-summary">Sur une ligne : la règle, ses conditions et exceptions, les faits et pièces qui les établissent.<span>Sous la règle : sa conséquence, qui peut alimenter la règle suivante. Chaque case cite son document ; cliquez sur le titre pour l’ouvrir.</span></div>${unused}<div class="pmc-map" data-layout="legal" aria-label="Règles, conditions et faits à l’horizontale ; conséquences vers le bas"><svg class="pmc-map-links" aria-hidden="true"><defs><marker id="pmc-flow-head" viewBox="0 0 8 8" refX="8" refY="4" markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse" orient="auto"><polygon points="0,0 8,4 0,8"/></marker></defs>${links.map((edge) => `<g data-from="${edge.from}" data-to="${edge.to}" data-relation="alimente" data-anchor-from="${edge.from}-outcome" data-anchor-to="${edge.to}-law"><path marker-end="url(#pmc-flow-head)"/></g>`).join('')}${internalLinks.map((edge) => `<g data-from="${edge.owner}" data-to="${edge.owner}" data-route="${edge.route}" data-anchor-from="${edge.from}" data-anchor-to="${edge.to}"><path marker-end="url(#pmc-flow-head)"/></g>`).join('')}</svg>${cards}</div>`;
 }

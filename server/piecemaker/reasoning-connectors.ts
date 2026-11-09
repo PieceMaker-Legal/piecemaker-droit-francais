@@ -62,7 +62,8 @@ const piece: Resolver = {
     if (!counterpart?.exists || typeof counterpart.path !== 'string') return null;
     const markdown = await realpath(counterpart.path);
     if (!inside(caseRoot, markdown)) return null;
-    return { kind: 'piece', title: formatPieceTitle(undefined, path.relative(caseRoot, canonical)), text: await readFile(markdown, 'utf8') };
+    const text = await readFile(markdown, 'utf8');
+    return { kind: 'piece', title: text.match(/^#\s+(.+?)\s*#*\s*$/m)?.[1] || formatPieceTitle(undefined, path.relative(caseRoot, canonical)), text };
   },
 };
 

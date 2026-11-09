@@ -120,7 +120,7 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 
 PieceMaker dessine des cases distinctes pour la règle, les conditions, les faits et les conséquences. Les flèches relient chaque condition à sa règle et à ses appuis ; une flèche descend de la règle vers la conséquence. Les groupes d’application restent transparents, sans cadre de tableau.
 
-PieceMaker présente chaque application de règle dans une ligne à trois colonnes : règle de droit, conditions, faits et pièces. Une flèche conduit à sa conséquence, placée en dessous. Les résultats réutilisés renvoient à leur démonstration précédente. Les liens entre applications descendent dans la marge. Les références apparaissent comme des boutons portant le nom du fichier, de l’article ou de la décision. Les URL ne sont pas affichées. Le clic utilise la visionneuse interne. Si le nom juridique manque, le volet le signale sans inventer un intitulé. La lecture commence en haut ; l’ajustement porte sur la largeur pour conserver un texte lisible. Aucun Graphviz n’est nécessaire.
+PieceMaker présente chaque application de règle dans une ligne à trois colonnes : règle de droit, conditions, faits et pièces. Une flèche conduit à sa conséquence, placée en dessous. Les résultats réutilisés renvoient à leur démonstration précédente. Les liens entre applications descendent dans la marge. L’objectif déclaré par l’avocat figure en tête. Chaque case cite ses documents : article, décision, doctrine ou pièce, avec son titre et sa citation exacte. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Une case sans document ou sans citation est signalée. Les URL ne sont pas affichées. Le clic utilise la visionneuse interne. Si le nom juridique manque, le volet le signale sans inventer un intitulé. La lecture commence en haut ; l’ajustement porte sur la largeur pour conserver un texte lisible. Aucun Graphviz n’est nécessaire.
 
 Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
 
@@ -128,7 +128,7 @@ Chaque carte d’application sépare horizontalement la règle, les conditions e
 
 Les faits et leurs pièces figurent en face de la condition concernée. Un résultat intermédiaire est désigné comme résultat déjà obtenu, avec un lien vers sa démonstration. Il n’est pas présenté comme une nouvelle pièce.
 
-Sans fait distinct, la carte indique « Aucun fait distinct renseigné ». Sans source précise, elle indique « Fondement à préciser » ou « Pièce à rattacher ».
+Une condition est marquée « Exception » seulement si Catala la rattache à une définition qui en écarte une autre (`exception`). Sans fait distinct, la carte indique « Aucun fait distinct renseigné ». Sans source précise, elle indique « Fondement à préciser » ou « Pièce à rattacher ».
 
 Une entrée booléenne ne suffit pas à rédiger un fait. Le graphe utilise la donnée distincte ou la citation déclarée dans le programme.
 
@@ -141,6 +141,7 @@ Une section `Concerne : identifiant` rattache ses pièces et explications au nœ
 | Champ | Rôle dans PieceMaker |
 |---|---|
 | `Question : …` | Libellé de la question sur le nœud. |
+| `Objectif : …` | Objectif annoncé par l’avocat, affiché en tête du graphe. Une seule ligne par programme ; elle n’a pas besoin de `Concerne`. |
 | `Justification : …` | Explication rédigée par l’agent, visible dans le détail de la carte. |
 | `À rechercher : …` | Démarche nécessaire, affichée comme point ouvert. |
 | `Démarche : …` | Démarche effectuée et résultat déclaré, conservés dans le détail. Plusieurs lignes sont possibles. |
