@@ -244,6 +244,23 @@ test('catleg counts native parser results, rejects empty checks and uses the use
     assert.equal(report().fichiers[0].versions[0].valide, false);
     await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2020-01-01' }, deps });
     assert.equal(report().fichiers[0].versions[0].valide, true);
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), 'Date de référence : 2019-12-31\n\n## Article fictif | LEGIARTI000000000001\n');
+    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, deps }), /vigueur au 2019-12-31, date de référence déclarée dans le programme/);
+    assert.equal(report().date_reference, '2019-12-31');
+    assert.equal(report().date_reference_origine, 'programme');
+    assert.equal(report().passed, false);
+    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2021-06-01' }, deps }), /donnée par --au/);
+    assert.equal(report().fichiers[0].versions[0].au, '2021-06-01');
+    assert.equal(report().passed, true);
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), 'Date de référence : 2021-06-01\n\n## Article fictif | LEGIARTI000000000001\n');
+    stdout = 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":true}]\n';
+    const expired = { ...deps, run: async (command, args, options) => args.includes('lf') ? runner(command, args, options) : { code: 1, stdout, stderr: 'expired' } };
+    await runCatala({ commande: 'catleg', cwd: dossier, deps: expired });
+    assert.equal(report().passed, true);
+    assert.deepEqual(report().fichiers[0].articles, ['LEGIARTI000000000001']);
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), 'Date de référence : hier\n\n## Article fictif | LEGIARTI000000000001\n');
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /Date de référence.*date valide/);
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '## Article fictif | LEGIARTI000000000001\n');
     for (const output of ['', 'PIECEMAKER_ARTICLES=[]\n', 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":true}]\n']) {
       stdout = output;
       await runCatala({ commande: 'catleg', cwd: dossier, deps });
