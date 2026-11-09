@@ -104,28 +104,21 @@ test('opens cited articles and pieces in the editor without leaving the written 
   } finally { view.close(); }
 });
 
-test('the graph details a node with its card and opens its sources', async () => {
+test('the graph draws one box per cited document and opens it in the viewer', async () => {
   const view = await open([program()]);
   try {
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
-    assert.ok(view.container.querySelector('[data-node="x001"] [data-kind=piece]'));
-    assert.equal(view.container.querySelectorAll('[data-node][data-kind=origin]').length, 0);
-    view.click(view.container.querySelector('[data-node="x002"][data-kind="conclusion"]'));
-    assert.match(view.container.querySelector('.pmc-inspector').textContent, /Sanction possible/);
-    view.click(view.container.querySelector('[data-node="x001"]'));
-    const inspector = view.container.querySelector('.pmc-inspector');
-    assert.equal(inspector.hidden, false);
-    assert.match(inspector.textContent, /attestation\.md/);
-    assert.equal(view.container.querySelectorAll('.pmc-map .is-selected').length, 1);
-    assert.equal(view.container.querySelectorAll('.pmc-map .is-dim').length, 0);
+    const piece = view.container.querySelector('[data-doc="/dossier/pieces/attestation.md"]');
+    assert.ok(piece);
+    assert.doesNotMatch(piece.textContent, /attestation\.md|\/dossier/);
+    assert.ok(view.container.querySelector('[data-doc="LEGIARTI000032041431"]'));
+    assert.equal(view.container.querySelectorAll('[data-doc][data-kind=origin]').length, 0);
+    assert.ok(view.container.querySelector('[data-from="/dossier/pieces/attestation.md"][data-to="LEGIARTI000032041431"]'));
     view.click(view.container.querySelector('[data-map-zoom=in]'));
     assert.ok(Number(view.container.querySelector('.pmc-map').dataset.scale) > 1);
-    view.click(inspector.querySelector('[data-open-reference][data-kind=piece]'));
-    assert.equal(view.opened.at(-1).path, '/dossier/pieces/attestation.md');
-    view.click(view.dom.window.document.querySelector('#outside'));
-    assert.equal(inspector.hidden, true);
-    assert.equal(view.container.querySelectorAll('.is-dim').length, 0);
+    view.click(piece);
+    assert.deepEqual(view.opened.at(-1), { path: '/dossier/pieces/attestation.md', passage: { quote: 'Société Exemple SAS n’a pas livré.' } });
   } finally { view.close(); }
 });
 
@@ -157,27 +150,21 @@ test('changes the graph using stored Catala scenarios without recomputing or hid
     };
     const initial = requests;
     choose('SansDemande');
-    assert.equal(view.container.querySelector('[data-node="x002"] .pmc-value').textContent, 'Non');
+    assert.ok(view.container.querySelector('[data-doc="LEGIARTI000032041431"]'));
     choose('TestErrone');
     assert.match(view.container.querySelector('.pmc-explanation').textContent, /ne produit pas de graphe/);
-    assert.equal(view.container.querySelectorAll('[data-node]').length, 0);
+    assert.equal(view.container.querySelectorAll('[data-doc]').length, 0);
     assert.equal(requests, initial);
   } finally { view.close(); }
 });
 
-test('shows a native JSON graph when the scenario has no DOT and keeps its provenance in the inspector', async () => {
+test('shows a native JSON graph when the scenario has no DOT without exposing its provenance in the boxes', async () => {
   const position = { file: '/dossier/.piecemaker/catala/demo/demo.catala_fr', start: { line: 9, character: 1 }, end: { line: 9, character: 50 }, law_headings: ['Article 1217'] };
   const provenance = { trace: [{ element: { kind: 'scope_call', name: 'Demo', decl_pos: position }, pos: position, value: {}, trace: [{ element: { kind: 'scope_var', name: 'sanction_possible', output: true, decl_pos: position }, pos: position, value: true, trace: [{ element: { kind: 'exception' }, pos: position, value: true }] }] }], definitions: [], dependencies: [], issues: ['Graphe issu de la trace JSON.'] };
   const view = await open([program({ graphe: '', scenarios: [{ fichier: 'test_demo.catala_fr', scope: 'Test', passed: true, test_reussi: true, graphe: '', message: '', provenance }] })]);
   try {
-    assert.ok(view.container.querySelector('[data-node][data-kind="conclusion"]'));
-    assert.doesNotMatch(view.container.querySelector('.pmc-map-summary').textContent, /trace JSON/);
-    assert.doesNotMatch(view.container.querySelector('.pmc-map').textContent, /Origine native|Ligne 9/);
-    view.click(view.container.querySelector('[data-node][data-kind="conclusion"]'));
-    view.click(view.container.querySelector('.pmc-inspector .pmc-native summary'));
-    assert.match(view.container.querySelector('.pmc-inspector').textContent, /Origine native Catala.*Article 1217/s);
-    assert.equal(view.container.querySelector('.pmc-inspector .pmc-native').open, true);
-    assert.match(view.container.querySelector('.pmc-inspector .pmc-native').textContent, /trace JSON/);
+    assert.ok(view.container.querySelector('[data-doc="LEGIARTI000032041431"]'));
+    assert.doesNotMatch(view.container.querySelector('.pmc-map').textContent, /Origine native|Ligne 9|trace JSON|catala_fr/);
   } finally { view.close(); }
 });
 

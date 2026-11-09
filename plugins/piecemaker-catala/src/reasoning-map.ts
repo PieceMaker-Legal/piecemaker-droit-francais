@@ -1,12 +1,7 @@
 import type { Reasoning, Source, Step } from './graph.js';
 
-type Relation = '' | 'si' | 'selon' | 'sauf';
-
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const legal = (source: Source) => source.kind === 'article' || source.kind === 'jurisprudence';
-const fold = (text: string) => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s_]+/g, '_');
-const words = (text: string) => new Set((text.match(/[\p{L}_][\p{L}\p{N}_]*/gu) ?? []).map(fold));
-const container = (step: Step) => step.answer && (step.value.startsWith('{') || step.name.includes('|'));
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const date = (text: string) => text.replace(/\|?(\d{4})-(\d{2})-(\d{2})\|?/g, (_, year, month, day) => `${Number(day) === 1 ? '1er' : Number(day)} ${MONTHS[Number(month) - 1]} ${year}`);
 const number = (value: number, digits = 3) => value.toLocaleString('fr-FR', { maximumFractionDigits: digits });
@@ -41,17 +36,6 @@ export function tone(step: Step) {
 const definition = (step: Step) => step.origins.find((origin) => origin.selected && origin.role === 'definition' && !origin.overrides)?.body
   ?? step.origins.find((origin) => origin.selected && origin.role === 'definition')?.body ?? '';
 
-function relation(owner: Step, child: Step): Relation {
-  const name = fold(child.name);
-  if (owner.origins.some((origin) => origin.selected && origin.role === 'condition' && origin.overrides && words(origin.expression || origin.text).has(name))) return 'sauf';
-  const text = definition(owner);
-  const condition = text.match(/\bsi\s+([\s\S]+?)\s+alors\b/)?.[1];
-  if (condition && words(condition).has(name)) return 'si';
-  const subject = text.match(/\bselon\s+([\p{L}_][\p{L}\p{N}_]*)/u)?.[1];
-  if (subject && fold(subject) === name) return 'selon';
-  return '';
-}
-
 export function formula(step: Step, human: (text: string) => string) {
   const text = definition(step).replace(/\s+/g, ' ').match(/(?:^|\s)égal à\s+(.+)$/)?.[1]?.trim() ?? step.expression;
   const plain = text.replace(/^qualifier de\s*\((.*)\)$/, '$1').replace(/^qualifier de\s+/, '');
@@ -61,59 +45,101 @@ export function formula(step: Step, human: (text: string) => string) {
     .replace(/>=/g, '≥').replace(/<=/g, '≤').replace(/\s\*\s/g, ' × ').replace(/\s\/\s/g, ' ÷ ').replace(/\s=\s/g, ' = ');
 }
 
-const KINDS: Record<string, [string, string]> = {
-  conclusion: ['✓', 'Conclusion'],
-  condition: ['◆', 'Condition'],
-  calcul: ['∑', 'Calcul'],
-  fait: ['●', 'Fait établi par pièce'],
-  hypothese: ['◎', 'Hypothèse du scénario'],
-};
-const RELATIONS: Record<Exclude<Relation, ''>, string> = { si: 'Applicable si', selon: 'Selon', sauf: 'Sauf' };
-const ORDER: Record<string, number> = { si: 0, selon: 1, condition: 2, calcul: 3, fait: 4, hypothese: 4, sauf: 5 };
+type Name = (source: Source) => { main: string; note: string };
+type Doc = { key: string; source: Source; quotes: string[]; steps: Set<string> };
 
-export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source, chip?: boolean) => string) {
-  const shown = model.steps.filter((step) => !container(step));
-  if (!shown.length) return '';
-  const steps = new Map(shown.map((step) => [step.id, step]));
-  const parents = (step: Step) => step.parents.map((id) => steps.get(id)).filter((parent): parent is Step => Boolean(parent));
-  const used = new Set(shown.flatMap((step) => step.parents));
-  const kind = (step: Step, root: boolean) => root && step.kind === 'rule' && !/^(?:argent|money|date|décimal|decimal|entier|integer|durée|duration)$/i.test(step.type) ? 'conclusion'
-    : step.kind === 'rule' ? (/^(?:argent|money|date|décimal|decimal|entier|integer|durée|duration)$/i.test(step.type) || /^\$|^\|?\d{4}-|^-?\d/.test(step.value) ? 'calcul' : 'condition')
-    : step.sources.some((source) => source.kind === 'piece') ? 'fait' : 'hypothese';
-  const size = (step: Step, seen = new Set<string>()): number => seen.has(step.id) ? 0 : (seen.add(step.id), 1 + parents(step).reduce((total, parent) => total + size(parent, seen), 0));
-  const outputs = model.steps.filter(container).flatMap((step) => step.parents).map((id) => steps.get(id)).filter((step): step is Step => Boolean(step));
-  const roots = (outputs.length ? outputs : shown).filter((step) => !used.has(step.id) && step.kind === 'rule');
-  const ordered = [...new Set(roots.length ? roots : shown.filter((step) => !used.has(step.id)))].sort((a, b) => Number(Boolean(b.notes.question)) - Number(Boolean(a.notes.question)) || size(b) - size(a));
-  const rendered = new Set<string>();
-  const pill = (step: Step) => `<span class="pmc-value pmc-${tone(step)}">${escape(display(step))}</span>`;
-  const chips = (sources: Source[]) => sources.length ? `<div class="pmc-node-refs">${sources.map((source) => sourceLink(source, true)).join('')}</div>` : '';
-  const node = (step: Step, root: boolean, link: Relation) => {
-    const type = kind(step, root);
-    const [icon, label] = link === 'sauf' ? ['⚖', 'Exception'] : KINDS[type];
-    const pieces = step.sources.filter((source) => source.kind === 'piece' && !/PROJECTION|\.catala_/i.test(source.target));
-    const law = step.sources.filter(legal);
-    const others = step.sources.filter((source) => !legal(source) && source.kind !== 'piece' && source.kind !== 'origin');
-    const quote = (type === 'fait' || type === 'hypothese' ? pieces : [...law, ...pieces]).find((source) => source.quote)?.quote ?? '';
-    const expression = type === 'fait' || type === 'hypothese' ? '' : formula(step, human);
-    const question = step.notes.question && step.notes.question !== step.title ? step.notes.question : '';
-    const failed = step.sources.some((source) => source.status === 'failed');
-    const open = type === 'hypothese' || tone(step) === 'warn';
-    return `<article class="pmc-node" data-node="${step.id}" data-card="${step.id}" data-kind="${type}" data-tone="${tone(step)}" data-open="${open}" tabindex="0" role="button" aria-pressed="false"><header><span class="pmc-node-kind">${icon} ${label}</span>${pill(step)}</header><h3>${escape(question || step.title)}</h3>${question ? `<p class="pmc-node-name">${escape(step.title)}</p>` : ''}${expression ? `<p class="pmc-node-formula">${escape(expression)}</p>` : ''}${quote ? `<q>${escape(quote)}</q>` : ''}${chips([...law, ...others, ...pieces])}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : type === 'hypothese' ? '<p class="pmc-warn">Pièce à produire pour établir ce point.</p>' : ''}${(type === 'condition' || type === 'conclusion') && !step.sources.length ? '<p class="pmc-warn">Aucune source rattachée à cette règle.</p>' : ''}${failed ? '<p class="pmc-warn">Citation non retrouvée dans la source.</p>' : ''}</article>`;
+const LEGAL_ID = /(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+|(?<=courdecassation\.fr\/decision\/)[0-9a-f]{24}/i;
+const KIND_LABELS: Record<string, string> = { article: 'Article', jurisprudence: 'Jurisprudence', piece: 'Pièce' };
+
+function docKey(source: Source, folder: string) {
+  if (source.kind === 'origin' || /PROJECTION|\.catala_/i.test(source.target)) return '';
+  if (/^https?:/i.test(source.target)) return legal(source) ? (source.id && LEGAL_ID.test(source.id) ? source.id : source.target.match(LEGAL_ID)?.[0] ?? '') : '';
+  if (!source.target) return '';
+  try {
+    const path = decodeURIComponent(new URL(source.target, `file:///${source.origin.replace(/^\/+/, '')}`).pathname);
+    return !folder || path.startsWith(`/${folder.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')}/`) ? path : '';
+  } catch { return ''; }
+}
+
+function title(source: Source, name: Name) {
+  const { main, note } = name(source);
+  if (source.kind !== 'piece' || (source.label && source.label !== source.target && !/[\\/]/.test(source.label))) return { main: source.kind === 'piece' ? source.label || main : main, note };
+  const text = main.replace(/\.[^.]+$/, '').replace(/^(\d+)[\s_-]+/, '').replace(/[_-]+/g, ' ').trim();
+  const number = main.match(/^(\d+)[\s_-]/)?.[1];
+  return { main: text ? text[0].toUpperCase() + text.slice(1) : main, note: number ? `Pièce ${Number(number)}` : '' };
+}
+
+export function reasoningMap(model: Reasoning, name: Name, folder = '') {
+  const docs = new Map<string, Doc>();
+  const missing = new Map<string, Source>();
+  const own = new Map<string, string[]>();
+  const add = (source: Source, step?: Step) => {
+    const key = docKey(source, folder);
+    if (!key) { if (source.kind !== 'origin' && !/PROJECTION|\.catala_/i.test(source.target)) missing.set(source.target || source.label, source); return ''; }
+    const doc = docs.get(key) ?? { key, source, quotes: [], steps: new Set<string>() };
+    if (source.quote && !doc.quotes.includes(source.quote)) doc.quotes.push(source.quote);
+    if (step) doc.steps.add(step.title);
+    docs.set(key, doc);
+    return key;
   };
-  const branch = (step: Step, root: boolean, link: Relation): string => {
-    const tag = link ? `<span class="pmc-relation" data-relation="${link}">${RELATIONS[link]}</span>` : '';
-    if (rendered.has(step.id)) return `<li data-relation="${link}">${tag}<button type="button" class="pmc-node-ref" data-goto="${step.id}"><span>↑ ${escape(step.notes.question || step.title)}</span>${pill(step)}<span class="pmc-muted">voir plus haut</span></button></li>`;
-    rendered.add(step.id);
-    const children = parents(step).map((parent) => ({ parent, link: relation(step, parent) }))
-      .sort((a, b) => (ORDER[a.link || kind(a.parent, false)] ?? 9) - (ORDER[b.link || kind(b.parent, false)] ?? 9));
-    const cumulative = children.length > 1 && /\b(?:cumul|et)\b/.test(definition(step)) && !/\bselon\b/.test(definition(step));
-    const list = children.length ? `<ul>${cumulative ? '<li class="pmc-tree-note">Toutes ces conditions doivent être réunies</li>' : ''}${children.map((child) => branch(child.parent, false, child.link)).join('')}</ul>` : '';
-    return `<li data-relation="${link}">${tag}${node(step, root, link)}${list}</li>`;
+  for (const step of model.steps) own.set(step.id, [...new Set(step.sources.map((source) => add(source, step)).filter(Boolean))]);
+  for (const source of model.others) add(source);
+  if (!docs.size) return missing.size ? `<p class="pmc-warn">Aucune référence citée n’est enregistrée dans le dossier.</p>` : '';
+  const steps = new Map(model.steps.map((step) => [step.id, step]));
+  const isLegal = (key: string) => legal(docs.get(key)!.source);
+  const top = (id: string) => { const keys = own.get(id) ?? []; const law = keys.filter(isLegal); return law.length ? law : keys; };
+  const reach = new Map<string, string[]>();
+  const effective = (id: string, seen = new Set<string>()): string[] => {
+    if (reach.has(id)) return reach.get(id)!;
+    if (seen.has(id)) return [];
+    seen.add(id);
+    const keys = top(id).length ? top(id) : [...new Set((steps.get(id)?.parents ?? []).flatMap((parent) => effective(parent, seen)))];
+    reach.set(id, keys);
+    return keys;
   };
-  const [main, ...rest] = ordered;
-  const tree = main ? `<ul class="pmc-tree">${branch(main, true, '')}</ul>` : '';
-  const others = rest.length ? `<section class="pmc-tree-others"><h3>Autres résultats calculés</h3><ul class="pmc-tree">${rest.map((step) => branch(step, false, '')).join('')}</ul></section>` : '';
-  const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} source${model.others.length > 1 ? 's' : ''} à rattacher</summary><div class="pmc-node-refs">${model.others.map((source) => sourceLink(source, true)).join('')}</div></details>` : '';
-  const legend = `<div class="pmc-map-summary">Lecture de haut en bas : la conclusion, puis les conditions qui la commandent, jusqu’aux faits et aux pièces.<span><b data-kind="conclusion">✓ Conclusion</b><b data-kind="condition">◆ Condition</b><b data-kind="calcul">∑ Calcul</b><b data-kind="fait">● Fait établi par pièce</b><b data-kind="hypothese">◎ Hypothèse à établir</b><b data-kind="sauf">⚖ Sauf : exception</b></span><span><i class="pmc-value pmc-ok">Confirmé</i><i class="pmc-value pmc-ko">Réfuté</i><i class="pmc-value pmc-warn">Inconnu</i> Cliquez sur une case pour lire la règle, sa source et ses pièces.</span></div>`;
-  return `${legend}${unused}<div class="pmc-map" data-layout="tree" aria-label="Arbre du raisonnement, de la conclusion vers les faits">${tree}${others}</div>`;
+  const edges = new Map<string, Set<string>>();
+  const link = (from: string, to: string, why: string) => { if (from !== to) edges.set(`${from}\n${to}`, (edges.get(`${from}\n${to}`) ?? new Set()).add(why)); };
+  for (const step of model.steps) {
+    const targets = top(step.id);
+    if (!targets.length) continue;
+    for (const piece of (own.get(step.id) ?? []).filter((key) => !targets.includes(key))) for (const target of targets) link(piece, target, step.title);
+    for (const parent of step.parents) for (const from of effective(parent)) for (const target of targets) link(from, target, step.title);
+  }
+  const pairs = [...edges.keys()].map((pair) => pair.split('\n') as [string, string]);
+  const outgoing = (key: string) => pairs.filter(([from]) => from === key).map(([, to]) => to);
+  const level = new Map<string, number>();
+  const depth = (key: string, path = new Set<string>()): number => {
+    if (level.has(key)) return level.get(key)!;
+    if (path.has(key)) return 0;
+    path.add(key);
+    const value = Math.max(-1, ...outgoing(key).map((to) => depth(to, path))) + 1;
+    path.delete(key);
+    level.set(key, value);
+    return value;
+  };
+  const linked = [...docs.keys()].filter((key) => pairs.some((pair) => pair.includes(key)));
+  const loose = [...docs.keys()].filter((key) => !linked.includes(key));
+  linked.forEach((key) => depth(key));
+  const rows: string[][] = [];
+  for (const key of linked) (rows[level.get(key)!] ??= []).push(key);
+  const position = new Map<string, number>();
+  rows.forEach((row) => {
+    const weight = (key: string) => { const above = outgoing(key).filter((to) => position.has(to)); return above.length ? above.reduce((total, to) => total + position.get(to)!, 0) / above.length : .5; };
+    row.sort((a, b) => weight(a) - weight(b));
+    row.forEach((key, index) => position.set(key, (index + .5) / row.length));
+  });
+  const box = (key: string) => {
+    const doc = docs.get(key)!;
+    const { main, note } = title(doc.source, name);
+    const kind = KIND_LABELS[doc.source.kind] ?? 'Document';
+    const failed = doc.source.status === 'failed';
+    const used = doc.steps.size ? `Fonde : ${[...doc.steps].join(' · ')}` : 'Cité sans lien dans le raisonnement';
+    return `<button type="button" class="pmc-doc" data-doc="${escape(key)}" data-kind="${escape(doc.source.kind)}" data-open-reference data-target="${escape(doc.source.target)}" data-origin="${escape(doc.source.origin)}" data-quote="${escape(doc.quotes[0] ?? '')}"${doc.source.id ? ` data-id="${escape(doc.source.id)}"` : ''}${failed ? ' data-citation="failed"' : ''} title="${escape(used)}"><span class="pmc-doc-kind">${kind}${note ? ` · ${escape(note)}` : ''}</span><strong>${escape(main)}</strong>${failed ? '<span class="pmc-warn">Citation non retrouvée</span>' : ''}</button>`;
+  };
+  const arrows = pairs.map(([from, to]) => `<g data-from="${escape(from)}" data-to="${escape(to)}"><title>${escape([...edges.get(`${from}\n${to}`)!].join(' · '))}</title><path marker-end="url(#pmc-arrow)"/></g>`).join('');
+  const graph = rows.length ? `<div class="pmc-graph"><svg class="pmc-graph-edges" aria-hidden="true"><defs><marker id="pmc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z"/></marker></defs>${arrows}</svg>${rows.map((row) => `<div class="pmc-graph-row">${row.map(box).join('')}</div>`).join('')}</div>` : '';
+  const alone = loose.length ? `<section class="pmc-graph-loose"><h3>Cités sans lien dans le raisonnement</h3><div class="pmc-graph-row">${loose.map(box).join('')}</div></section>` : '';
+  const absent = missing.size ? `<details class="pmc-unused"><summary>${missing.size} référence${missing.size > 1 ? 's' : ''} à enregistrer dans le dossier</summary><p>${[...missing.values()].map((source) => escape(name(source).main)).join(' · ')}</p></details>` : '';
+  const legend = `<div class="pmc-map-summary">Une case par document cité. La flèche va du document qui établit un point vers le texte qu’il permet d’appliquer.<span><b data-kind="article">Article</b><b data-kind="jurisprudence">Jurisprudence</b><b data-kind="piece">Pièce</b> Cliquez sur une case pour ouvrir le document. Survolez-la pour voir les points qu’il fonde.</span></div>`;
+  return `${legend}${absent}<div class="pmc-map" data-layout="graph" aria-label="Graphe des documents cités">${graph}${alone}</div>`;
 }

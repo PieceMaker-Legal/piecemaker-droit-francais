@@ -109,23 +109,26 @@ test('writes the rule, then its projection, then its justification', () => {
   assert.deepEqual(reasoningIssues(model).map((entry) => [entry.id, entry.title]), [[model.steps[0].id, 'Pièce 2, lettre']]);
 });
 
-test('keeps the argument readable and attaches references directly to rules and facts', () => {
+test('draws one box per cited document and links the piece to the article it applies', () => {
   const model = reasoning(dot, [module], citations);
   const document = new JSDOM(reasoningGraph(model)).window.document;
-  assert.equal(document.querySelector('.pmc-map').dataset.layout, 'tree');
-  const rule = document.querySelector('[data-node="x002"]');
-  const fact = document.querySelector('[data-node="x001"]');
-  assert.equal(rule.dataset.kind, 'conclusion');
-  assert.ok(rule.querySelector('[data-kind="article"][data-open-reference]'));
-  assert.ok(fact.querySelector('[data-kind="piece"][data-open-reference]'));
-  assert.ok(rule.closest('li').querySelector(':scope > ul [data-node="x001"]'));
-  assert.match(rule.querySelector('q').textContent, /résoudre le contrat/);
-  assert.match(fact.querySelector('q').textContent, /Société Exemple SAS est mise en demeure de livrer/);
-  assert.match(fact.textContent, /Citation non retrouvée/);
-  assert.equal(fact.querySelector('.pmc-value').textContent, 'Oui');
-  assert.match(document.querySelector('.pmc-map-summary').textContent, /de haut en bas/);
-  assert.equal(document.querySelectorAll('[data-node][data-kind="origin"], [data-node][data-kind="action"]').length, 0);
-  assert.match(document.querySelector('.pmc-unused').textContent, /Article 1104/);
+  assert.equal(document.querySelector('.pmc-map').dataset.layout, 'graph');
+  const article = document.querySelector('.pmc-graph [data-doc="LEGIARTI000032041472"]');
+  const piece = document.querySelector('.pmc-graph [data-doc="/dossiers/exemple/pieces/lettre-jean-dupont.md"]');
+  assert.equal(article.dataset.kind, 'article');
+  assert.ok(article.hasAttribute('data-open-reference'));
+  assert.equal(article.querySelector('strong').textContent, 'Article 1226');
+  assert.match(article.dataset.quote, /résoudre le contrat/);
+  assert.equal(piece.dataset.kind, 'piece');
+  assert.equal(piece.querySelector('strong').textContent, 'Pièce 2, lettre');
+  assert.match(piece.dataset.quote, /Société Exemple SAS est mise en demeure de livrer/);
+  assert.equal(piece.dataset.citation, 'failed');
+  assert.match(piece.title, /Mise en demeure/i);
+  assert.ok(document.querySelector('[data-from="/dossiers/exemple/pieces/lettre-jean-dupont.md"][data-to="LEGIARTI000032041472"]'));
+  assert.match(document.querySelector('.pmc-map-summary').textContent, /Une case par document cité/);
+  assert.equal(document.querySelectorAll('[data-doc][data-kind="origin"]').length, 0);
+  assert.match(document.querySelector('.pmc-graph-loose').textContent, /Article 1104/);
+  assert.doesNotMatch(document.querySelector('.pmc-map').textContent, /https?:|\.\.\/|\.md/);
   const otherQuote = citations.map((citation) => ({ ...citation, quote: 'Autre passage fictif.', status: 'passed' }));
   const unchecked = reasoning(dot, [module], otherQuote);
   assert.equal(unchecked.steps.find((step) => step.kind === 'fact').sources[0].status, '');
@@ -140,9 +143,8 @@ test('uses the native position of an input to connect its piece without Concerne
   assert.equal(fact.sources[0].target, '../../../pieces/reception-fictive.md');
   assert.match(fact.origins[0].headings.join(' '), /Pièce fictive de réception/);
   const graph = new JSDOM(reasoningGraph(model)).window.document;
-  const factNode = graph.querySelector('[data-node="x001"]');
-  assert.ok(factNode.querySelector('[data-target="../../../pieces/reception-fictive.md"]'));
-  assert.equal(graph.querySelectorAll('[data-node][data-kind="origin"]').length, 0);
+  assert.ok(graph.querySelector('[data-doc][data-target="../../../pieces/reception-fictive.md"]'));
+  assert.equal(graph.querySelectorAll('[data-doc][data-kind="origin"]').length, 0);
   assert.match(reasoningCard(fact, model), /reception-fictive\.md/);
 });
 
@@ -167,11 +169,8 @@ test('builds a graph from native JSON when DOT is unavailable and preserves the 
   assert.ok(answer.origins.some((origin) => origin.label === 'principe' && !origin.selected));
   assert.ok(answer.origins.some((origin) => origin.label === 'exception' && origin.selected));
   const graph = new JSDOM(reasoningGraph(model)).window.document;
-  const conclusion = graph.querySelector('[data-node][data-kind="conclusion"]');
-  assert.equal(conclusion.querySelector('.pmc-value').textContent, 'Non');
-  const fact = conclusion.closest('li').querySelector(':scope > ul [data-node]');
-  assert.match(fact.textContent, /Société Exemple SAS est mise en demeure de livrer/);
-  assert.ok(fact.querySelector('[data-kind="piece"]'));
+  const piece = graph.querySelector('[data-doc][data-kind="piece"]');
+  assert.match(piece.dataset.quote, /Société Exemple SAS est mise en demeure de livrer/);
   assert.doesNotMatch(graph.querySelector('.pmc-map').textContent, /Origine native|colonne|Autre définition/);
   assert.match(reasoningCard(answer, model), /appliquée au scénario/);
   assert.match(reasoningCard(answer, model), /autre règle/);
@@ -180,9 +179,10 @@ test('builds a graph from native JSON when DOT is unavailable and preserves the 
 test('distinguishes statutes, case law and other references without treating a website as legal authority', () => {
   const file = { ...module, contenu: `${module.contenu}\n## Sources\nConcerne : résolution_possible\n[Décision fictive](https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001)\n[Documentation](https://example.org/explication)\n` };
   const graph = new JSDOM(reasoningGraph(reasoning(dot, [file], citations))).window.document;
-  assert.ok(graph.querySelector('[data-open-reference][data-kind="article"]'));
-  assert.match(graph.querySelector('[data-open-reference][data-kind="jurisprudence"]').textContent, /Décision fictive/);
-  assert.match(graph.querySelector('[data-open-reference][data-kind="reference"]').textContent, /Documentation/);
+  assert.ok(graph.querySelector('[data-doc][data-kind="article"]'));
+  assert.match(graph.querySelector('[data-doc][data-kind="jurisprudence"]').textContent, /Décision fictive/);
+  assert.equal(graph.querySelectorAll('[data-doc][data-kind="reference"]').length, 0);
+  assert.match(graph.querySelector('.pmc-unused').textContent, /1 référence à enregistrer dans le dossier.*Documentation/);
   const webOnly = { ...module, contenu: '## Sources\nConcerne : résolution_possible\n[Documentation](https://example.org/explication)\n' };
   assert.match(reasoning(dot, [webOnly]).steps.find((step) => step.kind === 'rule').issue, /Aucun article ni aucune décision/);
 });
@@ -192,12 +192,8 @@ test('shares supporting nodes and preserves authored questions, research and nat
   const coverage = { scopes: [{ index: 0, name: 'AvecDemande' }, { index: 1, name: 'SansDemande' }], locations: [{ file: file.chemin, tree: [{ range: { start: { line: 15 }, end: { line: 15 } }, reached_by: [0, 1], subtree: [] }] }] };
   const model = reasoning(dot.replace('  x002 -> x003', '  x004 [label=<<table><tr><td>autre_solution</td></tr><tr><td>mise_en_demeure</td></tr><tr><td>= true</td></tr></table>>];\n  x001 -> x004 [style="solid"];\n  x002 -> x003'), [file], citations, coverage);
   const graph = new JSDOM(reasoningGraph(model)).window.document;
-  assert.equal(graph.querySelectorAll('[data-node="x001"]').length, 1);
-  assert.equal(graph.querySelectorAll('[data-goto="x001"]').length, 1);
-  assert.equal(graph.querySelectorAll('[data-node="x002"]').length, 1);
-  assert.ok(graph.querySelector('[data-node="x004"]'));
-  assert.match(graph.querySelector('[data-node="x002"]').textContent, /Peut-on retenir cette solution/);
-  assert.match(graph.querySelector('[data-node="x002"]').textContent, /Obtenir la preuve de réception/);
+  assert.equal(graph.querySelectorAll('[data-doc="/dossiers/exemple/pieces/lettre-jean-dupont.md"]').length, 1);
+  assert.equal(graph.querySelectorAll('[data-doc="LEGIARTI000032041472"]').length, 1);
   const card = new JSDOM(reasoningCard(model.steps.find((step) => step.id === 'x002'), model)).window.document;
   assert.match(card.body.textContent, /Démarches effectuées.*réponse attendue/s);
   assert.match(card.body.textContent, /AvecDemande, SansDemande/);
@@ -209,9 +205,7 @@ test('keeps unknown and disputed facts open without changing their scenario valu
     const fact = model.steps.find((step) => step.kind === 'fact');
     assert.equal(fact.value, value);
     assert.match(fact.issue, issue);
-    const graph = new JSDOM(reasoningGraph(model)).window.document;
-    assert.equal(graph.querySelector('[data-node="x001"]').dataset.open, 'true');
-    assert.equal(graph.querySelector('[data-node="x001"]').dataset.tone, 'warn');
+    assert.equal(new JSDOM(reasoningGraph(model)).window.document.querySelectorAll('[data-doc]').length, 3);
   }
 });
 
@@ -236,17 +230,7 @@ test('follows the depth of the Catala rules and separates exceptions', () => {
     x003 -> x004 [style="solid"];
     x002 -> x004 [style="solid"];
   }`);
-  const document = new JSDOM(reasoningGraph(model)).window.document;
-  const conclusion = document.querySelector('[data-node="x004"]');
-  assert.equal(conclusion.dataset.kind, 'conclusion');
-  assert.equal(conclusion.querySelector('.pmc-node-formula').textContent, 'inexécution grave et non force majeure');
-  const below = (id) => [...conclusion.closest('li').querySelectorAll(':scope > ul > li > [data-node]')].map((node) => node.dataset.node).includes(id);
-  assert.ok(below('x003') && below('x002'));
-  const qualification = document.querySelector('[data-node="x003"]');
-  assert.equal(qualification.dataset.kind, 'condition');
-  assert.ok(qualification.closest('li').querySelector(':scope > ul [data-node="x001"][data-kind="hypothese"]'));
-  assert.match(document.querySelector('[data-node="x001"]').textContent, /Oui.*Inexécution.*Pièce à produire/);
-  assert.match(qualification.textContent, /Aucune source rattachée/);
+  assert.equal(reasoningGraph(model), '');
   const card = new JSDOM(reasoningText(model)).window.document.querySelector('[data-card="x004"]');
   assert.match(card.querySelector('[data-part="rule"]').textContent, /Non\s*Force majeure/);
   assert.match(card.querySelector('[data-part="projection"]').textContent, /Les conditions sont remplies/);
@@ -267,11 +251,6 @@ test('preserves a conditional dependency without claiming that a dashed link pro
   assert.match(card.querySelector('[data-part="rule"]').textContent, /condition d’application/);
   assert.match(card.querySelector('[data-part="projection"]').textContent, /Non/);
   assert.match(card.querySelector('[data-part="justification"]').textContent, /Force majeure Oui/);
-  const graph = new JSDOM(reasoningGraph(model)).window.document;
-  assert.equal(graph.querySelector('[data-node="x010"] .pmc-value').textContent, 'Non');
-  assert.equal(graph.querySelector('[data-node="x011"] .pmc-value').textContent, 'Oui');
-  assert.ok(graph.querySelector('[data-node="x010"]').closest('li').querySelector(':scope > ul [data-node="x011"]'));
-  assert.equal(graph.querySelectorAll('[data-kind="exception"][data-node]').length, 0);
 });
 
 test('uses the native doc and its quote in the qualification card without mixing nearby sources', () => {
@@ -297,20 +276,17 @@ test('uses the native doc and its quote in the qualification card without mixing
   }`, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }]);
   assert.equal(model.steps.find((step) => step.id === 'x001').kind, 'fact');
   const document = new JSDOM(reasoningGraph(model)).window.document;
-  const card = document.querySelector('[data-node="x002"]');
-  const fact = document.querySelector('[data-node="x001"]');
-  assert.match(card.querySelector('q').textContent, /trois séances/);
-  assert.match(card.querySelector('.pmc-node-formula').textContent, /séances constatées ≥ 3/);
-  assert.equal(fact.querySelector('h3').textContent, 'Séances constatées');
-  assert.equal(fact.querySelector('.pmc-value').textContent, '4');
-  assert.match(fact.querySelector('[data-quote]').dataset.quote, /quatre séances/);
-  assert.doesNotMatch(card.textContent, /Autre article/);
+  const article = document.querySelector('[data-doc="LEGIARTI000000000001"]');
+  const piece = document.querySelector('[data-doc="/pieces/presence-fictive.md"]');
+  assert.match(article.dataset.quote, /trois séances/);
+  assert.match(piece.dataset.quote, /quatre séances/);
+  assert.equal(document.querySelectorAll('[data-from="/pieces/presence-fictive.md"][data-to="LEGIARTI000000000009"]').length, 0);
+  assert.ok(document.querySelector('[data-from="/pieces/presence-fictive.md"][data-to="LEGIARTI000000000001"]'));
   assert.equal(document.querySelectorAll('a').length, 0);
-  assert.doesNotMatch(document.querySelector('.pmc-map').textContent, /https?:|\.\.\//);
-  const documentButton = fact.querySelector('[data-open-reference]');
-  assert.equal(documentButton.tagName, 'BUTTON');
-  assert.equal(documentButton.textContent, 'presence-fictive.md');
-  assert.equal(documentButton.getAttribute('type'), 'button');
-  assert.ok(!documentButton.title.includes('http'));
-  assert.equal(card.querySelector('[data-open-reference]').textContent, 'Article 1 du règlement fictif');
+  assert.doesNotMatch(document.querySelector('.pmc-map').textContent, /https?:|\.\.\/|\.md/);
+  assert.equal(piece.tagName, 'BUTTON');
+  assert.equal(piece.getAttribute('type'), 'button');
+  assert.equal(piece.querySelector('strong').textContent, 'Presence fictive');
+  assert.ok(!piece.title.includes('http'));
+  assert.equal(article.querySelector('strong').textContent, 'Article 1 du règlement fictif');
 });

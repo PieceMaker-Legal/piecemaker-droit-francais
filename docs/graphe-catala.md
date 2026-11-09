@@ -102,8 +102,8 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 
 | Ajout | Comportement |
 |---|---|
-| Graphe à nœuds partagés | Chaque application de règle garde une carte et sa conséquence. Les données factuelles figurent dans les applications qu’elles soutiennent. |
-| Lecture juridique | La règle, les conditions et leurs appuis sont alignés horizontalement. La conséquence apparaît en dessous. |
+| Une case par document cité | Le graphe dessine une case par article, décision ou pièce enregistré dans le dossier. Un document cité par plusieurs étapes garde une seule case. |
+| Lecture juridique | La flèche va du document qui établit un point vers le texte qu’il permet d’appliquer. Le texte appliqué en dernier figure en haut. |
 | Groupes `ET`, `OU`, `NON` | PieceMaker lit les expressions booléennes simples présentes dans la trace pour expliciter les relations. |
 | Conditions d’application | Les dépendances pointillées de la trace restent identifiées. Une négation `NON` reste distincte de la sélection d’une définition conditionnelle. Un lien pointillé ne prouve pas, à lui seul, une exception. |
 | Sources attachées aux éléments | Chaque condition ou exception réunit son fondement juridique, le fait invoqué et sa pièce dans trois parties distinctes. |
@@ -115,16 +115,14 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Remontée des manques | Un manque dans les appuis fait apparaître « Justification à compléter » sur les règles qui en dépendent. |
 | Choix du scénario | Le volet charge les traces conservées lors de la vérification, sans relancer Catala à chaque sélection. |
 | Test en échec visible | Le scénario reste dans la liste. Si Catala ne produit pas de trace valide, le volet annonce l’absence de graphe. |
-| Inspection d’un nœud | La sélection montre le détail et atténue les éléments sans relation avec le nœud choisi. |
+| Survol d’une case | Le survol met en évidence les flèches de la case et atténue les autres. L’infobulle nomme les points que le document fonde. |
 | Navigation dans les sources | Les pièces et références juridiques utilisent les lecteurs et contrôles de citation PieceMaker existants. |
 
-PieceMaker dessine des cases distinctes pour la règle, les conditions, les faits et les conséquences. Les flèches relient chaque condition à sa règle et à ses appuis ; une flèche descend de la règle vers la conséquence. Les groupes d’application restent transparents, sans cadre de tableau.
-
-PieceMaker présente chaque application de règle dans une ligne à trois colonnes : règle de droit, conditions, faits et pièces. Une flèche conduit à sa conséquence, placée en dessous. Les résultats réutilisés renvoient à leur démonstration précédente. Les liens entre applications descendent dans la marge. Les références apparaissent comme des boutons portant le nom du fichier, de l’article ou de la décision. Les URL ne sont pas affichées. Le clic utilise la visionneuse interne. Si le nom juridique manque, le volet le signale sans inventer un intitulé. La lecture commence en haut ; l’ajustement porte sur la largeur pour conserver un texte lisible. Aucun Graphviz n’est nécessaire.
+Une case porte le titre du document, jamais son chemin ni son URL. Le clic ouvre le document dans la visionneuse interne, au passage cité. Une pièce sans titre déclaré reprend le nom de son fichier, sans extension ni numéro. Une référence hors du dossier, ou une simple page web, n’a pas de case : le volet la compte parmi les références à enregistrer dans le dossier. Les documents cités sans lien avec une étape sont regroupés sous le dessin. Les valeurs et les formules restent dans la présentation écrite. Aucun Graphviz n’est nécessaire.
 
 Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
 
-Chaque carte d’application sépare horizontalement la règle, les conditions et les faits invoqués. La conséquence du scénario figure en dessous. Les groupes ET, OU et NON restent dans les conditions ; ils ne deviennent plus des cartes isolées.
+Dans la présentation écrite, chaque carte d’application sépare la règle, les conditions et les faits invoqués. Les groupes ET, OU et NON restent dans les conditions.
 
 Les faits et leurs pièces figurent en face de la condition concernée. Un résultat intermédiaire est désigné comme résultat déjà obtenu, avec un lien vers sa démonstration. Il n’est pas présenté comme une nouvelle pièce.
 
