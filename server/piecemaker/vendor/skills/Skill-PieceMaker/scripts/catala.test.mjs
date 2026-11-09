@@ -412,7 +412,7 @@ test('exceptions, executer and squelette call Catala with the expected arguments
   } finally { cleanup(); }
 });
 
-test('verifier requires doc and a nonempty quote on every definition and rule', async () => {
+test('verifier requires doc, a nonempty quote and a past-participle title on every definition and rule', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime');
@@ -422,7 +422,9 @@ test('verifier requires doc and a nonempty quote on every definition and rule', 
       ['#[doc="Source : référence fictive."]\n', 'quote manquante'],
       ['#[doc="quote: «   »"]\n', 'quote manquante'],
       ['#[doc="Sans citation"]\n#[doc="quote: « Passage exact. »"]\n', 'quote manquante'],
-      ['#[doc="Source : référence fictive.\\nquote: « Passage exact. »"]\n', null],
+      ['#[doc="Source : référence fictive.\\nquote: « Passage exact. »"]\n', 'titre manquant'],
+      ['#[doc="titre: Montant de la prime\\nquote: « Passage exact. »"]\n', 'titre sans participe passé'],
+      ['#[doc="titre: Montant de la prime fixé\\nSource : référence fictive.\\nquote: « Passage exact. »"]\n', null],
     ];
     for (const [annotation, message] of cases) {
       fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\nCitation : « Une citation extérieure ne suffit pas. »\n\n```catala\nchamp d\'application Prime:\n' + annotation + 'définition montant égal à 10 €\n```\n');
@@ -436,7 +438,7 @@ test('verifier requires doc and a nonempty quote on every definition and rule', 
         assert.ok(output.includes(message));
       }
     }
-    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n#[doc="quote: « Passage exact. »"]\ndéfinition montant égal à 10 €\ndéfinition autre égal à 20 €\ndéclaration taux contenu décimal égal à 0.1\n```\n');
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n#[doc="titre: Montant fixé\\nquote: « Passage exact. »"]\ndéfinition montant égal à 10 €\ndéfinition autre égal à 20 €\ndéclaration taux contenu décimal égal à 0.1\n```\n');
     await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
     const check = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation');
     assert.equal(check.errors.length, 2);

@@ -333,13 +333,13 @@ test('states the declared objective, then shows each cited document by its title
   assert.match(undeclared.querySelector('[data-part="objective"]').textContent, /Objectif à déclarer/);
 });
 
-test('titles each box with its Titre note and flags a title without a past participle', () => {
-  const file = { ...module, contenu: `${module.contenu}\n## Titre\nConcerne : résolution_possible\nTitre : Résolution du contrat notifiée\n` };
+test('titles each box with the titre of its #[doc] and flags a title without a past participle', () => {
+  const file = { ...module, contenu: module.contenu.replace('  définition résolution_possible', '  #[doc="titre: Résolution du contrat notifiée\\nquote: « résoudre le contrat par voie de notification »"]\n  définition résolution_possible') };
   const document = new JSDOM(reasoningGraph(reasoning(dot, [file], citations))).window.document;
   const law = document.querySelector('[data-node="x002"] [data-part="law"]');
   assert.equal(law.querySelector('h3').textContent, 'Résolution du contrat notifiée');
   assert.equal(law.querySelector('[data-warning="participle"]'), null);
   assert.match(document.querySelector('[data-node="x002"] .pmc-consequence strong').textContent, /Résolution du contrat notifiée/);
   const untitled = new JSDOM(reasoningGraph(reasoning(dot, [module], citations))).window.document;
-  assert.ok(untitled.querySelector('[data-node="x002"] [data-part="law"] [data-warning="participle"]'));
+  assert.match(untitled.querySelector('[data-node="x002"] [data-part="law"] [data-warning="participle"]').textContent, /#\[doc\]/);
 });

@@ -10,10 +10,10 @@ employé salarié associé délégué préposé intéressé retraité assuré ac
 const NOUN_SUFFIX = /(?:ité|iété|erté|neté)$/;
 const ITE_VERBS = new Set('cité limité hérité évité mérité invité habité visité édité débité crédité imité facilité sollicité exploité quitté acquitté acheté jeté rejeté projeté été'.split(' '));
 
-const forms = (word: string) => [word, word.replace(/s$/, ''), word.replace(/e$/, ''), word.replace(/es$/, '')];
+const forms = (word) => [word, word.replace(/s$/, ''), word.replace(/e$/, ''), word.replace(/es$/, '')];
 
-const verbal = (word: string) => !forms(word).some((form) => NOUNS.has(form)) && forms(word).some((form) => IRREGULAR.has(form)
+const verbal = (word) => !forms(word).some((form) => NOUNS.has(form)) && forms(word).some((form) => IRREGULAR.has(form)
   || (form.length > 2 && form.endsWith('é') && !NOUNS.has(form) && (!NOUN_SUFFIX.test(form) || ITE_VERBS.has(form))));
 
-export const participle = (text: string) => text.toLowerCase().split(/[^\p{L}'’-]+/u)
+export const participle = (text) => text.toLowerCase().split(/[^\p{L}'’-]+/u)
   .flatMap((word) => word.replace(/^.*['’]/, '').split('-')).some(verbal);

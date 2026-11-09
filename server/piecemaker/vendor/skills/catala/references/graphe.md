@@ -15,16 +15,16 @@
 
 ## Annotation obligatoire et citation
 
-Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir une balise `quote` non vide.
+Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir une balise `quote` non vide et un `titre` au participe passé.
 Le vérificateur produit une erreur localisée pour chacun de ces manques. Cette obligation couvre aussi les définitions des scénarios.
 
 ````catala
 champ d'application Exemple:
-  #[doc="source: https://example.org/texte-fictif\nquote: « La condition requise est définie par ce texte fictif. »"]
+  #[doc="titre: Condition juridique remplie\nsource: https://example.org/texte-fictif\nquote: « La condition requise est définie par ce texte fictif. »"]
   définition condition_juridique égal à donnée_observée
 ````
 
-`#[doc]` appartient à Catala. Le contenu `source: …` et `quote: « … »` suit la convention PieceMaker.
+`#[doc]` appartient à Catala. Le contenu `titre: …`, `source: …` et `quote: « … »` suit la convention PieceMaker. `titre` nomme la case du graphe selon ASD-STE100 : groupe nominal court avec au moins un participe passé (« Contrat conclu », « Préavis exécuté »).
 Écrivez le lien après `source:` sans crochets Markdown dans l’attribut : le formateur du pack refuse certains liens avec crochets.
 Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait, indiquez le lien de la pièce et son passage exact.
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées.
@@ -48,7 +48,6 @@ Pour expliquer un nœud, ajoutez une section Markdown dans le fichier Catala. Le
 ## Réception de la demande
 
 Concerne : demande_reçue
-Titre : Demande reçue par le destinataire
 Question : La demande a-t-elle été reçue ?
 Justification : La réception doit être distinguée de l’envoi.
 À rechercher : Obtenir un justificatif de réception.
@@ -60,7 +59,7 @@ Citation : « Extrait fictif établissant seulement l’envoi. »
 
 `Concerne` rattache les sources et ces explications à un identifiant. Employez des identifiants distincts pour des notions distinctes dans un programme.
 
-Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. N’en inventez pas : sans objectif déclaré, demandez-le. `Titre` nomme la case selon ASD-STE100 : un groupe nominal court avec au moins un participe passé (« Contrat conclu », « Préavis exécuté »). Le graphe signale tout titre sans participe passé. `Question` formule la question juridique ; elle sert de titre seulement sans `Titre`. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
+Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. N’en inventez pas : sans objectif déclaré, demandez-le. `Question` formule la question juridique ; elle sert de titre seulement si le `#[doc]` n’en donne pas. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
 
 Répétez `Démarche` pour conserver les démarches effectuées et leurs résultats. N’inventez aucune démarche ni aucun résultat. Actualisez `À rechercher` lorsque la collecte progresse.
 

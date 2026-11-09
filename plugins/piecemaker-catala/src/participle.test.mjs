@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { participle } from './participle.ts';
+import { participle } from '../../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-participe.mjs';
 
 test('finds a past participle and ignores nouns that end like one', () => {
   for (const title of ['Contrat conclu', 'Préavis exécuté', 'Indemnité due', 'Clause prise en compte', 'Conditions réunies', 'Mandat confié au dirigeant']) assert.ok(participle(title), title);

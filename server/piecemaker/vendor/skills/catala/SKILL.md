@@ -39,14 +39,14 @@ Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destin
 ## Documentation obligatoire du raisonnement
 
 1. Ajoutez un attribut natif `#[doc="…"]` à chaque définition et règle exécutable, y compris dans les scénarios.
-2. Dans chaque `#[doc]`, indiquez `source: URL ou chemin` et une balise `quote: « passage exact »` non vide.
+2. Dans chaque `#[doc]`, indiquez `titre: …`, `source: URL ou chemin` et une balise `quote: « passage exact »` non vide. Le titre suit ASD-STE100 : groupe nominal court avec au moins un participe passé (`titre: Contrat conclu`).
 3. Pour une règle, citez son fondement juridique. Pour une donnée factuelle, citez la pièce qui la soutient.
 4. Pour une qualification ou un calcul, citez le fondement de l’opération et gardez les dépendances vers les faits distincts.
 5. Conservez les titres juridiques avec identifiant. Utilisez les inclusions natives de PDF seulement comme annexes documentaires.
-6. Lancez `pm catala verifier`. Corrigez chaque erreur `#[doc] manquant` et `quote manquante ou vide dans #[doc]`.
+6. Lancez `pm catala verifier`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]`, `titre manquant dans #[doc]` et `titre sans participe passé`.
 7. Si une source ou citation manque, signalez le manque et recherchez-la. N’inventez aucun passage pour satisfaire le contrôle.
 
-`doc` est un attribut natif Catala. `quote` est une convention PieceMaker dans son texte, pas un attribut natif spécialisé.
+`doc` est un attribut natif Catala. `titre`, `source` et `quote` sont des conventions PieceMaker dans son texte, pas des attributs natifs spécialisés.
 Le graphe et le contrôle des citations lisent cette annotation. Un `#[doc]` précis prime sur les sources du texte voisin.
 Une citation Markdown extérieure ne remplace pas la balise `quote` obligatoire. Les anciens liens restent lisibles pour compatibilité.
 

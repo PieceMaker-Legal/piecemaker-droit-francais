@@ -80,12 +80,15 @@ Références : [structure documentaire](https://github.com/CatalaLang/catala/blo
 
 Chaque définition ou règle exécutable doit porter un attribut natif `#[doc]`, y compris dans les scénarios.
 Chaque annotation `#[doc]` doit contenir une balise `quote: « passage exact »` non vide.
+Sur une définition ou une règle, elle contient aussi `titre: …` : un groupe nominal court avec au moins un participe passé (ASD-STE100), par exemple `titre: Contrat conclu`. Le graphe affiche ce titre dans la case ; sans lui, il affiche la `Question` ou le nom de la variable et signale le manque. La détection du participe passé est approchée (`catala-participe.mjs`).
 La référence s’écrit `source: URL ou chemin` dans la même annotation. Ces deux balises sont des conventions PieceMaker.
 
-`pm catala verifier` produit deux erreurs distinctes, avec fichier et ligne :
+`pm catala verifier` produit des erreurs distinctes, avec fichier et ligne :
 
 - `#[doc] manquant pour cette définition ou règle.`
 - `quote manquante ou vide dans #[doc].`
+- `titre manquant dans #[doc].`
+- `titre sans participe passé dans #[doc] (ASD-STE100).`
 
 Une citation placée seulement dans le Markdown extérieur ne satisfait pas cette obligation. Les contrôles de calcul restent exécutés pour permettre le diagnostic.
 Le volet affiche les erreurs de documentation. Le bilan ne peut pas être réussi si ces erreurs restent présentes.
@@ -140,7 +143,6 @@ Une section `Concerne : identifiant` rattache ses pièces et explications au nœ
 
 | Champ | Rôle dans PieceMaker |
 |---|---|
-| `Titre : …` | Titre de la case, au moins un participe passé (ASD-STE100) : « Contrat conclu ». Il prime sur `Question` et sur le nom de la variable. Sans participe passé, le graphe affiche un avertissement (`src/participle.ts`, détection approchée). |
 | `Question : …` | Libellé de la question sur le nœud. |
 | `Objectif : …` | Objectif annoncé par l’avocat, affiché en tête du graphe. Une seule ligne par programme ; elle n’a pas besoin de `Concerne`. |
 | `Justification : …` | Explication rédigée par l’agent, visible dans le détail de la carte. |

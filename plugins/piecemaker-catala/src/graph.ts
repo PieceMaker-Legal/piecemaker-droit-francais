@@ -1,4 +1,5 @@
 import { sourceContext } from './source-context.js';
+import { catalaDocumentation } from '../../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
 import { display, formula, reasoningMap } from './reasoning-map.js';
 import { nativeExecution, type NativeOrigin, type NativeProvenance } from './native-provenance.js';
 import { applicationMarkup, conditionApplication } from './condition-application.js';
@@ -7,10 +8,10 @@ type File = { nom: string; chemin: string; contenu?: string };
 type Citation = { origin: string; target: string; quote: string; status: string; title?: string; id?: string };
 export type Source = { label: string; target: string; kind: string; origin: string; quote: string; status: string; title?: string; id?: string };
 export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: string; refs: string[]; members: Clause[]; met: string };
-type Notes = { titre: string; question: string; justification: string; recherche: string; demarches: string[] };
+type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
 type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
 export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
-export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string };
+export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string; title: string };
 export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; type: string; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
 export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[]; objective?: string };
 
@@ -140,7 +141,7 @@ function citationOf(sources: Citation[], origin: string, target: string, quote: 
   return sources.find((entry) => entry.origin === origin && entry.target === target && entry.quote === quote);
 }
 
-const emptyNotes = (): Notes => ({ titre: '', question: '', justification: '', recherche: '', demarches: [] });
+const emptyNotes = (): Notes => ({ question: '', justification: '', recherche: '', demarches: [] });
 
 function documentSources(file: File, citations: Citation[], linked: Map<string, Source[]>, notes: Map<string, Notes>) {
   type Section = { sources: Source[]; concerned: string[]; blocks: Array<{ start: number; end: number }>; notes: Notes };
@@ -162,7 +163,7 @@ function documentSources(file: File, citations: Citation[], linked: Map<string, 
     if (!text.trim()) return;
     current.sources.push(...found(text));
     for (const match of text.matchAll(/^Concerne\s*:\s*(.+)$/gim)) current.concerned.push(...match[1].split(',').map(key).filter(Boolean));
-    for (const [label, field] of [['Titre', 'titre'], ['Question', 'question'], ['Justification', 'justification'], ['À rechercher', 'recherche']] as const) {
+    for (const [label, field] of [['Question', 'question'], ['Justification', 'justification'], ['À rechercher', 'recherche']] as const) {
       const value = text.match(new RegExp(`^${label}\\s*:\\s*(.+)$`, 'im'))?.[1];
       if (value) current.notes[field] = value;
     }
@@ -192,7 +193,6 @@ function documentSources(file: File, citations: Citation[], linked: Map<string, 
       linked.set(name, [...(linked.get(name) ?? []), ...section.sources]);
       const previous = notes.get(name) ?? emptyNotes();
       notes.set(name, {
-        titre: section.notes.titre || previous.titre,
         question: section.notes.question || previous.question,
         justification: section.notes.justification || previous.justification,
         recherche: section.notes.recherche || previous.recherche,
@@ -285,6 +285,8 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
       return { ...entry, label, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}) };
     });
   };
+  const documentation = new Map(files.map((file) => [file.chemin, catalaDocumentation(file.contenu ?? '').entries.filter((entry) => entry.hasDoc)]));
+  const docTitle = (file: string, line: number) => documentation.get(file)?.find((entry) => entry.startLine <= line && line <= entry.endLine)?.doc.match(/^\s*titre\s*:\s*(.+?)\s*$/im)?.[1] ?? '';
   const enrich = (entry: NativeOrigin): Origin => {
     const source = `${new URL(`file:///${entry.file.replaceAll('\\', '/').replace(/^\/+/, '')}`).href}#L${entry.line}`;
     const content = files.find((file) => file.chemin === entry.file)?.contenu?.split(/\r?\n/) ?? [];
@@ -296,7 +298,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     const opened = /\b(?:définition|règle|definition|rule)\b/.test(content[entry.line - 1] ?? '');
     const end = content.findIndex((line, at) => at >= entry.line && (/^\s*(?:```|#\[|étiquette\b|exception\b|label\b)/.test(line) || (opened || at > entry.line) && /^\s*(?:définition|règle|definition|rule)\b/.test(line) || !line.trim()));
     const body = content.slice(entry.line - 1, end < 0 ? undefined : end).join('\n').slice(Math.max(0, entry.column - 1));
-    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n'), body };
+    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n'), body, title: docTitle(entry.file, entry.line) };
   };
   const steps = new Map<string, Step>();
   for (const [id, node] of nodes) {
