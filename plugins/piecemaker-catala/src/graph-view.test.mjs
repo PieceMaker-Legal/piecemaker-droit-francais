@@ -104,6 +104,16 @@ test('opens cited articles and pieces in the editor without leaving the written 
   } finally { view.close(); }
 });
 
+test('shows the reference date used for the legal texts, or the day of the check', async () => {
+  const catleg = { date_controle: '2026-11-05', passed: true, fichiers: [{ fichier: 'demo.catala_fr', passed: true, messages: [] }] };
+  const today = await open([program({ catleg })]);
+  try { assert.equal(today.container.querySelector('[data-part="reference-date"]').textContent, 'Droit apprécié au : 5 novembre 2026 (jour du contrôle)'); } finally { today.close(); }
+  const past = await open([program({ catleg: { ...catleg, date_reference: '2019-12-31', passed: false, fichiers: [{ fichier: 'demo.catala_fr', date_reference: '2019-12-31', passed: false, messages: [] }] } })]);
+  try { assert.equal(past.container.querySelector('[data-part="reference-date"]').textContent, 'Droit apprécié au : 31 décembre 2019 vigueur à vérifier'); } finally { past.close(); }
+  const none = await open([program({ catleg: null })]);
+  try { assert.equal(none.container.querySelector('[data-part="reference-date"]'), null); } finally { none.close(); }
+});
+
 test('the graph opens each cited source directly and shows no detail panel', async () => {
   const view = await open([program()]);
   try {
