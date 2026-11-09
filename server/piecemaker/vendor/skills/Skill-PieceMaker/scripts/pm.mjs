@@ -83,8 +83,8 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   catala squelette --scope CHAMP [--fichier F] [--programme NOM]
       squelette de test Catala, entrées à leur valeur par défaut
   catala catleg [--fichier F] [--au AAAA-MM-JJ] [--programme NOM]
-      vigueur à la date de référence du programme (« Date de référence : AAAA-MM-JJ »),
-      à défaut à la date du jour ; --au remplace cette date
+      vigueur à la date que les scénarios calculent dans la variable date_de_référence
+      (lancez verifier avant), à défaut à la date du jour ; --au remplace cette date
   catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 

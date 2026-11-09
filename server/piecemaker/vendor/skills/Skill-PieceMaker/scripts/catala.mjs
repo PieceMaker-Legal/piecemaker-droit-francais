@@ -6,6 +6,7 @@ import path from 'node:path';
 
 import { catalaDocumentation } from './catala-documentation.mjs';
 
+const REFERENCE_DATE = 'date_de_référence';
 export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
 const NAME = /^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$/u;
@@ -334,13 +335,12 @@ async function verifier(context, program, flags = {}) {
     });
   };
   await Promise.all([
-    execution(),
-    record('catleg', 'catleg check-expiry', async () => {
+    execution().then(() => record('catleg', 'catleg check-expiry', async () => {
       if (!context.python || !context.credentials) return missing(!context.python ? 'Python partagé absent.' : 'Identifiants PISTE absents.');
       await catleg(context, program, flags.au ? { au: flags.au } : {});
       const report = readJson(path.join(program.directory, 'resultats', 'catleg.json'));
       return { passed: report.passed, message: report.fichiers.filter((file) => !file.passed && !file.skipped).flatMap((file) => file.messages).join(' · ') };
-    }),
+    })),
     record('citations', 'Contrôle des citations PieceMaker', async () => {
       if (!context.citations) return missing('Contrôle de citations indisponible : serveur PieceMaker requis.');
       const report = await context.citations({ cwd: program.root, programme: program.name });
@@ -532,16 +532,27 @@ async function catleg(context, program, flags) {
     if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) throw new Error(`${origin} attend une date valide AAAA-MM-JJ.`);
     return value;
   };
-  const declared = (file) => {
-    const value = /^Date de référence\s*:\s*(.*)$/im.exec(fs.readFileSync(path.join(program.directory, file), 'utf8'))?.[1]?.trim();
-    return value === undefined ? undefined : day(value, `« Date de référence » (${file})`);
-  };
   const forced = flags.au === undefined ? undefined : day(flags.au, '--au');
-  const common = forced ?? sourceFiles(program.directory).map(declared).find(Boolean);
+  const computed = () => {
+    const sources = sourceFiles(program.directory);
+    if (!sources.some((file) => fs.readFileSync(path.join(program.directory, file), 'utf8').includes(REFERENCE_DATE))) return [];
+    const stored = readJson(path.join(program.directory, 'resultats', 'scenarios.json'));
+    if (stored?.sources_sha256 !== sourcesDigest(program.directory, sources)) throw new Error(`Le programme calcule ${REFERENCE_DATE} : lancez pm catala verifier, qui exécute les scénarios avant catleg.`);
+    const found = new Set();
+    const visit = (events, origin) => {
+      for (const event of events ?? []) {
+        if (event.element?.kind === 'scope_var' && event.element.name === REFERENCE_DATE) found.add(day(event.value, `${REFERENCE_DATE} (${origin})`));
+        visit(event.trace, origin);
+      }
+    };
+    for (const scenario of stored.scenarios.filter((scenario) => scenario.test_reussi && scenario.passed)) visit(scenario.provenance?.trace, `${scenario.fichier} › ${scenario.scope}`);
+    if (!found.size) throw new Error(`Aucun scénario réussi ne calcule ${REFERENCE_DATE} : ajoutez un scénario #[test] qui l’établit.`);
+    return [...found].sort();
+  };
+  const dates = forced ? [forced] : computed();
   const started = context.now();
   const results = [];
   for (const file of files) {
-    const at = forced ?? declared(file) ?? common;
     const inspect = 'import json,sys; from catleg.parse_catala_markdown import parse_catala_file; from pathlib import Path; f=Path(sys.argv[2]); articles=parse_catala_file(f.open(), file_path=f); print("PIECEMAKER_ARTICLES="+json.dumps([{"id":a.id.upper(),"archive":a.is_archive} for a in articles]),flush=True); from catleg.catleg import main; sys.argv[0]="catleg"; main() if articles else None';
     const result = await context.run(python, ['-I', '-c', inspect, 'check-expiry', file], { cwd: program.directory, env: { ...context.env, ...credentials } });
     const output = `${result.stdout}${result.stderr}`;
@@ -550,33 +561,35 @@ async function catleg(context, program, flags) {
     try { articles = JSON.parse(marker?.[1] ?? '[]'); } catch {}
     const cited = [...new Set(fs.readFileSync(path.join(program.directory, file), 'utf8').match(/\b(?:LEGIARTI|JORFARTI)\d+\b/g) ?? [])];
     const missing = cited.filter((id) => !articles.some((article) => article.id === id));
-    const checked = articles.filter((article) => at || !article.archive).map((article) => article.id);
+    const checked = articles.filter((article) => dates.length || !article.archive).map((article) => article.id);
     const messages = output.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('PIECEMAKER_ARTICLES='));
     if (missing.length) messages.push(`Articles non reconnus par Catleg : ${missing.join(', ')}. Placez chaque identifiant dans un titre Markdown d’article.`);
     if (!checked.length) messages.push('Aucun article contrôlé : aucun titre reconnu ou uniquement des articles archivés.');
     const versions = [];
-    if (at) for (const id of checked) {
+    if (dates.length) for (const id of checked) {
       const response = await context.run(python, ['-I', '-c', 'import sys; from catleg.catleg import main; sys.argv[0]="catleg"; main()', 'lf', 'article', id], { cwd: program.directory, env: { ...context.env, ...credentials } });
       try {
         const article = JSON.parse(response.stdout).article;
         const official = (value) => typeof value === 'number' ? new Date(value).toISOString().slice(0, 10) : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
         const debut = official(article?.dateDebut), fin = official(article?.dateFin);
         if (response.code !== 0 || article?.id !== id || !debut || !fin) throw new Error('Période officielle indisponible');
-        const valide = debut <= at && at < fin;
-        versions.push({ id, au: at, debut, fin: fin >= '2999-01-01' ? null : fin, valide });
-        messages.push(`${id} : période officielle ${debut} → ${fin >= '2999-01-01' ? 'sans fin publiée' : fin} ; ${valide ? 'couvre' : 'ne couvre pas'} le ${at}. Applicabilité juridique à justifier séparément.`);
+        for (const at of dates) {
+          const valide = debut <= at && at < fin;
+          versions.push({ id, au: at, debut, fin: fin >= '2999-01-01' ? null : fin, valide });
+          messages.push(`${id} : période officielle ${debut} → ${fin >= '2999-01-01' ? 'sans fin publiée' : fin} ; ${valide ? 'couvre' : 'ne couvre pas'} le ${at}. Applicabilité juridique à justifier séparément.`);
+        }
       } catch {
-        versions.push({ id, au: at, valide: null });
-        messages.push(`${id} : période officielle non obtenue pour le ${at}.`);
+        for (const at of dates) versions.push({ id, au: at, valide: null });
+        messages.push(`${id} : période officielle non obtenue pour le ${dates.join(', ')}.`);
       }
     }
     const skipped = Boolean(marker) && !cited.length && !articles.length;
-    results.push({ fichier: file, exit_code: result.code, ...(at ? { date_reference: at } : {}), passed: Boolean(marker) && checked.length > 0 && !missing.length && versions.every((version) => version.valide === true) && (Boolean(at) || result.code === 0) && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
+    results.push({ fichier: file, exit_code: result.code, passed: Boolean(marker) && checked.length > 0 && !missing.length && versions.every((version) => version.valide === true) && (dates.length > 0 || result.code === 0) && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
   }
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), ...(common ? { date_reference: common, date_reference_origine: forced ? '--au' : 'programme' } : {}), passed: results.some((entry) => entry.articles.length) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), fichiers: results };
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), ...(dates.length ? { dates_reference: dates, date_reference_origine: forced ? '--au' : 'scénarios' } : {}), passed: results.some((entry) => entry.articles.length) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), fichiers: results };
   writeResult(program.directory, 'catleg.json', report);
-  const lines = results.map((entry) => `- ${entry.fichier} : ${entry.skipped ? 'sans article cité, non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s), ${entry.date_reference ? `en vigueur au ${entry.date_reference}` : 'sans expiration signalée'}` : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
-  return [`catleg (vigueur au ${common ? `${common}, date de référence ${forced ? 'donnée par --au' : 'déclarée dans le programme'}` : `${report.date_controle}, date du contrôle : aucune date de référence déclarée`}) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
+  const lines = results.map((entry) => `- ${entry.fichier} : ${entry.skipped ? 'sans article cité, non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s), ${dates.length ? `en vigueur au ${dates.join(', ')}` : 'sans expiration signalée'}` : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
+  return [`catleg (vigueur au ${dates.length ? `${dates.join(', ')}, date de référence ${forced ? 'donnée par --au' : `calculée par les scénarios (${REFERENCE_DATE})`}` : `${report.date_controle}, date du contrôle : le programme ne calcule pas ${REFERENCE_DATE}`}) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
 }
 
 export async function runCatala({ commande, cwd, programme, flags = {}, args = [], deps = {} }) {
