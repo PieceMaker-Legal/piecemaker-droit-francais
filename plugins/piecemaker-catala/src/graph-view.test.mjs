@@ -111,9 +111,9 @@ test('the graph details a node with its card and opens its sources', async () =>
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
     assert.ok(view.container.querySelector('[data-node] [data-part=evidence] [data-kind=piece]'));
     assert.equal(view.container.querySelectorAll('[data-node][data-kind=origin]').length, 0);
-    view.click(view.container.querySelector('[data-node][data-kind="rule"]'));
+    view.click(view.container.querySelector('[data-node][data-kind="answer"]'));
     assert.match(view.container.querySelector('.pmc-inspector').textContent, /Sanction possible/);
-    view.click(view.container.querySelector('[data-condition="x001"] [data-goto="x001"]'));
+    view.click(view.container.querySelector('[data-node="x001"]'));
     const inspector = view.container.querySelector('.pmc-inspector');
     assert.equal(inspector.hidden, false);
     assert.match(inspector.textContent, /attestation\.md/);
@@ -157,7 +157,8 @@ test('changes the graph using stored Catala scenarios without recomputing or hid
     };
     const initial = requests;
     choose('SansDemande');
-    assert.equal(view.container.querySelector('[data-node="x002"] .pmc-value').textContent, 'Non');
+    assert.equal(view.container.querySelector('[data-node="x002"] .pmc-met').textContent, 'Non remplie');
+    assert.equal(view.container.querySelector('[data-node="x002"]').dataset.state, 'ko');
     choose('TestErrone');
     assert.match(view.container.querySelector('.pmc-explanation').textContent, /ne produit pas de graphe/);
     assert.equal(view.container.querySelectorAll('[data-node]').length, 0);
@@ -181,40 +182,40 @@ test('shows a native JSON graph when the scenario has no DOT and keeps its prove
   } finally { view.close(); }
 });
 
-test('redraws links at card boundaries after resize and releases its observer', async () => {
-  const { mountExplanation } = await import('./graph-view.ts');
-  const dom = new JSDOM('<main><div class="pmc-map"><svg><g data-from="a" data-to="b"><path/><text>requiert</text></g></svg><div data-node="a"></div><div data-node="b"></div></div></main>');
-  let redraw;
-  let disconnected = false;
-  dom.window.ResizeObserver = class { constructor(callback) { redraw = callback; } observe() {} disconnect() { disconnected = true; } };
-  const view = dom.window.document.querySelector('main');
-  const canvas = view.querySelector('.pmc-map');
-  const [from, to] = view.querySelectorAll('[data-node]');
-  canvas.getBoundingClientRect = () => ({ left: 100, top: 50 });
-  from.getBoundingClientRect = () => ({ left: 300, right: 350, top: 90, bottom: 170, width: 50, height: 80 });
-  let targetLeft = 450;
-  let targetTop = 140;
-  to.getBoundingClientRect = () => ({ left: targetLeft, right: targetLeft + 50, top: targetTop, bottom: targetTop + 100, width: 50, height: 100 });
-  const stop = mountExplanation(view, () => {});
+test('lays the graph out as a tree: conclusion first, children nested, a shared step shown once then referenced', async () => {
+  const shared = `digraph G {
+  x001 [label=<<table><tr><td>inexécution</td><td>true</td></tr></table>>, URL="https://catala.local/test_demo.catala_fr#L9", style="filled"];
+  x002 [label=<<table><tr><td>sanction_possible</td></tr><tr><td>inexécution</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L9", style="filled"];
+  x003 [label=<<table><tr><td>autre_sanction</td></tr><tr><td>inexécution</td></tr><tr><td>=</td></tr><tr><td>false</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L9", style="filled"];
+  subgraph cluster_inputs { x001; }
+  x001 -> x002 [style="solid"];
+  x001 -> x003 [style="solid"];
+}`;
+  const view = await open([program({ graphe: shared })]);
   try {
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 140 H 350$/);
-    targetLeft = 550;
-    redraw();
-
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 140 H 450$/);
-    const edge = view.querySelector('g');
-    edge.dataset.route = 'consequence';
-    targetTop = 300;
-    redraw();
-    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 300 H 450$/);
-    const anchored = new JSDOM('<div class="pmc-map"><svg><g data-from="a" data-to="b" data-anchor-from="a-outcome" data-anchor-to="b-uses-a"><path/></g></svg><div data-node="a"><div data-flow-anchor="a-outcome"></div></div><div data-node="b"><div data-flow-anchor="b-uses-a"></div></div></div>');
-    const map = anchored.window.document.querySelector('.pmc-map');
-    anchored.window.ResizeObserver = dom.window.ResizeObserver;
-    map.getBoundingClientRect = () => ({ left: 0, top: 0 });
-    anchored.window.document.querySelector('[data-flow-anchor="a-outcome"]').getBoundingClientRect = () => ({ left: 40, right: 140, top: 10, bottom: 30, width: 100, height: 20 });
-    anchored.window.document.querySelector('[data-flow-anchor="b-uses-a"]').getBoundingClientRect = () => ({ left: 60, right: 260, top: 100, bottom: 140, width: 200, height: 40 });
-    const stopAnchored = mountExplanation(anchored.window.document.body, () => {});
-    try { assert.match(anchored.window.document.querySelector('path').getAttribute('d'), /^M 40 20 H \d+ V 120 H 60$/); } finally { stopAnchored(); anchored.window.close(); }
-  } finally { stop(); dom.window.close(); }
-  assert.equal(disconnected, true);
+    view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
+    const map = view.container.querySelector('.pmc-map');
+    assert.equal(map.dataset.layout, 'tree');
+    assert.equal(map.querySelector('svg'), null);
+    const roots = [...map.querySelectorAll(':scope > .pmc-branch')];
+    assert.equal(roots.length, 2);
+    const conclusion = roots[0].querySelector(':scope > [data-node]');
+    assert.equal(conclusion.dataset.kind, 'answer');
+    assert.equal(conclusion.querySelector('.pmc-box-kind').textContent, 'Conclusion');
+    assert.equal(map.querySelector('[data-node]'), conclusion);
+    const child = roots[0].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]');
+    assert.ok(child);
+    assert.equal(child.dataset.kind, 'fact');
+    assert.equal(map.querySelectorAll('[data-node="x001"]').length, 1);
+    const reference = roots[1].querySelector(':scope > .pmc-children .pmc-tree-ref');
+    assert.ok(reference);
+    assert.equal(reference.querySelector('[data-goto]').dataset.goto, 'x001');
+    assert.match(reference.textContent, /Déjà détaillé dans le graphe/);
+    assert.equal(roots[1].querySelector(':scope > [data-node]').dataset.state, 'ko');
+    assert.equal(conclusion.dataset.state, 'ok');
+    assert.deepEqual([...map.querySelectorAll('i[hidden]')].map((edge) => `${edge.dataset.from}>${edge.dataset.to}`).sort(), ['x001>x002', 'x001>x003']);
+    view.click(reference.querySelector('[data-goto]'));
+    assert.equal(map.querySelector('.is-selected').dataset.node, 'x001');
+    assert.equal(view.container.querySelector('.pmc-inspector').hidden, false);
+  } finally { view.close(); }
 });

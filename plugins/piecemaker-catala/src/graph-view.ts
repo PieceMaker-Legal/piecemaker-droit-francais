@@ -2,33 +2,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const inspector = view.querySelector<HTMLElement>('.pmc-inspector');
   const nodes = [...view.querySelectorAll<HTMLElement>('[data-node]')];
   const canvas = view.querySelector<HTMLElement>('.pmc-map');
-  const edges = [...view.querySelectorAll<SVGGElement>('[data-from][data-to]')];
-  const draw = () => {
-    if (!canvas) return;
-    const bounds = canvas.getBoundingClientRect();
-    const scale = Number(canvas.dataset.scale ?? 1);
-    const svg = canvas.querySelector('svg')!;
-    svg.setAttribute('width', String(canvas.scrollWidth));
-    svg.setAttribute('height', String(canvas.scrollHeight));
-    for (const edge of edges) {
-      const from = nodes.find((node) => node.dataset.node === edge.dataset.from)?.getBoundingClientRect();
-      const to = nodes.find((node) => node.dataset.node === edge.dataset.to)?.getBoundingClientRect();
-      if (!from || !to) continue;
-      const source = canvas.querySelector<HTMLElement>(`[data-flow-anchor="${edge.dataset.anchorFrom}"]`)?.getBoundingClientRect() ?? nodes.find((node) => node.dataset.node === edge.dataset.from)?.querySelector('.pmc-consequence')?.getBoundingClientRect() ?? from;
-      const target = canvas.querySelector<HTMLElement>(`[data-flow-anchor="${edge.dataset.anchorTo}"]`)?.getBoundingClientRect() ?? to;
-      const x1 = (source.left - bounds.left) / scale, y1 = (source.top + source.height / 2 - bounds.top) / scale;
-      const x2 = (target.left - bounds.left) / scale, y2 = (target.top + target.height / 2 - bounds.top) / scale;
-      const lane = 14 + edges.indexOf(edge) % 4 * 10;
-      const path = `M ${x1} ${y1} H ${lane} V ${y2} H ${x2}`;
-      edge.querySelector('path')!.setAttribute('d', path);
-    }
-  };
-  const Observer = view.ownerDocument.defaultView?.ResizeObserver;
-  const observer = Observer ? new Observer(draw) : null;
-  if (canvas) observer?.observe(canvas);
-  nodes.forEach((node) => observer?.observe(node));
-  view.querySelectorAll<HTMLElement>('[data-flow-anchor]').forEach((box) => observer?.observe(box));
-  draw();
+  const edges = [...view.querySelectorAll<HTMLElement>('[data-from][data-to]')];
   const scroll = view.querySelector<HTMLElement>('.pmc-map-scroll');
   const select = (id: string, detailId?: string) => {
     const related = new Set(id ? [id] : []);
@@ -69,7 +43,6 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       const next = zoom.dataset.mapZoom === 'fit' ? Math.min(1, (scroll.clientWidth - 40) / canvas.scrollWidth) : scale * (zoom.dataset.mapZoom === 'in' ? 1.2 : 1 / 1.2);
       canvas.dataset.scale = String(Math.max(.4, Math.min(2, next)));
       canvas.style.zoom = canvas.dataset.scale;
-      draw();
       return;
     }
     const reference = target.closest<HTMLElement>('[data-open-reference]');
@@ -99,7 +72,6 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   view.ownerDocument.addEventListener('click', click);
   view.addEventListener('keydown', key);
   return () => {
-    observer?.disconnect();
     select('');
     view.ownerDocument.removeEventListener('click', click);
     view.removeEventListener('keydown', key);

@@ -105,8 +105,8 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 
 | Ajout | Comportement |
 |---|---|
-| Graphe à nœuds partagés | Chaque application de règle garde une carte et sa conséquence. Les données factuelles figurent dans les applications qu’elles soutiennent. |
-| Lecture juridique | Un bloc par règle : la règle et sa source, ses conditions, les faits et pièces en regard, puis la conséquence. |
+| Graphe à nœuds partagés | Chaque règle ou fait est détaillé une seule fois. Ses autres emplois renvoient à cette case. |
+| Lecture juridique | Un arbre de gauche à droite : la conclusion, ses conditions, leurs propres conditions, puis les faits et les pièces. |
 | Groupes `ET`, `OU`, `NON` | PieceMaker lit les expressions booléennes simples présentes dans la trace pour expliciter les relations. |
 | Conditions d’application | Les dépendances pointillées de la trace restent identifiées. Une négation `NON` reste distincte de la sélection d’une définition conditionnelle. Un lien pointillé ne prouve pas, à lui seul, une exception. |
 | Sources attachées aux éléments | Chaque condition ou exception réunit son fondement juridique, le fait invoqué et sa pièce dans trois parties distinctes. |
@@ -115,26 +115,34 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Données sans pièce | La carte indique « Pièce à rattacher ». Le détail précise que la donnée reste une hypothèse du scénario. |
 | États inconnus ou contestés | Les valeurs correspondantes restent visibles et créent un point ouvert. PieceMaker ne les remplace pas par un booléen. |
 | Points ouverts | Une donnée sans pièce, un fondement absent, une citation à vérifier ou une recherche déclarée est signalé sur sa carte. Aucun nœud technique supplémentaire n’est créé. |
-| Remontée des manques | Un manque dans les appuis fait apparaître « Justification à compléter » sur les règles qui en dépendent. |
+| Remontée des manques | Un manque dans les appuis fait passer en orange, avec la mention « à justifier », les cases qui en dépendent. |
 | Choix du scénario | Le volet charge les traces conservées lors de la vérification, sans relancer Catala à chaque sélection. |
 | Test en échec visible | Le scénario reste dans la liste. Si Catala ne produit pas de trace valide, le volet annonce l’absence de graphe. |
 | Inspection d’un nœud | La sélection montre le détail et atténue les éléments sans relation avec le nœud choisi. |
 | Navigation dans les sources | Les pièces et références juridiques utilisent les lecteurs et contrôles de citation PieceMaker existants. |
 
-PieceMaker présente chaque règle dans un bloc, lu de haut en bas :
+PieceMaker présente le raisonnement comme un arbre, lu de gauche à droite :
 
-1. La règle : son titre et sa source, citée une seule fois.
-2. Les conditions, une par ligne. Chaque ligne indique l’état de la condition : « Remplie », « Non remplie » ou « À établir ». Une condition affiche une source seulement si cette source diffère de celle de la règle.
-3. Les faits et pièces, en regard de chaque condition : la valeur du scénario, la pièce et sa citation exacte. Si la condition vient d’une autre règle, la ligne renvoie à cette règle.
-4. La conséquence : la valeur produite et, pour un calcul simple, sa formule.
+1. La conclusion figure à gauche. Toutes les branches partent d’elle.
+2. Chaque colonne à droite décompose la case précédente en conditions, puis en conditions de ces conditions.
+3. Une branche se termine par un fait et sa pièce, avec la citation exacte.
+4. Une case déjà détaillée ailleurs devient un renvoi vers cette case.
 
-Une flèche dans la marge relie la conséquence d’une règle à la condition qu’elle remplit dans une autre règle. L’objectif déclaré par l’avocat figure en tête. Chaque source est cliquable : article, décision, doctrine ou pièce s’ouvre dans la visionneuse interne, sur le passage cité. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Les URL ne sont pas affichées. Le graphe signale seulement trois manques : une règle sans source, un fait sans pièce et une citation non retrouvée. Les autres contrôles restent dans `pm catala verifier`. Aucun Graphviz n’est nécessaire.
+Chaque case indique son rôle (« Conclusion », « Condition », « Exception », « Fait »), sa valeur ou son état, puis ses sources. Une condition affiche une source seulement si cette source diffère de celle de la règle. Un calcul simple affiche sa formule.
+
+La couleur d’une case et de son trait donne son état :
+
+| Couleur | État |
+|---|---|
+| Vert | Validé : condition remplie ou fait établi, avec ses sources. |
+| Orange, bord pointillé | À établir : valeur inconnue. À justifier : une source ou une pièce manque dans la case ou dans ses appuis. |
+| Rouge | Condition non remplie, ou exception qui fait obstacle. |
+
+L’objectif déclaré par l’avocat figure en tête. Chaque source est cliquable : article, décision, doctrine ou pièce s’ouvre dans la visionneuse interne, sur le passage cité. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Les URL ne sont pas affichées. Le graphe signale seulement trois manques : une règle sans source, un fait sans pièce et une citation non retrouvée. Les autres contrôles restent dans `pm catala verifier`. Aucun Graphviz n’est nécessaire.
 
 Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
 
-Les groupes ET, OU et NON restent dans les conditions ; ils ne deviennent pas des cartes isolées.
-
-Les faits et leurs pièces figurent en face de la condition concernée. Un résultat intermédiaire est désigné comme résultat déjà obtenu, avec un lien vers sa démonstration. Il n’est pas présenté comme une nouvelle pièce.
+Un groupe ET, OU ou SAUF imbriqué forme une étiquette entre la condition et ses branches.
 
 Une condition est marquée « Exception » seulement si Catala la rattache à une définition qui en écarte une autre (`exception`). Sans fait distinct, la carte indique « Aucun fait distinct renseigné ». Sans source précise, elle indique « Fondement à préciser » ou « Pièce à rattacher ».
 
