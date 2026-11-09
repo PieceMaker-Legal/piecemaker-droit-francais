@@ -9,7 +9,7 @@
 7. Écrivez un scénario `#[test]` pour chaque branche utile : conditions remplies, condition absente, exception applicable, hypothèse différente.
 8. Ajoutez des assertions aux résultats attendus. Un test réussi peut confirmer une conclusion négative.
 9. Lancez `pm catala verifier`. Le volet propose les scénarios du rapport Clerk et leurs graphes Catala.
-10. Consultez la couverture Clerk dans le détail des nœuds. Un passage exercé ne prouve pas que toutes ses branches sont testées.
+10. Consultez la couverture Clerk dans la vue Raisonnement. Un passage exercé ne prouve pas que toutes ses branches sont testées.
 11. Pour examiner une autre exécution sans entrée, lancez `pm catala expliquer --fichier F --scope S`.
 12. Contrôlez la hiérarchie avec `pm catala exceptions`. Contrôlez les conflits avec `pm catala preuve`.
 
@@ -40,7 +40,7 @@ Dans un scénario, définissez les faits comme des données intermédiaires sous
 Le graphe est un arbre lu de gauche à droite : la conclusion, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
 La couleur donne l’état de chaque case : vert pour validé, orange pour à établir ou à justifier, rouge pour non rempli.
 
-Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque définition garde son `#[doc]`. Le graphe affiche la source d’une condition seulement si elle diffère de celle de la règle. Le graphe signale une règle sans source et un fait sans pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans le détail. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
+Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque définition garde son `#[doc]`. Le graphe affiche la source d’une condition seulement si elle diffère de celle de la règle. Le graphe signale une règle sans source et un fait sans pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans la vue Raisonnement. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
 
 Pour expliquer un nœud, ajoutez une section Markdown dans le fichier Catala. Les champs suivants restent du texte pour Catala :
 

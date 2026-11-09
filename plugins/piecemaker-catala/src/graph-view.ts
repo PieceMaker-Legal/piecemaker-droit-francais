@@ -1,10 +1,9 @@
 export function mountExplanation(view: HTMLElement, openReference: (target: string, origin: string, quote: string, id: string) => void) {
-  const inspector = view.querySelector<HTMLElement>('.pmc-inspector');
   const nodes = [...view.querySelectorAll<HTMLElement>('[data-node]')];
   const canvas = view.querySelector<HTMLElement>('.pmc-map');
   const edges = [...view.querySelectorAll<HTMLElement>('[data-from][data-to]')];
   const scroll = view.querySelector<HTMLElement>('.pmc-map-scroll');
-  const select = (id: string, detailId?: string) => {
+  const select = (id: string) => {
     const related = new Set(id ? [id] : []);
     for (const direction of ['from', 'to'] as const) {
       const queue = id ? [id] : [];
@@ -21,11 +20,6 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       if (node.hasAttribute('aria-pressed')) node.setAttribute('aria-pressed', String(on));
     });
     edges.forEach((edge) => edge.classList.toggle('is-dim', Boolean(id) && !(related.has(edge.dataset.from!) && related.has(edge.dataset.to!))));
-    if (!inspector) return;
-    const chosen = nodes.find((node) => node.dataset.node === id);
-    const card = chosen ? view.querySelector<HTMLElement>(`.pmc-cards [data-card="${detailId ?? chosen.dataset.card}"]`) : null;
-    inspector.hidden = !card;
-    if (card) inspector.innerHTML = `<button class="pmc-close" data-close-node aria-label="Fermer le détail">×</button>${card.outerHTML}`;
   };
   const goto = (id: string) => {
     const card = view.querySelector<HTMLElement>(`.pmc-written [data-card="${id}"]`);
@@ -54,15 +48,13 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       else {
         const destination = nodes.find((node) => node.dataset.card === link.dataset.goto);
         const owner = link.closest<HTMLElement>('[data-node]');
-        select(destination?.dataset.node ?? owner?.dataset.node ?? '', link.dataset.goto);
+        select(destination?.dataset.node ?? owner?.dataset.node ?? '');
         destination?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
       }
       return;
     }
-    if (target.closest<HTMLElement>('button')?.hasAttribute('data-close-node')) { select(''); return; }
     const node = target.closest<HTMLElement>('[data-node]');
-    if (node) select(node.dataset.node!);
-    else if (!target.closest('.pmc-inspector')) select('');
+    select(node?.dataset.node ?? '');
   };
   const key = (event: KeyboardEvent) => {
     if (event.key === 'Escape') { select(''); return; }

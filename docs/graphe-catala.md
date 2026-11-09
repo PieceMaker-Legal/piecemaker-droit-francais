@@ -52,7 +52,7 @@ Sur cet exemple, `interpret` a réussi, tandis que `explain` a échoué avec une
 
 Le lecteur rattache les sources trouvées aux positions des règles et des données. Une donnée définie sous une section de pièce peut donc retrouver sa pièce sans `Concerne`. Les noms de fichiers identiques dans des répertoires distincts ne suffisent pas à établir un rattachement.
 
-Le détail de chaque carte conserve les positions et les sources natives. Les origines du compilateur ne deviennent pas des nœuds du graphe principal. Le graphe distingue une déclaration, qui donne le contexte du champ, de la définition qui fixe sa valeur. `Concerne` complète les liens transversaux ; il ne remplace pas une origine déjà fournie par Catala.
+La vue Raisonnement conserve, dans chaque carte, les positions et les sources natives. Les origines du compilateur ne deviennent pas des nœuds du graphe principal. Le graphe distingue une déclaration, qui donne le contexte du champ, de la définition qui fixe sa valeur. `Concerne` complète les liens transversaux ; il ne remplace pas une origine déjà fournie par Catala.
 
 Références : [programmation littéraire](https://book.catala-lang.org/en/5-1-literate-programming.html), [méthode de rédaction avec les juristes](https://book.catala-lang.org/fr/3-5-lawyers-agile.html), code du compilateur au tag `1.3.0` : `compiler/surface/lexer_common.ml`, `compiler/desugared/print.ml` et `compiler/plugins/explain.ml`.
 
@@ -112,13 +112,13 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Sources attachées aux éléments | Chaque condition ou exception réunit son fondement juridique, le fait invoqué et sa pièce dans trois parties distinctes. |
 | Origine distinguée | Les références distinguent textes, jurisprudence, pièces et autres références. Une simple page web ne remplace pas un fondement juridique. |
 | Valeur distincte de la preuve | `Vrai` reste « Vrai » et `Faux` reste « Faux ». Aucune de ces valeurs n’est renommée « Établi ». |
-| Données sans pièce | La carte indique « Pièce à rattacher ». Le détail précise que la donnée reste une hypothèse du scénario. |
+| Données sans pièce | La carte indique « Pièce à rattacher ». La vue Raisonnement précise que la donnée reste une hypothèse du scénario. |
 | États inconnus ou contestés | Les valeurs correspondantes restent visibles et créent un point ouvert. PieceMaker ne les remplace pas par un booléen. |
 | Points ouverts | Une donnée sans pièce, un fondement absent, une citation à vérifier ou une recherche déclarée est signalé sur sa carte. Aucun nœud technique supplémentaire n’est créé. |
 | Remontée des manques | Un manque dans les appuis fait passer en orange, avec la mention « à justifier », les cases qui en dépendent. |
 | Choix du scénario | Le volet charge les traces conservées lors de la vérification, sans relancer Catala à chaque sélection. |
 | Test en échec visible | Le scénario reste dans la liste. Si Catala ne produit pas de trace valide, le volet annonce l’absence de graphe. |
-| Inspection d’un nœud | La sélection montre le détail et atténue les éléments sans relation avec le nœud choisi. |
+| Sélection d’un nœud | La sélection atténue les éléments sans relation avec le nœud choisi. Aucun panneau ne s’ouvre. Chaque article, décision ou pièce cité s’ouvre directement dans la visionneuse, au passage cité. |
 | Navigation dans les sources | Les pièces et références juridiques utilisent les lecteurs et contrôles de citation PieceMaker existants. |
 
 PieceMaker présente le raisonnement comme un arbre, lu de gauche à droite :
@@ -158,9 +158,9 @@ Une section `Concerne : identifiant` rattache ses pièces et explications au nœ
 |---|---|
 | `Question : …` | Libellé de la question sur le nœud. |
 | `Objectif : …` | Objectif annoncé par l’avocat, affiché en tête du graphe. Une seule ligne par programme ; elle n’a pas besoin de `Concerne`. |
-| `Justification : …` | Explication rédigée par l’agent, visible dans le détail de la carte. |
+| `Justification : …` | Explication rédigée par l’agent, visible dans la carte de la vue Raisonnement. |
 | `À rechercher : …` | Démarche nécessaire, affichée comme point ouvert. |
-| `Démarche : …` | Démarche effectuée et résultat déclaré, conservés dans le détail. Plusieurs lignes sont possibles. |
+| `Démarche : …` | Démarche effectuée et résultat déclaré, conservés dans la vue Raisonnement. Plusieurs lignes sont possibles. |
 
 Ces champs ne sont pas des instructions Catala. Ils ne changent pas le résultat du programme. Ils ne prouvent pas davantage l’exactitude des explications.
 
@@ -207,7 +207,7 @@ L’empreinte des fichiers Catala empêche d’utiliser les scénarios, citation
 - Lecture de la trace JSON et des arbres natifs : `plugins/piecemaker-catala/src/native-provenance.ts`.
 - Regroupement condition, fondement et fait : `plugins/piecemaker-catala/src/condition-application.ts`.
 - Construction du graphe partagé : `plugins/piecemaker-catala/src/reasoning-map.ts`.
-- Relations SVG, sélection et détail : `plugins/piecemaker-catala/src/graph-view.ts`.
+- Sélection, zoom et ouverture des sources : `plugins/piecemaker-catala/src/graph-view.ts`.
 - Choix des scénarios : `plugins/piecemaker-catala/src/client.ts`.
 - Vérification et conservation des traces : `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala.mjs`.
 - Transmission des résultats actuels : `server/piecemaker/catala.ts`.

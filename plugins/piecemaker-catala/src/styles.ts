@@ -114,9 +114,5 @@ export const STYLES = `
 .pmc-map .is-dim{opacity:.3}
 .pmc-map-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:12px;font-weight:600}.pmc-map-legend span{--tint:var(--muted);color:var(--ink)}.pmc-map-legend span:before{content:'';display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:3px;background:var(--tint)}.pmc-map-legend [data-state=ok]{--tint:#2f8f5b}.pmc-map-legend [data-state=warn]{--tint:#c98a1b}.pmc-map-legend [data-state=ko]{--tint:#c45b5b}
 
-.pmc-inspector{position:absolute;right:12px;top:12px;max-width:calc(100% - 24px);width:400px;max-height:calc(100% - 68px);overflow:auto;cursor:auto;border-radius:14px;box-shadow:0 8px 28px rgb(15 23 42 / .16);background:var(--surface)}
-.pmc-inspector .pmc-rule{border-radius:0;border-left-width:3px;padding-top:30px}
-.pmc-inspector .pmc-rule h3{font-size:16px}
-.pmc .pmc-close{position:absolute;top:6px;right:6px;width:24px;height:24px;padding:0;z-index:1}
 .pmc-others h3{font-size:15px}
 `;
