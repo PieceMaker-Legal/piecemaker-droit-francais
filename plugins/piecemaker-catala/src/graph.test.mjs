@@ -119,8 +119,8 @@ test('keeps the argument readable and attaches references directly to rules and 
   assert.ok(fact.querySelector('[data-part="evidence"] [data-kind="piece"] [data-open-reference]'));
   assert.equal(rule.querySelector('[data-part="evidence"]'), null);
   assert.equal(fact.querySelector('[data-part="law"]'), null);
-  assert.equal(document.querySelectorAll('.pmc-map-links, .pmc-columns, .pmc-application-table, [data-flow-anchor], svg').length, 0);
-  assert.equal(rule.querySelector('.pmc-box-kind').textContent, 'Conclusion');
+  assert.equal(document.querySelectorAll('.pmc-map-links, .pmc-columns, .pmc-application-table, [data-flow-anchor]').length, 0);
+  assert.equal(rule.querySelector('.pmc-box-kind').textContent, 'Objectif');
   assert.equal(fact.querySelector('.pmc-box-kind').textContent, 'Fait');
   assert.match(rule.querySelector('.pmc-result .pmc-met').textContent, /Remplie/);
   assert.match(fact.querySelector('.pmc-result .pmc-met').textContent, /Remplie|Non remplie|À établir/);
@@ -336,10 +336,13 @@ test('uses the native doc and its quote in the qualification card without mixing
   assert.equal(card.querySelector('[data-part="law"] [data-open-reference]').textContent, 'Article 1 du règlement fictif');
 });
 
-test('states the declared objective, then shows each cited document by its title and quote inside its box', () => {
+test('names the final conclusion by the declared objective, then shows each cited document by its title and quote inside its box', () => {
   const titled = citations.map((citation) => citation.target.endsWith('.md') ? { ...citation, status: 'passed', title: 'Pièce 2 — Lettre de mise en demeure' } : citation);
   const document = new JSDOM(reasoningGraph(reasoning(dot, [{ ...module, contenu: `${module.contenu}\nObjectif : Obtenir la résolution du contrat\n` }], titled))).window.document;
-  assert.equal(document.querySelector('[data-part="objective"] strong').textContent, 'Obtenir la résolution du contrat');
+  const goal = document.querySelector('.pmc-map-node[data-kind="answer"]');
+  assert.equal(goal.querySelector('.pmc-box-kind').textContent, 'Objectif');
+  assert.equal(goal.querySelector('h3').textContent, 'Obtenir la résolution du contrat');
+  assert.equal(document.querySelector('[data-part="objective"]'), null);
   const law = document.querySelector('[data-node="x002"] [data-part="law"]');
   assert.match(law.querySelector('[data-kind="article"] q').textContent, /résoudre le contrat/);
   const piece = document.querySelector('[data-node="x001"] [data-part="evidence"] li');
@@ -348,7 +351,8 @@ test('states the declared objective, then shows each cited document by its title
   assert.equal(document.querySelectorAll('[data-node="x001"] [data-part="law"]').length, 0);
   assert.equal(document.querySelectorAll('[data-node="x002"] q').length, 1);
   const undeclared = new JSDOM(reasoningGraph(reasoning(dot, [module], citations))).window.document;
-  assert.match(undeclared.querySelector('[data-part="objective"]').textContent, /Objectif à déclarer/);
+  assert.equal(undeclared.querySelector('.pmc-map-node[data-kind="answer"] .pmc-box-kind').textContent, 'Objectif');
+  assert.doesNotMatch(undeclared.body.textContent, /Objectif à déclarer/);
 });
 
 test('titles each box with the titre of its #[doc] and flags a title without a past participle', () => {

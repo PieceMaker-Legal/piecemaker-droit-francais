@@ -198,12 +198,13 @@ test('lays the graph out as a tree: conclusion first, children nested, a shared 
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     const map = view.container.querySelector('.pmc-map');
     assert.equal(map.dataset.layout, 'tree');
-    assert.equal(map.querySelector('svg'), null);
+    assert.equal(map.querySelectorAll('svg.pmc-wires path').length, map.querySelectorAll('.pmc-children > .pmc-branch').length);
+    assert.match(map.querySelector('svg.pmc-wires path').getAttribute('d'), /^M\S+ \S+C/);
     const roots = [...map.querySelectorAll(':scope > .pmc-branch')];
     assert.equal(roots.length, 2);
     const conclusion = roots[0].querySelector(':scope > [data-node]');
     assert.equal(conclusion.dataset.kind, 'answer');
-    assert.equal(conclusion.querySelector('.pmc-box-kind').textContent, 'Conclusion');
+    assert.equal(conclusion.querySelector('.pmc-box-kind').textContent, 'Objectif');
     assert.equal(map.querySelector('[data-node]'), conclusion);
     const child = roots[0].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]');
     assert.ok(child);

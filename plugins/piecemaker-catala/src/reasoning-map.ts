@@ -85,7 +85,8 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     if (owner) links.push({ from: step.id, to: owner.id });
     if (visited.has(step.id)) return branch(`<div class="pmc-tree-ref" data-state="${current}"><button type="button" class="pmc-text-action" data-goto="${step.id}">${escape(named(step))}</button>${status(step, negated, current)}<span class="pmc-muted">Déjà détaillé dans le graphe</span></div>`, [], current);
     visited.add(step.id);
-    const conclusion = step.answer || !owner && visited.size === 1;
+    const goal = !owner && visited.size === 1;
+    const conclusion = step.answer || goal;
     const application = owner ? conditionApplication(step, model) : null;
     const exception = application?.kind === 'exception' || step.origins.some((origin) => origin.selected && origin.role === 'definition' && origin.overrides);
     const stated = new Set((owner?.sources ?? []).map(identity));
@@ -95,14 +96,13 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const calculation = step.kind === 'rule' ? formula(step, human) : '';
     const top = step.clause && step.clause.kind === 'all' ? step.clause.members : step.clause ? [step.clause] : null;
     const children = top ? top.map((member) => condition(member, step, false)) : step.parents.map((id) => steps.get(id)).filter((parent): parent is Step => Boolean(parent)).map((parent) => tree(parent, step));
-    const kind = conclusion ? 'Conclusion' : exception ? 'Exception' : step.kind === 'fact' ? 'Fait' : owner ? 'Condition' : 'Règle';
-    return branch(`<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}" data-kind="${conclusion ? 'answer' : exception ? 'exception' : step.kind}" data-state="${current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(named(step))}</h3><p class="pmc-result">${status(step, negated, current)}</p>${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, step.kind === 'rule' ? 'Source de la règle à indiquer' : '', 'law')}${evidence}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? warn(`À rechercher : ${step.notes.recherche}`) : ''}</article>`, children, current);
+    const kind = goal ? 'Objectif' : conclusion ? 'Conclusion' : exception ? 'Exception' : step.kind === 'fact' ? 'Fait' : owner ? 'Condition' : 'Règle';
+    return branch(`<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}" data-kind="${conclusion ? 'answer' : exception ? 'exception' : step.kind}" data-state="${current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(goal && model.objective || named(step))}</h3><p class="pmc-result">${status(step, negated, current)}</p>${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, step.kind === 'rule' ? 'Source de la règle à indiquer' : '', 'law')}${evidence}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? warn(`À rechercher : ${step.notes.recherche}`) : ''}</article>`, children, current);
   };
   const used = new Set(rules.flatMap((step) => step.parents));
   const roots = [...rules.filter((step) => step.answer), ...rules.filter((step) => !step.answer && !used.has(step.id)).sort((a, b) => b.level - a.level), ...(rules.length ? rules : model.steps)];
   const trees = roots.map((step) => visited.has(step.id) ? '' : tree(step, null)).join('');
-  const objective = `<section class="pmc-objective" data-part="objective"><span>Objectif déclaré</span>${model.objective ? `<strong>${escape(model.objective)}</strong>` : warn('Objectif à déclarer : ajoutez une ligne « Objectif : … » dans le programme.')}</section>`;
   const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, '', 'other')}</details>` : '';
   const legend = '<p class="pmc-map-legend"><span data-state="ok">Validé</span><span data-state="warn">À établir ou à justifier</span><span data-state="ko">Non rempli</span></p>';
-  return `${objective}<div class="pmc-map-summary">La conclusion est à gauche. Chaque colonne à droite détaille les conditions, jusqu’aux faits et aux pièces.<span>Cliquez sur une source pour l’ouvrir.</span>${legend}</div>${unused}<div class="pmc-map" data-layout="tree" aria-label="Arbre du raisonnement : conclusion à gauche, conditions puis faits vers la droite">${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;
+  return `<div class="pmc-map-summary">L’objectif est à gauche. Chaque colonne à droite détaille ses conditions, jusqu’aux faits et aux pièces.<span>Cliquez sur une source pour l’ouvrir.</span>${legend}</div>${unused}<div class="pmc-map" data-layout="tree" aria-label="Arbre du raisonnement : objectif à gauche, conditions puis faits vers la droite"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;
 }

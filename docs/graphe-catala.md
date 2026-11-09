@@ -138,7 +138,7 @@ La couleur d’une case et de son trait donne son état :
 | Orange, bord pointillé | À établir : valeur inconnue. À justifier : une source ou une pièce manque dans la case ou dans ses appuis. |
 | Rouge | Condition non remplie, ou exception qui fait obstacle. |
 
-L’objectif déclaré par l’avocat figure en tête. Chaque source est cliquable : article, décision, doctrine ou pièce s’ouvre dans la visionneuse interne, sur le passage cité. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Les URL ne sont pas affichées. Le graphe signale seulement trois manques : une règle sans source, un fait sans pièce et une citation non retrouvée. Les autres contrôles restent dans `pm catala verifier`. Aucun Graphviz n’est nécessaire.
+L’objectif est la conclusion finale : la case de gauche porte la mention « Objectif » et, s’il est déclaré, le texte de la ligne `Objectif : …`. Des courbes relient chaque case à ses conditions. Pendant le défilement, chaque case reste à hauteur de lecture tant que ses branches sont à l’écran. Chaque source est cliquable : article, décision, doctrine ou pièce s’ouvre dans la visionneuse interne, sur le passage cité. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Les URL ne sont pas affichées. Le graphe signale seulement trois manques : une règle sans source, un fait sans pièce et une citation non retrouvée. Les autres contrôles restent dans `pm catala verifier`. Aucun Graphviz n’est nécessaire.
 
 Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
 
@@ -157,7 +157,7 @@ Une section `Concerne : identifiant` rattache ses pièces et explications au nœ
 | Champ | Rôle dans PieceMaker |
 |---|---|
 | `Question : …` | Libellé de la question sur le nœud. |
-| `Objectif : …` | Objectif annoncé par l’avocat, affiché en tête du graphe. Une seule ligne par programme ; elle n’a pas besoin de `Concerne`. |
+| `Objectif : …` | Objectif annoncé par l’avocat. Il titre la conclusion finale du graphe ; sans cette ligne, la conclusion garde son propre titre. Une seule ligne par programme ; elle n’a pas besoin de `Concerne`. |
 | `Justification : …` | Explication rédigée par l’agent, visible dans la carte de la vue Raisonnement. |
 | `À rechercher : …` | Démarche nécessaire, affichée comme point ouvert. |
 | `Démarche : …` | Démarche effectuée et résultat déclaré, conservés dans la vue Raisonnement. Plusieurs lignes sont possibles. |
