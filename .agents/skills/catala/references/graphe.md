@@ -37,7 +37,7 @@ Placez chaque définition sous le texte ou la décision qui la fonde. Un même c
 
 Dans un scénario, définissez les faits comme des données intermédiaires sous les sections de leurs pièces, puis passez ces données au champ métier. La trace conserve ainsi leur origine. Une déclaration de champ donne seulement son contexte ; elle ne prouve pas l’origine factuelle de sa valeur.
 
-Présentez chaque application sur une ligne horizontale : règle de droit, conditions, faits et pièces. Placez la conséquence juridique en dessous.
+Le graphe présente chaque règle dans un bloc : la règle et sa source, ses conditions, les faits et pièces en regard, puis la conséquence.
 Si cette conséquence sert ensuite, désignez-la comme résultat réutilisé et reliez sa démonstration. Ne la présentez pas comme une pièce.
 
 Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans le détail. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.

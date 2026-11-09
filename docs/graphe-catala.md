@@ -80,7 +80,7 @@ Références : [structure documentaire](https://github.com/CatalaLang/catala/blo
 
 Chaque définition ou règle exécutable doit porter un attribut natif `#[doc]`, y compris dans les scénarios.
 Chaque annotation `#[doc]` doit contenir une balise `quote: « passage exact »` non vide.
-Sur une définition ou une règle, elle contient aussi `titre: …` : un groupe nominal court avec au moins un participe passé (ASD-STE100), par exemple `titre: Contrat conclu`. Le graphe affiche ce titre dans la case ; sans lui, il affiche la `Question` ou le nom de la variable et signale le manque. La détection du participe passé est approchée (`catala-participe.mjs`).
+Sur une définition ou une règle, elle contient aussi `titre: …` : un groupe nominal court avec au moins un participe passé (ASD-STE100), par exemple `titre: Contrat conclu`. Le graphe affiche ce titre ; sans lui, il affiche la `Question` ou le nom de la variable. Le manque est signalé par `pm catala verifier`, pas dans le graphe. La détection du participe passé est approchée (`catala-participe.mjs`).
 La référence s’écrit `source: URL ou chemin` dans la même annotation. Ces deux balises sont des conventions PieceMaker.
 
 `pm catala verifier` produit des erreurs distinctes, avec fichier et ligne :
@@ -106,7 +106,7 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Ajout | Comportement |
 |---|---|
 | Graphe à nœuds partagés | Chaque application de règle garde une carte et sa conséquence. Les données factuelles figurent dans les applications qu’elles soutiennent. |
-| Lecture juridique | La règle, les conditions et leurs appuis sont alignés horizontalement. La conséquence apparaît en dessous. |
+| Lecture juridique | Un bloc par règle : la règle et sa source, ses conditions, les faits et pièces en regard, puis la conséquence. |
 | Groupes `ET`, `OU`, `NON` | PieceMaker lit les expressions booléennes simples présentes dans la trace pour expliciter les relations. |
 | Conditions d’application | Les dépendances pointillées de la trace restent identifiées. Une négation `NON` reste distincte de la sélection d’une définition conditionnelle. Un lien pointillé ne prouve pas, à lui seul, une exception. |
 | Sources attachées aux éléments | Chaque condition ou exception réunit son fondement juridique, le fait invoqué et sa pièce dans trois parties distinctes. |
@@ -121,13 +121,18 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Inspection d’un nœud | La sélection montre le détail et atténue les éléments sans relation avec le nœud choisi. |
 | Navigation dans les sources | Les pièces et références juridiques utilisent les lecteurs et contrôles de citation PieceMaker existants. |
 
-PieceMaker dessine des cases distinctes pour la règle, les conditions, les faits et les conséquences. Les flèches relient chaque condition à sa règle et à ses appuis ; une flèche descend de la règle vers la conséquence. Les groupes d’application restent transparents, sans cadre de tableau.
+PieceMaker présente chaque règle dans un bloc, lu de haut en bas :
 
-PieceMaker présente chaque application de règle dans une ligne à trois colonnes : règle de droit, conditions, faits et pièces. Une flèche conduit à sa conséquence, placée en dessous. Les résultats réutilisés renvoient à leur démonstration précédente. Les liens entre applications descendent dans la marge. L’objectif déclaré par l’avocat figure en tête. Chaque case cite ses documents : article, décision, doctrine ou pièce, avec son titre et sa citation exacte. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Une case sans document ou sans citation est signalée. Les URL ne sont pas affichées. Le clic utilise la visionneuse interne. Si le nom juridique manque, le volet le signale sans inventer un intitulé. La lecture commence en haut ; l’ajustement porte sur la largeur pour conserver un texte lisible. Aucun Graphviz n’est nécessaire.
+1. La règle : son titre et sa source, citée une seule fois.
+2. Les conditions, une par ligne. Chaque ligne indique l’état de la condition : « Remplie », « Non remplie » ou « À établir ». Une condition affiche une source seulement si cette source diffère de celle de la règle.
+3. Les faits et pièces, en regard de chaque condition : la valeur du scénario, la pièce et sa citation exacte. Si la condition vient d’une autre règle, la ligne renvoie à cette règle.
+4. La conséquence : la valeur produite et, pour un calcul simple, sa formule.
+
+Une flèche dans la marge relie la conséquence d’une règle à la condition qu’elle remplit dans une autre règle. L’objectif déclaré par l’avocat figure en tête. Chaque source est cliquable : article, décision, doctrine ou pièce s’ouvre dans la visionneuse interne, sur le passage cité. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Les URL ne sont pas affichées. Le graphe signale seulement trois manques : une règle sans source, un fait sans pièce et une citation non retrouvée. Les autres contrôles restent dans `pm catala verifier`. Aucun Graphviz n’est nécessaire.
 
 Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
 
-Chaque carte d’application sépare horizontalement la règle, les conditions et les faits invoqués. La conséquence du scénario figure en dessous. Les groupes ET, OU et NON restent dans les conditions ; ils ne deviennent plus des cartes isolées.
+Les groupes ET, OU et NON restent dans les conditions ; ils ne deviennent pas des cartes isolées.
 
 Les faits et leurs pièces figurent en face de la condition concernée. Un résultat intermédiaire est désigné comme résultat déjà obtenu, avec un lien vers sa démonstration. Il n’est pas présenté comme une nouvelle pièce.
 

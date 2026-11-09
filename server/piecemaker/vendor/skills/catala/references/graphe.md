@@ -37,10 +37,10 @@ Placez chaque définition sous le texte ou la décision qui la fonde. Un même c
 
 Dans un scénario, définissez les faits comme des données intermédiaires sous les sections de leurs pièces, puis passez ces données au champ métier. La trace conserve ainsi leur origine. Une déclaration de champ donne seulement son contexte ; elle ne prouve pas l’origine factuelle de sa valeur.
 
-Présentez chaque application sur une ligne horizontale : règle de droit, conditions, faits et pièces. Placez la conséquence juridique en dessous.
+Le graphe présente chaque règle dans un bloc : la règle et sa source, ses conditions, les faits et pièces en regard, puis la conséquence.
 Si cette conséquence sert ensuite, désignez-la comme résultat réutilisé et reliez sa démonstration. Ne la présentez pas comme une pièce.
 
-Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque case doit citer son document avec une citation exacte, y compris une condition : le graphe signale toute case sans document. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans le détail. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
+Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque définition garde son `#[doc]`. Le graphe affiche la source d’une condition seulement si elle diffère de celle de la règle. Le graphe signale une règle sans source et un fait sans pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans le détail. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
 
 Pour expliquer un nœud, ajoutez une section Markdown dans le fichier Catala. Les champs suivants restent du texte pour Catala :
 

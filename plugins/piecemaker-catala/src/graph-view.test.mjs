@@ -203,12 +203,18 @@ test('redraws links at card boundaries after resize and releases its observer', 
 
     assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 140 H 450$/);
     const edge = view.querySelector('g');
-    for (const [route, expected] of [['requires', /^M 250 80 .* H 450$/], ['supports', /^M 200 80 .* H 500$/], ['consequence', /^M 225 120 .* V 250$/]]) {
-      edge.dataset.route = route;
-      if (route === 'consequence') targetTop = 300;
-      redraw();
-      assert.match(view.querySelector('path').getAttribute('d'), expected);
-    }
+    edge.dataset.route = 'consequence';
+    targetTop = 300;
+    redraw();
+    assert.match(view.querySelector('path').getAttribute('d'), /^M 200 80 H 14 V 300 H 450$/);
+    const anchored = new JSDOM('<div class="pmc-map"><svg><g data-from="a" data-to="b" data-anchor-from="a-outcome" data-anchor-to="b-uses-a"><path/></g></svg><div data-node="a"><div data-flow-anchor="a-outcome"></div></div><div data-node="b"><div data-flow-anchor="b-uses-a"></div></div></div>');
+    const map = anchored.window.document.querySelector('.pmc-map');
+    anchored.window.ResizeObserver = dom.window.ResizeObserver;
+    map.getBoundingClientRect = () => ({ left: 0, top: 0 });
+    anchored.window.document.querySelector('[data-flow-anchor="a-outcome"]').getBoundingClientRect = () => ({ left: 40, right: 140, top: 10, bottom: 30, width: 100, height: 20 });
+    anchored.window.document.querySelector('[data-flow-anchor="b-uses-a"]').getBoundingClientRect = () => ({ left: 60, right: 260, top: 100, bottom: 140, width: 200, height: 40 });
+    const stopAnchored = mountExplanation(anchored.window.document.body, () => {});
+    try { assert.match(anchored.window.document.querySelector('path').getAttribute('d'), /^M 40 20 H \d+ V 120 H 60$/); } finally { stopAnchored(); anchored.window.close(); }
   } finally { stop(); dom.window.close(); }
   assert.equal(disconnected, true);
 });
