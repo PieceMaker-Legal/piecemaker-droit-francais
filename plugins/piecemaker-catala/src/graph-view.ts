@@ -3,41 +3,6 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const nodes = [...view.querySelectorAll<HTMLElement>('[data-node]')];
   const canvas = view.querySelector<HTMLElement>('.pmc-map');
   const scroll = view.querySelector<HTMLElement>('.pmc-map-scroll');
-  const graph = view.querySelector<HTMLElement>('.pmc-graph');
-  const boxes = new Map([...view.querySelectorAll<HTMLElement>('[data-doc]')].map((box) => [box.dataset.doc!, box]));
-  const draw = () => {
-    if (!graph) return;
-    const bounds = graph.getBoundingClientRect();
-    const scale = Number(canvas?.dataset.scale ?? 1);
-    const svg = graph.querySelector('svg')!;
-    svg.setAttribute('width', String(graph.scrollWidth));
-    svg.setAttribute('height', String(graph.scrollHeight));
-    for (const edge of graph.querySelectorAll<SVGGElement>('[data-from][data-to]')) {
-      const from = boxes.get(edge.dataset.from!)?.getBoundingClientRect();
-      const to = boxes.get(edge.dataset.to!)?.getBoundingClientRect();
-      if (!from || !to) continue;
-      const x1 = (from.left + from.width / 2 - bounds.left) / scale, y1 = (from.top - bounds.top) / scale;
-      const x2 = (to.left + to.width / 2 - bounds.left) / scale, y2 = (to.bottom - bounds.top) / scale;
-      const bend = Math.max(24, (y1 - y2) / 2);
-      edge.querySelector('path')!.setAttribute('d', `M ${x1} ${y1} C ${x1} ${y1 - bend} ${x2} ${y2 + bend} ${x2} ${y2}`);
-    }
-  };
-  const Observer = view.ownerDocument.defaultView?.ResizeObserver;
-  const observer = graph && Observer ? new Observer(draw) : null;
-  if (graph) { observer?.observe(graph); boxes.forEach((box) => observer?.observe(box)); }
-  draw();
-  const hover = (event: Event) => {
-    const key = (event.target as Element).closest<HTMLElement>('[data-doc]')?.dataset.doc ?? '';
-    const near = new Set(key ? [key] : []);
-    graph?.querySelectorAll<SVGGElement>('[data-from][data-to]').forEach((edge) => {
-      const on = Boolean(key) && (edge.dataset.from === key || edge.dataset.to === key);
-      edge.classList.toggle('is-on', on);
-      if (on) { near.add(edge.dataset.from!); near.add(edge.dataset.to!); }
-    });
-    boxes.forEach((box, id) => box.classList.toggle('is-dim', Boolean(key) && !near.has(id)));
-  };
-  graph?.addEventListener('mouseover', hover);
-  graph?.addEventListener('mouseleave', hover);
   const select = (id: string, detailId?: string) => {
     const chosenItem = nodes.find((node) => node.dataset.node === id)?.closest('li');
     const related = new Set(id ? [id] : []);
@@ -74,7 +39,6 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       const next = zoom.dataset.mapZoom === 'fit' ? Math.min(1, (scroll.clientWidth - 40) / canvas.scrollWidth) : scale * (zoom.dataset.mapZoom === 'in' ? 1.2 : 1 / 1.2);
       canvas.dataset.scale = String(Math.max(.4, Math.min(2, next)));
       canvas.style.zoom = canvas.dataset.scale;
-      draw();
       return;
     }
     const reference = target.closest<HTMLElement>('[data-open-reference]');
@@ -105,9 +69,6 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   view.addEventListener('keydown', key);
   return () => {
     select('');
-    observer?.disconnect();
-    graph?.removeEventListener('mouseover', hover);
-    graph?.removeEventListener('mouseleave', hover);
     view.ownerDocument.removeEventListener('click', click);
     view.removeEventListener('keydown', key);
   };

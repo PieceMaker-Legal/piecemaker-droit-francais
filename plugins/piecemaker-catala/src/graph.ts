@@ -507,6 +507,6 @@ export function reasoningIssues(model: Reasoning) {
   ];
 }
 
-export function reasoningGraph(model: Reasoning, folder = '') {
-  return reasoningMap(model, sourceName, folder);
+export function reasoningGraph(model: Reasoning) {
+  return reasoningMap(model, human, sourceLink);
 }
