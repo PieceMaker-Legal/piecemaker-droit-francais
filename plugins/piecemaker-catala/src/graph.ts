@@ -7,7 +7,7 @@ type File = { nom: string; chemin: string; contenu?: string };
 type Citation = { origin: string; target: string; quote: string; status: string; title?: string; id?: string };
 export type Source = { label: string; target: string; kind: string; origin: string; quote: string; status: string; title?: string; id?: string };
 export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: string; refs: string[]; members: Clause[]; met: string };
-type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
+type Notes = { titre: string; question: string; justification: string; recherche: string; demarches: string[] };
 type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
 export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
 export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string };
@@ -140,7 +140,7 @@ function citationOf(sources: Citation[], origin: string, target: string, quote: 
   return sources.find((entry) => entry.origin === origin && entry.target === target && entry.quote === quote);
 }
 
-const emptyNotes = (): Notes => ({ question: '', justification: '', recherche: '', demarches: [] });
+const emptyNotes = (): Notes => ({ titre: '', question: '', justification: '', recherche: '', demarches: [] });
 
 function documentSources(file: File, citations: Citation[], linked: Map<string, Source[]>, notes: Map<string, Notes>) {
   type Section = { sources: Source[]; concerned: string[]; blocks: Array<{ start: number; end: number }>; notes: Notes };
@@ -162,7 +162,7 @@ function documentSources(file: File, citations: Citation[], linked: Map<string, 
     if (!text.trim()) return;
     current.sources.push(...found(text));
     for (const match of text.matchAll(/^Concerne\s*:\s*(.+)$/gim)) current.concerned.push(...match[1].split(',').map(key).filter(Boolean));
-    for (const [label, field] of [['Question', 'question'], ['Justification', 'justification'], ['À rechercher', 'recherche']] as const) {
+    for (const [label, field] of [['Titre', 'titre'], ['Question', 'question'], ['Justification', 'justification'], ['À rechercher', 'recherche']] as const) {
       const value = text.match(new RegExp(`^${label}\\s*:\\s*(.+)$`, 'im'))?.[1];
       if (value) current.notes[field] = value;
     }
@@ -192,6 +192,7 @@ function documentSources(file: File, citations: Citation[], linked: Map<string, 
       linked.set(name, [...(linked.get(name) ?? []), ...section.sources]);
       const previous = notes.get(name) ?? emptyNotes();
       notes.set(name, {
+        titre: section.notes.titre || previous.titre,
         question: section.notes.question || previous.question,
         justification: section.notes.justification || previous.justification,
         recherche: section.notes.recherche || previous.recherche,

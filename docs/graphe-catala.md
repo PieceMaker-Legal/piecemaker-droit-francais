@@ -140,6 +140,7 @@ Une section `Concerne : identifiant` rattache ses pièces et explications au nœ
 
 | Champ | Rôle dans PieceMaker |
 |---|---|
+| `Titre : …` | Titre de la case, au moins un participe passé (ASD-STE100) : « Contrat conclu ». Il prime sur `Question` et sur le nom de la variable. Sans participe passé, le graphe affiche un avertissement (`src/participle.ts`, détection approchée). |
 | `Question : …` | Libellé de la question sur le nœud. |
 | `Objectif : …` | Objectif annoncé par l’avocat, affiché en tête du graphe. Une seule ligne par programme ; elle n’a pas besoin de `Concerne`. |
 | `Justification : …` | Explication rédigée par l’agent, visible dans le détail de la carte. |

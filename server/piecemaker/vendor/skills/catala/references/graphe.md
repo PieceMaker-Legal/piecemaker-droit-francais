@@ -48,6 +48,7 @@ Pour expliquer un nœud, ajoutez une section Markdown dans le fichier Catala. Le
 ## Réception de la demande
 
 Concerne : demande_reçue
+Titre : Demande reçue par le destinataire
 Question : La demande a-t-elle été reçue ?
 Justification : La réception doit être distinguée de l’envoi.
 À rechercher : Obtenir un justificatif de réception.
@@ -59,7 +60,7 @@ Citation : « Extrait fictif établissant seulement l’envoi. »
 
 `Concerne` rattache les sources et ces explications à un identifiant. Employez des identifiants distincts pour des notions distinctes dans un programme.
 
-Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. N’en inventez pas : sans objectif déclaré, demandez-le. `Question` nomme le nœud. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
+Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. N’en inventez pas : sans objectif déclaré, demandez-le. `Titre` nomme la case selon ASD-STE100 : un groupe nominal court avec au moins un participe passé (« Contrat conclu », « Préavis exécuté »). Le graphe signale tout titre sans participe passé. `Question` formule la question juridique ; elle sert de titre seulement sans `Titre`. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
 
 Répétez `Démarche` pour conserver les démarches effectuées et leurs résultats. N’inventez aucune démarche ni aucun résultat. Actualisez `À rechercher` lorsque la collecte progresse.
 
