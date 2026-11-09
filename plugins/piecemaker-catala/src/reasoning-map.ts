@@ -91,7 +91,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const referenced = steps.get(clause.ref);
     const supporting = (referenced ? [referenced] : clause.refs.map((id) => steps.get(id))).filter((step): step is Step => Boolean(step));
     const application = referenced ? conditionApplication(referenced, model) : null;
-    const foundation = referenced?.kind === 'rule' ? referenced.sources.filter((source) => source.kind !== 'origin') : application?.basis ?? [];
+    const foundation = referenced?.kind === 'rule' ? referenced.sources.filter((source) => source.kind !== 'origin') : application?.basis.length ? application.basis : owner.sources.filter((source) => source.kind !== 'origin');
     const title = referenced ? named(referenced) : human(clause.text);
     return row(application?.kind === 'exception' ? 'Exception invoquée' : 'Condition exigée', title, documents(foundation, 'Fondement de la condition à préciser : article, jurisprudence ou doctrine et citation exacte'), supporting.length ? supporting.map(support).join('') : warn('Application au dossier à préciser'), owner, referenced?.id ?? '');
   };

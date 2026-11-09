@@ -328,7 +328,7 @@ test('states the declared objective, then shows each cited document by its title
   const piece = document.querySelector('[data-condition="x001"] [data-part="evidence"] li');
   assert.equal(piece.querySelector('[data-open-reference]').textContent, 'Pièce 2 — Lettre de mise en demeure');
   assert.match(piece.querySelector('q').textContent, /mise en demeure de livrer/);
-  assert.match(document.querySelector('[data-condition="x001"] [data-part="condition"]').textContent, /Fondement de la condition à préciser/);
+  assert.match(document.querySelector('[data-condition="x001"] [data-part="condition"] [data-kind="article"] q').textContent, /résoudre le contrat/);
   const undeclared = new JSDOM(reasoningGraph(reasoning(dot, [module], citations))).window.document;
   assert.match(undeclared.querySelector('[data-part="objective"]').textContent, /Objectif à déclarer/);
 });
