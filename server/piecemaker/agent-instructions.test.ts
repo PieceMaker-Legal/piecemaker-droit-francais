@@ -75,8 +75,24 @@ test('updates the old suivi rule in an existing AGENTS.md and nothing else', () 
   const oldRule = '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.yaml, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans l’onglet Échéances.';
   await writeFile(path.join(root, 'AGENTS.md'), `Ma règle sur suivi.yaml\n${oldRule}\n`);
   await ensureAgentInstructionFiles(root, SHARED);
-  const rule = agentInstructionsTemplate().split('\n').at(-1);
+  const rule = agentInstructionsTemplate().split('\n').find((line) => line.startsWith('5° '));
   assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n`);
+}));
+
+test('adds the tools rule once to an AGENTS.md written from the template and keeps custom lines', () => withProject(async (root) => {
+  const template = agentInstructionsTemplate();
+  const withoutToolsRule = template.slice(0, template.indexOf('\n6° Outils:'));
+  await writeFile(path.join(root, 'AGENTS.md'), `${withoutToolsRule}\nMa règle du dossier\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await read(root, 'AGENTS.md'), `${withoutToolsRule}\nMa règle du dossier\n${template.slice(withoutToolsRule.length + 1)}\n`);
+}));
+
+test('leaves a tools rule rewritten by the lawyer untouched', () => withProject(async (root) => {
+  const content = `${agentInstructionsTemplate().split('\n')[0]}\n6° Outils: ma propre table\n`;
+  await writeFile(path.join(root, 'AGENTS.md'), content);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await read(root, 'AGENTS.md'), content);
 }));
 
 test('points the rules of an existing AGENTS.md to arborescence.json and keeps custom lines', () => withProject(async (root) => {

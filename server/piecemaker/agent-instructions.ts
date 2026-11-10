@@ -38,6 +38,18 @@ const OLD_GENERAL_RULE = '2° Instructions générales: Au début de chaque sess
 const TREE_RULE = '3° Arborescence: Respecte l’arborescence du dossier, enregistrée dans .piecemaker/arborescence.json : l’avocat la règle dans l’index du dossier, tu la lis dans ce fichier et tu la remplaces avec pm dossier arborescence (voir la skill piecemaker), un « / » dans un nom crée un sous-dossier. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
 const PREVIOUS_TREE_RULE = '3° Arborescence: Respecte l’arborescence du dossier, enregistrée dans .piecemaker/arborescence.json : l’avocat la règle dans le Tabular review index, tu la lis ou la remplaces avec pm tabular_review_index arborescence (voir la skill piecemaker), un « / » dans un nom crée un sous-dossier. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
 const OLD_TREE_RULE = '3° Arborescence: Respecte arborescence convenue dans perso.md. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
+const TEMPLATE_HEADER = 'Tu es un assistant juridique. Voici les règles :';
+const TOOLS_RULE_START = '6° Outils:';
+const TOOLS_RULE_LINES = [
+  `${TOOLS_RULE_START} Avant d’agir, charge le skill qui correspond à la demande, puis suis-le.`,
+  '- Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement → skill piecemaker',
+  '- Règle juridique en programme, calcul formel, preuve sur les exceptions → skill catala',
+  '- Lire, modifier, annoter ou créer un fichier Word .docx → skill docx-cli',
+  '- Rédiger ou relire un acte, un courrier, un document juridique → skill style-redaction-cabinet, puis docx-cli',
+  '- Instruction, gabarit ou skill personnels → skill ajout-de-fonctionnalites',
+  '- Textes, jurisprudence, BODACC → outils MCP legifrance, sans skill',
+  '- Syntaxe d’une commande → pm --help',
+];
 const RULE_UPDATES = new Map([
   ...OLD_SUIVI_RULES.map((rule): [string, string] => [rule, SUIVI_RULE]),
   [OLD_GENERAL_RULE, GENERAL_RULE],
@@ -47,21 +59,30 @@ const RULE_UPDATES = new Map([
 
 export function agentInstructionsTemplate(): string {
   return [
-  'Tu es un assistant juridique. Voici les règles :',
+  TEMPLATE_HEADER,
   '1° Anonymisation: Les entités sensibles sont pseudonymisées automatiquement à la lecture et dépseudonymisées à l’écriture. Conserve les pseudonymes fournis ; ne cherche pas à retrouver les identités réelles. Ne jamais ouvrir un dossier non anonymisé sans autorisation préalable',
   GENERAL_RULE,
   TREE_RULE,
   '4° Suivi projets: Pour chaque projet demandé par l’utilisateur, crée puis maintiens un fichier Markdown servant de mémoire. Un projet correspond à un acte précis et identifié : jeu de conclusions, contrat, etc. Référence sa mémoire dans ce document avec son chemin et sa date de dernière mise à jour. Son frontmatter YAML indique le template utilisé, les échéances et l’étape en cours.',
   SUIVI_RULE,
+  ...TOOLS_RULE_LINES,
 ].join('\n');
 }
 
+const withToolsRule = (content: string) => {
+  const lines = content.split(/\r?\n/);
+  if (!lines.includes(TEMPLATE_HEADER) || lines.some((line) => line.startsWith(TOOLS_RULE_START))) return content;
+  const lineEnd = content.includes('\r\n') ? '\r\n' : '\n';
+  const rule = TOOLS_RULE_LINES.join(lineEnd);
+  return content.endsWith('\n') ? content + rule + lineEnd : content + lineEnd + rule;
+};
+
 const refreshRules = async (agentsPath: string) => {
   const content = await readFile(agentsPath, 'utf8');
-  const next = content.split('\n').map((line) => {
+  const next = withToolsRule(content.split('\n').map((line) => {
     const updated = RULE_UPDATES.get(line.replace(/\r$/, ''));
     return updated ? updated + (line.endsWith('\r') ? '\r' : '') : line;
-  }).join('\n');
+  }).join('\n'));
   if (next !== content) await writeFile(agentsPath, next);
 };
 

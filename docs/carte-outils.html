@@ -215,6 +215,22 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     </section>
 
     <section class="card">
+      <h2>Table de routage</h2>
+      <p>La règle 6° de l'<code>AGENTS.md</code> du dossier dit au moteur quel skill charger avant d'agir. Claude la reçoit par l'import <code>@AGENTS.md</code> de <code>CLAUDE.md</code>. Le serveur l'ajoute une fois aux <code>AGENTS.md</code> issus du modèle ; il ne touche pas un fichier écrit par l'avocat.</p>
+      <div class="scroll"><table>
+        <tr><th>Demande</th><th>À charger</th></tr>
+        <tr><td>Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement</td><td class="c-skill">piecemaker</td></tr>
+        <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala</td></tr>
+        <tr><td>Lire, modifier, annoter ou créer un fichier Word <code>.docx</code></td><td class="c-skill">docx-cli</td></tr>
+        <tr><td>Rédiger ou relire un acte, un courrier, un document juridique</td><td class="c-skill">style-redaction-cabinet, puis docx-cli</td></tr>
+        <tr><td>Instruction, gabarit ou skill personnels</td><td class="c-skill">ajout-de-fonctionnalites</td></tr>
+        <tr><td>Textes, jurisprudence, BODACC</td><td class="c-mcp">MCP legifrance, sans skill</td></tr>
+        <tr><td>Syntaxe d'une commande</td><td><code>pm --help</code></td></tr>
+      </table></div>
+      <p><code>legal-code</code> n'y figure pas : il s'ouvre par <code>/legal-code</code>.</p>
+    </section>
+
+    <section class="card">
       <h2>Hooks</h2>
       <div class="scroll"><table>
         <tr><th>Hook</th><th>Moment</th><th>Outils visés</th></tr>
@@ -268,6 +284,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <li>Outils : <code>mcp_definitions.py</code>, <code>server.mjs</code>, <code>pm.mjs</code>.</li>
         <li>Skills : les <code>SKILL.md</code>, <code>server/piecemaker/skill-declaration.ts</code>.</li>
         <li>MCP par dossier : <code>server/piecemaker/mcp-declaration.ts</code>.</li>
+        <li>Table de routage : <code>server/piecemaker/agent-instructions.ts</code>.</li>
         <li>Binaire : <code>docx --help</code>.</li>
       </ul>
     </section>
