@@ -229,6 +229,7 @@ async function verifier(context, program, flags = {}) {
   const files = sourceFiles(program.directory);
   if (!files.length) throw new TypeError(`Aucun fichier .catala_fr dans .piecemaker/catala/${program.name}/.`);
   const started = context.now();
+  const formatted = context.pack ? await formatSources(context, program, files) : null;
   const digest = sourcesDigest(program.directory, files);
   const previous = readJson(path.join(program.directory, 'resultats', 'explication.json'));
   for (const file of ['preuve.json', 'catleg.json', 'citations.json', 'tests.json', 'explication.json', 'explication.dot', 'scenarios.json']) fs.rmSync(path.join(program.directory, 'resultats', file), { force: true });
@@ -263,14 +264,8 @@ async function verifier(context, program, flags = {}) {
     await record('format', 'catala-format', async () => {
       if (!context.pack) return missing('Pack Catala absent.');
       if (!typed.passed) return blocked('Compilation non validée.');
-      const unformatted = [], logs = [];
-      for (const file of files) {
-        const { result } = await check(context, program.directory, 'format', 'catala-format', [file]);
-        logs.push(`${file}:\n${result.code ? result.stdout + result.stderr : result.stdout !== fs.readFileSync(path.join(program.directory, file), 'utf8') ? 'Mise en forme différente : lancez pm catala formater.' : 'Conforme.'}`);
-        if (result.code !== 0 || result.stdout !== fs.readFileSync(path.join(program.directory, file), 'utf8')) unformatted.push(file);
-      }
-      writeResult(program.directory, 'format.log', logs.join('\n'));
-      return { passed: !unformatted.length, exit_code: unformatted.length ? 1 : 0, files: unformatted };
+      writeResult(program.directory, 'format.log', formatted.log);
+      return { passed: !formatted.failed.length, exit_code: formatted.failed.length ? 1 : 0, files: formatted.failed, message: formatted.rewritten.length ? `reformatés : ${formatted.rewritten.join(', ')}` : '' };
     });
     const tests = files.filter((file) => isTestFile(program.directory, file));
     let scopes = [];
@@ -359,16 +354,22 @@ async function verifier(context, program, flags = {}) {
   return [`Programme ${program.name} : ${report.passed ? 'vérifié' : 'à corriger'}.`, ...checks.map((entry) => `- ${entry.name} : ${labels[entry.status]}${entry.message ? ` — ${entry.message}` : ''}${entry.files?.length ? ` (${entry.files.join(', ')})` : ''}${entry.errors?.length ? `\n  ${entry.errors.join('\n  ')}` : ''}`), `Détail : .piecemaker/catala/${program.name}/resultats/`].join('\n');
 }
 
-async function formater(context, program) {
-  const files = sourceFiles(program.directory);
-  const changed = [];
+async function formatSources(context, program, files) {
+  const failed = [], rewritten = [], logs = [];
   for (const file of files) {
     const before = fs.readFileSync(path.join(program.directory, file), 'utf8');
     const { result } = await check(context, program.directory, 'format', 'catala-format', ['--in-place', file]);
-    if (result.code !== 0) throw new Error(`catala-format a échoué sur ${file} :\n${result.stdout}${result.stderr}`);
-    if (fs.readFileSync(path.join(program.directory, file), 'utf8') !== before) changed.push(file);
+    if (result.code !== 0) failed.push(file);
+    else if (fs.readFileSync(path.join(program.directory, file), 'utf8') !== before) rewritten.push(file);
+    logs.push(`${file}:\n${result.code !== 0 ? result.stdout + result.stderr : rewritten.includes(file) ? 'Reformaté.' : 'Conforme.'}`);
   }
-  return changed.length ? `Formatés : ${changed.join(', ')}.` : 'Déjà formatés.';
+  return { failed, rewritten, log: logs.join('\n') };
+}
+
+async function formater(context, program) {
+  const { failed, rewritten, log } = await formatSources(context, program, sourceFiles(program.directory));
+  if (failed.length) throw new Error(`catala-format a échoué sur ${failed.join(', ')} :\n${log}`);
+  return rewritten.length ? `Formatés : ${rewritten.join(', ')}.` : 'Déjà formatés.';
 }
 
 function defaultProofFile(program) {

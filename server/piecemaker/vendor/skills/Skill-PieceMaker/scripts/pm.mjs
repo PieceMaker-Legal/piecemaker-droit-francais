@@ -69,7 +69,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
 
   catala verifier --au AAAA-MM-JJ [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
-      typage, format, tests Clerk/Python, preuves, Catleg, citations, explication → resultats/verification.json ;
+      mise au format, typage, tests Clerk/Python, preuves, Catleg, citations, explication → resultats/verification.json ;
       --programme est requis quand le dossier en compte plusieurs
   catala lister | env
   catala formater [--programme NOM]

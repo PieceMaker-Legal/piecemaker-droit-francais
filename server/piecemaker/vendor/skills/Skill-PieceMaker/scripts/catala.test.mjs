@@ -176,7 +176,7 @@ test('verifier runs every check inside the pack environment and writes the resul
   }
 });
 
-test('a failing test or an unformatted file makes the verification fail', async () => {
+test('a failing test fails the verification, verifier rewrites unformatted files and reports a formatter failure', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime-anciennete');
@@ -185,8 +185,18 @@ test('a failing test or an unformatted file makes the verification fail', async 
     const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: runner } });
     assert.match(text, /tests : échec/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).passed, false);
-    const unformatted = async (command, args, options) => (path.basename(command) === 'catala-format' ? { code: 0, stdout: 'autre', stderr: '' } : runner(command, args, options));
-    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: unformatted } }), /format : échec \(prime.catala_fr, test_prime.catala_fr\)/);
+    const broken = async (command, args, options) => (path.basename(command) === 'catala-format' ? { code: 1, stdout: '', stderr: 'Failed idempotence check' } : runner(command, args, options));
+    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: broken } }), /format : échec \(prime.catala_fr, test_prime.catala_fr\)/);
+    assert.equal(fs.readFileSync(path.join(directory, 'prime.catala_fr'), 'utf8'), MODULE);
+    const rewriting = async (command, args, options) => {
+      if (path.basename(command) !== 'catala-format') return runner(command, args, options);
+      assert.equal(args[0], '--in-place');
+      fs.writeFileSync(path.join(options.cwd, args.at(-1)), `${fs.readFileSync(path.join(options.cwd, args.at(-1)), 'utf8')}\n`);
+      return { code: 0, stdout: '', stderr: '' };
+    };
+    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: rewriting } }), /format : ok — reformatés : prime.catala_fr, test_prime.catala_fr/);
+    assert.equal(fs.readFileSync(path.join(directory, 'prime.catala_fr'), 'utf8'), `${MODULE}\n`);
+    assert.doesNotMatch(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'), /Code modifié/);
   } finally {
     cleanup();
   }
@@ -381,7 +391,7 @@ test('verifier prints the compiler error lines under the failed typecheck', asyn
     const run = async (command, args, options) => (args[0] === 'typecheck' ? { code: 1, stdout: 'prime.catala_fr:4.3-4.6: [ERROR] Syntax error\nMaybe you wanted to write: "égal à"?\n', stderr: '' } : runner(command, args, options));
     const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => ({ passed: true, status: 'passed', results: [] }) } });
     assert.match(text, /typecheck : échec[^\n]*\n  prime\.catala_fr:4\.3-4\.6: \[ERROR\] Syntax error/);
-    assert.ok(calls.every((call) => call.command !== 'catala-format'));
+    assert.match(text, /format : bloqué/);
   } finally { cleanup(); }
 });
 

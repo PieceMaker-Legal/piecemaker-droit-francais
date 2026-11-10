@@ -11,7 +11,7 @@
 9. Lancez `pm catala verifier`. Le volet propose les scénarios du rapport Clerk et leurs graphes Catala.
 10. Consultez la couverture Clerk dans la vue Raisonnement. Un passage exercé ne prouve pas que toutes ses branches sont testées.
 11. Pour examiner une autre exécution sans entrée, lancez `pm catala expliquer --fichier F --scope S`.
-12. Contrôlez la hiérarchie avec `pm catala exceptions`. Contrôlez les conflits avec `pm catala preuve`.
+12. Si la preuve signale un conflit, contrôlez la hiérarchie avec `pm catala exceptions`.
 
 ## Annotation obligatoire et citation
 

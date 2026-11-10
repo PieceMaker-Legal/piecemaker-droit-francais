@@ -30,7 +30,7 @@ Lisez d'abord `references/syntaxe.md` : modèle vérifié, pièges fréquents, m
 4. Mettez les définitions dans des blocs ` ```catala `. Citez le texte en Markdown au-dessus du bloc qui le code.
 5. Reprenez les pièces et citations du dossier dans le Markdown associé à chaque règle ou donnée. Écrivez les extraits sous la forme `Citation : « passage exact »` après leur lien. Évitez les lignes commençant par `>` : Catala les réserve à ses directives. Titrez chaque article cité `## Article 1218 | LEGIARTI000032041431`. catleg lit ces titres. Placez l'article ou la décision qui fonde une règle juste avant le bloc ` ```catala ` de cette règle : le volet les rattache à elle. Pour rattacher une pièce ou une source à une donnée ou à une autre règle, écrivez dans sa section `Concerne : <identifiant>` (plusieurs identifiants séparés par des virgules). Le volet montre les sources non rattachées à part. Nommez les identifiants en français, avec les accents (`mise_en_demeure`, `résolution_possible`) : le volet les affiche tels quels à l'avocat.
 6. Écrivez les tests dans `test_<module>.catala_fr` : `> Usage de Nom`, un champ d'application `#[test]` par scénario, avec `assertion`. Utilisez des faits fictifs ou ceux du dossier, jamais d'autres.
-7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala preuve` le détecte.
+7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala verifier` le détecte.
 
 ## Construire le graphe du raisonnement
 
@@ -64,21 +64,29 @@ Le titre nomme la case du graphe. L’avocat le lit sans le code. Aucun contrôl
 - Reprenez les mêmes mots dans la condition et dans le fait qui la valide : `Vérifier le montant demandé`, `Montant demandé`.
 - N’annoncez pas le résultat dans le titre d’une règle : la couleur de la case le donne.
 
-## Vérifier
+## Commandes
 
-1. `pm catala verifier --programme <nom>` : typage avec invariants, format, tests Clerk/Python, preuves de tous les champs métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande. Sous un contrôle en échec, le bilan donne une ligne par erreur (`fichier:ligne.colonne: [ERROR] message`) ou par test faux (`fichier:ligne › Scenario : message`). Tant que la compilation échoue, les contrôles qui en dépendent, format compris, sont bloqués : corrigez d'abord la compilation. Corrigez et relancez jusqu'à « vérifié ».
-2. `pm catala formater --programme <nom>` réécrit les fichiers au format officiel.
-3. `pm catala preuve --scope <Champ> [--fichier F]` prouve l'absence de conflit et d'erreur. Le mode `--whole-program` est refusé : Catala 1.3 peut y masquer des conflits. Le vérificateur inventorie les champs métier avec `catala dependency-graph` puis prouve chaque champ séparément. Une commande `preuve` isolée ne couvre pas les champs appelés. Un `[WARNING]` est un échec : lisez le contre-exemple.
-4. `pm catala catleg --au AAAA-MM-JJ [--fichier F]` vérifie la vigueur des articles cités, avec les identifiants PISTE de PieceMaker.
-5. `pm catala lister` montre les programmes et leur dernier bilan. `pm catala env` montre le pack, son état d'installation et le Python utilisé.
-6. `pm catala squelette --scope <Champ> [--fichier F]` génère un test dont les entrées ont leur valeur par défaut. Copiez-le dans `test_<module>.catala_fr`, puis fixez les faits et ajoutez les assertions.
-7. `pm catala executer --scope <Scenario> [--fichier F]` exécute un champ sans entrées et affiche sa trace : valeur de chaque variable et règle appliquée. Utilisez-la pour comprendre un test qui échoue.
-8. `pm catala exceptions --scope <Champ> --variable <v> [--fichier F]` affiche l'arbre des exceptions d'une variable. Utilisez-le pour contrôler la hiérarchie avant la preuve.
-9. `pm catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> -- <arguments>` lance un outil du pack avec son environnement (LSP et débogueur pour un éditeur, commandes non couvertes).
+Contrôler, une seule commande :
+
+- `pm catala verifier --programme <nom> --au AAAA-MM-JJ` met les fichiers au format officiel, puis lance tous les contrôles : typage avec invariants, tests Clerk/Python, preuve de chaque champ métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande.
+- La commande réécrit les fichiers : relisez un fichier signalé « reformatés » avant de le modifier.
+- Sous un contrôle en échec, le bilan donne une ligne par erreur (`fichier:ligne.colonne: [ERROR] message`) ou par test faux (`fichier:ligne › Scenario : message`). Tant que la compilation échoue, les contrôles qui en dépendent sont bloqués : corrigez d'abord la compilation.
+- Un `[WARNING]` de preuve est un échec : lisez le contre-exemple dans `resultats/preuve.log`.
+- Corrigez et relancez jusqu'à « vérifié ».
+
+Comprendre un échec :
+
+- `pm catala executer --scope <Scenario> [--fichier F]` exécute un champ sans entrées et affiche sa trace : valeur de chaque variable et règle appliquée. Utilisez-la pour un test qui échoue.
+- `pm catala exceptions --scope <Champ> --variable <v> [--fichier F]` affiche l'arbre des exceptions d'une variable. Utilisez-la pour un conflit signalé par la preuve.
+- `pm catala expliquer --scope <Scenario> [--fichier F]` produit le graphe d'un autre scénario. Voir « Expliquer une exécution ».
+
+Écrire :
+
+- `pm catala squelette --scope <Champ> [--fichier F]` génère un test dont les entrées ont leur valeur par défaut. Copiez-le dans `test_<module>.catala_fr`, puis fixez les faits et ajoutez les assertions.
+
+Hors parcours : `pm catala lister` (programmes et dernier bilan), `pm catala env` (pack, Python) et `pm catala exec <outil> -- <arguments>` (outil du pack, pour un éditeur).
 
 ## Expliquer une exécution
-
-`pm catala expliquer --programme <nom> --fichier test_<module>.catala_fr --scope <Scenario>` produit le graphe des formules et conditions appliquées.
 
 Choisissez un champ sans entrées : ses données doivent être fixées dans le scénario. Indiquez `--fichier` quand le programme contient plusieurs fichiers.
 
@@ -92,10 +100,10 @@ Le bilan distingue réussite, échec, contrôle bloqué et contrôle indisponibl
 
 ## Limites à dire à l'avocat
 
-- Catleg vérifie les articles reconnus dans les titres Markdown, avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient uniquement de `--au AAAA-MM-JJ`, obligatoire pour `pm catala catleg` ; sans `--au`, `pm catala verifier` marque Catleg « non effectué ». En conseil ou en rédaction de contrat, donnez la date du jour. En contentieux, donnez la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure) ; demandez-la à l’avocat si elle est incertaine. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
+- Catleg vérifie les articles reconnus dans les titres Markdown, avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient uniquement de `--au AAAA-MM-JJ` ; sans `--au`, `pm catala verifier` marque Catleg « non effectué ». En conseil ou en rédaction de contrat, donnez la date du jour. En contentieux, donnez la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure) ; demandez-la à l’avocat si elle est incertaine. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
 - Catala 1.3 peut omettre des obligations pour des définitions globales. La preuve valide seulement les obligations produites. Une preuve sans obligation échoue.
 - Une preuve porte sur le programme. Elle ne prouve ni les faits, ni la fidélité du programme au texte.
 - Le programme ne lit pas les pièces. Le lien entre les entrées du programme et les pièces passe par une table des sources que l'avocat construit (qualification, lien officiel, pièce).
-- Si `catala-format` signale « Failed idempotence check », le formateur bute sur la construction : gardez la forme écrite et signalez-le.
+- Si le contrôle `format` échoue avec « Failed idempotence check », le formateur bute sur la construction : gardez la forme écrite et signalez-le.
 
 Répondez à l'avocat sans code : la règle codée, les scénarios testés, le résultat des contrôles et ces limites.
