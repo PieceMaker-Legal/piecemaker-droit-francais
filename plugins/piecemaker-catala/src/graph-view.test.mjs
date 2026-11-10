@@ -239,11 +239,11 @@ test('the pick mode sends the clicked card with its file and lines and stops', a
     window.dispatchEvent(new CustomEvent('piecemaker:panel-pick', { detail: { tab: 'plugin:piecemaker-catala' } }));
     assert.equal(root.hasAttribute('data-picking'), true);
     click(container.querySelector('.pmc-map-node[data-kind="fact"] h3'));
-    assert.deepEqual(inserted, [{ titre: card.querySelector('h3').textContent, fichier: undefined, debut: undefined, fin: undefined }]);
+    assert.deepEqual(inserted, [{ titre: card.querySelector('h3').textContent, fichier: undefined, debut: undefined, fin: undefined, identifiant: 'inexécution', valeur: 'Vrai', scenario: 'Test' }]);
     window.dispatchEvent(new CustomEvent('piecemaker:panel-pick', { detail: { tab: 'plugin:piecemaker-catala' } }));
     const rule = container.querySelector('.pmc-map-node:not([data-kind="fact"])');
     click(rule);
-    assert.deepEqual(inserted[1], { titre: rule.querySelector('h3').textContent, fichier: '.piecemaker/catala/demo/demo.catala_fr', debut: 9, fin: 9 });
+    assert.deepEqual(inserted[1], { titre: rule.querySelector('h3').textContent, fichier: '.piecemaker/catala/demo/demo.catala_fr', debut: 9, fin: 9, identifiant: 'sanction_possible', valeur: 'Vrai', scenario: 'Test' });
     assert.equal(root.hasAttribute('data-picking'), false);
     assert.equal(card.classList.contains('is-selected'), false);
     window.dispatchEvent(new CustomEvent('piecemaker:panel-pick', { detail: { tab: 'plugin:piecemaker-catala' } }));

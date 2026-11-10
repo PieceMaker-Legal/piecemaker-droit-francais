@@ -61,11 +61,12 @@ Citation : « Extrait fictif établissant seulement l’envoi. »
 
 L’objectif et la conclusion finale sont la même case du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. Cette ligne titre la conclusion finale. N’en inventez pas : sans objectif annoncé, la conclusion garde son titre.
 
-Quand un message contient `[Carte « titre »](chemin:12 "lignes 12 à 15")`, l’avocat vise cette case du graphe. Le lien donne le fichier Catala, relatif au dossier, et les lignes de la définition avec son `#[doc]`.
+Quand un message contient ``[Carte « titre »](chemin:12 "lignes 12 à 15") — `identifiant` = Vrai, scénario Test``, l’avocat vise cette case du graphe. Le lien donne le fichier Catala, relatif au dossier, et les lignes de la définition avec son `#[doc]`. La suite donne l’identifiant Catala, sa valeur dans le scénario affiché et le nom de ce scénario.
 
 1. Lisez seulement ces lignes du fichier.
-2. Lisez le reste du fichier seulement si la question porte sur d’autres règles.
-3. Si le lien ne donne aucun fichier, retrouvez la définition par le `titre` de son `#[doc]`, ou par la ligne `Objectif`.
+2. Si le contenu de ces lignes ne correspond pas, retrouvez la définition avec `grep -n` sur l’identifiant.
+3. Lisez le reste du fichier seulement si la question porte sur d’autres règles.
+4. Si le lien ne donne aucun fichier, retrouvez la définition par l’identifiant, par le `titre` de son `#[doc]`, ou par la ligne `Objectif`.
 
 `Question` formule la question juridique ; elle sert de titre seulement si le `#[doc]` n’en donne pas. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
 

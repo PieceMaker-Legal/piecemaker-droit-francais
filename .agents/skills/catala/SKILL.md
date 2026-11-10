@@ -77,6 +77,7 @@ Contrôler, une seule commande :
 Comprendre un échec :
 
 - `pm catala executer --scope <Scenario> [--fichier F]` exécute un champ sans entrées et affiche sa trace : valeur de chaque variable et règle appliquée. Utilisez-la pour un test qui échoue.
+- Pour la valeur d'une seule variable, filtrez ensuite le journal complet : `grep "≔.*<identifiant>" .piecemaker/catala/<nom>/resultats/execution.log`. Chaque ligne `≔` donne une variable et sa valeur.
 - `pm catala exceptions --scope <Champ> --variable <v> [--fichier F]` affiche l'arbre des exceptions d'une variable. Utilisez-la pour un conflit signalé par la preuve.
 - `pm catala expliquer --scope <Scenario> [--fichier F]` produit le graphe d'un autre scénario. Voir « Expliquer une exécution ».
 
@@ -93,6 +94,8 @@ Choisissez un champ sans entrées : ses données doivent être fixées dans le s
 La vérification produit déjà le graphe. Utilisez `expliquer` pour choisir un autre scénario. Le volet présente chaque règle avec son fondement, sa valeur Vrai ou Faux dans le scénario et les faits qui la justifient, en vue écrite et en graphe. Aucun Graphviz n’est nécessaire.
 
 L’explication concerne cette exécution seulement. Elle ne remplace ni les tests, ni la preuve du programme, ni la justification des faits.
+
+N'ouvrez pas les fichiers JSON de `resultats/` : ils servent au volet. Lisez le bilan de la commande, ou filtrez un journal `.log` avec `grep`.
 
 Les résultats vont dans `.piecemaker/catala/<nom>/resultats/` : `verification.json`, `tests.json`, `preuve.json`, `catleg.json`, `citations.json`, `explication.json`, `explication.dot` et un journal par contrôle.
 

@@ -26,6 +26,8 @@ test('a picked card shows as a chip and joins the sent message with its file and
     assert.equal(form.firstElementChild.className, 'pmc-chips');
     assert.deepEqual(chips(), ['Carte « Vérifier le montant demandé »', 'Carte « Contrat conclu »']);
     assert.equal(cardReference(first), '[Carte « Vérifier le montant demandé »](.piecemaker/catala/demo/demo.catala_fr:12 "lignes 12 à 15")');
+    assert.equal(cardReference({ ...first, identifiant: 'montant_dû', valeur: 'Vrai', scenario: 'TestMontant' }), '[Carte « Vérifier le montant demandé »](.piecemaker/catala/demo/demo.catala_fr:12 "lignes 12 à 15") — `montant_dû` = Vrai, scénario TestMontant');
+    assert.equal(cardReference({ titre: 'Contrat conclu', valeur: 'Faux' }), 'Carte « Contrat conclu » — valeur Faux');
     form.querySelector('[data-remove="1"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
     assert.deepEqual(chips(), ['Carte « Vérifier le montant demandé »']);
     field.value = 'Pourquoi ?';

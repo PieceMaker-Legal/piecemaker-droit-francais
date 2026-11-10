@@ -1,4 +1,4 @@
-type Card = { titre: string; fichier?: string; debut?: number; fin?: number };
+type Card = { titre: string; fichier?: string; debut?: number; fin?: number; identifiant?: string; valeur?: string; scenario?: string };
 type Pending = { target: HTMLTextAreaElement; original: string; full: string };
 
 const PICK_EVENT = 'piecemaker:catala-card-pick';
@@ -21,8 +21,11 @@ const place = (card: Card) => (card.fichier && card.debut ? `${card.fichier}, ${
 
 export function cardReference(card: Card): string {
   const label = `Carte « ${card.titre.replace(/[[\]]/g, '')} »`;
-  if (!card.fichier || !card.debut) return label;
-  return `[${label}](${card.fichier}:${card.debut}${card.fin && card.fin > card.debut ? ` "lignes ${card.debut} à ${card.fin}"` : ''})`;
+  const link = card.fichier && card.debut ? `[${label}](${card.fichier}:${card.debut}${card.fin && card.fin > card.debut ? ` "lignes ${card.debut} à ${card.fin}"` : ''})` : label;
+  const name = card.identifiant ? `\`${card.identifiant.replace(/`/g, '')}\`` : '';
+  const value = card.valeur ? `${name ? '= ' : 'valeur '}${card.valeur.replace(/\s+/g, ' ').trim()}` : '';
+  const state = [[name, value].filter(Boolean).join(' '), card.scenario && value ? `scénario ${card.scenario}` : ''].filter(Boolean).join(', ');
+  return state ? `${link} — ${state}` : link;
 }
 
 export function inject(): () => void {

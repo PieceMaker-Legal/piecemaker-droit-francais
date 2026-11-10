@@ -53,6 +53,7 @@ export function mount(container: HTMLElement, api: Host) {
   let chosenScenario = '';
   let picking = false;
   let steps: Step[] = [];
+  let shownScenario = '';
   const setPicking = (on: boolean) => {
     if (on === picking) return;
     picking = on;
@@ -74,6 +75,7 @@ export function mount(container: HTMLElement, api: Host) {
     try { model = reasoning(traced ? dot || 'digraph G {}' : 'digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage, traced ? provenance : undefined); }
     catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage); }
     steps = model.steps;
+    shownScenario = traced ? selected?.scope ?? program.explication?.scope ?? '' : '';
     const issues = reasoningIssues(model);
     const graph = reasoningGraph(model);
     const empty = `<p class="pmc-muted">${failure ? escape(failure) : 'Aucun raisonnement calculé pour ce scénario.'}</p>`;
@@ -185,11 +187,12 @@ export function mount(container: HTMLElement, api: Host) {
     event.preventDefault();
     event.stopPropagation();
     setPicking(false);
-    const origins = steps.find((step) => step.id === card.getAttribute('data-card'))?.origins ?? [];
+    const step = steps.find((entry) => entry.id === card.getAttribute('data-card'));
+    const origins = step?.origins ?? [];
     const origin = origins.find((entry) => entry.selected && entry.role === 'definition') ?? origins[0];
     const folder = `${context.project?.path.replaceAll('\\', '/') ?? ''}/`;
     const file = origin?.file.replaceAll('\\', '/');
-    window.dispatchEvent(new CustomEvent('piecemaker:catala-card-pick', { detail: { titre, fichier: file?.startsWith(folder) ? file.slice(folder.length) : file, debut: origin?.blockStart, fin: origin?.blockEnd } }));
+    window.dispatchEvent(new CustomEvent('piecemaker:catala-card-pick', { detail: { titre, fichier: file?.startsWith(folder) ? file.slice(folder.length) : file, debut: origin?.blockStart, fin: origin?.blockEnd, identifiant: step?.name || undefined, valeur: step?.value || undefined, scenario: shownScenario || undefined } }));
   }, true);
   window.addEventListener('piecemaker:panel-pick', togglePick);
   window.addEventListener('keydown', cancelPick);
