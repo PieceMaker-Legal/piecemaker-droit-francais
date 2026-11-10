@@ -51,7 +51,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   const steps = new Map(model.steps.map((step) => [step.id, step]));
   const rules = model.steps.filter((step) => step.kind === 'rule' && !container(step));
   const incomplete = new Set<string>();
-  for (const step of model.steps) if (step.issue || step.notes.recherche || step.sources.some((source) => source.status === 'failed') || step.parents.some((id) => incomplete.has(id))) incomplete.add(step.id);
+  for (const step of model.steps) if (step.issue || (step.kind === 'fact' && !step.sources.some((source) => source.kind === 'piece')) || step.notes.recherche || step.sources.some((source) => source.status === 'failed') || step.parents.some((id) => incomplete.has(id))) incomplete.add(step.id);
   const visited = new Set<string>();
   const links: Array<{ from: string; to: string }> = [];
   const warn = (text: string) => `<p class="pmc-warn">${escape(text)}</p>`;

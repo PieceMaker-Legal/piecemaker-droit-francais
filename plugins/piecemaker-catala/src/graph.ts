@@ -363,7 +363,6 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   for (const step of [...steps.values()]) if (step.kind === 'condition') steps.delete(step.id);
   for (const step of steps.values()) {
     step.parents = step.parents.filter((id) => steps.has(id));
-    if (step.kind === 'fact' && !step.sources.some((source) => source.kind === 'piece')) step.issue = 'Hypothèse du scénario : recherchez une pièce pour justifier cette donnée.';
     if (step.kind === 'fact' && /\b(?:Disputé|Contesté)(?!\p{L})/iu.test(step.value)) step.issue = 'Fait contesté : tranchez-le au vu des pièces.';
     if (step.kind === 'fact' && (!step.value || /\b(?:Indéterminé|Inconnu|null|None)(?!\p{L})/iu.test(step.value))) step.issue = 'Fait non établi : indiquez la pièce qui l’établit.';
     if (step.kind === 'rule' && !step.sources.some(legal) && !(step.clause && roots(step.clause).some((clause) => lawOf(clause, steps).length))) step.issue = 'Aucun article ni aucune décision rattaché à cette règle.';

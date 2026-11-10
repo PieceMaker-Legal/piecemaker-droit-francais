@@ -39,8 +39,8 @@ export const STYLES = `
 .pmc-bar select{flex:0 1 auto;min-width:72px;max-width:200px;height:1.75rem;border:1px solid var(--border);border-radius:999px;padding:0 8px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;text-overflow:ellipsis}
 .pmc-run{display:flex;align-items:center;gap:8px;margin-left:auto}
 .pmc-map-tools{display:flex;gap:4px}.pmc .pmc-map-tools button{width:1.75rem;padding:0}
-.pmc .pmc-alerts{position:relative;flex:none;margin-right:6px;color:var(--ko)}.pmc-bubble{position:absolute;top:-6px;right:-8px;min-width:16px;padding:0 4px;border-radius:999px;background:#d93025;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center}
-.pmc-alert-list{flex:none;max-height:40%;overflow:auto;margin:0 16px 8px;padding:8px 12px;border:1px solid color-mix(in srgb,var(--ko) 35%,var(--border));border-radius:12px;background:var(--surface);font-size:12.5px}.pmc-alert-list ul{margin:0;padding-left:18px}.pmc-alert-list li+li{margin-top:4px}.pmc-alert-list>button{float:right;margin:0 0 6px 10px}
+.pmc .pmc-alerts{position:relative;flex:none;margin-right:6px}.pmc .pmc-alerts[data-count]{color:var(--ko)}.pmc-bubble{position:absolute;top:-6px;right:-8px;min-width:16px;padding:0 4px;border-radius:999px;background:#d93025;color:#fff;font-size:10px;font-weight:700;line-height:16px;text-align:center}
+.pmc-alert-list{flex:none;max-height:40%;overflow:auto;margin:0 16px 8px;padding:8px 12px;border:1px solid color-mix(in srgb,var(--ko) 35%,var(--border));border-radius:12px;background:var(--surface);font-size:12.5px}.pmc-alert-list ul{margin:0;padding-left:18px}.pmc-alert-list li+li{margin-top:4px}.pmc-alert-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:6px}.pmc-alert-actions>span{margin-right:auto}.pmc-alert-list p{margin:0}
 .pmc-scenario{color:var(--muted);font-size:12.5px}.pmc-scenario strong{color:var(--ink);font-weight:600}
 p.pmc-scenario{margin:0}
 .pmc-tabs{display:flex;gap:3px;padding:3px;border:1px solid var(--glass-border);border-radius:999px;background:var(--glass-bg);box-shadow:var(--glass-shadow)}

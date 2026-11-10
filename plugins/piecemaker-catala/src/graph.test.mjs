@@ -14,8 +14,8 @@ test('keeps scenario truth separate from evidence, including a false input', () 
     const card = new JSDOM(reasoningCard(model.steps[0], model)).window.document;
     assert.equal(card.querySelector('.pmc-value').textContent, expected);
     assert.doesNotMatch(card.body.textContent, /Établi|Non établi/);
-    assert.match(card.body.textContent, /Hypothèse du scénario/);
-    assert.match(reasoningIssues(model)[0].issue, /pièce/i);
+    assert.doesNotMatch(card.body.textContent, /Hypothèse du scénario/);
+    assert.equal(reasoningIssues(model).length, 0);
   }
 });
 
@@ -262,7 +262,7 @@ test('follows the depth of the Catala rules and separates exceptions', () => {
   assert.match(qualification.querySelector('.pmc-met').textContent, /Remplie/);
   assert.match(qualification.textContent, /Source de la règle à indiquer/);
   assert.ok(qualification.closest('.pmc-branch').querySelector(':scope > .pmc-children [data-node="x001"]'));
-  assert.match(qualification.closest('.pmc-branch').querySelector('[data-node="x001"]').textContent, /recherchez une pièce/);
+  assert.match(qualification.closest('.pmc-branch').querySelector('[data-node="x001"]').textContent, /Pièce à rattacher/);
   assert.ok(document.querySelector('i[hidden][data-from="x003"][data-to="x004"]'));
   const order = [...document.querySelectorAll('[data-node]')].map((node) => node.dataset.node);
   assert.ok(order.indexOf('x004') < order.indexOf('x003'));

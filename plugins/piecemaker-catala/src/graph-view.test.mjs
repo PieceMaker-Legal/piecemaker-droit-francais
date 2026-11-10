@@ -82,8 +82,10 @@ test('shows each rule with its legal basis and documentation errors', async () =
     assert.equal(view.container.querySelector('.pmc-alert-list'), null);
     const written = view.container.querySelector('.pmc-written');
     assert.equal(written.hidden, false);
-    assert.match(view.container.querySelector('.pmc-run').textContent, /Recalculer/);
-    assert.doesNotMatch(view.container.querySelector('.pmc-run').textContent, /vérifié|vérification/i);
+    assert.equal(view.container.querySelector('.pmc-bar [data-verify]'), null);
+    assert.match(view.container.querySelector('.pmc-run').textContent, /^Vérification2$/);
+    view.click(view.container.querySelector('[data-alerts]'));
+    assert.match(view.container.querySelector('.pmc-alert-list [data-verify]').textContent, /Recalculer/);
     const card = written.querySelector('[data-card="x002"]');
     assert.equal(card.querySelector('h3').textContent, 'Sanction possible');
     assert.equal(card.querySelector('[data-part="projection"] .pmc-value').textContent, 'Oui');
@@ -277,7 +279,12 @@ test('keeps one toolbar line and shows the drafted text with its Catala blocks f
     assert.deepEqual([...bar.querySelectorAll('[role=tab]')].map((tab) => tab.textContent.trim().replace(/\s*\d+$/, '')), ['Graphe', 'Raisonnement', 'Acte']);
     assert.equal(view.container.querySelector('[data-refresh]'), null);
     assert.equal(bar.querySelectorAll('[data-map-zoom]').length, 3);
-    assert.equal(bar.querySelector('[data-verify]').title.startsWith('Analysé le'), true);
+    assert.equal(bar.querySelector('[data-verify]'), null);
+    assert.equal(bar.querySelector('[data-alerts] .pmc-bubble'), null);
+    view.click(bar.querySelector('[data-alerts]'));
+    assert.match(view.container.querySelector('.pmc-alert-list').textContent, /Analysé le.*Recalculer.*Aucune erreur/);
+    assert.equal(view.container.querySelector('[data-fix]'), null);
+    view.click(view.container.querySelector('[data-alerts]'));
     view.click(view.container.querySelector('[role=tab][data-mode=acte]'));
     assert.equal(view.container.querySelector('.pmc-bar [data-map-zoom]'), null);
     const acte = view.container.querySelector('.pmc-acte');

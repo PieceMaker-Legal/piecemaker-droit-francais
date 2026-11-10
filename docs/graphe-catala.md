@@ -111,7 +111,7 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Sources attachées aux éléments | Chaque condition ou exception réunit son fondement juridique, le fait invoqué et sa pièce dans trois parties distinctes. |
 | Origine distinguée | Les références distinguent textes, jurisprudence, pièces et autres références. Une simple page web ne remplace pas un fondement juridique. |
 | Valeur distincte de la preuve | `Vrai` reste « Vrai » et `Faux` reste « Faux ». Aucune de ces valeurs n’est renommée « Établi ». |
-| Données sans pièce | La carte indique « Pièce à rattacher ». La vue Raisonnement précise que la donnée reste une hypothèse du scénario. |
+| Données sans pièce | La carte indique « Pièce à rattacher ». Aucune erreur n’est comptée pour ce seul manque. |
 | États inconnus ou contestés | Les valeurs correspondantes restent visibles et créent un point ouvert. PieceMaker ne les remplace pas par un booléen. |
 | Points ouverts | Une donnée sans pièce, un fondement absent, une citation à vérifier ou une recherche déclarée est signalé sur sa carte. Aucun nœud technique supplémentaire n’est créé. |
 | Remontée des manques | Un manque dans les appuis fait passer en orange, avec la mention « à justifier », les cases qui en dépendent. |
