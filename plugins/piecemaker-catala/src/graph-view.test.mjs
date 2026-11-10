@@ -77,7 +77,8 @@ test('shows each rule with its legal basis and documentation errors', async () =
     assert.match(card.textContent, /Article 1217/);
     assert.match(card.textContent, /Passage juridique fictif/);
     assert.match(card.querySelector('[data-part="justification"]').textContent, /Inexécution/);
-    assert.doesNotMatch(view.container.textContent, /Étape|typecheck|Contrôles|clerk|test_demo|catleg/i);
+    assert.doesNotMatch(view.container.textContent, /typecheck|Contrôles|clerk|test_demo|catleg/i);
+    assert.match(written.querySelector('.pmc-thread').textContent, /part des faits/);
     assert.match(written.textContent, /Autres sources citées/);
   } finally { view.close(); }
 });
@@ -229,6 +230,8 @@ test('the pick mode sends the clicked card with its file and lines and stops', a
     const states = [];
     window.addEventListener('piecemaker:catala-card-pick', (event) => inserted.push(event.detail));
     window.addEventListener('piecemaker:panel-pick-state', (event) => states.push(event.detail));
+    const picked = [];
+    window.addEventListener('piecemaker:panel-picked', (event) => picked.push(event.detail));
     const root = container.querySelector('.pmc');
     const card = container.querySelector('.pmc-map-node[data-kind="fact"]');
     click(card);
@@ -240,6 +243,7 @@ test('the pick mode sends the clicked card with its file and lines and stops', a
     assert.equal(root.hasAttribute('data-picking'), true);
     click(container.querySelector('.pmc-map-node[data-kind="fact"] h3'));
     assert.deepEqual(inserted, [{ titre: card.querySelector('h3').textContent, fichier: undefined, debut: undefined, fin: undefined, identifiant: 'inexécution', valeur: 'Vrai', scenario: 'Test' }]);
+    assert.deepEqual(picked, [{ tab: 'plugin:piecemaker-catala' }]);
     window.dispatchEvent(new CustomEvent('piecemaker:panel-pick', { detail: { tab: 'plugin:piecemaker-catala' } }));
     const rule = container.querySelector('.pmc-map-node:not([data-kind="fact"])');
     click(rule);
@@ -251,4 +255,26 @@ test('the pick mode sends the clicked card with its file and lines and stops', a
     assert.equal(root.hasAttribute('data-picking'), false);
     assert.deepEqual(states.map((state) => state.active), [true, false, true, false, true, false]);
   } finally { close(); }
+});
+
+test('keeps one toolbar line and shows the drafted text with its Catala blocks folded', async () => {
+  const view = await open([program()]);
+  try {
+    const bar = view.container.querySelector('.pmc-bar');
+    assert.deepEqual([...bar.querySelectorAll('[role=tab]')].map((tab) => tab.textContent.trim().replace(/\s*\d+$/, '')), ['Graphe', 'Raisonnement', 'Acte']);
+    assert.equal(view.container.querySelector('[data-refresh]'), null);
+    assert.equal(bar.querySelectorAll('[data-map-zoom]').length, 3);
+    assert.equal(bar.querySelector('[data-verify]').title.startsWith('Analysé le'), true);
+    view.click(view.container.querySelector('[role=tab][data-mode=acte]'));
+    assert.equal(view.container.querySelector('.pmc-bar [data-map-zoom]'), null);
+    const acte = view.container.querySelector('.pmc-acte');
+    assert.equal(acte.hidden, false);
+    assert.equal(acte.querySelector('h3').textContent, 'Article 1217');
+    assert.doesNotMatch(acte.textContent, /Module Demo/);
+    const block = acte.querySelector('details.pmc-code-block');
+    assert.equal(block.open, false);
+    assert.match(block.querySelector('pre').textContent, /définition sanction_possible/);
+    view.click(acte.querySelector('[data-open-reference]'));
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally { view.close(); }
 });

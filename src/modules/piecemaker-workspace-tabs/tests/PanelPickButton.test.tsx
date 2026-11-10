@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { expect, it } from 'vitest';
 
+import { CloseWorkspacePanelContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import { PanelPickButton } from '@/modules/piecemaker-workspace-tabs/PanelPickButton';
 
 it('demande le ciblage au volet Catala et reflète son état', () => {
@@ -16,4 +17,15 @@ it('demande le ciblage au volet Catala et reflète son état', () => {
   act(() => { window.dispatchEvent(new CustomEvent('piecemaker:panel-pick-state', { detail: { tab: 'plugin:piecemaker-catala', active: true } })); });
   expect(buttons[0].getAttribute('aria-pressed')).toBe('true');
   window.removeEventListener('piecemaker:panel-pick', listen);
+});
+
+it('ferme le volet après un ciblage sur petit écran seulement', () => {
+  const closed: string[] = [];
+  const picked = () => act(() => { window.dispatchEvent(new CustomEvent('piecemaker:panel-picked', { detail: { tab: 'plugin:piecemaker-catala' } })); });
+  const { rerender } = render(<CloseWorkspacePanelContext.Provider value={(tab) => closed.push(tab)}><PanelPickButton tab="plugin:piecemaker-catala" /></CloseWorkspacePanelContext.Provider>);
+  picked();
+  expect(closed).toEqual([]);
+  rerender(<CloseWorkspacePanelContext.Provider value={(tab) => closed.push(tab)}><PanelPickButton tab="plugin:piecemaker-catala" closeOnPick /></CloseWorkspacePanelContext.Provider>);
+  picked();
+  expect(closed).toEqual(['plugin:piecemaker-catala']);
 });

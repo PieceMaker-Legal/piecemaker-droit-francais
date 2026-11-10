@@ -1,12 +1,17 @@
 import { MousePointerClick } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { useCloseWorkspacePanel } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import type { AppTab } from '@/shared/types';
+
 const PANEL_PICK_EVENT = 'piecemaker:panel-pick';
 const PANEL_PICK_STATE_EVENT = 'piecemaker:panel-pick-state';
+const PANEL_PICKED_EVENT = 'piecemaker:panel-picked';
 const PICKABLE_TABS: readonly string[] = ['plugin:piecemaker-catala'];
 
-export function PanelPickButton({ tab }: { tab: string }) {
+export function PanelPickButton({ tab, closeOnPick = false }: { tab: AppTab; closeOnPick?: boolean }) {
   const [active, setActive] = useState(false);
+  const close = useCloseWorkspacePanel();
 
   useEffect(() => {
     const sync = (event: Event) => {
@@ -16,6 +21,15 @@ export function PanelPickButton({ tab }: { tab: string }) {
     window.addEventListener(PANEL_PICK_STATE_EVENT, sync);
     return () => window.removeEventListener(PANEL_PICK_STATE_EVENT, sync);
   }, [tab]);
+
+  useEffect(() => {
+    if (!closeOnPick || !close) return;
+    const leave = (event: Event) => {
+      if ((event as CustomEvent<{ tab?: string }>).detail?.tab === tab) close(tab);
+    };
+    window.addEventListener(PANEL_PICKED_EVENT, leave);
+    return () => window.removeEventListener(PANEL_PICKED_EVENT, leave);
+  }, [tab, closeOnPick, close]);
 
   if (!PICKABLE_TABS.includes(tab)) return null;
   const label = 'Cibler une carte pour le chat';

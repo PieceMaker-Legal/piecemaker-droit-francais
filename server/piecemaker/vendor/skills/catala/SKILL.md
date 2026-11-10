@@ -32,6 +32,14 @@ Lisez d'abord `references/syntaxe.md` : modèle vérifié, pièges fréquents, m
 6. Écrivez les tests dans `test_<module>.catala_fr` : `> Usage de Nom`, un champ d'application `#[test]` par scénario, avec `assertion`. Utilisez des faits fictifs ou ceux du dossier, jamais d'autres.
 7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala verifier` le détecte.
 
+## Rédiger un acte
+
+L'onglet Acte du volet affiche le Markdown des fichiers du programme, hors fichiers `test_`. Chaque bloc Catala y est replié sous le titre de ses règles. Le document final ne contient pas les blocs Catala.
+
+1. Rédigez le texte de l'acte en Markdown, hors des blocs.
+2. Placez chaque bloc ` ```catala ` sous le passage qu'il code.
+3. Rédigez un texte lisible sans le code : aucun identifiant Catala, aucun renvoi à un bloc.
+
 ## Construire le graphe du raisonnement
 
 Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destiné au graphe. Séparez les faits, leur qualification, les conditions et les exceptions. Une valeur de scénario ne prouve aucun fait.
@@ -91,7 +99,7 @@ Hors parcours : `pm catala lister` (programmes et dernier bilan), `pm catala env
 
 Choisissez un champ sans entrées : ses données doivent être fixées dans le scénario. Indiquez `--fichier` quand le programme contient plusieurs fichiers.
 
-La vérification produit déjà le graphe. Utilisez `expliquer` pour choisir un autre scénario. Le volet présente chaque règle avec son fondement, sa valeur Vrai ou Faux dans le scénario et les faits qui la justifient, en vue écrite et en graphe. Aucun Graphviz n’est nécessaire.
+La vérification produit déjà le graphe. Utilisez `expliquer` pour choisir un autre scénario. Le volet présente chaque règle avec son fondement, sa valeur Vrai ou Faux dans le scénario et les faits qui la justifient, en graphe et en fil écrit, des faits à la conclusion. Aucun Graphviz n’est nécessaire.
 
 L’explication concerne cette exécution seulement. Elle ne remplace ni les tests, ni la preuve du programme, ni la justification des faits.
 

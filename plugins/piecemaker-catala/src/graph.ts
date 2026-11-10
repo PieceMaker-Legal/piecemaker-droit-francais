@@ -481,7 +481,11 @@ function writer(model: Reasoning) {
       : step.conditional ? 'Une condition d’application sélectionne cette définition.' : '';
     return `<div class="pmc-projection" data-tone="${tone(step.value)}">${value}<span>${escape(reason)}</span></div>`;
   };
-  const card = (step: Step) => {
+  const serves = (step: Step) => {
+    const used = model.steps.filter((rule) => rule.kind === 'rule' && rule.parents.includes(step.id));
+    return used.length ? `<p class="pmc-serves">Sert à établir : ${used.map((rule) => `<button type="button" class="pmc-text-action" data-goto="${rule.id}">${escape(rule.title)}</button>`).join(', ')}</p>` : '';
+  };
+  const card = (step: Step, rank = 0) => {
     const native = step.origins.length || model.nativeIssues.length ? `<details class="pmc-native"><summary>Origine native Catala</summary>${model.nativeIssues.map((issue) => `<p class="pmc-warn">${escape(issue)}</p>`).join('')}${step.origins.map((entry) => `<section><h4>${entry.role === 'declaration' ? 'Déclaration' : entry.role === 'condition' ? 'Condition' : 'Définition'}${entry.selected ? ' · appliquée au scénario' : ' · autre règle'}</h4>${sourceLink({ kind: 'origin', label: entry.headings.join(' › ') || 'Passage du programme', target: entry.file, origin: entry.file, quote: entry.text, status: '' })}<p class="pmc-muted">Ligne ${entry.line}, colonne ${entry.column} à ligne ${entry.endLine}, colonne ${entry.endColumn}</p>${entry.expression ? `<p>${escape(human(entry.expression))}</p>` : ''}${sourceList(entry.sources)}</section>`).join('')}</details>` : '';
     const notes = `${native}${step.notes.justification ? `<p>${escape(step.notes.justification)}</p>` : ''}${step.tests.length ? `<p class="pmc-muted">Exercé par les tests : ${step.tests.map(escape).join(', ')}.</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${step.notes.demarches.length ? `<h4>Démarches effectuées</h4><ul>${step.notes.demarches.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}`;
     const application = conditionApplication(step, model);
@@ -490,7 +494,7 @@ function writer(model: Reasoning) {
       const used = model.steps.filter((rule) => rule.parents.includes(step.id));
       return `<section class="pmc-rule" data-card="${step.id}" data-kind="fact" data-tone="${tone(step.value)}"><header><span class="pmc-kind">Donnée du scénario</span><h3>${escape(step.title)}</h3>${factPill(step)}</header><div class="pmc-part" data-part="justification"><h4>Pièces citées</h4>${step.sources.some((source) => source.kind === 'piece') ? sourceList(step.sources.filter((source) => source.kind === 'piece')) : '<p class="pmc-muted">Aucune pièce rattachée à cette donnée.</p>'}${notes}${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}${used.length ? `<h4>Retenu pour</h4><ul class="pmc-sources">${used.map((rule) => `<li><button type="button" class="pmc-text-action" data-goto="${rule.id}">${escape(rule.title)}</button></li>`).join('')}</ul>` : ''}</div></section>`;
     }
-    return `<section class="pmc-rule" data-card="${step.id}" data-kind="${step.answer ? 'answer' : 'rule'}" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${step.answer ? 'Conclusion' : 'Règle'}</span><h3>${escape(step.notes.question || step.title)}</h3></header><div class="pmc-part" data-part="rule"><h4>La règle</h4>${rulePart(step)}</div><div class="pmc-part" data-part="projection"><h4>Projection au scénario</h4>${projection(step)}</div><div class="pmc-part" data-part="justification"><h4>Justification</h4>${notes}${justification(step) || '<p class="pmc-muted">Aucun élément de fait à l’appui de cette solution.</p>'}</div>${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</section>`;
+    return `<section class="pmc-rule" data-card="${step.id}" data-kind="${step.answer ? 'answer' : 'rule'}" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${step.answer ? 'Conclusion' : rank ? `Étape ${rank}` : 'Règle'}</span><h3>${escape(step.notes.question || step.title)}</h3></header>${serves(step)}<div class="pmc-part" data-part="rule"><h4>La règle</h4>${rulePart(step)}</div><div class="pmc-part" data-part="projection"><h4>Projection au scénario</h4>${projection(step)}</div><div class="pmc-part" data-part="justification"><h4>Justification</h4>${notes}${justification(step) || '<p class="pmc-muted">Aucun élément de fait à l’appui de cette solution.</p>'}</div>${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</section>`;
   };
   return { steps, card, title };
 }
@@ -499,11 +503,14 @@ export function reasoningCard(step: Step, model: Reasoning) {
   return writer(model).card(step);
 }
 
-const ordered = (model: Reasoning) => model.steps.filter((step) => step.kind === 'rule').sort((a, b) => Number(b.answer) - Number(a.answer) || b.level - a.level);
+const ordered = (model: Reasoning) => model.steps.filter((step) => step.kind === 'rule').sort((a, b) => Number(a.answer) - Number(b.answer) || a.level - b.level);
+
+export const stepBadge = (step: Step) => step.value ? pill(tone(step.value), display(step)) : '';
 
 export function reasoningText(model: Reasoning) {
   const { card } = writer(model);
-  return `${ordered(model).map(card).join('')}${model.others.length ? `<section class="pmc-rule pmc-others"><header><h3>Autres sources citées</h3></header>${sourceList(model.others)}</section>` : ''}`;
+  const thread = ordered(model);
+  return `${thread.length ? '<p class="pmc-thread">Le raisonnement part des faits et monte, étape par étape, jusqu’à la conclusion. Chaque étape cite sa règle, sa valeur dans le scénario et les faits qui la justifient.</p>' : ''}${thread.map((step, index) => card(step, index + 1)).join('')}${model.others.length ? `<section class="pmc-rule pmc-others"><header><h3>Autres sources citées</h3></header>${sourceList(model.others)}</section>` : ''}`;
 }
 
 export function reasoningIssues(model: Reasoning) {
