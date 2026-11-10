@@ -73,7 +73,9 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, se
         graphe: !perimee && fs.existsSync(path.join(results, 'explication.dot')) ? fs.readFileSync(path.join(results, 'explication.dot'), 'utf8') : null,
       };
     });
-    return { pack: pack ? { id: pack.id, platform: pack.platform, version: pack.version, proof: pack.proof, installedAt: pack.installedAt } : null, status, programmes };
+    const styleSkill = path.resolve(path.dirname(scriptPath), '..', '..', '..', 'piecemaker-plugin', 'skills', 'style-redaction-cabinet', 'SKILL.md');
+    const styles = fs.existsSync(styleSkill) ? [...fs.readFileSync(styleSkill, 'utf8').matchAll(/^\|\s*([^|[\]]+?)\s*\|\s*\[(styles\/[^\]]+)\]/gm)].map(([, nom, regle]) => ({ nom, regle })) : [];
+    return { pack: pack ? { id: pack.id, platform: pack.platform, version: pack.version, proof: pack.proof, installedAt: pack.installedAt } : null, status, programmes, styles };
   };
   const fail = (response: express.Response, error: unknown) => response.status(400).json({ error: error instanceof Error ? error.message : 'Catala indisponible.' });
   router.get('/', (request, response) => {

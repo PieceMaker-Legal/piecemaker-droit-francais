@@ -33,7 +33,7 @@ La même annotation alimente le contrôle des citations et le graphe. Le graphe 
 Une annotation ne doit pas déborder sur la définition suivante. Les sources voisines et `Concerne` restent des solutions de compatibilité.
 Une inclusion PDF native peut compléter le document ; elle ne remplace pas la source et `quote` dans `#[doc]`.
 
-Placez chaque définition sous le texte ou la décision qui la fonde. Un même champ peut être défini par plusieurs blocs, répartis sous les différentes sources. Gardez les étiquettes et exceptions dans Catala.
+Vous pouvez placer une définition sous le texte ou la décision qui la fonde ; ce texte est facultatif. Un même champ peut être défini par plusieurs blocs, répartis sous les différentes sources. Gardez les étiquettes et exceptions dans Catala.
 
 Dans un scénario, définissez les faits comme des données intermédiaires sous les sections de leurs pièces, puis passez ces données au champ métier. La trace conserve ainsi leur origine. Une déclaration de champ donne seulement son contexte ; elle ne prouve pas l’origine factuelle de sa valeur.
 

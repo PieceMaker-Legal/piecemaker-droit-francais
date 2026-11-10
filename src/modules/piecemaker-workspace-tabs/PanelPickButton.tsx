@@ -2,6 +2,7 @@ import { MousePointerClick } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { useCloseWorkspacePanel } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import { usePanelNewChat } from '@/piecemaker/chat/usePanelNewChat';
 import type { AppTab } from '@/shared/types';
 
 const PANEL_PICK_EVENT = 'piecemaker:panel-pick';
@@ -12,6 +13,7 @@ const PICKABLE_TABS: readonly string[] = ['plugin:piecemaker-catala'];
 export function PanelPickButton({ tab, closeOnPick = false }: { tab: AppTab; closeOnPick?: boolean }) {
   const [active, setActive] = useState(false);
   const close = useCloseWorkspacePanel();
+  usePanelNewChat(tab);
 
   useEffect(() => {
     const sync = (event: Event) => {

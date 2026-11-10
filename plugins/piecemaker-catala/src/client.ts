@@ -1,7 +1,6 @@
-import { acteText } from './acte.js';
 import { citeCatala, loadCatala, verifyCatala } from './api.js';
 import { mountExplanation } from './graph-view.js';
-import { human, reasoning, reasoningGraph, reasoningIssues, reasoningText, stepBadge, type Reasoning, type Coverage, type Step } from './graph.js';
+import { human, reasoning, reasoningGraph, reasoningIssues, reasoningBrief, reasoningText, type Reasoning, type Coverage, type Step } from './graph.js';
 import type { NativeProvenance } from './native-provenance.js';
 import { STYLES } from './styles.js';
 
@@ -18,6 +17,7 @@ export type CatalaSnapshot = {
   pack: { id: string; platform: string; version: string; proof: boolean; installedAt: string } | null;
   status: { state: string; id?: string; step?: string; error?: string; updatedAt?: string } | null;
   programmes: Program[];
+  styles?: Array<{ nom: string; regle: string }>;
 };
 
 const TAB = 'plugin:piecemaker-catala';
@@ -53,6 +53,8 @@ export function mount(container: HTMLElement, api: Host) {
   let viewMode = 'graph';
   let alertsOpen = false;
   let fixRequest = '';
+  let draftOpen = false;
+  let draftBase = '';
   let chosenScenario = '';
   let picking = false;
   let steps: Step[] = [];
@@ -93,7 +95,11 @@ export function mount(container: HTMLElement, api: Host) {
     const choice = data!.programmes.length > 1 ? `<select data-program-choice aria-label="Raisonnement">${data!.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.nom)}</option>`).join('')}</select>` : '';
     const alerts = [...issues.map((entry) => `<li>${entry.id ? `<button type="button" class="pmc-text-action" data-goto="${entry.id}">${escape(entry.title)}</button>` : escape(entry.title)} : ${escape(entry.issue)}</li>`), ...gaps.map(plainGap).map((gap) => `<li>${escape(gap.meaning)}${gap.place ? ` <span class="pmc-muted">${escape(gap.place)}</span>` : ''}</li>`)];
     fixRequest = [`Corrige les erreurs du programme Catala \`${program.nom}\`, puis relance \`pm catala verifier\`. N’invente aucune source ni citation : signale ce qui manque.`, ...issues.map((entry) => `- ${entry.title} : ${entry.issue}`), ...gaps.map(plainGap).map((gap) => `- ${gap.meaning}${gap.place ? ` (${gap.place})` : ''}`)].join('\n');
-    const run = `<span class="pmc-run">${freshness(program)}<button type="button" class="pmc-alerts" data-alerts${alerts.length ? ` data-count="${alerts.length}"` : ''} aria-expanded="${alertsOpen}" title="${alerts.length ? `${alerts.length} erreur${alerts.length > 1 ? 's' : ''} à corriger` : 'Résultat de la vérification'}">Vérification${alerts.length ? `<span class="pmc-bubble">${alerts.length}</span>` : ''}</button></span>`;
+    const scope = traced ? selected?.scope ?? program.explication?.scope ?? '' : '';
+    draftBase = [`Fonde le document sur le raisonnement Catala \`${program.nom}\`${scope ? `, scénario ${scope}` : ''} (\`.piecemaker/catala/${program.nom}/\`). N’écris ni code ni identifiant Catala dans le document. Signale tout fait ou fondement que tu ajoutes au raisonnement.`, alerts.length ? `Le raisonnement compte ${alerts.length} erreur${alerts.length > 1 ? 's' : ''} non corrigée${alerts.length > 1 ? 's' : ''} : signale-les avant de rédiger.` : '', '', 'Raisonnement :', reasoningBrief(model)].filter((line, index) => line || index === 2).join('\n');
+    const styles = data!.styles ?? [];
+    const drafts = draftOpen && traced ? `<div class="pmc-alert-list pmc-draft-list" role="region" aria-label="Document à rédiger"><p class="pmc-muted">Quel document rédiger ? La demande s’ouvre dans un nouveau chat.</p><div class="pmc-alert-actions">${styles.map((style, index) => `<button type="button" data-draft-style="${index}">${escape(style.nom)}</button>`).join('')}<button type="button" data-draft-style="-1">Autre document</button></div></div>` : '';
+    const run = `<span class="pmc-run">${freshness(program)}<button type="button" data-draft aria-expanded="${draftOpen && Boolean(traced)}" title="${traced ? 'Rédiger un document à partir de ce raisonnement' : 'Calculez d’abord le raisonnement.'}"${traced ? '' : ' disabled'}>Rédiger</button><button type="button" class="pmc-alerts" data-alerts${alerts.length ? ` data-count="${alerts.length}"` : ''} aria-expanded="${alertsOpen}" title="${alerts.length ? `${alerts.length} erreur${alerts.length > 1 ? 's' : ''} à corriger` : 'Résultat de la vérification'}">Vérification${alerts.length ? `<span class="pmc-bubble">${alerts.length}</span>` : ''}</button></span>`;
     const outcome = alerts.length ? `<ul>${alerts.join('')}</ul>` : traced ? '<p>Aucune erreur.</p>' : '';
     const list = alertsOpen ? `<div class="pmc-alert-list" role="region" aria-label="Résultat de la vérification"><div class="pmc-alert-actions"><span class="pmc-muted">${escape(analysed(program))}</span>${recalc}${alerts.length ? `<button type="button" data-fix="${alerts.length}">Demander la correction</button>` : ''}</div>${outcome}</div>` : '';
     const scenario = scenarios.length ? `<select data-scenario-choice aria-label="Scénario Catala" title="Scénario">${scenarios.map((entry) => `<option value="${escape(`${entry.fichier}:${entry.scope}`)}"${entry === selected ? ' selected' : ''}>${escape(human(entry.scope).replace(/^Test\s*/i, ''))} — ${entry.test_reussi ? 'test réussi' : 'test en échec'}</option>`).join('')}</select>` : program.explication?.scope ? `<span class="pmc-scenario" title="Scénario"><strong>${escape(program.explication.scope)}</strong></span>` : '';
@@ -103,7 +109,7 @@ export function mount(container: HTMLElement, api: Host) {
     const reference = check ? `<p class="pmc-scenario" data-part="reference-date">Droit apprécié au : <strong>${dates.length ? dates.map(day).join(', ') : `${day(check.date_controle)} (jour du contrôle)`}</strong>${check.passed ? '' : ' <span class="pmc-warn">vigueur à vérifier</span>'}</p>` : '';
     const tab = (mode: string, label: string) => `<button role="tab" data-mode="${mode}" aria-selected="${viewMode === mode}">${label}</button>`;
     const zoom = graph && viewMode === 'graph' ? '<span class="pmc-map-tools"><button data-map-zoom="out" aria-label="Dézoomer" title="Dézoomer">−</button><button data-map-zoom="in" aria-label="Zoomer" title="Zoomer">+</button><button data-map-zoom="fit" aria-label="Ajuster à la largeur" title="Ajuster à la largeur">↔</button></span>' : '';
-    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-bar"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement">${tab('graph', 'Graphe')}${tab('written', 'Raisonnement')}${tab('acte', 'Acte')}</div>${scenario}${choice}${zoom}${run}</div>${list}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${reference}${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div>` : empty}</div><div class="pmc-acte" role="tabpanel"${viewMode === 'acte' ? '' : ' hidden'}>${viewMode === 'acte' ? acteText(program.fichiers, model.steps, stepBadge) : ''}</div></section>`;
+    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-bar"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement">${tab('graph', 'Graphe')}${tab('written', 'Raisonnement')}</div>${scenario}${choice}${zoom}${run}</div>${list}${drafts}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${reference}${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div>` : empty}</div></section>`;
   };
   const paint = () => {
     stopGraph();
@@ -149,7 +155,19 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   panel.addEventListener('click', (event) => {
-    if ((event.target as Element).closest('[data-alerts]')) { alertsOpen = !alertsOpen; paint(); return; }
+    if ((event.target as Element).closest('[data-alerts]')) { alertsOpen = !alertsOpen; draftOpen = false; paint(); return; }
+    if ((event.target as Element).closest('[data-draft]')) { draftOpen = !draftOpen; alertsOpen = false; paint(); return; }
+    const draft = (event.target as Element).closest<HTMLElement>('[data-draft-style]');
+    if (draft) {
+      const style = data?.styles?.[Number(draft.dataset.draftStyle)];
+      const demande = [style ? `Rédige ce document : ${style.nom}.` : 'Rédige un document à partir de ce raisonnement.', style ? `Charge le skill \`style-redaction-cabinet\` et applique sa règle \`${style.regle}\`.` : 'Charge le skill `style-redaction-cabinet`, donne-moi la liste de ses documents et demande-moi lequel rédiger.', draftBase].join('\n');
+      window.dispatchEvent(new CustomEvent('piecemaker:panel-new-chat', { detail: { tab: TAB } }));
+      window.dispatchEvent(new CustomEvent('piecemaker:catala-card-pick', { detail: { titre: `Rédiger : ${style?.nom ?? 'document'}`, demande } }));
+      window.dispatchEvent(new CustomEvent('piecemaker:panel-picked', { detail: { tab: TAB } }));
+      draftOpen = false;
+      paint();
+      return;
+    }
     const fix = (event.target as Element).closest<HTMLElement>('[data-fix]');
     if (fix) {
       const count = Number(fix.dataset.fix);

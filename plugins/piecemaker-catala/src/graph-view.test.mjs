@@ -20,7 +20,7 @@ async function open(programmes, fetchMore = async () => null) {
   globalThis.CustomEvent = dom.window.CustomEvent;
   globalThis.localStorage = { getItem: () => null };
   const previousFetch = globalThis.fetch;
-  globalThis.fetch = async (url, options) => (await fetchMore(url, options)) ?? new Response(JSON.stringify({ pack: { id: 'pack', platform: 'darwin', version: '1.3', proof: true, installedAt: '2026-11-01' }, status: null, programmes }));
+  globalThis.fetch = async (url, options) => (await fetchMore(url, options)) ?? new Response(JSON.stringify({ pack: { id: 'pack', platform: 'darwin', version: '1.3', proof: true, installedAt: '2026-11-01' }, status: null, programmes, styles: [{ nom: 'Mise en demeure', regle: 'styles/mise-en-demeure.md' }] }));
   const container = dom.window.document.querySelector('#panel');
   mount(container, { context: { theme: 'light', project: { name: 'fictif', path: '/dossier' } }, onContextChange: () => () => {} });
   await new Promise((resolve) => setImmediate(resolve));
@@ -83,7 +83,7 @@ test('shows each rule with its legal basis and documentation errors', async () =
     const written = view.container.querySelector('.pmc-written');
     assert.equal(written.hidden, false);
     assert.equal(view.container.querySelector('.pmc-bar [data-verify]'), null);
-    assert.match(view.container.querySelector('.pmc-run').textContent, /^Vérification2$/);
+    assert.match(view.container.querySelector('.pmc-run').textContent, /^RédigerVérification2$/);
     view.click(view.container.querySelector('[data-alerts]'));
     assert.match(view.container.querySelector('.pmc-alert-list [data-verify]').textContent, /Recalculer/);
     const card = written.querySelector('[data-card="x002"]');
@@ -276,7 +276,7 @@ test('keeps one toolbar line and shows the drafted text with its Catala blocks f
   const view = await open([program()]);
   try {
     const bar = view.container.querySelector('.pmc-bar');
-    assert.deepEqual([...bar.querySelectorAll('[role=tab]')].map((tab) => tab.textContent.trim().replace(/\s*\d+$/, '')), ['Graphe', 'Raisonnement', 'Acte']);
+    assert.deepEqual([...bar.querySelectorAll('[role=tab]')].map((tab) => tab.textContent.trim().replace(/\s*\d+$/, '')), ['Graphe', 'Raisonnement']);
     assert.equal(view.container.querySelector('[data-refresh]'), null);
     assert.equal(bar.querySelectorAll('[data-map-zoom]').length, 3);
     assert.equal(bar.querySelector('[data-verify]'), null);
@@ -285,16 +285,17 @@ test('keeps one toolbar line and shows the drafted text with its Catala blocks f
     assert.match(view.container.querySelector('.pmc-alert-list').textContent, /Analysé le.*Recalculer.*Aucune erreur/);
     assert.equal(view.container.querySelector('[data-fix]'), null);
     view.click(view.container.querySelector('[data-alerts]'));
-    view.click(view.container.querySelector('[role=tab][data-mode=acte]'));
-    assert.equal(view.container.querySelector('.pmc-bar [data-map-zoom]'), null);
-    const acte = view.container.querySelector('.pmc-acte');
-    assert.equal(acte.hidden, false);
-    assert.equal(acte.querySelector('h3').textContent, 'Article 1217');
-    assert.doesNotMatch(acte.textContent, /Module Demo/);
-    const block = acte.querySelector('details.pmc-code-block');
-    assert.equal(block.open, false);
-    assert.match(block.querySelector('pre').textContent, /définition sanction_possible/);
-    view.click(acte.querySelector('[data-open-reference]'));
+    const sent = [];
+    const listen = (event) => sent.push([event.type, event.detail]);
+    for (const type of ['piecemaker:panel-new-chat', 'piecemaker:catala-card-pick']) window.addEventListener(type, listen);
+    view.click(view.container.querySelector('[data-draft]'));
+    assert.deepEqual([...view.container.querySelectorAll('[data-draft-style]')].map((button) => button.textContent), ['Mise en demeure', 'Autre document']);
+    view.click(view.container.querySelector('[data-draft-style="0"]'));
+    for (const type of ['piecemaker:panel-new-chat', 'piecemaker:catala-card-pick']) window.removeEventListener(type, listen);
+    assert.deepEqual(sent.map(([type]) => type), ['piecemaker:panel-new-chat', 'piecemaker:catala-card-pick']);
+    assert.equal(sent[1][1].titre, 'Rédiger : Mise en demeure');
+    assert.match(sent[1][1].demande, /style-redaction-cabinet.*styles\/mise-en-demeure\.md[\s\S]*Raisonnement :\n- /);
+    assert.equal(view.container.querySelector('.pmc-draft-list'), null);
     await new Promise((resolve) => setImmediate(resolve));
   } finally { view.close(); }
 });

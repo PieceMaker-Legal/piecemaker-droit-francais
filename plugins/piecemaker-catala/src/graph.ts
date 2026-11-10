@@ -504,7 +504,12 @@ export function reasoningCard(step: Step, model: Reasoning) {
 
 const ordered = (model: Reasoning) => model.steps.filter((step) => step.kind === 'rule').sort((a, b) => Number(a.answer) - Number(b.answer) || a.level - b.level);
 
-export const stepBadge = (step: Step) => step.value ? pill(tone(step.value), display(step)) : '';
+export function reasoningBrief(model: Reasoning) {
+  const titles = new Map(model.steps.map((step) => [step.id, step.title]));
+  const cited = (step: Step) => unique(step.sources).map((source) => `${source.title || source.label}${source.quote ? ` « ${source.quote} »` : ''}`).join(' ; ');
+  const line = (step: Step, label: string) => [`- ${label} — ${step.title} : ${step.value ? display(step) : 'non établi'}`, cited(step) ? `${step.kind === 'fact' ? 'Pièce' : 'Fondement'} : ${cited(step)}` : '', step.kind === 'rule' && step.parents.length ? `S’appuie sur : ${step.parents.map((id) => titles.get(id)).join(', ')}` : ''].filter(Boolean).join('. ');
+  return [...model.steps.filter((step) => step.kind === 'fact').map((step) => line(step, 'Fait')), ...ordered(model).map((step, index) => line(step, step.answer ? 'Conclusion' : `Étape ${index + 1}`))].join('\n');
+}
 
 export function reasoningText(model: Reasoning) {
   const { card } = writer(model);
