@@ -1,14 +1,16 @@
 {
   "name": "piecemaker-catala",
   "displayName": "Catala",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "État du pack Catala et bilans des programmes Catala du dossier.",
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",
   "entry": "dist/index.js",
   "permissions": [],
+  "piecemakerInjections": ["dist/composer.js"],
   "piecemakerSources": {
-    "index": "src/client.ts"
+    "index": "src/client.ts",
+    "composer": "src/composer.ts"
   }
 }

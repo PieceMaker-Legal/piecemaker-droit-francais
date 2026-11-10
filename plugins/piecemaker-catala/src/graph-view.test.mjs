@@ -222,12 +222,12 @@ test('lays the graph out as a tree: conclusion first, children nested, a shared 
   } finally { view.close(); }
 });
 
-test('the pick mode inserts the title of the clicked card in the chat and stops', async () => {
+test('the pick mode sends the clicked card with its file and lines and stops', async () => {
   const { dom, container, click, close } = await open([program()]);
   try {
     const inserted = [];
     const states = [];
-    window.addEventListener('piecemaker:composer-insert', (event) => inserted.push(event.detail.text));
+    window.addEventListener('piecemaker:catala-card-pick', (event) => inserted.push(event.detail));
     window.addEventListener('piecemaker:panel-pick-state', (event) => states.push(event.detail));
     const root = container.querySelector('.pmc');
     const card = container.querySelector('.pmc-map-node[data-kind="fact"]');
@@ -239,12 +239,16 @@ test('the pick mode inserts the title of the clicked card in the chat and stops'
     window.dispatchEvent(new CustomEvent('piecemaker:panel-pick', { detail: { tab: 'plugin:piecemaker-catala' } }));
     assert.equal(root.hasAttribute('data-picking'), true);
     click(container.querySelector('.pmc-map-node[data-kind="fact"] h3'));
-    assert.deepEqual(inserted, [`Carte « ${card.querySelector('h3').textContent} » : `]);
+    assert.deepEqual(inserted, [{ titre: card.querySelector('h3').textContent, fichier: undefined, debut: undefined, fin: undefined }]);
+    window.dispatchEvent(new CustomEvent('piecemaker:panel-pick', { detail: { tab: 'plugin:piecemaker-catala' } }));
+    const rule = container.querySelector('.pmc-map-node:not([data-kind="fact"])');
+    click(rule);
+    assert.deepEqual(inserted[1], { titre: rule.querySelector('h3').textContent, fichier: '.piecemaker/catala/demo/demo.catala_fr', debut: 9, fin: 9 });
     assert.equal(root.hasAttribute('data-picking'), false);
     assert.equal(card.classList.contains('is-selected'), false);
     window.dispatchEvent(new CustomEvent('piecemaker:panel-pick', { detail: { tab: 'plugin:piecemaker-catala' } }));
     window.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape' }));
     assert.equal(root.hasAttribute('data-picking'), false);
-    assert.deepEqual(states.map((state) => state.active), [true, false, true, false]);
+    assert.deepEqual(states.map((state) => state.active), [true, false, true, false, true, false]);
   } finally { close(); }
 });

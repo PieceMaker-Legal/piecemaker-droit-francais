@@ -11,7 +11,7 @@ export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: 
 type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
 type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
 export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
-export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string; title: string };
+export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string; title: string; blockStart: number; blockEnd: number };
 export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; type: string; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
 export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[]; objective?: string };
 
@@ -298,7 +298,8 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     const opened = /\b(?:définition|règle|definition|rule)\b/.test(content[entry.line - 1] ?? '');
     const end = content.findIndex((line, at) => at >= entry.line && (/^\s*(?:```|#\[|étiquette\b|exception\b|label\b)/.test(line) || (opened || at > entry.line) && /^\s*(?:définition|règle|definition|rule)\b/.test(line) || !line.trim()));
     const body = content.slice(entry.line - 1, end < 0 ? undefined : end).join('\n').slice(Math.max(0, entry.column - 1));
-    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n'), body, title: docTitle(entry.file, entry.line) };
+    const block = documentation.get(entry.file)?.find((item) => item.startLine <= entry.line && entry.line <= item.endLine);
+    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n'), body, title: docTitle(entry.file, entry.line), blockStart: block?.startLine ?? entry.line, blockEnd: block?.endLine ?? entry.endLine };
   };
   const steps = new Map<string, Step>();
   for (const [id, node] of nodes) {

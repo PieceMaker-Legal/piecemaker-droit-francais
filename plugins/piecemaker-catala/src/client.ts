@@ -1,6 +1,6 @@
 import { citeCatala, loadCatala, verifyCatala } from './api.js';
 import { mountExplanation } from './graph-view.js';
-import { human, reasoning, reasoningGraph, reasoningIssues, reasoningText, type Reasoning, type Coverage } from './graph.js';
+import { human, reasoning, reasoningGraph, reasoningIssues, reasoningText, type Reasoning, type Coverage, type Step } from './graph.js';
 import type { NativeProvenance } from './native-provenance.js';
 import { STYLES } from './styles.js';
 
@@ -52,6 +52,7 @@ export function mount(container: HTMLElement, api: Host) {
   let viewMode = 'graph';
   let chosenScenario = '';
   let picking = false;
+  let steps: Step[] = [];
   const setPicking = (on: boolean) => {
     if (on === picking) return;
     picking = on;
@@ -72,6 +73,7 @@ export function mount(container: HTMLElement, api: Host) {
     let failure = selected && !selected.passed ? 'Ce scénario ne produit pas de graphe. Corrigez son exécution Catala.' : '';
     try { model = reasoning(traced ? dot || 'digraph G {}' : 'digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage, traced ? provenance : undefined); }
     catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage); }
+    steps = model.steps;
     const issues = reasoningIssues(model);
     const graph = reasoningGraph(model);
     const empty = `<p class="pmc-muted">${failure ? escape(failure) : 'Aucun raisonnement calculé pour ce scénario.'}</p>`;
@@ -177,13 +179,17 @@ export function mount(container: HTMLElement, api: Host) {
   const cancelPick = (event: KeyboardEvent) => { if (event.key === 'Escape') setPicking(false); };
   root.addEventListener('click', (event) => {
     if (!picking) return;
-    const title = (event.target as Element).closest('[data-card]')?.querySelector('h3')?.textContent?.trim();
-    if (!title) return;
+    const card = (event.target as Element).closest('[data-card]');
+    const titre = card?.querySelector('h3')?.textContent?.trim();
+    if (!card || !titre) return;
     event.preventDefault();
     event.stopPropagation();
     setPicking(false);
-    const program = shown();
-    window.dispatchEvent(new CustomEvent('piecemaker:composer-insert', { detail: { text: `Carte « ${title} »${program && data!.programmes.length > 1 ? ` du raisonnement « ${program.nom} »` : ''} : ` } }));
+    const origins = steps.find((step) => step.id === card.getAttribute('data-card'))?.origins ?? [];
+    const origin = origins.find((entry) => entry.selected && entry.role === 'definition') ?? origins[0];
+    const folder = `${context.project?.path.replaceAll('\\', '/') ?? ''}/`;
+    const file = origin?.file.replaceAll('\\', '/');
+    window.dispatchEvent(new CustomEvent('piecemaker:catala-card-pick', { detail: { titre, fichier: file?.startsWith(folder) ? file.slice(folder.length) : file, debut: origin?.blockStart, fin: origin?.blockEnd } }));
   }, true);
   window.addEventListener('piecemaker:panel-pick', togglePick);
   window.addEventListener('keydown', cancelPick);
