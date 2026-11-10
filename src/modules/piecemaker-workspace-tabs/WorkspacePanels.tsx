@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
+import { PanelPickButton } from '@/modules/piecemaker-workspace-tabs/PanelPickButton';
 import { WorkspaceColumnSeparator } from '@/modules/piecemaker-workspace-tabs/WorkspaceColumnSeparator';
 import { WorkspaceFilesPanel } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
 import type { WorkspaceFilesSlots } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
@@ -241,6 +242,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                       : <Card className="piecemaker-workspace-panel" hidden={hidden} style={style}>
                         <header className="piecemaker-workspace-panel-header">
                           <span className="truncate text-sm font-medium">{label}</span>
+                          <PanelPickButton tab={tab} />
                           <button type="button" aria-label={`${expandedTab === tab ? 'Réduire' : 'Agrandir'} ${label}`} onClick={() => { setExpanded(expandedTab === tab ? null : tab); setExpandedCompanion(null); }}>{expandedTab === tab ? <Minimize2 /> : <Maximize2 />}</button>
                           <button type="button" aria-label={`Fermer ${label}`} onClick={() => close(tab)}><X /></button>
                         </header>

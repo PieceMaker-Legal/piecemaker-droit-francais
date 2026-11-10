@@ -61,6 +61,7 @@ export const STYLES = `
 .pmc-op{display:inline-block;margin-right:4px;color:var(--muted);font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
 .pmc-formula{margin:4px 0 0!important;color:var(--ink)}
 .pmc .pmc-reference,.pmc .pmc-text-action{display:inline;height:auto;max-width:100%;padding:0;border:0;border-radius:3px;background:none;box-shadow:none;backdrop-filter:none;color:var(--ink);font:inherit;text-align:left;white-space:normal;text-decoration:none;cursor:pointer}
+.pmc .pmc-reference:not(.pmc-chip),.pmc .pmc-text-action{text-decoration:underline;text-underline-offset:2px}
 .pmc .pmc-reference:hover,.pmc .pmc-text-action:hover{background:var(--soft);filter:none}
 .pmc-sources{margin:2px 0 0;padding-left:18px}.pmc-sources li{margin:4px 0}
 .pmc-sources q{display:block;margin:2px 0 4px;color:var(--text);font:italic 15px/1.5 var(--editorial)}
@@ -110,6 +111,7 @@ export const STYLES = `
 .pmc-map-node[role=button]{cursor:pointer}
 .pmc-map-node .pmc-warn:not(.pmc-met,.pmc-value){display:block;font-size:11px;margin:6px 0 0}
 .pmc-map-node:focus-visible,.pmc-map-node.is-selected{outline:2px solid var(--accent);outline-offset:3px}
+.pmc[data-picking] .pmc-view,.pmc[data-picking] [data-card],.pmc[data-picking] [data-card] *{cursor:crosshair}.pmc[data-picking] [data-card]:hover{outline:2px solid var(--accent);outline-offset:3px}
 .pmc-map .is-dim{opacity:.3}
 .pmc-map-legend{display:flex;flex-wrap:wrap;gap:6px 16px;margin:0;font-size:12px;font-weight:600}.pmc-map-legend span{--tint:var(--muted);color:var(--ink)}.pmc-map-legend span:before{content:'';display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:3px;background:var(--tint)}.pmc-map-legend [data-state=ok]{--tint:#2f8f5b}.pmc-map-legend [data-state=warn]{--tint:#c98a1b}.pmc-map-legend [data-state=ko]{--tint:#c45b5b}
 

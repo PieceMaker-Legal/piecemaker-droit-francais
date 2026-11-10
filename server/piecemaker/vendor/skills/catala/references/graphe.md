@@ -59,7 +59,9 @@ Citation : « Extrait fictif établissant seulement l’envoi. »
 
 `Concerne` rattache les sources et ces explications à un identifiant. Employez des identifiants distincts pour des notions distinctes dans un programme.
 
-L’objectif et la conclusion finale sont la même case du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. Cette ligne titre la conclusion finale. N’en inventez pas : sans objectif annoncé, la conclusion garde son titre. `Question` formule la question juridique ; elle sert de titre seulement si le `#[doc]` n’en donne pas. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
+L’objectif et la conclusion finale sont la même case du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. Cette ligne titre la conclusion finale. N’en inventez pas : sans objectif annoncé, la conclusion garde son titre. Quand l’avocat écrit `Carte « titre »`, il vise la case du graphe qui porte ce titre : retrouvez la définition par le `titre` de son `#[doc]`, ou par la ligne `Objectif`.
+
+`Question` formule la question juridique ; elle sert de titre seulement si le `#[doc]` n’en donne pas. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
 
 Répétez `Démarche` pour conserver les démarches effectuées et leurs résultats. N’inventez aucune démarche ni aucun résultat. Actualisez `À rechercher` lorsque la collecte progresse.
 

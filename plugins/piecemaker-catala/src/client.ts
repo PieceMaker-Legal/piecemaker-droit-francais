@@ -19,6 +19,7 @@ export type CatalaSnapshot = {
   programmes: Program[];
 };
 
+const TAB = 'plugin:piecemaker-catala';
 const cleanups = new WeakMap<HTMLElement, () => void>();
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const pill = (tone: string, label: string) => `<span class="pmc-pill pmc-${tone}">${escape(label)}</span>`;
@@ -50,6 +51,13 @@ export function mount(container: HTMLElement, api: Host) {
   let sequence = 0;
   let viewMode = 'graph';
   let chosenScenario = '';
+  let picking = false;
+  const setPicking = (on: boolean) => {
+    if (on === picking) return;
+    picking = on;
+    root.toggleAttribute('data-picking', on);
+    window.dispatchEvent(new CustomEvent('piecemaker:panel-pick-state', { detail: { tab: TAB, active: on } }));
+  };
 
   const shown = () => data?.programmes.find((entry) => entry.nom === chosen) ?? data?.programmes[0];
   const explanationPart = (program: Program) => {
@@ -165,6 +173,20 @@ export function mount(container: HTMLElement, api: Host) {
     if (changed) { chosen = undefined; chosenScenario = ''; error = ''; data = null; serialized = ''; load(); }
     paint();
   });
+  const togglePick = (event: Event) => { if ((event as CustomEvent<{ tab?: string }>).detail?.tab === TAB) setPicking(!picking); };
+  const cancelPick = (event: KeyboardEvent) => { if (event.key === 'Escape') setPicking(false); };
+  root.addEventListener('click', (event) => {
+    if (!picking) return;
+    const title = (event.target as Element).closest('[data-card]')?.querySelector('h3')?.textContent?.trim();
+    if (!title) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setPicking(false);
+    const program = shown();
+    window.dispatchEvent(new CustomEvent('piecemaker:composer-insert', { detail: { text: `Carte « ${title} »${program && data!.programmes.length > 1 ? ` du raisonnement « ${program.nom} »` : ''} : ` } }));
+  }, true);
+  window.addEventListener('piecemaker:panel-pick', togglePick);
+  window.addEventListener('keydown', cancelPick);
   const updated = (event: Event) => {
     const project = (event as CustomEvent<{ projectPath?: string }>).detail?.projectPath;
     if (!project || project === context.project?.path) load();
@@ -172,8 +194,8 @@ export function mount(container: HTMLElement, api: Host) {
   window.addEventListener('piecemaker:catala-updated', updated);
   paint();
   load();
-  window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: 'plugin:piecemaker-catala' } }));
-  cleanups.set(container, () => { stopped = true; sequence++; window.removeEventListener('piecemaker:catala-updated', updated); stopGraph(); unsubscribe(); container.replaceChildren(); });
+  window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: TAB } }));
+  cleanups.set(container, () => { stopped = true; sequence++; setPicking(false); window.removeEventListener('piecemaker:panel-pick', togglePick); window.removeEventListener('keydown', cancelPick); window.removeEventListener('piecemaker:catala-updated', updated); stopGraph(); unsubscribe(); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {
