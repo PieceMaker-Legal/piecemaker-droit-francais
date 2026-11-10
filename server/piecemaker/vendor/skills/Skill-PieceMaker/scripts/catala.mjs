@@ -92,6 +92,27 @@ export function selectProgram(cwd, name) {
   return { name: names[0], directory: path.join(programsRoot(cwd), names[0]) };
 }
 
+const TASK_TYPES = ['contentieux', 'contrat', 'autre'];
+
+function taskErrors(directory, files) {
+  const file = path.join(directory, 'tache.json');
+  if (!fs.existsSync(file)) return [];
+  let task;
+  try { task = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return ['tâche illisible : JSON invalide.']; }
+  const sources = files.map((name) => fs.readFileSync(path.join(directory, name), 'utf8')).join('\n');
+  const declared = (scope) => new RegExp(`(?:déclaration champ d'application|declaration scope)\\s+${String(scope).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`).test(sources);
+  const parts = Array.isArray(task?.raisonnements) ? task.raisonnements : [];
+  return [
+    typeof task?.tache === 'string' && task.tache.trim() ? '' : 'tâche sans nom : renseignez « tache ».',
+    TASK_TYPES.includes(task?.type) ? '' : `type de tâche inconnu : écrivez ${TASK_TYPES.join(', ')}.`,
+    parts.length ? '' : 'tâche sans raisonnement : renseignez « raisonnements ».',
+    ...parts.flatMap((part) => [
+      part?.champ && declared(part.champ) ? '' : `raisonnement « ${part?.champ ?? ''} » : aucun champ d’application de ce nom.`,
+      typeof part?.objectif === 'string' && part.objectif.trim() ? '' : `raisonnement « ${part?.champ ?? ''} » sans objectif.`,
+    ]),
+  ].filter(Boolean);
+}
+
 export function sourceFiles(directory, relative = '') {
   const files = [];
   for (const entry of fs.readdirSync(path.join(directory, relative), { withFileTypes: true })) {
@@ -251,6 +272,7 @@ async function verifier(context, program, flags = {}) {
   };
   await record('documentation', 'Présence de #[doc] et quote', async () => {
     const errors = files.flatMap((file) => catalaDocumentation(fs.readFileSync(path.join(program.directory, file), 'utf8')).errors.map((error) => `${file}:${error.line}: ${error.message}`));
+    errors.push(...taskErrors(program.directory, files).map((message) => `tache.json:1: ${message}`));
     return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
   });
   const missing = (message) => ({ exit_code: null, passed: false, status: 'missing', message });

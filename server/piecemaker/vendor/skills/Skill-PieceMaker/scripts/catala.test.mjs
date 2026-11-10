@@ -461,5 +461,14 @@ test('verifier requires doc, a nonempty quote and a title, in any language', asy
     const check = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation');
     assert.equal(check.errors.length, 2);
     assert.match(check.errors[0], /doc.*manquant/);
+    const verify = async (task) => {
+      fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
+      await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
+      return JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation').errors.filter((error) => error.startsWith('tache.json:1: '));
+    };
+    assert.deepEqual(await verify({ tache: 'Conclusions en défense Dupont / Société Exemple', type: 'contentieux', raisonnements: [{ champ: 'Prime', objectif: 'Obtenir la prime', rang: 'principal' }] }), []);
+    const faults = await verify({ type: 'litige', raisonnements: [{ champ: 'Absent' }] });
+    assert.equal(faults.length, 4);
+    assert.match(faults.join('\n'), /sans nom[\s\S]*type de tâche inconnu[\s\S]*« Absent » : aucun champ[\s\S]*sans objectif/);
   } finally { cleanup(); }
 });

@@ -59,7 +59,7 @@ Citation : « Extrait fictif établissant seulement l’envoi. »
 
 `Concerne` rattache les sources et ces explications à un identifiant. Employez des identifiants distincts pour des notions distinctes dans un programme.
 
-L’objectif et la conclusion finale sont la même case du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. Cette ligne titre la conclusion finale. N’en inventez pas : sans objectif annoncé, la conclusion garde son titre.
+L’objectif et la conclusion finale sont la même case du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. Cette ligne titre la conclusion finale. N’en inventez pas : sans objectif annoncé, la conclusion garde son titre. Quand `tache.json` décrit le raisonnement, son `objectif` remplace cette ligne.
 
 Quand un message contient ``[Carte « titre »](chemin:12 "lignes 12 à 15") — `identifiant` = Vrai, scénario Test``, l’avocat vise cette case du graphe. Le lien donne le fichier Catala, relatif au dossier, et les lignes de la définition avec son `#[doc]`. La suite donne l’identifiant Catala, sa valeur dans le scénario affiché et le nom de ce scénario.
 

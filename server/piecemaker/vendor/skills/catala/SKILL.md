@@ -9,16 +9,42 @@ Catala code une règle juridique en programme exécutable. Le pack Catala est in
 
 ## Classement
 
-Un programme Catala vit dans `.piecemaker/catala/<nom>/`. `<nom>` s'écrit en minuscules, chiffres et tirets. Un dossier peut contenir plusieurs programmes ; indiquez alors `--programme <nom>`.
+Un programme Catala correspond à une tâche : un jeu de conclusions, un contrat ou un autre acte précis. Il vit dans `.piecemaker/catala/<nom>/`. `<nom>` s'écrit en minuscules, chiffres et tirets ; reprenez le nom de la mémoire de projet et du suivi de cet acte. Un dossier peut contenir plusieurs programmes ; indiquez alors `--programme <nom>`.
+
+Une tâche contient un ou plusieurs raisonnements : une demande principale et une demande subsidiaire, ou les clauses d'un contrat. Chaque raisonnement est un champ d'application du même programme. Ne créez pas un programme par raisonnement : les faits et les pièces s'écrivent une seule fois.
 
 ```
 .piecemaker/catala/
   prime-anciennete/              programme Catala
     clerk.toml                   [project] name = "prime-anciennete"
+    tache.json                   tâche, type et raisonnements
     prime.catala_fr              > Module Prime
     test_prime.catala_fr         > Usage de Prime, scopes #[test]
     resultats/                   écrit par pm catala, ne pas modifier
 ```
+
+## Décrire la tâche
+
+Écrivez `tache.json` avant le programme, puis tenez-le à jour :
+
+```json
+{
+  "tache": "Conclusions en défense Dupont / Société Exemple, TC Paris",
+  "type": "contentieux",
+  "raisonnements": [
+    { "champ": "RejetDeLaDemande", "objectif": "Faire rejeter la demande en paiement", "rang": "À titre principal" },
+    { "champ": "ReductionDuMontant", "objectif": "Faire réduire le montant", "rang": "À titre subsidiaire" }
+  ]
+}
+```
+
+- `tache` nomme l'acte, comme l'avocat le nomme.
+- `type` vaut `contentieux`, `contrat` ou `autre`.
+- `champ` est le nom exact du champ d'application qui porte la conclusion du raisonnement.
+- `objectif` reprend l'objectif annoncé par l'avocat. N'en inventez pas : demandez-le s'il manque.
+- `rang` situe le raisonnement dans l'acte : `À titre principal`, `À titre subsidiaire`, ou la clause (`Clause 5 — Confidentialité`).
+
+Le volet classe chaque scénario de test sous le raisonnement dont il appelle le champ. Écrivez au moins un scénario par raisonnement. `pm catala verifier` signale un `tache.json` illisible, un type inconnu, un champ absent du programme et un objectif manquant.
 
 ## Écrire le programme
 

@@ -12,7 +12,9 @@ type Report = { started_utc: string; finished_utc: string; passed: boolean; chec
 type Proof = Report & { fichier: string; scope: string; conflits: number; obligations?: number };
 type Catleg = { date_controle: string; dates_reference?: string[]; passed: boolean; fichiers: Array<{ fichier: string; passed: boolean; skipped?: boolean; articles?: string[]; versions?: Array<{ id: string; au: string; debut?: string; fin?: string | null; valide: boolean | null }>; messages: string[] }> };
 type Scenario = { fichier: string; scope: string; passed: boolean; test_reussi: boolean; graphe: string; message: string; provenance?: NativeProvenance };
-type Program = { nom: string; enCours: boolean; perimee: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; tests?: { coverage?: Coverage; 'test-results': Array<{ file: string; tests: { scopes: Array<{ scope_name: string; success: boolean; errors?: unknown[] }> } }> } | null; citations?: { results: Array<{ origin: string; target: string; quote: string; label?: string; title?: string; id?: string; kind?: string; status: string; message: string }> } | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string; provenance?: NativeProvenance }) | null; graphe: string | null; scenarios?: Scenario[] };
+type Part = { champ: string; objectif?: string; rang?: string };
+type Task = { tache?: string; type?: string; raisonnements?: Part[] };
+type Program = { nom: string; tache?: Task | null; enCours: boolean; perimee: boolean; fichiers: File[]; journaux: File[]; verification: Report | null; tests?: { coverage?: Coverage; 'test-results': Array<{ file: string; tests: { scopes: Array<{ scope_name: string; success: boolean; errors?: unknown[] }> } }> } | null; citations?: { results: Array<{ origin: string; target: string; quote: string; label?: string; title?: string; id?: string; kind?: string; status: string; message: string }> } | null; preuve: Proof | null; catleg: Catleg | null; explication: (Report & { fichier: string; scope: string; provenance?: NativeProvenance }) | null; graphe: string | null; scenarios?: Scenario[] };
 export type CatalaSnapshot = {
   pack: { id: string; platform: string; version: string; proof: boolean; installedAt: string } | null;
   status: { state: string; id?: string; step?: string; error?: string; updatedAt?: string } | null;
@@ -56,6 +58,7 @@ export function mount(container: HTMLElement, api: Host) {
   let draftOpen = false;
   let draftBase = '';
   let chosenScenario = '';
+  let chosenPart = '';
   let picking = false;
   let steps: Step[] = [];
   let shownScenario = '';
@@ -76,27 +79,49 @@ export function mount(container: HTMLElement, api: Host) {
     return { meaning, place: file ? `${file}, ligne ${line}` : '' };
   };
   const explanationPart = (program: Program, recalc: string, gaps: string[]) => {
-    const scenarios = program.scenarios ?? [];
+    const parts = (program.tache?.raisonnements ?? []).filter((entry) => entry?.champ);
+    const several = parts.length > 1;
+    const part = parts.find((entry) => entry.champ === chosenPart) ?? parts[0];
+    const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const declaration = "(?:déclaration champ d'application|declaration scope)\\s+";
+    const exercises = (scenario: Scenario, entry: Part) => {
+      const source = program.fichiers.find((file) => file.nom === scenario.fichier)?.contenu ?? '';
+      const block = source.split(new RegExp(`(?=${declaration})`)).find((piece) => new RegExp(`^${declaration}${literal(scenario.scope)}\\s*:`).test(piece)) ?? '';
+      return new RegExp(`[^\\p{L}\\p{N}_]${literal(entry.champ)}(?![\\p{L}\\p{N}_])`, 'u').test(block);
+    };
+    const own = (entry: Part) => (program.scenarios ?? []).filter((scenario) => exercises(scenario, entry));
+    const scenarios = several ? own(part) : program.scenarios ?? [];
     const selected = scenarios.find((scenario) => `${scenario.fichier}:${scenario.scope}` === chosenScenario)
       ?? scenarios.find((scenario) => scenario.scope === program.explication?.scope && scenario.fichier === program.explication?.fichier)
       ?? scenarios.find((scenario) => scenario.passed) ?? scenarios[0];
-    const provenance = selected?.provenance ?? (!program.perimee ? program.explication?.provenance : undefined);
-    const traced = selected ? selected.passed && (selected.graphe || provenance?.trace.length) : !program.perimee && program.explication?.passed && (program.graphe || provenance?.trace.length);
-    const dot = selected?.graphe ?? program.graphe;
-    let model: Reasoning;
-    let failure = selected && !selected.passed ? 'Ce scénario ne produit pas de graphe. Corrigez son exécution Catala.' : '';
-    try { model = reasoning(traced ? dot || 'digraph G {}' : 'digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage, traced ? provenance : undefined); }
-    catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage); }
+    const build = (scenario: Scenario | undefined) => {
+      const provenance = scenario?.provenance ?? (!several && !program.perimee ? program.explication?.provenance : undefined);
+      const traced = Boolean(scenario ? scenario.passed && (scenario.graphe || provenance?.trace.length) : !several && !program.perimee && program.explication?.passed && (program.graphe || provenance?.trace.length));
+      const dot = scenario?.graphe ?? (several ? null : program.graphe);
+      let model: Reasoning;
+      let failure = scenario && !scenario.passed ? 'Ce scénario ne produit pas de graphe. Corrigez son exécution Catala.' : '';
+      try { model = reasoning(traced ? dot || 'digraph G {}' : 'digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage, traced ? provenance : undefined); }
+      catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage); }
+      return { model, failure, traced, scope: traced ? scenario?.scope ?? program.explication?.scope ?? '' : '' };
+    };
+    const { model, failure, traced, scope } = build(selected);
+    if (part?.objectif) model.objective = part.objectif;
     steps = model.steps;
-    shownScenario = traced ? selected?.scope ?? program.explication?.scope ?? '' : '';
+    shownScenario = scope;
     const issues = reasoningIssues(model);
     const graph = reasoningGraph(model);
     const empty = `<p class="pmc-muted">${failure ? escape(failure) : 'Aucun raisonnement calculé pour ce scénario.'}</p>`;
-    const choice = data!.programmes.length > 1 ? `<select data-program-choice aria-label="Raisonnement">${data!.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.nom)}</option>`).join('')}</select>` : '';
+    const choice = data!.programmes.length > 1 ? `<select data-program-choice aria-label="Tâche" title="Tâche">${data!.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.tache?.tache || entry.nom)}</option>`).join('')}</select>` : '';
+    const named = (entry: Part) => [entry.rang, entry.objectif].filter(Boolean).join(' — ') || entry.champ;
+    const partChoice = several ? `<select data-part-choice aria-label="Raisonnement" title="Raisonnement">${parts.map((entry) => `<option value="${escape(entry.champ)}"${entry === part ? ' selected' : ''}>${escape(named(entry))}</option>`).join('')}</select>` : '';
+    const task = program.tache?.tache ? `<p class="pmc-scenario" data-part="task">Tâche : <strong>${escape(program.tache.tache)}</strong>${program.tache.type ? ` <span class="pmc-muted">${escape(program.tache.type)}</span>` : ''}</p>` : '';
     const alerts = [...issues.map((entry) => `<li>${entry.id ? `<button type="button" class="pmc-text-action" data-goto="${entry.id}">${escape(entry.title)}</button>` : escape(entry.title)} : ${escape(entry.issue)}</li>`), ...gaps.map(plainGap).map((gap) => `<li>${escape(gap.meaning)}${gap.place ? ` <span class="pmc-muted">${escape(gap.place)}</span>` : ''}</li>`)];
     fixRequest = [`Corrige les erreurs du programme Catala \`${program.nom}\`, puis relance \`pm catala verifier\`. N’invente aucune source ni citation : signale ce qui manque.`, ...issues.map((entry) => `- ${entry.title} : ${entry.issue}`), ...gaps.map(plainGap).map((gap) => `- ${gap.meaning}${gap.place ? ` (${gap.place})` : ''}`)].join('\n');
-    const scope = traced ? selected?.scope ?? program.explication?.scope ?? '' : '';
-    draftBase = [`Fonde le document sur le raisonnement Catala \`${program.nom}\`${scope ? `, scénario ${scope}` : ''} (\`.piecemaker/catala/${program.nom}/\`). N’écris ni code ni identifiant Catala dans le document. Signale tout fait ou fondement que tu ajoutes au raisonnement.`, alerts.length ? `Le raisonnement compte ${alerts.length} erreur${alerts.length > 1 ? 's' : ''} non corrigée${alerts.length > 1 ? 's' : ''} : signale-les avant de rédiger.` : '', '', 'Raisonnement :', reasoningBrief(model)].filter((line, index) => line || index === 2).join('\n');
+    const briefs = several ? parts.map((entry) => {
+      const built = entry === part ? { model, traced, scope } : build(own(entry).find((scenario) => scenario.passed));
+      return `Raisonnement — ${named(entry)}${built.scope ? ` (scénario ${built.scope})` : ''} :\n${built.traced ? reasoningBrief(built.model) : '- non calculé'}`;
+    }).join('\n\n') : `Raisonnement :\n${reasoningBrief(model)}`;
+    draftBase = `${[`Fonde le document sur le raisonnement Catala \`${program.nom}\`${program.tache?.tache ? `, tâche « ${program.tache.tache} »${program.tache.type ? ` (${program.tache.type})` : ''}` : ''}${scope && !several ? `, scénario ${scope}` : ''} (\`.piecemaker/catala/${program.nom}/\`). N’écris ni code ni identifiant Catala dans le document. Signale tout fait ou fondement que tu ajoutes au raisonnement.`, alerts.length ? `Le raisonnement compte ${alerts.length} erreur${alerts.length > 1 ? 's' : ''} non corrigée${alerts.length > 1 ? 's' : ''} : signale-les avant de rédiger.` : ''].filter(Boolean).join('\n')}\n\n${briefs}`;
     const styles = data!.styles ?? [];
     const drafts = draftOpen && traced ? `<div class="pmc-alert-list pmc-draft-list" role="region" aria-label="Document à rédiger"><p class="pmc-muted">Quel document rédiger ? La demande s’ouvre dans un nouveau chat.</p><div class="pmc-alert-actions">${styles.map((style, index) => `<button type="button" data-draft-style="${index}">${escape(style.nom)}</button>`).join('')}<button type="button" data-draft-style="-1">Autre document</button></div></div>` : '';
     const run = `<span class="pmc-run">${freshness(program)}<button type="button" data-draft aria-expanded="${draftOpen && Boolean(traced)}" title="${traced ? 'Rédiger un document à partir de ce raisonnement' : 'Calculez d’abord le raisonnement.'}"${traced ? '' : ' disabled'}>Rédiger</button><button type="button" class="pmc-alerts" data-alerts${alerts.length ? ` data-count="${alerts.length}"` : ''} aria-expanded="${alertsOpen}" title="${alerts.length ? `${alerts.length} erreur${alerts.length > 1 ? 's' : ''} à corriger` : 'Résultat de la vérification'}">Vérification${alerts.length ? `<span class="pmc-bubble">${alerts.length}</span>` : ''}</button></span>`;
@@ -109,7 +134,7 @@ export function mount(container: HTMLElement, api: Host) {
     const reference = check ? `<p class="pmc-scenario" data-part="reference-date">Droit apprécié au : <strong>${dates.length ? dates.map(day).join(', ') : `${day(check.date_controle)} (jour du contrôle)`}</strong>${check.passed ? '' : ' <span class="pmc-warn">vigueur à vérifier</span>'}</p>` : '';
     const tab = (mode: string, label: string) => `<button role="tab" data-mode="${mode}" aria-selected="${viewMode === mode}">${label}</button>`;
     const zoom = graph && viewMode === 'graph' ? '<span class="pmc-map-tools"><button data-map-zoom="out" aria-label="Dézoomer" title="Dézoomer">−</button><button data-map-zoom="in" aria-label="Zoomer" title="Zoomer">+</button><button data-map-zoom="fit" aria-label="Ajuster à la largeur" title="Ajuster à la largeur">↔</button></span>' : '';
-    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-bar"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement">${tab('graph', 'Graphe')}${tab('written', 'Raisonnement')}</div>${scenario}${choice}${zoom}${run}</div>${list}${drafts}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${reference}${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div>` : empty}</div></section>`;
+    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-bar"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement">${tab('graph', 'Graphe')}${tab('written', 'Raisonnement')}</div>${choice}${partChoice}${scenario}${zoom}${run}</div>${list}${drafts}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${task}${reference}${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div>` : empty}</div></section>`;
   };
   const paint = () => {
     stopGraph();
@@ -200,7 +225,8 @@ export function mount(container: HTMLElement, api: Host) {
 
   panel.addEventListener('change', (event) => {
     const select = event.target as HTMLSelectElement;
-    if (select.hasAttribute('data-program-choice')) { chosen = select.value; chosenScenario = ''; paint(); }
+    if (select.hasAttribute('data-program-choice')) { chosen = select.value; chosenPart = ''; chosenScenario = ''; paint(); }
+    if (select.hasAttribute('data-part-choice')) { chosenPart = select.value; chosenScenario = ''; paint(); }
     if (select.hasAttribute('data-scenario-choice')) { chosenScenario = select.value; paint(); }
   });
   panel.addEventListener('click', (event) => {

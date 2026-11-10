@@ -59,6 +59,7 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, se
       const journaux = fs.existsSync(results) ? fs.readdirSync(results).filter((file) => file.endsWith('.log') && fs.lstatSync(path.join(results, file)).isFile()).sort() : [];
       return {
         nom,
+        tache: readJson(path.join(directory, 'tache.json')),
         perimee,
         enCours: running.has(directory),
         fichiers: files.map((file) => ({ nom: file.split(path.sep).join('/'), chemin: path.join(directory, file), contenu: fs.readFileSync(path.join(directory, file), 'utf8') })),
