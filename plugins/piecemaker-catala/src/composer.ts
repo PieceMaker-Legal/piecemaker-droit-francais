@@ -8,12 +8,12 @@ const WATCH_INTERVAL = 200;
 const WATCH_ROUNDS = 150;
 
 const STYLES = `
-.pmc-chips{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding:8px 12px 0}
-.pmc-chips[hidden]{display:none}
-.pmc-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:2px 4px 2px 10px;border:1px solid hsl(var(--border));border-radius:999px;background:hsl(var(--muted));color:hsl(var(--foreground));font-size:12px;line-height:20px}
-.pmc-chip>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pmc-chip>button{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:0;border-radius:999px;background:none;color:hsl(var(--muted-foreground));font-size:14px;line-height:1;cursor:pointer}
-.pmc-chip>button:hover{background:hsl(var(--border));color:hsl(var(--foreground))}
+.pmc-picks{display:flex;flex-wrap:wrap;gap:6px;width:100%;padding:8px 12px 0}
+.pmc-picks[hidden]{display:none}
+.pmc-pick{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:2px 4px 2px 10px;border:1px solid hsl(var(--border));border-radius:999px;background:hsl(var(--muted));color:hsl(var(--foreground));font-size:12px;line-height:20px}
+.pmc-pick>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pmc-pick>button{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:0;border-radius:999px;background:none;color:hsl(var(--muted-foreground));font-size:14px;line-height:1;cursor:pointer}
+.pmc-pick>button:hover{background:hsl(var(--border));color:hsl(var(--foreground))}
 `;
 
 const escape = (text: string) => text.replace(/[&<>"]/g, (sign) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[sign]!);
@@ -36,7 +36,7 @@ export function inject(): () => void {
   style.textContent = STYLES;
   document.head.append(style);
   const row = document.createElement('div');
-  row.className = 'pmc-chips';
+  row.className = 'pmc-picks';
   row.hidden = true;
 
   const field = () => document.querySelector<HTMLTextAreaElement>(`${FORM} ${FIELD}`);
@@ -50,7 +50,7 @@ export function inject(): () => void {
   };
   const paint = () => {
     row.hidden = !cards.length;
-    row.innerHTML = cards.map((card, index) => `<span class="pmc-chip" title="${escape(place(card))}"><span>Carte « ${escape(card.titre)} »</span><button type="button" data-remove="${index}" aria-label="Retirer la carte">×</button></span>`).join('');
+    row.innerHTML = cards.map((card, index) => `<span class="pmc-pick" title="${escape(place(card))}"><span>Carte « ${escape(card.titre)} »</span><button type="button" data-remove="${index}" aria-label="Retirer la carte">×</button></span>`).join('');
     attach();
   };
   const stopWatch = () => { window.clearInterval(watch); watch = 0; };

@@ -18,12 +18,12 @@ test('a picked card shows as a chip and joins the sent message with its file and
     field.addEventListener('keydown', (event) => { if (event.key === 'Enter' && sends) { event.preventDefault(); sent.push(field.value); } });
     const pick = (detail) => window.dispatchEvent(new dom.window.CustomEvent('piecemaker:catala-card-pick', { detail }));
     const enter = () => field.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
-    const chips = () => [...form.querySelectorAll('.pmc-chip > span')].map((chip) => chip.textContent);
+    const chips = () => [...form.querySelectorAll('.pmc-pick > span')].map((chip) => chip.textContent);
     const first = { titre: 'Vérifier le montant demandé', fichier: '.piecemaker/catala/demo/demo.catala_fr', debut: 12, fin: 15 };
     pick(first);
     pick(first);
     pick({ titre: 'Contrat conclu' });
-    assert.equal(form.firstElementChild.className, 'pmc-chips');
+    assert.equal(form.firstElementChild.className, 'pmc-picks');
     assert.deepEqual(chips(), ['Carte « Vérifier le montant demandé »', 'Carte « Contrat conclu »']);
     assert.equal(cardReference(first), '[Carte « Vérifier le montant demandé »](.piecemaker/catala/demo/demo.catala_fr:12 "lignes 12 à 15")');
     assert.equal(cardReference({ ...first, identifiant: 'montant_dû', valeur: 'Vrai', scenario: 'TestMontant' }), '[Carte « Vérifier le montant demandé »](.piecemaker/catala/demo/demo.catala_fr:12 "lignes 12 à 15") — `montant_dû` = Vrai, scénario TestMontant');
@@ -48,5 +48,5 @@ test('a picked card shows as a chip and joins the sent message with its file and
     assert.equal(sent[1], cardReference(first));
     assert.deepEqual(chips(), []);
   } finally { stop(); dom.window.close(); }
-  assert.equal(document.querySelector('.pmc-chips'), null);
+  assert.equal(document.querySelector('.pmc-picks'), null);
 });
