@@ -17,3 +17,12 @@ const verbal = (word) => !forms(word).some((form) => NOUNS.has(form)) && forms(w
 
 export const participle = (text) => text.toLowerCase().split(/[^\p{L}'’-]+/u)
   .flatMap((word) => word.replace(/^.*['’]/, '').split('-')).some(verbal);
+
+const NOT_INFINITIVE = new Set(`salaire loyer dossier titre registre notaire mandataire bénéficiaire commissaire locataire propriétaire actionnaire destinataire signataire contraire
+ordre nombre membre terme offre lettre livre droit délivrance premier dernier courrier créancier débiteur huissier héritier ouvrier salarier chantier métier atelier papier
+calendrier danger étranger février janvier septembre octobre novembre décembre avenir plaisir souvenir pouvoir devoir avoir savoir`.split(/\s+/));
+
+export const infinitive = (text) => {
+  const first = text.trim().toLowerCase().split(/[^\p{L}'’-]+/u)[0].replace(/^(?:s|se)['’]/, '');
+  return /(?:er|ir|re)$/.test(first) && !NOT_INFINITIVE.has(first);
+};

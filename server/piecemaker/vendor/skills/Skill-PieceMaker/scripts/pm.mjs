@@ -67,7 +67,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   suivi_dossiers ecrire <chemin> --json '{...}'
       écrit un document du Matter board
 
-  catala verifier [--programme NOM] [--au AAAA-MM-JJ]
+  catala verifier --au AAAA-MM-JJ [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
       typage, format, tests Clerk/Python, preuves, Catleg, citations, explication → resultats/verification.json ;
       --programme est requis quand le dossier en compte plusieurs
@@ -82,9 +82,8 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       exécute un scénario et affiche sa trace
   catala squelette --scope CHAMP [--fichier F] [--programme NOM]
       squelette de test Catala, entrées à leur valeur par défaut
-  catala catleg [--fichier F] [--au AAAA-MM-JJ] [--programme NOM]
-      vigueur à la date que les scénarios calculent dans la variable date_de_référence
-      (lancez verifier avant), à défaut à la date du jour ; --au remplace cette date
+  catala catleg --au AAAA-MM-JJ [--fichier F] [--programme NOM]
+      vigueur des articles à la date --au, obligatoire ; la date du jour est admise
   catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 

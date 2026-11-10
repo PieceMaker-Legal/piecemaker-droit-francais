@@ -74,14 +74,14 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 
 | Commande | Effet | Résultat |
 | --- | --- | --- |
-| `pm catala verifier --programme <nom> [--au AAAA-MM-JJ]` | typage, format, tests Clerk/Python, preuves, Catleg, citations PieceMaker, explication | `resultats/verification.json`, `tests.json` |
+| `pm catala verifier --programme <nom> --au AAAA-MM-JJ` | typage, format, tests Clerk/Python, preuves, Catleg, citations PieceMaker, explication | `resultats/verification.json`, `tests.json` |
 | `pm catala formater` | `catala-format --in-place` | fichiers réécrits |
 | `pm catala preuve --scope <Champ> [--fichier F]` | `catala proof`, sans compilation OCaml | `resultats/preuve.json` |
 | `pm catala expliquer --programme <nom> --fichier test_prime.catala_fr --scope Exemple` | Graphe des formules et conditions d’une exécution | `resultats/explication.dot`, `explication.json` |
 | `pm catala squelette --scope <Champ> [--fichier F]` | `catala testcase generate` puis `write -l fr`, dans un dossier temporaire avec la stdlib en `_build/libcatala` | test en sortie, entrées par défaut |
 | `pm catala executer --scope <Scenario> [--fichier F]` | `catala interpret --whole-program --trace --stdlib` | trace en sortie (200 lignes), `resultats/execution.log` |
 | `pm catala exceptions --scope <Champ> --variable <v> [--fichier F]` | `catala exceptions` | arbre en sortie, `resultats/exceptions.log` |
-| `pm catala catleg [--fichier F] [--au AAAA-MM-JJ]` | vigueur des articles cités, identifiants PISTE de PieceMaker | `resultats/catleg.json` |
+| `pm catala catleg --au AAAA-MM-JJ [--fichier F]` | vigueur des articles cités, identifiants PISTE de PieceMaker | `resultats/catleg.json` |
 | `pm catala lister` / `env` | programmes et dernier bilan / pack, état, Python | sortie |
 | `pm catala exec <outil> -- <args>` | lance un outil du pack (LSP, DAP, autres) | code de sortie |
 
@@ -97,7 +97,7 @@ Une preuve réussit si `catala proof --debug` produit au moins une obligation, s
 
 ## Limites
 
-- Catleg contrôle l’expiration actuelle des articles reconnus par son parseur natif. Un contrôle vide échoue. La date de référence est un résultat du raisonnement : le programme la calcule dans une variable `date_de_référence`, de type date, à partir d’un fait tiré d’une pièce et de l’article qui fixe le droit applicable dans le temps. Des scénarios `#[test]` la contrôlent. `pm catala verifier` exécute les scénarios, puis Catleg lit la valeur de `date_de_référence` dans la trace de chaque scénario réussi. Si les scénarios donnent plusieurs dates, Catleg contrôle chaque article à chaque date. Sans cette variable, le contrôle se place à la date du jour (contrat, conseil). `--au` remplace la date calculée. Avec une date de référence, le résultat dépend de la période officielle de chaque article, même abrogé depuis, lue par `catleg lf article` ; `catleg.json` porte `dates_reference` et `date_reference_origine`. `pm catala catleg` seul exige des scénarios à jour : lancez d’abord `verifier`. Le volet affiche « Droit apprécié au : » suivi de ces dates, ou du jour du contrôle, et signale une vigueur à vérifier. Cette comparaison ne détermine pas l’applicabilité juridique.
+- Catleg contrôle la vigueur des articles reconnus par son parseur natif. Un contrôle vide échoue. La date de vigueur vient uniquement de `--au AAAA-MM-JJ` ; la date du jour est admise. `pm catala catleg` sans `--au` échoue ; `pm catala verifier` sans `--au` marque Catleg « non effectué ». Le résultat dépend de la période officielle de chaque article, même abrogé depuis, lue par `catleg lf article` ; `catleg.json` porte `dates_reference`. Le volet affiche « Droit apprécié au : » suivi de cette date et signale une vigueur à vérifier. Cette comparaison ne détermine pas l’applicabilité juridique.
 - Une preuve porte sur le programme, pas sur les faits.
 - Le lien avec les pièces passe par une table des sources que l'avocat construit.
 - Windows : installation et preuve non exécutées sur ce Mac. La CI Windows doit réussir avant livraison.

@@ -15,16 +15,16 @@
 
 ## Annotation obligatoire et citation
 
-Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir une balise `quote` non vide et un `titre` au participe passé.
+Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir une balise `quote` non vide et un `titre` : à l’infinitif pour une règle ou une condition, au participe passé pour un fait.
 Le vérificateur produit une erreur localisée pour chacun de ces manques. Cette obligation couvre aussi les définitions des scénarios.
 
 ````catala
 champ d'application Exemple:
-  #[doc="titre: Condition juridique remplie\nsource: https://example.org/texte-fictif\nquote: « La condition requise est définie par ce texte fictif. »"]
+  #[doc="titre: Vérifier la condition juridique\nsource: https://example.org/texte-fictif\nquote: « La condition requise est définie par ce texte fictif. »"]
   définition condition_juridique égal à donnée_observée
 ````
 
-`#[doc]` appartient à Catala. Le contenu `titre: …`, `source: …` et `quote: « … »` suit la convention PieceMaker. `titre` nomme la case du graphe selon ASD-STE100 : groupe nominal court avec au moins un participe passé (« Contrat conclu », « Préavis exécuté »).
+`#[doc]` appartient à Catala. Le contenu `titre: …`, `source: …` et `quote: « … »` suit la convention PieceMaker. `titre` nomme la case du graphe. Une règle ou une condition indique ce qu’il faut faire : son titre commence par un verbe à l’infinitif (`titre: Vérifier le montant demandé`). Un fait, dont la `source` est une pièce, constate ce qui valide la condition : son titre contient un participe passé (`titre: Montant demandé`, `titre: Contrat conclu`).
 Écrivez le lien après `source:` sans crochets Markdown dans l’attribut : le formateur du pack refuse certains liens avec crochets.
 Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait, indiquez le lien de la pièce et son passage exact.
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées.

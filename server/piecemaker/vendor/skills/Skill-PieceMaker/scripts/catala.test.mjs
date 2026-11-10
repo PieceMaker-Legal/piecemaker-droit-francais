@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, runCatala, selectProgram, sharedPython, sourceFiles, sourcesDigest, toolCommand } from './catala.mjs';
+import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, runCatala, selectProgram, sharedPython, toolCommand } from './catala.mjs';
 import { run } from './pm.mjs';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
@@ -41,6 +41,7 @@ function fakeRun({ testsPass = true, proofOutput = 'No errors found during the p
       return { code: testsPass ? 0 : 1, stdout: JSON.stringify({ 'test-results': [{ file: path.join(options.cwd, 'test_prime.catala_fr'), tests: { scopes, 'inline-tests': [] } }], coverage: {} }), stderr: '' };
     }
     if (tool === 'catala' && args[0] === 'dependency-graph') return { code: 0, stdout: JSON.stringify({ inter_scopes: { nodes: { 1: 'Prime', 2: 'AutrePrime' } } }), stderr: '' };
+    if (args.includes('lf')) return { code: 0, stdout: JSON.stringify({ article: { id: 'LEGIARTI000000000001', dateDebut: '2020-01-01', dateFin: '2999-01-01' } }), stderr: '' };
     if (args.includes('check-expiry')) return { code: 0, stdout: 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":false}]', stderr: '' };
     if (tool === 'catala' && args[0] === 'explain') return { code: 0, stdout: 'digraph G { x001 [label=<Prime>] }', stderr: '' };
     if (tool === 'catala' && args[0] === 'proof') return { code: 0, stdout: proofOutput, stderr: '' };
@@ -151,7 +152,7 @@ test('verifier runs every check inside the pack environment and writes the resul
   try {
     const directory = program(dossier, 'prime-anciennete');
     const { calls, runner } = fakeRun({ proofOutput: 'This verification condition was generated\nNo errors found during the proof mode run.\n' });
-    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home, PATH: '/usr/bin' }, homeDir: home, run: runner, python: '/usr/bin/python3', credentials: { CATLEG_LF_CLIENT_ID: 'id', CATLEG_LF_CLIENT_SECRET: 's' }, citations: async () => ({ passed: true, status: 'passed', results: [] }), now: () => '2026-01-02T00:00:00Z' } });
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home, PATH: '/usr/bin' }, homeDir: home, run: runner, python: '/usr/bin/python3', credentials: { CATLEG_LF_CLIENT_ID: 'id', CATLEG_LF_CLIENT_SECRET: 's' }, citations: async () => ({ passed: true, status: 'passed', results: [] }), now: () => '2026-01-02T00:00:00Z' } });
     assert.match(text, /vérifié/);
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'));
     assert.equal(report.passed, true);
@@ -233,7 +234,7 @@ test('catleg counts native parser results, rejects empty checks and uses the use
     };
     const deps = { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: '/py/python3', credentials: { CATLEG_LF_CLIENT_ID: 'id', CATLEG_LF_CLIENT_SECRET: 's' }, now: () => '2026-03-04T10:00:00Z' };
     const report = () => JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'catleg.json'), 'utf8'));
-    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { fichier: 'prime.catala_fr' }, deps }), /1 article\(s\) contrôlé/);
+    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { fichier: 'prime.catala_fr', au: '2026-03-04' }, deps }), /1 article\(s\) contrôlé/);
     assert.equal(calls[0].command, '/py/python3');
     assert.deepEqual(calls[0].args.slice(-2), ['check-expiry', 'prime.catala_fr']);
     assert.equal(calls[0].env.CATLEG_LF_CLIENT_ID, 'id');
@@ -244,42 +245,21 @@ test('catleg counts native parser results, rejects empty checks and uses the use
     assert.equal(report().fichiers[0].versions[0].valide, false);
     await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2020-01-01' }, deps });
     assert.equal(report().fichiers[0].versions[0].valide, true);
-    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '## Article fictif | LEGIARTI000000000001\n\ndéfinition date_de_référence égal à date_conclusion\n');
-    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /lancez pm catala verifier/);
-    const computed = (value, scenario = {}) => ({ fichier: 'test_prime.catala_fr', scope: 'Scénario', test_reussi: true, passed: true, provenance: { trace: [{ element: { kind: 'scope_call', name: 'Scénario' }, trace: [{ element: { kind: 'scope_call', name: 'Vigueur' }, trace: [{ element: { kind: 'scope_var', name: 'date_de_référence' }, value }] }] }] }, ...scenario });
-    const scenarios = (...list) => fs.writeFileSync(path.join(directory, 'resultats', 'scenarios.json'), JSON.stringify({ sources_sha256: sourcesDigest(directory, sourceFiles(directory)), scenarios: list }));
-    scenarios(computed('2019-12-31'), computed('2018-01-01', { test_reussi: false }));
-    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, deps }), /vigueur au 2019-12-31, date de référence calculée par les scénarios/);
-    assert.deepEqual(report().dates_reference, ['2019-12-31']);
-    assert.equal(report().date_reference_origine, 'scénarios');
-    assert.equal(report().passed, false);
-    scenarios(computed('2021-06-01'), computed('2019-12-31'));
-    await runCatala({ commande: 'catleg', cwd: dossier, deps });
-    assert.deepEqual(report().dates_reference, ['2019-12-31', '2021-06-01']);
-    assert.deepEqual(report().fichiers[0].versions.map((version) => [version.au, version.valide]), [['2019-12-31', false], ['2021-06-01', true]]);
-    assert.equal(report().passed, false);
-    scenarios(computed('2019-12-31', { test_reussi: false }));
-    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /Aucun scénario réussi ne calcule date_de_référence/);
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /--au AAAA-MM-JJ/);
     assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2021-06-01' }, deps }), /donnée par --au/);
-    assert.equal(report().fichiers[0].versions[0].au, '2021-06-01');
-    assert.equal(report().passed, true);
-    scenarios(computed('2021-06-01'));
+    assert.deepEqual(report().dates_reference, ['2021-06-01']);
     stdout = 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":true}]\n';
-    const expired = { ...deps, run: async (command, args, options) => args.includes('lf') ? runner(command, args, options) : { code: 1, stdout, stderr: 'expired' } };
-    await runCatala({ commande: 'catleg', cwd: dossier, deps: expired });
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2021-06-01' }, deps: { ...deps, run: async (command, args, options) => args.includes('lf') ? runner(command, args, options) : { code: 1, stdout, stderr: 'expired' } } });
     assert.equal(report().passed, true);
     assert.deepEqual(report().fichiers[0].articles, ['LEGIARTI000000000001']);
-    scenarios(computed('hier'));
-    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /date_de_référence.*date valide/);
-    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '## Article fictif | LEGIARTI000000000001\n');
-    for (const output of ['', 'PIECEMAKER_ARTICLES=[]\n', 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":true}]\n']) {
+    for (const output of ['', 'PIECEMAKER_ARTICLES=[]\n']) {
       stdout = output;
-      await runCatala({ commande: 'catleg', cwd: dossier, deps });
+      await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-03-04' }, deps });
       assert.equal(report().passed, false);
     }
     await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-02-30' }, deps }), /date valide/);
-    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, flags: { fichier: '../secret' }, deps }), /absent du programme/);
-    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps: { ...deps, credentials: null } }), /PISTE/);
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, flags: { fichier: '../secret', au: '2026-03-04' }, deps }), /absent du programme/);
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-03-04' }, deps: { ...deps, credentials: null } }), /PISTE/);
   } finally { cleanup(); }
 });
 
@@ -440,7 +420,7 @@ test('exceptions, executer and squelette call Catala with the expected arguments
   } finally { cleanup(); }
 });
 
-test('verifier requires doc, a nonempty quote and a past-participle title on every definition and rule', async () => {
+test('verifier requires doc, a nonempty quote and a title: infinitive for a rule, past participle for a fact', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime');
@@ -451,8 +431,11 @@ test('verifier requires doc, a nonempty quote and a past-participle title on eve
       ['#[doc="quote: «   »"]\n', 'quote manquante'],
       ['#[doc="Sans citation"]\n#[doc="quote: « Passage exact. »"]\n', 'quote manquante'],
       ['#[doc="Source : référence fictive.\\nquote: « Passage exact. »"]\n', 'titre manquant'],
-      ['#[doc="titre: Montant de la prime\\nquote: « Passage exact. »"]\n', 'titre sans participe passé'],
-      ['#[doc="titre: Montant de la prime fixé\\nSource : référence fictive.\\nquote: « Passage exact. »"]\n', null],
+      ['#[doc="titre: Montant de la prime\\nsource: ../../../pieces/contrat-fictif.md\\nquote: « Passage exact. »"]\n', 'titre de fait sans participe passé'],
+      ['#[doc="titre: Montant de la prime fixé\\nsource: ../../../pieces/contrat-fictif.md\\nquote: « Passage exact. »"]\n', null],
+      ['#[doc="titre: Montant de la prime fixé\\nsource: https://example.org/texte-fictif\\nquote: « Passage exact. »"]\n', 'titre de règle ou de condition sans infinitif'],
+      ['#[doc="titre: Salaire à vérifier\\nquote: « Passage exact. »"]\n', 'titre de règle ou de condition sans infinitif'],
+      ['#[doc="titre: Vérifier le montant de la prime\\nsource: https://example.org/texte-fictif\\nquote: « Passage exact. »"]\n', null],
     ];
     for (const [annotation, message] of cases) {
       fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\nCitation : « Une citation extérieure ne suffit pas. »\n\n```catala\nchamp d\'application Prime:\n' + annotation + 'définition montant égal à 10 €\n```\n');
@@ -466,7 +449,7 @@ test('verifier requires doc, a nonempty quote and a past-participle title on eve
         assert.ok(output.includes(message));
       }
     }
-    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n#[doc="titre: Montant fixé\\nquote: « Passage exact. »"]\ndéfinition montant égal à 10 €\ndéfinition autre égal à 20 €\ndéclaration taux contenu décimal égal à 0.1\n```\n');
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n#[doc="titre: Fixer le montant\\nquote: « Passage exact. »"]\ndéfinition montant égal à 10 €\ndéfinition autre égal à 20 €\ndéclaration taux contenu décimal égal à 0.1\n```\n');
     await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
     const check = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation');
     assert.equal(check.errors.length, 2);
