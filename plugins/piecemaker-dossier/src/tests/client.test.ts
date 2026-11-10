@@ -2,6 +2,7 @@ import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { etapesApi, knowledgeApi } from '../api.js';
 import { mount, unmount } from '../client.js';
+import { okfApi } from '../okf.js';
 import { openIndexAnalysis } from '../index-analysis.js';
 
 vi.mock('../index-analysis.js', () => ({ openIndexAnalysis: vi.fn(async () => vi.fn()) }));
@@ -25,6 +26,7 @@ beforeEach(() => {
   vi.stubGlobal('CustomEvent', dom.window.CustomEvent);
   vi.spyOn(knowledgeApi, 'graph').mockResolvedValue(graph);
   vi.spyOn(knowledgeApi, 'scanJob').mockResolvedValue({ job: null });
+  vi.spyOn(okfApi, 'read').mockResolvedValue({ types: [], typesGraphe: [], fiches: [] });
   vi.spyOn(etapesApi, 'read').mockResolvedValue({});
   container = dom.window.document.getElementById('root')!;
 });

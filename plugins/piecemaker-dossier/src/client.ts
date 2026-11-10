@@ -1,12 +1,14 @@
 import { openIndexAnalysis } from './index-analysis.js';
 import { editClassification } from './classification.js';
 import { etapesApi, knowledgeApi } from './api.js';
+import { mountGraph, okfApi } from './okf.js';
+import type { OkfView } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { CUSTOM_NATURE, chronologyView, escapeHtml, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
+import { CUSTOM_NATURE, chronologyView, documentResource, escapeHtml, linksMarkup, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, ChronologySort, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -60,6 +62,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let data: ViewData | null = null;
   let closeIndexAnalysis: (() => void) | null = null;
   let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
+  let okfView: Pick<OkfView, 'mode' | 'errors'> = { mode: 'table', errors: null };
+  let destroyGraph: (() => void) | null = null;
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
   let mappingValidated: string | null = null;
@@ -208,7 +212,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       }, () => undefined);
       const graph = await knowledgeApi.graph(projectId);
       if (sequence !== loadSequence) return;
-      data = { graph };
+      data = { graph, okf: cached?.okf ?? null };
+      void okfApi.read(projectId).then((okf) => {
+        if (sequence !== loadSequence || !data) return;
+        data = { ...data, okf };
+        viewCache.set(projectId, data);
+        if (okfView.mode === 'graph') paintContent();
+        else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
+      }, () => undefined);
       viewCache.set(projectId, data);
       render();
       openRequestedMapping();
@@ -373,9 +384,21 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', view: active } }));
     const content = root.querySelector<HTMLElement>('[data-content]');
     if (!content) return;
+    destroyGraph?.();
+    destroyGraph = null;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort, okfView) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    const graphHost = content.querySelector<HTMLElement>('[data-okf-graph]');
+    const projectPath = context.project?.path || '';
+    if (!graphHost || !data?.okf) return;
+    void mountGraph(graphHost, data.okf, (resource) => {
+      const node = data?.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === resource);
+      if (data && node) documentEditor(root, data, node, projectPath, save, renamePiece);
+    }).then((destroy) => {
+      if (graphHost.isConnected) destroyGraph = destroy;
+      else destroy();
+    }).catch(showError);
   };
 
   const saveNature = async (nodeId: string, nature: string) => {
@@ -439,7 +462,20 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         root.querySelector<HTMLElement>(`[data-sort="${sort}"]`)?.focus();
         return;
       }
+      const okfMode = target.closest<HTMLElement>('[data-okf-mode]')?.dataset.okfMode;
+      if (okfMode === 'table' || okfMode === 'graph') {
+        okfView = { ...okfView, mode: okfMode };
+        paintContent();
+        return;
+      }
       const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
+      if (action === 'okf-verify' && context.project) {
+        void okfApi.verify(context.project.name).then(({ erreurs }) => {
+          okfView = { ...okfView, errors: erreurs };
+          paintContent();
+        }).catch(showError);
+        return;
+      }
       if (action === 'index-analysis' && context.project) {
         const button = target.closest<HTMLButtonElement>('button')!;
         button.disabled = true;
@@ -746,6 +782,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   });
   (container as HTMLElement & { pmdUnsubscribe?: () => void }).pmdUnsubscribe = () => {
     closeIndexAnalysis?.();
+    destroyGraph?.();
     unsubscribe();
     compactWorkspace.removeEventListener('change', syncTiersWithWorkspaceWidth);
     window.clearInterval(versionTimer);

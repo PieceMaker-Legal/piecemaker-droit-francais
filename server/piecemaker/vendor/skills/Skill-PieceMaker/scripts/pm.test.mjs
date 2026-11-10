@@ -315,12 +315,29 @@ test('suivi_dossiers verifier, lire et ecrire passent par suiviFn', async () => 
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
+test('okf verifier, lier et delier passent par okfFn', async () => {
+  const calls = [];
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-okf-'));
+  const folder = path.resolve(dossier);
+  const lien = { source: '/Pièces/Courrier.pdf.md', relation: 'modifie', cible: '/Pièces/Contrat.pdf.md' };
+  const deps = { okfFn: async (input) => { calls.push(input); return input.action === 'verifier' ? { erreurs: calls.length > 1 ? [{ fiche: '/Pièces/Courrier.pdf.md', erreur: 'type absent' }] : [] } : lien; } };
+  assert.equal(await run(['okf', 'verifier'], { cwd: dossier, deps }), 'Index OKF : aucune erreur.');
+  assert.equal(await run(['okf', 'verifier'], { cwd: dossier, deps }), 'Index OKF : 1 erreur(s).\n- /Pièces/Courrier.pdf.md : type absent');
+  assert.equal(await run(['okf', 'lier', 'Pièces/Courrier.pdf', 'modifie', 'Pièces/Contrat.pdf', '--citation', 'Il est résilié.'], { cwd: dossier, deps }), 'Lien enregistré : /Pièces/Courrier.pdf.md modifie /Pièces/Contrat.pdf.md');
+  assert.deepEqual(calls.pop(), { action: 'lier', folder, source: 'Pièces/Courrier.pdf', relation: 'modifie', cible: 'Pièces/Contrat.pdf', citation: 'Il est résilié.' });
+  await run(['okf', 'delier', 'Pièces/Courrier.pdf', 'modifie', 'Pièces/Contrat.pdf'], { cwd: dossier, deps });
+  assert.deepEqual(calls.pop(), { action: 'delier', folder, source: 'Pièces/Courrier.pdf', relation: 'modifie', cible: 'Pièces/Contrat.pdf' });
+  await assert.rejects(run(['okf', 'lier', 'Pièces/Courrier.pdf', 'modifie', 'Pièces/Contrat.pdf'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
+  await assert.rejects(run(['okf', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
 test('SKILL.md documente toute la surface d’interface', () => {
   const references = path.join(HERE, '..', 'references');
   const skill = [path.join(HERE, '..', 'SKILL.md'), ...fs.readdirSync(references).map((name) => path.join(references, name))]
     .map((file) => fs.readFileSync(file, 'utf8')).join('\n');
   const required = [
-    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm raisonnement', 'pm suivi_dossiers',
+    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm raisonnement', 'pm suivi_dossiers', 'pm okf', 'lier', 'delier', '--citation',
     'lister', 'afficher', 'fermer', 'verifier', 'sql', 'conversion', 'arborescence', 'index', 'lire', 'ecrire',
     'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'fichier',
     '--force', '--dossier', '--dossiers', '--raisonnement', '--suivi', '--json',

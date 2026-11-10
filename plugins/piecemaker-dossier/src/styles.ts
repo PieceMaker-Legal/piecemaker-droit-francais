@@ -199,6 +199,12 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-metric{padding:14px 16px;border:1px solid var(--pmd-border);border-radius:14px;background:var(--pmd-surface);box-shadow:var(--pmd-glass-shadow)}
 .pmd-metric strong{display:block;font-family:var(--piecemaker-font-editorial,EB Garamond,Georgia,serif);font-size:1.6rem;font-weight:500;letter-spacing:-.03em;color:var(--pmd-ink)}
 .pmd-metric span{color:var(--pmd-muted);font-size:11px}
+.pmd-okf-switch{display:inline-flex;gap:4px}
+.pmd-okf-switch [aria-pressed=true]{background:var(--pmd-soft);border-color:var(--pmd-border)}
+.pmd-okf-graph{height:min(70vh,640px);border:1px solid var(--pmd-border);border-radius:var(--pmd-radius);background:var(--pmd-surface)}
+.pmd-okf-report{margin-bottom:12px;padding:10px 12px;border:1px solid var(--pmd-border);border-radius:var(--pmd-radius);background:var(--pmd-surface);font-size:12px}
+.pmd-okf-report[data-okf-report=errors]{border-color:var(--pmd-danger)}
+.pmd-okf-report ul{margin:6px 0 0;padding-left:18px}
 .pmd-chronology-scroll{overflow:auto;border:1px solid var(--pmd-border);border-radius:var(--pmd-radius);background:var(--pmd-surface)}
 .pmd-chronology-table{width:100%;border-collapse:separate;border-spacing:0;font-size:12px}
 .pmd-chronology-table th{position:sticky;top:0;z-index:2;background:var(--pmd-soft);color:var(--pmd-muted);font-size:10px;font-weight:500;letter-spacing:.04em;text-align:left;text-transform:uppercase;white-space:nowrap}

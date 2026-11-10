@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CATALA_COMMANDS, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala'];
+const TOOLS = ['tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
 const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'fichier'];
 const DOSSIER_COMMANDS = ['verifier', 'sql', 'conversion', 'arborescence', 'index'];
@@ -17,6 +17,7 @@ const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lan
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
+const OKF_COMMANDS = ['verifier', 'lier', 'delier'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'whole_program']);
@@ -66,6 +67,14 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       lit un document du Matter board (ex. projects/cabinet/requests)
   suivi_dossiers ecrire <chemin> --json '{...}'
       écrit un document du Matter board
+
+  okf verifier
+      index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
+      reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
+  okf lier <source> <relation> <cible> --citation "phrase du document source"
+      relations : modifie | repond-a | se-refere-a ; source et cible : chemins des documents ;
+      la citation doit figurer mot pour mot dans le document source
+  okf delier <source> <relation> <cible>
 
   catala verifier --au AAAA-MM-JJ [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
@@ -250,6 +259,7 @@ async function defaultDeps(cwd) {
     catalaUpdated: client.notifyCatalaUpdated,
     catalaCitations: client.verifyCatalaCitations,
     suiviFn: client.runSuivi,
+    okfFn: client.runOkf,
     tabularFn: client.runTabularReview,
     stampFn: client.runStamping,
     execFn: (args, dir, signal) => spawnPiecemaker(cliPath, args, dir, signal),
@@ -563,6 +573,22 @@ async function tabularReview(api, positional, flags, resolved) {
   return text;
 }
 
+async function okf(api, positional, flags, resolved) {
+  const action = positional[1];
+  if (!OKF_COMMANDS.includes(action)) usage(`okf attend ${OKF_COMMANDS.join(', ')}.`);
+  const folder = path.resolve(resolved);
+  if (action === 'verifier') {
+    const { erreurs } = await api.okfFn({ action, folder });
+    if (!erreurs.length) return 'Index OKF : aucune erreur.';
+    return [`Index OKF : ${erreurs.length} erreur(s).`, ...erreurs.map((entry) => `- ${entry.fiche} : ${entry.erreur}`)].join('\n');
+  }
+  const [source, relation, cible] = positional.slice(2);
+  if (!source || !relation || !cible) usage(`okf ${action} attend <source> <relation> <cible>.`);
+  if (action === 'lier' && !value(flags.citation)) usage('okf lier attend --citation.');
+  const lien = await api.okfFn({ action, folder, source, relation, cible, ...(action === 'lier' ? { citation: String(flags.citation) } : {}) });
+  return `${action === 'lier' ? 'Lien enregistré' : 'Lien retiré'} : ${lien.source} ${lien.relation} ${lien.cible}`;
+}
+
 async function suiviDossiers(api, positional, flags, resolved) {
   const [, commande, chemin] = positional;
   if (!SUIVI_COMMANDS.includes(commande)) usage(`suivi_dossiers attend ${SUIVI_COMMANDS.join(', ')}.`);
@@ -614,6 +640,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (tool === 'tabular_review') return tabularReview(api, positional, flags, resolved);
   if (tool === 'suivi_dossiers') return suiviDossiers(api, positional, flags, resolved);
   if (tool === 'catala') return catala(api, positional, flags, resolved);
+  if (tool === 'okf') return okf(api, positional, flags, resolved);
 
   if (tool === 'bordereau') {
     const pieces = positional.slice(1);

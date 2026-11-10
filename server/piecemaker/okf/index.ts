@@ -1,0 +1,103 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+import express from 'express';
+
+import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
+
+import type { Renamed } from './build.js';
+import { buildBundle, documentsFromSnapshot } from './build.js';
+import { parseAtoms, readBundle, readGraphTypes, readTypes, relationsOf, resourceOf, text } from './bundle.js';
+import type { LinkInput } from './links.js';
+import { addLink, removeLink } from './links.js';
+import { verifyBundle } from './verify.js';
+
+type OkfOptions = {
+  projects: {
+    getProjectById(projectId: string): { project_path: string } | null;
+    getProjectPath(projectPath: string): { project_id: string; project_path: string } | null;
+  };
+  snapshot(projectId: string): KnowledgeSnapshot;
+  convertedMarkdown(projectPath: string, filePath: string): string | null;
+  listDocuments(projectPath: string): Promise<string[]>;
+  isLoopback(request: express.Request): boolean;
+};
+
+export function createOkfBackend(options: OkfOptions) {
+  const projectPathOf = (projectId: unknown): string => {
+    const project = typeof projectId === 'string' ? options.projects.getProjectById(projectId) : null;
+    if (!project) throw new Error('Project not found.');
+    return fs.realpathSync(project.project_path);
+  };
+  const markdownOf = (projectPath: string) => (resource: string) => options.convertedMarkdown(projectPath, path.join(projectPath, resource));
+
+  const construire = (projectId: string, renamed?: Renamed) => {
+    const projectPath = projectPathOf(projectId);
+    return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, options.snapshot(projectId)), markdownOf: markdownOf(projectPath), renamed });
+  };
+
+  const verifier = async (projectId: string) => {
+    construire(projectId);
+    const projectPath = projectPathOf(projectId);
+    const resources = (await options.listDocuments(projectPath)).map((filePath) => resourceOf(projectPath, filePath));
+    return { erreurs: verifyBundle({ projectPath, resources, markdownOf: markdownOf(projectPath) }) };
+  };
+
+  const lire = (projectId: string) => {
+    construire(projectId);
+    const projectPath = projectPathOf(projectId);
+    return {
+      types: readTypes(projectPath),
+      typesGraphe: readGraphTypes(projectPath),
+      fiches: readBundle(projectPath).filter((concept) => !concept.error).map((concept) => ({
+        id: concept.id,
+        type: text(concept.frontmatter.type),
+        title: text(concept.frontmatter.title),
+        description: text(concept.frontmatter.description),
+        resource: text(concept.frontmatter.resource),
+        date: text(concept.frontmatter.date),
+        atomes: parseAtoms(concept.body).length,
+        relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
+          .filter((entry) => !entry.ecarte)
+          .map((entry) => ({ relation, cible: entry.cible, citation: entry.citation, origine: entry.origine }))),
+      })),
+    };
+  };
+
+  const lier = (projectId: string, input: LinkInput) => {
+    construire(projectId);
+    const projectPath = projectPathOf(projectId);
+    return addLink(projectPath, input, markdownOf(projectPath));
+  };
+
+  const delier = (projectId: string, input: LinkInput) => removeLink(projectPathOf(projectId), input);
+
+  const statusFor = (error: unknown): number => error instanceof TypeError ? 400 : error instanceof Error && error.message === 'Project not found.' ? 404 : 500;
+  const respond = (operation: () => unknown | Promise<unknown>, response: express.Response) => {
+    Promise.resolve().then(operation).then((result) => response.json(result)).catch((error: unknown) => {
+      response.status(statusFor(error)).json({ error: error instanceof Error ? error.message : 'OKF operation failed.' });
+    });
+  };
+
+  const router = express.Router();
+  router.get('/okf', (request, response) => respond(() => lire(String(request.query.projectId || '')), response));
+  router.get('/okf/verifier', (request, response) => respond(() => verifier(String(request.query.projectId || '')), response));
+
+  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verifier, lire, lier, delier };
+  const localRouter = express.Router();
+  localRouter.post('/okf', express.json(), (request, response) => {
+    if (!options.isLoopback(request)) {
+      response.status(403).json({ error: 'OKF is restricted to loopback callers.' });
+      return;
+    }
+    respond(async () => {
+      const action = actions[String(request.body?.action || '')];
+      if (!action) throw new TypeError(`action inconnue. Actions : ${Object.keys(actions).join(', ')}.`);
+      const project = options.projects.getProjectPath(String(request.body?.folder || '').trim());
+      if (!project) throw new Error('Project not found.');
+      return { resultat: await action(project.project_id, request.body) };
+    }, response);
+  });
+
+  return { construire, verifier, lire, lier, delier, router, localRouter };
+}

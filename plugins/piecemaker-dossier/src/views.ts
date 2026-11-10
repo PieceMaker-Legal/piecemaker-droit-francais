@@ -2,6 +2,8 @@ import { NODE_KINDS } from './types.js';
 import { nodePosition } from './party-codes.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import type { CompanySearchResult, ScanJob } from './api.js';
+import { ficheLinks } from './okf.js';
+import type { OkfError, OkfIndex, OkfView } from './okf.js';
 
 export type Tab = 'general' | 'chronology';
 export type BodaccScanState = {
@@ -13,6 +15,7 @@ export type BodaccScanState = {
 };
 export type ViewData = {
   graph: KnowledgeSnapshot;
+  okf?: OkfIndex | null;
 };
 
 export const labels: Record<NodeKind, string> = {
@@ -321,7 +324,17 @@ function chronologyFolder(node: KnowledgeNode, projectPath: string): string {
   return relative.includes('/') ? relative.slice(0, relative.lastIndexOf('/')) : '';
 }
 
-function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string): string {
+export function documentResource(node: KnowledgeNode, projectPath: string): string {
+  const folder = chronologyFolder(node, projectPath);
+  const name = textValue(node.data.path).replace(/\\/g, '/').split('/').pop() || '';
+  return folder ? `${folder}/${name}` : name;
+}
+
+export function linksMarkup(okf: OkfIndex | null, resource: string): string {
+  return ficheLinks(okf, resource).map((link) => `<span class="pmd-badge" title="${escapeHtml(link.citation)}">${escapeHtml(`${link.label} ${link.title}`)}</span>`).join('');
+}
+
+function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string, okf: OkfIndex | null): string {
   const related = links
     .filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id))
     .map((link) => byId.get(link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId))
@@ -330,12 +343,12 @@ function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<str
   const fields = chronologyFields(node);
   const fieldCells = fieldLabels.map((label) => `<td>${escapeHtml(fields.find((field) => field.label === label)?.value ?? '')}</td>`).join('');
   const nature = textValue(node.data.nature);
-  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
+  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td><td><div class="pmd-badges" data-okf-links="${escapeHtml(documentResource(node, projectPath))}">${linksMarkup(okf, documentResource(node, projectPath))}</div></td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
 }
 
 export type ChronologySort = { column: 'document' | 'date' | 'classification'; direction: 'ascending' | 'descending' };
 
-function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string, sort: ChronologySort): string {
+function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string, sort: ChronologySort, okf: OkfIndex | null): string {
   if (!nodes.length) return '<div class="pmd-empty">Aucun document indexé.</div>';
   const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))].filter((label) => !MENTION_FIELD.test(label));
   const heading = (label: string) => `<th scope="col">${escapeHtml(label)}</th>`;
@@ -345,10 +358,28 @@ function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode
     const edit = column === 'classification' ? '<button type="button" class="pmd-chronology-heading" data-action="edit-tree" title="Organiser l’arborescence du dossier">Classement ▾</button> ' : '';
     return `<th scope="col" aria-sort="${direction}">${edit}<button type="button" class="pmd-chronology-heading" data-sort="${column}" aria-label="Trier par ${label.toLowerCase()}">${edit ? '' : label + ' '}${arrow}</button></th>`;
   };
-  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${sortHeading('Document', 'document')}${sortHeading('Date', 'date')}${heading('Mentions')}${sortHeading('Classement', 'classification')}${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath)).join('')}</tbody></table></div>`;
+  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${sortHeading('Document', 'document')}${sortHeading('Date', 'date')}${heading('Mentions')}${sortHeading('Classement', 'classification')}${heading('Liens')}${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath, okf)).join('')}</tbody></table></div>`;
 }
 
-export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }): string {
+function okfSwitch(mode: OkfView['mode']): string {
+  const option = (value: OkfView['mode'], label: string) => `<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-okf-mode="${value}" aria-pressed="${mode === value}">${label}</button>`;
+  return `<div class="pmd-okf-switch" role="group" aria-label="Affichage de l’index">${option('table', 'Tableau')}${option('graph', 'Graphe')}</div>`;
+}
+
+function okfErrors(errors: OkfError[] | null): string {
+  if (!errors) return '';
+  if (!errors.length) return '<div class="pmd-okf-report" data-okf-report="ok">Index vérifié : aucune erreur.</div>';
+  return `<div class="pmd-okf-report" data-okf-report="errors"><strong>${errors.length} erreur${errors.length > 1 ? 's' : ''} dans l’index</strong><ul>${errors.map((entry) => `<li><code>${escapeHtml(entry.fiche)}</code> ${escapeHtml(entry.erreur)}</li>`).join('')}</ul></div>`;
+}
+
+function okfGraph(okf: OkfIndex | null): string {
+  if (!okf) return '<div class="pmd-empty">Index OKF indisponible.</div>';
+  const count = okf.fiches.filter((fiche) => okf.typesGraphe.includes(fiche.type)).length;
+  if (!count) return `<div class="pmd-empty">Aucun document de type ${escapeHtml(okf.typesGraphe.join(', '))}.</div>`;
+  return `<div class="pmd-subtitle">Graphe limité aux types : ${escapeHtml(okf.typesGraphe.join(', '))}.</div><div class="pmd-okf-graph" data-okf-graph></div>`;
+}
+
+export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }, view: Pick<OkfView, 'mode' | 'errors'> = { mode: 'table', errors: null }): string {
   const value = (node: KnowledgeNode) => sort.column === 'date' ? dateFor(node) : sort.column === 'classification' ? chronologyFolder(node, projectPath) : node.label;
   const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
   const documents = data.graph.nodes.filter((node) => node.kind === 'document').sort((left, right) => {
@@ -361,6 +392,7 @@ export function chronologyView(data: ViewData, projectPath = '', sort: Chronolog
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   const label = { document: 'Document', date: 'Date', classification: 'Classement' }[sort.column];
   return `
-    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-action="index-analysis">Analyse tabulaire</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
-    ${chronologyTable(documents, byId, data.graph.links, projectPath, sort)}`;
+    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span>${okfSwitch(view.mode)}<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="okf-verify" title="Contrôler les fiches, les types et les liens de l’index">Vérifier</button><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-action="index-analysis">Analyse tabulaire</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
+    ${okfErrors(view.errors)}
+    ${view.mode === 'graph' ? okfGraph(data.okf ?? null) : chronologyTable(documents, byId, data.graph.links, projectPath, sort, data.okf ?? null)}`;
 }

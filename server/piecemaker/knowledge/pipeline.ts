@@ -152,7 +152,7 @@ function documentsFromIndex(projectPath: string, files: string[], documentIndex:
   });
 }
 
-function convertedMarkdown(projectPath: string, document: GlinerDocument): string | null {
+export function convertedMarkdown(projectPath: string, document: Pick<GlinerDocument, 'path'>): string | null {
   try {
     const markdown = markdownCounterpart(String(document.path || ''), projectPath);
     return markdown.exists ? fs.readFileSync(markdown.path, 'utf8') : null;
