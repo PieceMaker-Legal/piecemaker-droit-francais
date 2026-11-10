@@ -62,7 +62,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     const link = target.closest<HTMLElement>('[data-goto]');
     if (link) {
       event.preventDefault();
-      if (link.closest('.pmc-written')) goto(link.dataset.goto!);
+      if (view.dataset.mode !== 'graph') goto(link.dataset.goto!);
       else {
         const destination = nodes.find((node) => node.dataset.card === link.dataset.goto);
         const owner = link.closest<HTMLElement>('[data-node]');

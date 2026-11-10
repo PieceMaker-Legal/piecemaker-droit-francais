@@ -51,6 +51,8 @@ export function mount(container: HTMLElement, api: Host) {
   let stopGraph = () => {};
   let sequence = 0;
   let viewMode = 'graph';
+  let alertsOpen = false;
+  let fixRequest = '';
   let chosenScenario = '';
   let picking = false;
   let steps: Step[] = [];
@@ -63,7 +65,15 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   const shown = () => data?.programmes.find((entry) => entry.nom === chosen) ?? data?.programmes[0];
-  const explanationPart = (program: Program, run: string, documentation: string, gaps: number) => {
+  const plainGap = (message: string) => {
+    const [, file = '', line = '', text = message] = message.match(/^(.*?):(\d+):\s*(.*)$/) ?? [];
+    const meaning = /quote/i.test(text) ? 'Citation manquante : le passage exact de la source n’est pas cité.'
+      : /titre/i.test(text) ? 'Titre manquant : cette règle n’a pas de nom lisible.'
+      : /#\[doc\]/.test(text) ? 'Source manquante : cette règle ne cite ni texte ni pièce.'
+      : text;
+    return { meaning, place: file ? `${file}, ligne ${line}` : '' };
+  };
+  const explanationPart = (program: Program, run: string, gaps: string[]) => {
     const scenarios = program.scenarios ?? [];
     const selected = scenarios.find((scenario) => `${scenario.fichier}:${scenario.scope}` === chosenScenario)
       ?? scenarios.find((scenario) => scenario.scope === program.explication?.scope && scenario.fichier === program.explication?.fichier)
@@ -81,7 +91,10 @@ export function mount(container: HTMLElement, api: Host) {
     const graph = reasoningGraph(model);
     const empty = `<p class="pmc-muted">${failure ? escape(failure) : 'Aucun raisonnement calculé pour ce scénario.'}</p>`;
     const choice = data!.programmes.length > 1 ? `<select data-program-choice aria-label="Raisonnement">${data!.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.nom)}</option>`).join('')}</select>` : '';
-    const open = issues.length ? `<details class="pmc-open-states"><summary class="pmc-warn">${issues.length} point${issues.length > 1 ? 's' : ''} à examiner</summary><ul>${issues.map((entry) => `<li>${entry.id ? `<button type="button" class="pmc-text-action" data-goto="${entry.id}">${escape(entry.title)}</button>` : escape(entry.title)} : ${escape(entry.issue)}</li>`).join('')}</ul></details>` : '';
+    const alerts = [...issues.map((entry) => `<li>${entry.id ? `<button type="button" class="pmc-text-action" data-goto="${entry.id}">${escape(entry.title)}</button>` : escape(entry.title)} : ${escape(entry.issue)}</li>`), ...gaps.map(plainGap).map((gap) => `<li>${escape(gap.meaning)}${gap.place ? ` <span class="pmc-muted">${escape(gap.place)}</span>` : ''}</li>`)];
+    fixRequest = [`Corrige les erreurs du programme Catala \`${program.nom}\`, puis relance \`pm catala verifier\`. N’invente aucune source ni citation : signale ce qui manque.`, ...issues.map((entry) => `- ${entry.title} : ${entry.issue}`), ...gaps.map(plainGap).map((gap) => `- ${gap.meaning}${gap.place ? ` (${gap.place})` : ''}`)].join('\n');
+    const bell = alerts.length ? `<button type="button" class="pmc-alerts" data-alerts aria-expanded="${alertsOpen}" title="${alerts.length} erreur${alerts.length > 1 ? 's' : ''} à corriger">Erreurs<span class="pmc-bubble">${alerts.length}</span></button>` : '';
+    const list = alerts.length && alertsOpen ? `<div class="pmc-alert-list" role="region" aria-label="Erreurs à corriger"><button type="button" class="pmc-primary" data-fix="${alerts.length}">Demander la correction</button><ul>${alerts.join('')}</ul></div>` : '';
     const scenario = scenarios.length ? `<select data-scenario-choice aria-label="Scénario Catala" title="Scénario">${scenarios.map((entry) => `<option value="${escape(`${entry.fichier}:${entry.scope}`)}"${entry === selected ? ' selected' : ''}>${escape(human(entry.scope).replace(/^Test\s*/i, ''))} — ${entry.test_reussi ? 'test réussi' : 'test en échec'}</option>`).join('')}</select>` : program.explication?.scope ? `<span class="pmc-scenario" title="Scénario"><strong>${escape(program.explication.scope)}</strong></span>` : '';
     const day = (value: string) => new Date(`${value}T00:00:00Z`).toLocaleDateString('fr-FR', { dateStyle: 'long', timeZone: 'UTC' });
     const check = program.perimee ? null : program.catleg;
@@ -89,7 +102,7 @@ export function mount(container: HTMLElement, api: Host) {
     const reference = check ? `<p class="pmc-scenario" data-part="reference-date">Droit apprécié au : <strong>${dates.length ? dates.map(day).join(', ') : `${day(check.date_controle)} (jour du contrôle)`}</strong>${check.passed ? '' : ' <span class="pmc-warn">vigueur à vérifier</span>'}</p>` : '';
     const tab = (mode: string, label: string) => `<button role="tab" data-mode="${mode}" aria-selected="${viewMode === mode}">${label}</button>`;
     const zoom = graph && viewMode === 'graph' ? '<span class="pmc-map-tools"><button data-map-zoom="out" aria-label="Dézoomer" title="Dézoomer">−</button><button data-map-zoom="in" aria-label="Zoomer" title="Zoomer">+</button><button data-map-zoom="fit" aria-label="Ajuster à la largeur" title="Ajuster à la largeur">↔</button></span>' : '';
-    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-bar"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement">${tab('graph', 'Graphe')}${tab('written', `Raisonnement${issues.length + gaps ? ` <span class="pmc-count" title="${issues.length + gaps} point${issues.length + gaps > 1 ? 's' : ''} à examiner">${issues.length + gaps}</span>` : ''}`)}${tab('acte', 'Acte')}</div>${scenario}${choice}${zoom}${run}</div><div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${reference}${documentation}${open}${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div>` : empty}</div><div class="pmc-acte" role="tabpanel"${viewMode === 'acte' ? '' : ' hidden'}>${viewMode === 'acte' ? acteText(program.fichiers, model.steps, stepBadge) : ''}</div></section>`;
+    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-bar"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement">${tab('graph', 'Graphe')}${tab('written', 'Raisonnement')}${tab('acte', 'Acte')}</div>${bell}${scenario}${choice}${zoom}${run}</div>${list}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${reference}${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div>` : empty}</div><div class="pmc-acte" role="tabpanel"${viewMode === 'acte' ? '' : ' hidden'}>${viewMode === 'acte' ? acteText(program.fichiers, model.steps, stepBadge) : ''}</div></section>`;
   };
   const paint = () => {
     stopGraph();
@@ -102,8 +115,7 @@ export function mount(container: HTMLElement, api: Host) {
     const running = program.enCours || verifying === program.nom;
     const run = `<span class="pmc-run">${freshness(program)}<button class="pmc-primary" data-verify="${escape(program.nom)}" title="${escape(data.pack ? analysed(program) : 'Le calcul du raisonnement n’est pas disponible sur ce poste.')}"${running || verifying || !data.pack ? ' disabled' : ''}>${running ? 'Analyse en cours…' : 'Recalculer'}</button></span>`;
     const documentationErrors = program.verification?.checks.find((check) => check.name === 'documentation')?.errors ?? [];
-    const documentation = documentationErrors.length ? `<div class="pmc-warning"><strong>Documentation du raisonnement à compléter</strong><ul>${documentationErrors.map((message) => `<li>${escape(message)}</li>`).join('')}</ul></div>` : '';
-    panel.innerHTML = `${warning}${explanationPart(program, run, documentation, documentationErrors.length)}`;
+    panel.innerHTML = `${warning}${explanationPart(program, run, documentationErrors)}`;
     const view = panel.querySelector<HTMLElement>('.pmc-view');
     if (view) stopGraph = mountExplanation(view, (target, origin, quote, id) => {
       let legalId = id && (/^(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) || /^[0-9a-f]{24}$/i.test(id)) ? id : undefined;
@@ -136,6 +148,16 @@ export function mount(container: HTMLElement, api: Host) {
   };
 
   panel.addEventListener('click', (event) => {
+    if ((event.target as Element).closest('[data-alerts]')) { alertsOpen = !alertsOpen; paint(); return; }
+    const fix = (event.target as Element).closest<HTMLElement>('[data-fix]');
+    if (fix) {
+      const count = Number(fix.dataset.fix);
+      window.dispatchEvent(new CustomEvent('piecemaker:catala-card-pick', { detail: { titre: `Corriger ${count} erreur${count > 1 ? 's' : ''}`, demande: fixRequest } }));
+      window.dispatchEvent(new CustomEvent('piecemaker:panel-picked', { detail: { tab: TAB } }));
+      alertsOpen = false;
+      paint();
+      return;
+    }
     const tab = (event.target as Element).closest<HTMLElement>('[role="tab"][data-mode]');
     if (!tab) return;
     viewMode = tab.dataset.mode ?? 'written';

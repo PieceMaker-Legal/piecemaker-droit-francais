@@ -1,4 +1,4 @@
-type Card = { titre: string; fichier?: string; debut?: number; fin?: number; identifiant?: string; valeur?: string; scenario?: string };
+type Card = { titre: string; fichier?: string; debut?: number; fin?: number; identifiant?: string; valeur?: string; scenario?: string; demande?: string };
 type Pending = { target: HTMLTextAreaElement; original: string; full: string };
 
 const PICK_EVENT = 'piecemaker:catala-card-pick';
@@ -20,6 +20,7 @@ const escape = (text: string) => text.replace(/[&<>"]/g, (sign) => ({ '&': '&amp
 const place = (card: Card) => (card.fichier && card.debut ? `${card.fichier}, ${card.fin && card.fin > card.debut ? `lignes ${card.debut} à ${card.fin}` : `ligne ${card.debut}`}` : '');
 
 export function cardReference(card: Card): string {
+  if (card.demande) return card.demande;
   const label = `Carte « ${card.titre.replace(/[[\]]/g, '')} »`;
   const link = card.fichier && card.debut ? `[${label}](${card.fichier}:${card.debut}${card.fin && card.fin > card.debut ? ` "lignes ${card.debut} à ${card.fin}"` : ''})` : label;
   const name = card.identifiant ? `\`${card.identifiant.replace(/`/g, '')}\`` : '';
@@ -50,7 +51,7 @@ export function inject(): () => void {
   };
   const paint = () => {
     row.hidden = !cards.length;
-    row.innerHTML = cards.map((card, index) => `<span class="pmc-pick" title="${escape(place(card))}"><span>Carte « ${escape(card.titre)} »</span><button type="button" data-remove="${index}" aria-label="Retirer la carte">×</button></span>`).join('');
+    row.innerHTML = cards.map((card, index) => `<span class="pmc-pick" title="${escape(place(card))}"><span>${card.demande ? escape(card.titre) : `Carte « ${escape(card.titre)} »`}</span><button type="button" data-remove="${index}" aria-label="Retirer la carte">×</button></span>`).join('');
     attach();
   };
   const stopWatch = () => { window.clearInterval(watch); watch = 0; };
@@ -67,6 +68,7 @@ export function inject(): () => void {
   const pick = (event: Event) => {
     const card = (event as CustomEvent<Card>).detail;
     if (!card?.titre) return;
+    if (card.demande) cards = cards.filter((other) => !other.demande);
     if (!cards.some((other) => other.titre === card.titre && other.fichier === card.fichier && other.debut === card.debut)) cards.push(card);
     paint();
     field()?.focus();
