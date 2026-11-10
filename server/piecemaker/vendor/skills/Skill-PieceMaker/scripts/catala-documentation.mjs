@@ -1,5 +1,3 @@
-import { infinitive, participle } from './catala-participe.mjs';
-
 const decode = (value) => value.replace(/\\\r?\n[ \t]*/g, '').replace(/\\([\s\S])/g, (_, char) => char === 'n' ? '\n' : char === 't' ? '\t' : char);
 
 export function catalaDocumentation(content) {
@@ -37,11 +35,7 @@ export function catalaDocumentation(content) {
       previous = entry;
       if (definition && !entry.hasDoc) errors.push({ line, message: '#[doc] manquant pour cette définition ou règle.' });
       const title = doc.match(/^\s*titre\s*:\s*(.+?)\s*$/im)?.[1];
-      if (definition && entry.hasDoc && !title) errors.push({ line: entry.startLine, message: 'titre manquant dans #[doc]. Format attendu : titre: Vérifier le montant demandé (règle, condition) ou titre: Contrat conclu (fait).' });
-      const source = doc.match(/^\s*source\s*:\s*(\S+)/im)?.[1];
-      const fact = Boolean(source) && !/^https?:/i.test(source);
-      if (definition && title && fact && !participle(title)) errors.push({ line: entry.startLine, message: `titre de fait sans participe passé dans #[doc] : « ${title} ». Exemple : Montant demandé.` });
-      if (definition && title && !fact && !infinitive(title)) errors.push({ line: entry.startLine, message: `titre de règle ou de condition sans infinitif en tête dans #[doc] : « ${title} ». Exemple : Vérifier le montant demandé.` });
+      if (definition && entry.hasDoc && !title) errors.push({ line: entry.startLine, message: 'titre manquant dans #[doc]. Exemples : titre: Vérifier le montant demandé (règle, condition) ou titre: Contrat conclu (fait).' });
       pending = [];
       pendingLine = 0;
     }

@@ -420,7 +420,7 @@ test('exceptions, executer and squelette call Catala with the expected arguments
   } finally { cleanup(); }
 });
 
-test('verifier requires doc, a nonempty quote and a title: infinitive for a rule, past participle for a fact', async () => {
+test('verifier requires doc, a nonempty quote and a title, in any language', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime');
@@ -431,10 +431,7 @@ test('verifier requires doc, a nonempty quote and a title: infinitive for a rule
       ['#[doc="quote: «   »"]\n', 'quote manquante'],
       ['#[doc="Sans citation"]\n#[doc="quote: « Passage exact. »"]\n', 'quote manquante'],
       ['#[doc="Source : référence fictive.\\nquote: « Passage exact. »"]\n', 'titre manquant'],
-      ['#[doc="titre: Montant de la prime\\nsource: ../../../pieces/contrat-fictif.md\\nquote: « Passage exact. »"]\n', 'titre de fait sans participe passé'],
-      ['#[doc="titre: Montant de la prime fixé\\nsource: ../../../pieces/contrat-fictif.md\\nquote: « Passage exact. »"]\n', null],
-      ['#[doc="titre: Montant de la prime fixé\\nsource: https://example.org/texte-fictif\\nquote: « Passage exact. »"]\n', 'titre de règle ou de condition sans infinitif'],
-      ['#[doc="titre: Salaire à vérifier\\nquote: « Passage exact. »"]\n', 'titre de règle ou de condition sans infinitif'],
+      ['#[doc="titre: Amount claimed\\nsource: ../../../pieces/contrat-fictif.md\\nquote: « Passage exact. »"]\n', null],
       ['#[doc="titre: Vérifier le montant de la prime\\nsource: https://example.org/texte-fictif\\nquote: « Passage exact. »"]\n', null],
     ];
     for (const [annotation, message] of cases) {

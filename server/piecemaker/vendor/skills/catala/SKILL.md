@@ -39,16 +39,30 @@ Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destin
 ## Documentation obligatoire du raisonnement
 
 1. Ajoutez un attribut natif `#[doc="…"]` à chaque définition et règle exécutable, y compris dans les scénarios.
-2. Dans chaque `#[doc]`, indiquez `titre: …`, `source: URL ou chemin` et une balise `quote: « passage exact »` non vide. Le titre nomme la case du graphe. Une règle ou une condition indique ce qu’il faut faire : son titre commence par un verbe à l’infinitif (`titre: Vérifier le montant demandé`). Un fait, dont la `source` est une pièce, constate ce qui valide la condition : son titre contient un participe passé (`titre: Montant demandé`, `titre: Contrat conclu`).
+2. Dans chaque `#[doc]`, indiquez `titre: …`, `source: URL ou chemin` et une balise `quote: « passage exact »` non vide. Rédigez le titre selon « Style des titres ».
 3. Pour une règle, citez son fondement juridique. Pour une donnée factuelle, citez la pièce qui la soutient.
 4. Pour une qualification ou un calcul, citez le fondement de l’opération et gardez les dépendances vers les faits distincts.
 5. Conservez les titres juridiques avec identifiant. Utilisez les inclusions natives de PDF seulement comme annexes documentaires.
-6. Lancez `pm catala verifier`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]`, `titre manquant dans #[doc]`, `titre de règle ou de condition sans infinitif en tête` et `titre de fait sans participe passé`.
+6. Lancez `pm catala verifier`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]` et `titre manquant dans #[doc]`.
 7. Si une source ou citation manque, signalez le manque et recherchez-la. N’inventez aucun passage pour satisfaire le contrôle.
 
 `doc` est un attribut natif Catala. `titre`, `source` et `quote` sont des conventions PieceMaker dans son texte, pas des attributs natifs spécialisés.
 Le graphe et le contrôle des citations lisent cette annotation. Un `#[doc]` précis prime sur les sources du texte voisin.
 Une citation Markdown extérieure ne remplace pas la balise `quote` obligatoire. Les anciens liens restent lisibles pour compatibilité.
+
+## Style des titres
+
+Le titre nomme la case du graphe. L’avocat le lit sans le code. Aucun contrôle ne vérifie ce style : relisez chaque titre.
+
+| Case | Forme | Exemples | À éviter |
+|---|---|---|---|
+| Règle, condition, qualification, calcul | Verbe d’action à l’infinitif, puis son objet | `Vérifier le montant demandé`, `Calculer l’indemnité` | `Montant`, `Le montant est-il dû ?` |
+| Fait (sa `source` est une pièce) | Nom, puis participe passé qui constate | `Montant demandé`, `Contrat conclu` | `Contrat`, `Vérifier le contrat` |
+
+- Écrivez dans la langue du programme. En anglais : `Check the amount claimed`, `Amount claimed`.
+- Écrivez 2 à 7 mots. N’écrivez ni phrase, ni question, ni point final, ni identifiant (`montant_demandé`), ni numéro d’article.
+- Reprenez les mêmes mots dans la condition et dans le fait qui la valide : `Vérifier le montant demandé`, `Montant demandé`.
+- N’annoncez pas le résultat dans le titre d’une règle : la couleur de la case le donne.
 
 ## Vérifier
 

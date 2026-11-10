@@ -15,16 +15,16 @@
 
 ## Annotation obligatoire et citation
 
-Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir une balise `quote` non vide.
+Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir une balise `quote` non vide et un `titre`.
 Le vérificateur produit une erreur localisée pour chacun de ces manques. Cette obligation couvre aussi les définitions des scénarios.
 
 ````catala
 champ d'application Exemple:
-  #[doc="source: https://example.org/texte-fictif\nquote: « La condition requise est définie par ce texte fictif. »"]
+  #[doc="titre: Vérifier la condition juridique\nsource: https://example.org/texte-fictif\nquote: « La condition requise est définie par ce texte fictif. »"]
   définition condition_juridique égal à donnée_observée
 ````
 
-`#[doc]` appartient à Catala. Le contenu `source: …` et `quote: « … »` suit la convention PieceMaker.
+`#[doc]` appartient à Catala. Le contenu `titre: …`, `source: …` et `quote: « … »` suit la convention PieceMaker. Rédigez `titre` selon « Style des titres » de `SKILL.md`.
 Écrivez le lien après `source:` sans crochets Markdown dans l’attribut : le formateur du pack refuse certains liens avec crochets.
 Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait, indiquez le lien de la pièce et son passage exact.
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées.
@@ -40,7 +40,7 @@ Dans un scénario, définissez les faits comme des données intermédiaires sous
 Le graphe est un arbre lu de gauche à droite : la conclusion, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
 La couleur donne l’état de chaque case : vert pour validé, orange pour à établir ou à justifier, rouge pour non rempli.
 
-Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans la vue Raisonnement. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
+Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque définition garde son `#[doc]`. Le graphe affiche la source d’une condition seulement si elle diffère de celle de la règle. Le graphe signale une règle sans source et un fait sans pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans la vue Raisonnement. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
 
 Pour expliquer un nœud, ajoutez une section Markdown dans le fichier Catala. Les champs suivants restent du texte pour Catala :
 
@@ -59,7 +59,7 @@ Citation : « Extrait fictif établissant seulement l’envoi. »
 
 `Concerne` rattache les sources et ces explications à un identifiant. Employez des identifiants distincts pour des notions distinctes dans un programme.
 
-`Question` nomme le nœud. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
+L’objectif et la conclusion finale sont la même case du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. Cette ligne titre la conclusion finale. N’en inventez pas : sans objectif annoncé, la conclusion garde son titre. `Question` formule la question juridique ; elle sert de titre seulement si le `#[doc]` n’en donne pas. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
 
 Répétez `Démarche` pour conserver les démarches effectuées et leurs résultats. N’inventez aucune démarche ni aucun résultat. Actualisez `À rechercher` lorsque la collecte progresse.
 

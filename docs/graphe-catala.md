@@ -80,7 +80,7 @@ Références : [structure documentaire](https://github.com/CatalaLang/catala/blo
 
 Chaque définition ou règle exécutable doit porter un attribut natif `#[doc]`, y compris dans les scénarios.
 Chaque annotation `#[doc]` doit contenir une balise `quote: « passage exact »` non vide.
-Sur une définition ou une règle, elle contient aussi `titre: …` : un verbe à l’infinitif en tête pour une règle ou une condition (`titre: Vérifier le montant demandé`), un participe passé pour un fait (`titre: Montant demandé`). Un fait est une définition dont la `source` est une pièce, pas une adresse `http`. Le graphe affiche ce titre ; sans lui, il affiche la `Question` ou le nom de la variable. Le manque est signalé par `pm catala verifier`, pas dans le graphe. La détection de l’infinitif et du participe passé est approchée (`catala-participe.mjs`).
+Sur une définition ou une règle, elle contient aussi `titre: …`. Le skill `catala` fixe le style : un verbe à l’infinitif en tête pour une règle ou une condition (`titre: Vérifier le montant demandé`), un participe passé pour un fait (`titre: Montant demandé`), dans la langue du programme. Aucun contrôle ne vérifie ce style. Le graphe affiche ce titre ; sans lui, il affiche la `Question` ou le nom de la variable. Le manque est signalé par `pm catala verifier`, pas dans le graphe.
 La référence s’écrit `source: URL ou chemin` dans la même annotation. Ces deux balises sont des conventions PieceMaker.
 
 `pm catala verifier` produit des erreurs distinctes, avec fichier et ligne :
@@ -88,8 +88,6 @@ La référence s’écrit `source: URL ou chemin` dans la même annotation. Ces 
 - `#[doc] manquant pour cette définition ou règle.`
 - `quote manquante ou vide dans #[doc].`
 - `titre manquant dans #[doc].`
-- `titre de règle ou de condition sans infinitif en tête dans #[doc].`
-- `titre de fait sans participe passé dans #[doc].`
 
 Une citation placée seulement dans le Markdown extérieur ne satisfait pas cette obligation. Les contrôles de calcul restent exécutés pour permettre le diagnostic.
 Le volet affiche les erreurs de documentation. Le bilan ne peut pas être réussi si ces erreurs restent présentes.
