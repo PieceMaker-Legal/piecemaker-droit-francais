@@ -1,3 +1,7 @@
+---
+type: document
+---
+
 # Style : conclusions en défense
 
 Citations : [citations.md](citations.md).

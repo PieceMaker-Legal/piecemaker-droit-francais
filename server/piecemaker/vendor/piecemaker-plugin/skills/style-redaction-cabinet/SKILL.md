@@ -22,6 +22,8 @@ Crée tout `.docx` avec `python3 <dossier de ce skill>/scripts/style-docx.py cre
 | Conclusions en défense | [styles/conclusions-en-defense.md](styles/conclusions-en-defense.md) | Aucun |
 | Conclusions d'appel | [styles/conclusions-appel.md](styles/conclusions-appel.md) | Aucun |
 
+Chaque fichier de `styles/` commence par un frontmatter YAML : `type: document` pour un document à rédiger, `type: regle-generale` pour une règle commune à tous les documents. Le bouton Rédiger de l'onglet Catala propose seulement les documents.
+
 En cas de document demandé par l'utilisateur non listé, ajoute une ligne au tableau, et note dans la colonne Règles : "Règle à rédiger à partir de la session <ID de ta session>".
 
 Si la mention existe, propose à l'utilisateur d'ouvrir une session séparée pour rédiger le style, avec instruction de lire [new-style.md](new-style.md).

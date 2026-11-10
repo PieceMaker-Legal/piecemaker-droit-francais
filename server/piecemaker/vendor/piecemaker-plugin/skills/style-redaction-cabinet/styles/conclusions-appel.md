@@ -1,3 +1,7 @@
+---
+type: document
+---
+
 # Style : conclusions d'appel
 
 Les règles de [conclusions-en-defense.md](conclusions-en-defense.md) et de [citations.md](citations.md) s'appliquent aussi.

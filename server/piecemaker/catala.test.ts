@@ -178,3 +178,9 @@ test('local citation transport validates access and the reader reuses current st
   await post('citation', request);
   assert.equal(sourceReads, before + 1);
 });
+
+test('la route propose les documents du skill de style, sans les règles générales', async () => {
+  const data = await (await fetch(`${base}/?projectPath=${encodeURIComponent(dossier)}`)).json() as { styles: Array<{ nom: string; regle: string }> };
+  assert.ok(data.styles.some((style) => style.regle === 'styles/assignation.md'));
+  assert.ok(!data.styles.some((style) => style.regle === 'styles/citations.md'));
+});

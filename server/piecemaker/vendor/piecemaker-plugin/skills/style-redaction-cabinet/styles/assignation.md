@@ -1,3 +1,7 @@
+---
+type: document
+---
+
 # Style : assignation
 
 Modèle : [templates/assignation.docx](../templates/assignation.docx).

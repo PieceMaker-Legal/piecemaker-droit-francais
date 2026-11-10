@@ -75,7 +75,11 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, se
       };
     });
     const styleSkill = path.resolve(path.dirname(scriptPath), '..', '..', '..', 'piecemaker-plugin', 'skills', 'style-redaction-cabinet', 'SKILL.md');
-    const styles = fs.existsSync(styleSkill) ? [...fs.readFileSync(styleSkill, 'utf8').matchAll(/^\|\s*([^|[\]]+?)\s*\|\s*\[(styles\/[^\]]+)\]/gm)].map(([, nom, regle]) => ({ nom, regle })) : [];
+    const generalRule = (regle: string) => {
+      const file = path.join(path.dirname(styleSkill), regle);
+      return fs.existsSync(file) && /^type:\s*regle-generale\s*$/m.test(fs.readFileSync(file, 'utf8').match(/^---\n([\s\S]*?)\n---/)?.[1] ?? '');
+    };
+    const styles = fs.existsSync(styleSkill) ? [...fs.readFileSync(styleSkill, 'utf8').matchAll(/^\|\s*([^|[\]]+?)\s*\|\s*\[(styles\/[^\]]+)\]/gm)].map(([, nom, regle]) => ({ nom, regle })).filter(({ regle }) => !generalRule(regle)) : [];
     return { pack: pack ? { id: pack.id, platform: pack.platform, version: pack.version, proof: pack.proof, installedAt: pack.installedAt } : null, status, programmes, styles };
   };
   const fail = (response: express.Response, error: unknown) => response.status(400).json({ error: error instanceof Error ? error.message : 'Catala indisponible.' });
