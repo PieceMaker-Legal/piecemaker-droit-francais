@@ -336,6 +336,8 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| #\[doc\] cite une prémisse absente de l'index : \/_premises\/inconnue\.md/.test(gap)));
   assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| #\[doc\] cite une pièce directement \(Pièces\/Contrat\.pdf\)/.test(gap)));
   assert.equal(gaps.some((gap) => gap.startsWith(`/${LETTER}.md`)), false);
+  assert.deepEqual([...new Set(graphGaps(projectPath).filter((gap) => gap.element.includes('demo.catala_fr')).flatMap((gap) => gap.programmes ?? []))], ['demo']);
+  assert.equal(graphGaps(projectPath).find((gap) => gap.element === RESILIATION_ID)?.programmes, undefined);
 
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros', single: true }, markdownOf);
   addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf);

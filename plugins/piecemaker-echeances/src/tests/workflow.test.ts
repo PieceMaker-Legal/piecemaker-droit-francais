@@ -91,6 +91,14 @@ it('ne propose de valider que ce qui existe', async () => {
   expect(card().querySelector('[data-validate="finalisation"]')?.textContent).toBe('Valider la rédaction');
   expect(root.querySelector('.pme-drawer [data-open-doc="0"]')?.textContent).toContain('Conclusions exemple');
   expect(root.querySelector('[data-add-doc]')).toBeNull();
+  expect(card().textContent).toContain('Conclusions exemple (en cours de rédaction)');
+  click('.pme-drawer [data-toggle-valide="0"]');
+  await vi.waitFor(() => expect(etapes.raisonnement).toHaveBeenCalledWith(expect.objectContaining({ documents: [{ type: 'Conclusions', nom: 'Conclusions exemple', chemin: 'Projets/exemple.docx', valide: true }] })));
+  unmount(root);
+  root.innerHTML = '';
+  await tableau(carte({ etape: 'redaction', raisonnement, documents: [{ type: 'Conclusions', nom: 'Conclusions exemple', chemin: 'Projets/exemple.docx', valide: true, statut: 'validé' }] }));
+  expect(card().textContent).toContain('Conclusions exemple (validé)');
+  expect(root.querySelector('.pme-drawer [data-toggle-valide="0"]')?.textContent).toBe('Remettre Conclusions exemple en cours');
 });
 
 it('déplace une carte à démarrer sans YAML après confirmation et permet son exclusion', async () => {

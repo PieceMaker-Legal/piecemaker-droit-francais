@@ -31,7 +31,7 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   Claude seulement) lance la vérification qui lui correspond et donne le bilan
   à l'agent principal, avec l'invitation à relancer le sous-agent fautif :
   `index-maker` → `pm okf verify` ; `premise-maker` → manques de prémisses et
-  de `#[doc]` de `pm okf verify-graph` ; `research-maker` → décisions citées
+  de `#[doc]` de `pm okf verify` ; `research-maker` → décisions citées
   absentes du cache `~/.piecemaker/decisions/`, donc jamais lues ;
   `deep-research-maker` → `pm tabular_review lister` (revue en erreur, à
   compléter ou encore en attente). Le programme Catala et le raisonnement YAML

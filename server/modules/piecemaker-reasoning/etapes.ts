@@ -19,7 +19,7 @@ export const ETAPES = ['preparation', 'raisonnement', 'redaction', 'finalisation
 
 type Etape = typeof ETAPES[number];
 type Json = Record<string, unknown>;
-type Document = { type: string; nom: string; chemin: string };
+type Document = { type: string; nom: string; chemin: string; valide?: boolean };
 type Action = { texte: string; fait: boolean; echeance?: string; suivi?: string };
 type Suite = { etape: Etape; documents?: Document[]; action?: Action; precedent?: string; remplacePar?: string };
 type Etapes = { etape?: Etape; nonJuridique?: boolean; mappingValide?: string; preparationForcee?: boolean; raisonnements?: Record<string, Suite> };
@@ -181,7 +181,7 @@ export function createEtapesService(deps: EtapesDependencies) {
     try { const parsed: unknown = JSON.parse(snapshot.code); if (isObject(parsed) && isObject(parsed.matter)) matter = parsed.matter; } catch { matter = {}; }
     return typeof matter.nextStep === 'string' && matter.nextStep.trim() ? { texte: matter.nextStep.trim(), fait: false } : null;
   };
-  const documentsOf = (root: string, documents: Document[] = []) => Promise.all(documents.map(async (document) => ({ ...document, statut: await exists(path.join(root, document.chemin)) ? 'en cours' : 'non commencé' })));
+  const documentsOf = (root: string, documents: Document[] = []) => Promise.all(documents.map(async (document) => ({ ...document, statut: document.valide ? 'validé' : await exists(path.join(root, document.chemin)) ? 'en cours' : 'non commencé' })));
   const reasoningOf = async (root: string, nom: string) => {
     const snapshot = await deps.reasoning.read(root, nom).catch(() => null);
     const dismissed = new Set(snapshot?.dismissed.map((entry) => entry.id) ?? []);
@@ -291,7 +291,7 @@ export function createEtapesService(deps: EtapesDependencies) {
             for (let index = 2; reserves.has(path.resolve(root, chemin)) || await exists(path.resolve(root, chemin)); index += 1) chemin = path.join(dir, `${stem} (${index})${ext}`);
           }
           reserves.add(path.resolve(root, chemin));
-          documents.push({ type, nom: name, chemin });
+          documents.push({ type, nom: name, chemin, ...(document.valide === true ? { valide: true } : {}) });
         }
         entry.documents = documents;
       }

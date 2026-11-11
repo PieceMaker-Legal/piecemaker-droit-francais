@@ -204,7 +204,7 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
-test('check résume préparation, OKF, prémisses, Catala, suivi, recherche et étape', async () => {
+test('check numérote préparation, index, raisonnements reliés par leur nom et recherches', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-check-'));
   const write = (relative, content) => { fs.mkdirSync(path.dirname(path.join(dossier, relative)), { recursive: true }); fs.writeFileSync(path.join(dossier, relative), content); };
   write('.piecemaker/catala/rupture/clerk.toml', '');
@@ -213,8 +213,17 @@ test('check résume préparation, OKF, prémisses, Catala, suivi, recherche et �
   write('.piecemaker/catala/bail/resultats/verification.json', '{"passed":true}');
   const later = new Date(Date.now() + 60000);
   fs.utimesSync(path.join(dossier, '.piecemaker/catala/bail/resultats/verification.json'), later, later);
-  write('.piecemaker/conclusions-suivi.json', '{}');
-  write('.piecemaker/etapes.json', JSON.stringify({ raisonnements: { conclusions: { etape: 'redaction' } } }));
+  write('.piecemaker/rupture-suivi.json', '{}');
+  write('.piecemaker/suivi.json', '{}');
+  write('Projets/conclusions.docx', '');
+  write('.piecemaker/etapes.json', JSON.stringify({ raisonnements: {
+    ancien: { etape: 'raisonnement', remplacePar: 'rupture' },
+    rupture: { etape: 'redaction', precedent: 'ancien', documents: [
+      { type: 'Conclusions', nom: 'Conclusions en défense', chemin: 'Projets/conclusions.docx' },
+      { type: 'Lettre', nom: 'Lettre fictive', chemin: 'Projets/lettre.docx', valide: true },
+      { type: 'Assignation', nom: 'Assignation fictive', chemin: 'Projets/assignation.docx' },
+    ] },
+  } }));
   const calls = [];
   const deps = {
     caseState: () => ({ anonymized: true, lifted: false }),
@@ -227,28 +236,36 @@ test('check résume préparation, OKF, prémisses, Catala, suivi, recherche et �
     okfFn: async (input) => { calls.push(input); return {
       erreurs: [{ fiche: 'Pièces/bail.md', erreur: 'lien sans citation' }],
       contradictions: [],
-      manques: [{ element: '/_premises/date-de-rupture.md', manque: 'prémisse sans valeur' }, { element: 'Pièces/avenant.md', manque: 'pièce sans prémisse ni lien' }],
+      manques: [{ element: '/_premises/date-de-rupture.md', manque: 'prémisse sans valeur', programmes: ['rupture'] }, { element: 'Pièces/avenant.md', manque: 'pièce sans prémisse ni lien' }],
     }; },
-    suiviFn: async ({ suivi }) => `Suivi du dossier (.piecemaker/${suivi})\nÉchéances :\n  02/01/2026 — Conclusions (conclusions) — DÉPASSÉE\n  01/06/2027 — Audience (audience) — à venir\n\n1 erreur(s), 0 manque(s).`,
+    suiviFn: async ({ suivi }) => (suivi === 'suivi.json' ? '0 erreur(s), 0 manque(s).'
+      : `Suivi du dossier (.piecemaker/${suivi})\nÉchéances :\n  02/01/2026 — Conclusions (conclusions) — DÉPASSÉE\n  01/06/2027 — Audience (audience) — à venir\n\n1 erreur(s), 0 manque(s).`),
   };
   const text = await run(['check', '--dossier', dossier], { deps });
-  assert.deepEqual(calls, [{ action: 'verify-graph', folder: dossier }]);
+  assert.deepEqual(calls, [{ action: 'verify', folder: dossier }]);
   assert.equal(text, [
-    'Dossier : 6 point(s) à traiter.',
-    'Anonymisation : valide',
-    'Mapping : valide',
-    'Conversion : valide',
-    'Index OKF : 1 erreur(s) → pm okf verify (sous-agent index-maker)',
-    'Prémisses : 1 manque(s) → pm okf verify-graph (sous-agent premise-maker)',
-    'Graphe : 1 manque(s) → pm okf verify-graph',
-    'Catala bail : valide',
-    'Catala rupture : jamais vérifié → pm catala verifier --programme rupture',
-    'Suivi conclusions-suivi.json : 1 erreur(s), 0 manque(s), 1 échéance(s) dépassée(s), du jour ou sans date → pm suivi_dossiers verifier --suivi conclusions-suivi.json',
-    'Revue de recherche Rupture fictive : bloquée → pm tabular_review lister (sous-agent deep-research-maker)',
-    'Étape : conclusions → redaction',
+    'Dossier : 7 point(s) à traiter.',
+    '1° Conversion : valide',
+    '2° Anonymisation : valide',
+    '3° Mapping : valide',
+    '4° Index : 1 erreur(s), 1 manque(s) → pm okf verify (sous-agent index-maker)',
+    '5° Raisonnement',
+    '  5.A bail',
+    '    5.A.1 Catala : valide',
+    '    5.A.2 Prémisses : valide',
+    '  5.B rupture (rédaction)',
+    '    5.B.1 Catala : jamais vérifié → pm catala verifier --programme rupture',
+    '    5.B.2 Prémisses : 1 manque(s) → pm okf verify (sous-agent premise-maker)',
+    '    5.B.3 Conclusions en défense : en cours de rédaction',
+    '    5.B.4 Lettre fictive : validé',
+    '    5.B.5 Assignation fictive : à rédiger',
+    '    5.B.6 Suivi : 1 erreur(s), 0 manque(s), 1 échéance(s) dépassée(s), du jour ou sans date → pm suivi_dossiers verifier --suivi rupture-suivi.json',
+    '6° Recherche « Rupture fictive » : bloquée → pm tabular_review lister (sous-agent deep-research-maker)',
+    '7° Suivi suivi.json : valide',
   ].join('\n'));
-  assert.doesNotMatch(text, /^Index :|raisonnement/m);
+  assert.doesNotMatch(text, /ancien|yaml/i);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
+  await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
@@ -265,19 +282,18 @@ test('check sur un dossier à jour ne signale rien', async () => {
   };
   assert.equal(await run(['check', '--dossier', dossier], { deps }), [
     'Dossier : valide.',
-    'Anonymisation : valide',
-    'Mapping : valide',
-    'Conversion : valide',
-    'Index OKF : valide',
-    'Prémisses : valide',
-    'Étape : non choisie (onglet Tableau)',
+    '1° Conversion : valide',
+    '2° Anonymisation : valide',
+    '3° Mapping : valide',
+    '4° Index : valide',
+    '5° Raisonnement : aucun',
   ].join('\n'));
   const pending = { ...deps, mappingValidated: () => false, piecesFn: async () => ({ pieces: [{ path: 'Pièces/lettre.pdf', status: 'conversion-failed', protected: true }] }) };
   assert.equal((await run(['check', '--dossier', dossier], { deps: pending })).split('\n').slice(0, 4).join('\n'), [
     'Dossier : 2 point(s) à traiter.',
-    'Anonymisation : valide',
-    'Mapping : à valider par l’avocat (onglet Dossier, Mapping)',
-    'Conversion : 1 pièce(s) non convertie(s) : pm dossier conversion',
+    '1° Conversion : 1 pièce(s) non convertie(s) : pm dossier conversion',
+    '2° Anonymisation : valide',
+    '3° Mapping : à valider par l’avocat (onglet Dossier, Mapping)',
   ].join('\n'));
   fs.rmSync(dossier, { recursive: true, force: true });
 });
@@ -384,9 +400,9 @@ test('okf verify, link et unlink passent par okfFn', async () => {
   assert.deepEqual(calls.pop(), { action: 'link', folder, source: 'Date de signature', relation: 'involves', target: 'CLIENT_01' });
   const contradiction = { premise: '/_premises/date-de-signature.md', titre: 'Date de signature', valeurs: [{ piece: '/Pièces/Contrat.pdf.md', valeur: '2024-03-03' }, { piece: '/Pièces/Courrier.pdf.md', valeur: '2024-03-05' }] };
   assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async () => ({ erreurs: [], contradictions: [contradiction] }) } }), 'Index OKF : aucune erreur.\nContradictions : 1.\n- Date de signature : /Pièces/Contrat.pdf.md → 2024-03-03 ; /Pièces/Courrier.pdf.md → 2024-03-05');
-  const manque = { element: '/_premises/date-de-signature.md', manque: 'prémisse sans pièce citée' };
-  assert.equal(await run(['okf', 'verify-graph'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return { erreurs: [], contradictions: [], manques: [manque] }; } } }), 'Index OKF : aucune erreur.\nGraphe : 1 élément(s) manquant(s).\n- /_premises/date-de-signature.md : prémisse sans pièce citée');
-  assert.deepEqual(calls.pop(), { action: 'verify-graph', folder });
+  const manque = { element: '/_premises/date-de-signature.md', manque: 'prémisse sans pièce citée', programmes: ['bail'] };
+  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return { erreurs: [], contradictions: [], manques: [manque] }; } } }), 'Index OKF : aucune erreur.\nGraphe : 1 élément(s) manquant(s).\n- /_premises/date-de-signature.md : prémisse sans pièce citée (programme bail)');
+  assert.deepEqual(calls.pop(), { action: 'verify', folder });
   await assert.rejects(run(['okf', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
   fs.rmSync(dossier, { recursive: true, force: true });
 });

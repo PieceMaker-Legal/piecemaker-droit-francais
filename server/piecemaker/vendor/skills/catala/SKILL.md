@@ -79,7 +79,7 @@ Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destin
    Si la prémisse manque, nommez-la quand même dans le `#[doc]`. `premise-maker` la cherche ensuite dans les pièces (skill `okf`).
 4. Pour une qualification ou un calcul, citez le fondement de l’opération et gardez les dépendances vers les faits distincts.
 5. Conservez les titres juridiques avec identifiant. Utilisez les inclusions natives de PDF seulement comme annexes documentaires.
-6. Lancez `pm catala verifier`, puis `pm okf verify-graph`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]` et `titre manquant dans #[doc]`, et chaque manque du graphe.
+6. Lancez `pm catala verifier`, puis `pm okf verify`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]` et `titre manquant dans #[doc]`, et chaque manque du graphe.
 7. Si une source ou citation manque, signalez le manque et recherchez-la. N’inventez aucun passage pour satisfaire le contrôle.
 
 `doc` est un attribut natif Catala. `titre`, `source` et `quote` sont des conventions PieceMaker dans son texte, pas des attributs natifs spécialisés.

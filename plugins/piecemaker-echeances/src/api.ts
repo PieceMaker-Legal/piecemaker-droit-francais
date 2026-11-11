@@ -5,7 +5,7 @@ const ETAPES = '/api/piecemaker/etapes';
 
 export type Etape = 'preparation' | 'raisonnement' | 'redaction' | 'finalisation' | 'attente' | 'clos';
 export type Ligne = { nom: string; texte: string; ok: boolean };
-export type DocumentRedige = { type: string; nom: string; chemin: string; statut?: 'en cours' | 'non commencé' };
+export type DocumentRedige = { type: string; nom: string; chemin: string; valide?: boolean; statut?: 'validé' | 'en cours' | 'non commencé' };
 export type Action = { texte: string; fait: boolean; echeance?: string; suivi?: string };
 export type TacheStatut = 'attente' | 'en-cours' | 'question' | 'terminee' | 'echec';
 export type Demande = { requestId: string; toolName: string; input: Record<string, unknown> };

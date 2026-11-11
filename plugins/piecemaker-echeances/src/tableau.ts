@@ -20,7 +20,7 @@ const NOUVEAU_TYPE = '__nouveau';
 const CACHE = 'pme-tableau';
 
 const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
-const sansStatut = (documents: DocumentRedige[] = []) => documents.map(({ type, nom, chemin }) => ({ type, nom, chemin }));
+const sansStatut = (documents: DocumentRedige[] = []) => documents.map(({ type, nom, chemin, valide }) => ({ type, nom, chemin, ...(valide ? { valide } : {}) }));
 
 const icone = (chemins: string) => `<svg class="pme-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${chemins}</svg>`;
 const ICONE_RAISONNEMENT = icone('<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>');
@@ -47,10 +47,11 @@ const menuHtml = (carte: Carte) => {
 const vide = (texte: string) => `<p class="pme-muted">${texte}</p>`;
 const bouton = (attributs: string, libelle: string, primaire = false) => `<button type="button" class="ptr-button${primaire ? ' ptr-button-primary' : ''}" ${attributs}>${libelle}</button>`;
 const ouvrirDocument = (document: DocumentRedige, index: number, version = '') => `<button type="button" class="ptr-button pme-glass" data-open-doc="${index}"${version ? ` data-version="${escape(version)}"` : ''} title="Ouvrir ${escape(document.nom)}">${ICONE_DOCUMENT}${escape(document.nom)}</button>`;
-const rediges = (carte: Carte) => (carte.documents ?? []).map((document, index) => [document, index] as const).filter(([document]) => document.statut === 'en cours');
+const rediges = (carte: Carte) => (carte.documents ?? []).map((document, index) => [document, index] as const).filter(([document]) => document.statut === 'en cours' || document.statut === 'validé');
+const basculerValide = ([document, index]: readonly [DocumentRedige, number]) => `<button type="button" class="pme-link" data-toggle-valide="${index}">${document.statut === 'validé' ? `Remettre ${escape(document.nom)} en cours` : `Marquer ${escape(document.nom)} validé`}</button>`;
 const nomsDocuments = (carte: Carte) => {
   const liste = rediges(carte);
-  return liste.length ? `<p class="pme-card-doc">${ICONE_DOCUMENT}${liste.map(([document]) => escape(document.nom)).join(', ')}</p>` : vide('Aucun document rédigé.');
+  return liste.length ? `<p class="pme-card-doc">${ICONE_DOCUMENT}${liste.map(([document]) => `${escape(document.nom)} (${document.statut === 'validé' ? 'validé' : 'en cours de rédaction'})`).join(', ')}</p>` : vide('Aucun document rédigé.');
 };
 const compte = (carte: Carte) => [carte.raisonnement?.erreurs ? plural(carte.raisonnement.erreurs, 'erreur') : '', carte.raisonnement?.manques ? plural(carte.raisonnement.manques, 'manque') : ''].filter(Boolean).join(' · ');
 
@@ -84,12 +85,12 @@ const raisonnement = (carte: Carte): Colonne => {
 
 const redaction = (carte: Carte): Colonne => {
   const faits = rediges(carte);
-  const aFaire = (carte.documents ?? []).map((document, index) => [document, index] as const).filter(([document]) => document.statut !== 'en cours');
+  const aFaire = (carte.documents ?? []).map((document, index) => [document, index] as const).filter(([document]) => document.statut !== 'en cours' && document.statut !== 'validé');
   const lancerDocument = ([document, index]: readonly [DocumentRedige, number], primaire: boolean) => bouton(`data-launch="redaction" data-doc="${index}"`, primaire ? 'Lancer la rédaction' : `Rédiger ${escape(document.nom)}`, primaire);
   return {
     etat: faits.length ? nomsDocuments(carte) : vide('Rédaction non commencée.'),
     principal: faits.length ? bouton('data-validate="finalisation"', 'Valider la rédaction', true) : aFaire.length ? lancerDocument(aFaire[0], true) : bouton('data-add-doc', 'Lancer la rédaction', true),
-    secondaires: [...faits.map(([document, index]) => ouvrirDocument(document, index)), lienRaisonnement, ...aFaire.slice(faits.length ? 0 : 1).map((entree) => lancerDocument(entree, false)),
+    secondaires: [...faits.map(([document, index]) => ouvrirDocument(document, index)), ...faits.map(basculerValide), lienRaisonnement, ...aFaire.slice(faits.length ? 0 : 1).map((entree) => lancerDocument(entree, false)),
       ...aFaire.map(([document, index]) => `<button type="button" class="pme-link pme-link--muted" data-remove-doc="${index}">Retirer ${escape(document.nom)}</button>`)],
   };
 };
@@ -369,6 +370,11 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
       const titre = etape === 'redaction' ? 'Valider le raisonnement ?' : 'Valider la rédaction ?';
       void confirmDialog(root, titre, `${sujet(carte)}${etape === 'redaction' && compte(carte) ? `<p>Il reste ${compte(carte)}.</p>` : ''}<p>La carte passe en ${escape(LIBELLE[etape])}.</p>`, 'Valider').then((ok) => { if (ok) void run(() => etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement!.nom, etape })); });
     } else if ('addDoc' in data) void ajouterDocument(carte);
+    else if (data.toggleValide) {
+      const documents = sansStatut(carte.documents);
+      const cible = documents[Number(data.toggleValide)];
+      if (cible) void run(() => etapes.raisonnement({ projectPath: carte.projectPath, raisonnement: carte.raisonnement!.nom, documents: documents.map((document) => document === cible ? { ...document, valide: !cible.valide } : document) }));
+    }
     else if (data.removeDoc) {
       const documents = sansStatut(carte.documents);
       const [retire] = documents.splice(Number(data.removeDoc), 1);

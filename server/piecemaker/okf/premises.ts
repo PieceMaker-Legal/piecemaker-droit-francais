@@ -22,7 +22,7 @@ import {
 export const OKF_SCHEME = 'okf:';
 export type PremisePiece = { resource: string; title: string; citation: string; value: string };
 export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[] };
-export type OkfGap = { element: string; manque: string };
+export type OkfGap = { element: string; manque: string; programmes?: string[] };
 
 const SKIPPED_FOLDERS = new Set(['resultats', '_build', 'node_modules']);
 const LEGAL_SOURCE = /^(?:https?:|(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT|JORFTEXT|JORFARTI)\d+$|[0-9a-f]{24}$)/i;
@@ -63,12 +63,17 @@ function catalaSources(projectPath: string): Array<{ place: string; source: stri
   });
 }
 
+const programOf = (place: string) => place.split('/')[2] ?? '';
+
 export function graphGaps(projectPath: string): OkfGap[] {
   const concepts = readBundle(projectPath).filter((concept) => !concept.error);
   const graphTypes = readGraphTypes(projectPath);
   const premises = concepts.filter((concept) => concept.frontmatter.type === PREMISE_TYPE);
   const gaps: OkfGap[] = [];
-  const report = (element: string, manque: string) => gaps.push({ element, manque });
+  const sources = catalaSources(projectPath);
+  const citedBy = new Map<string, Set<string>>();
+  for (const { place, source } of sources) if (isOkfSource(source)) citedBy.set(premiseIdOf(source), (citedBy.get(premiseIdOf(source)) ?? new Set()).add(programOf(place)));
+  const report = (element: string, manque: string, programmes = [...(citedBy.get(element) ?? [])].sort()) => gaps.push({ element, manque, ...(programmes.length ? { programmes } : {}) });
 
   const linked = new Set<string>();
   const stated = new Set<string>();
@@ -95,17 +100,16 @@ export function graphGaps(projectPath: string): OkfGap[] {
     if (!live(premise, INVOLVES).length) report(premise.id, 'prémisse sans partie concernée (involves)');
   }
 
-  const sources = catalaSources(projectPath);
   const used = new Set<string>();
   for (const { place, source } of sources) {
     if (isOkfSource(source)) {
       const id = premiseIdOf(source);
       used.add(id);
       const evidence = evidenceOf(concepts, id);
-      if (!evidence) report(place, `#[doc] cite une prémisse absente de l'index : ${id}`);
-      else if (!evidence.pieces.length) report(place, `#[doc] cite une prémisse sans pièce citée : ${id}`);
+      if (!evidence) report(place, `#[doc] cite une prémisse absente de l'index : ${id}`, [programOf(place)]);
+      else if (!evidence.pieces.length) report(place, `#[doc] cite une prémisse sans pièce citée : ${id}`, [programOf(place)]);
     } else if (!LEGAL_SOURCE.test(source) && !/^[a-z][\w+.-]*:/i.test(source)) {
-      report(place, `#[doc] cite une pièce directement (${source}) : citer une prémisse, source: ${OKF_SCHEME}/_premises/<titre>.md`);
+      report(place, `#[doc] cite une pièce directement (${source}) : citer une prémisse, source: ${OKF_SCHEME}/_premises/<titre>.md`, [programOf(place)]);
     }
   }
   if (sources.length) {

@@ -94,12 +94,12 @@ Le serveur refuse une citation absente du document source.
 
 ## Vérification
 
-`pm okf verify`, ou le bouton Vérifier de l'onglet Index. Deux listes :
+`pm okf verify`, ou le bouton Vérifier de l'onglet Index. Trois listes :
 
 - **Erreurs** : frontmatter, type, document présent, fiche alignée sur son document, relation connue et permise pour le type de la source, cible présente, citation retrouvée dans le document (apostrophes et guillemets typographiques, espaces insécables et ellipse « … » au milieu tolérés ; les fragments se suivent dans l'ordre), document sans fiche, `index.md`.
 - **Contradictions** : prémisse `single_value` qui reçoit plusieurs valeurs distinctes (comparaison sans casse ni accents ; une valeur qui est une date est ramenée au format `AAAA-MM-JJ` avant comparaison : « 3 mars 2024 », « 03/03/2024 » et « 2024-03-03 » comptent pour une seule valeur).
 
-`pm okf verify-graph` ajoute la liste **Manques**, pour l'agent. Chaque ligne nomme un élément et ce qui lui manque :
+`pm okf verify` donne aussi la liste **Manques**, pour l'agent. Chaque ligne nomme un élément, ce qui lui manque et, s'il y a lieu, le programme Catala concerné ; `pm check` range ces manques sous chaque raisonnement :
 
 | Élément | Manque signalé |
 | --- | --- |
@@ -120,7 +120,7 @@ Onglet Index du plugin `piecemaker-dossier` :
 
 Skill `okf` (`server/piecemaker/vendor/skills/okf/`), déclaré dans chaque dossier.
 
-Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activés par dossier depuis la Bibliothèque : `index-maker`, affiché IndexMaker (documents, parties, liens entre pièces, jamais de prémisse), et `premise-maker`, affiché PremiseMaker (prémisses qu'un programme Catala attend). Claude précharge le skill ; Codex et Vibe le lisent en première étape. Une prémisse ne se crée que pour une condition Catala qui la demande. L'entête du skill invite l'agent principal à déléguer l'écriture. Après chaque sous-agent, le hook `verify-subagent.mjs` (Claude seulement) donne le résultat de `pm okf verify` ou `verify-graph` à l'agent principal et l'invite à relancer le sous-agent si une erreur subsiste.
+Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activés par dossier depuis la Bibliothèque : `index-maker`, affiché IndexMaker (documents, parties, liens entre pièces, jamais de prémisse), et `premise-maker`, affiché PremiseMaker (prémisses qu'un programme Catala attend). Claude précharge le skill ; Codex et Vibe le lisent en première étape. Une prémisse ne se crée que pour une condition Catala qui la demande. L'entête du skill invite l'agent principal à déléguer l'écriture. Après chaque sous-agent, le hook `verify-subagent.mjs` (Claude seulement) donne le résultat de `pm okf verify` à l'agent principal et l'invite à relancer le sous-agent si une erreur subsiste.
 
 ## Limites connues
 

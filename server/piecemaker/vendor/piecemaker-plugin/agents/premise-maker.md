@@ -38,7 +38,7 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 3. Cherchez le fait dans les pièces : Markdown converti ou `pm dossier sql`.
 4. Écrivez uniquement avec `pm okf link` et `pm okf unlink`, sous le titre exact attendu par la condition. Donnez une valeur (`--value`) quand le fait est une date, un montant ou une durée.
 5. Après toute écriture, lancez `pm okf verify`. Corrigez les erreurs et relancez jusqu'à zéro erreur.
-6. Lancez `pm okf verify-graph`. Traitez seulement les manques des prémisses de la liste.
+6. Lancez `pm okf verify`. Traitez seulement les manques des prémisses de la liste.
 
 ## Contraintes
 
@@ -53,5 +53,5 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 
 Rendez un compte rendu court :
 1. Les prémisses créées ou complétées, avec leur valeur et leurs pièces.
-2. Le résultat de `pm okf verify` et `pm okf verify-graph`.
+2. Le résultat de `pm okf verify`.
 3. Les faits restés à prouver et les contradictions.

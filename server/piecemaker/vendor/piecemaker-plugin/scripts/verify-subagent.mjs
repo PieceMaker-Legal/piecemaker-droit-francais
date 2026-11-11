@@ -49,15 +49,15 @@ function okfSections(output) {
   return sections;
 }
 
-async function okfCheck(cwd, run, { command, keepGap, owner, gapOwner = owner }) {
-  const result = await run(['okf', command], cwd);
-  if (result.code !== 0 || !result.stdout.includes('Index OKF')) return unavailable(`okf ${command}`, result);
+async function okfCheck(cwd, run, { keepGap, owner, gapOwner = owner }) {
+  const result = await run(['okf', 'verify'], cwd);
+  if (result.code !== 0 || !result.stdout.includes('Index OKF')) return unavailable('okf verify', result);
   const { erreurs, contradictions, manques } = okfSections(result.stdout);
   const gaps = manques.filter((line) => keepGap(line.slice(2)));
   const lines = [
     `Index OKF : ${erreurs.length} erreur(s).`, ...erreurs,
     ...(contradictions.length ? [`Contradictions à présenter à l'avocat : ${contradictions.length}.`, ...contradictions] : []),
-    ...(command === 'verify-graph' ? [`Manques : ${gaps.length}.`, ...gaps] : []),
+    ...(gaps.length ? [`Manques : ${gaps.length}.`, ...gaps] : []),
   ];
   return { lines, failing: [...(erreurs.length ? [owner] : []), ...(gaps.length ? [gapOwner] : [])] };
 }
@@ -98,8 +98,8 @@ async function tabularCheck(cwd, run) {
 const isPremiseGap = (gap) => gap.startsWith('/_premises/') || gap.includes('#[doc]');
 
 const CHECKS = {
-  'index-maker': async (cwd, run) => [await okfCheck(cwd, run, { command: 'verify', keepGap: () => false, owner: 'index-maker' })],
-  'premise-maker': async (cwd, run) => [await okfCheck(cwd, run, { command: 'verify-graph', keepGap: isPremiseGap, owner: 'premise-maker' })],
+  'index-maker': async (cwd, run) => [await okfCheck(cwd, run, { keepGap: () => false, owner: 'index-maker' })],
+  'premise-maker': async (cwd, run) => [await okfCheck(cwd, run, { keepGap: isPremiseGap, owner: 'premise-maker' })],
   'research-maker': async (cwd, run, report) => [researchCheck(report)],
   'deep-research-maker': async (cwd, run) => [await tabularCheck(cwd, run)],
 };

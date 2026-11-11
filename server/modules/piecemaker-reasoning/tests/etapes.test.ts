@@ -183,3 +183,17 @@ test('une reprise dont la persistance échoue retire ses nouvelles copies et per
   fs.rmdirSync(temporaire);
   assert.deepEqual(await etapes.reprise({ projectPath: root, raisonnement: 'demande' }), { raisonnement: 'demande-v2' });
 });
+
+test('un acte reste en cours de rédaction tant que l’avocat ne l’a pas validé', async () => {
+  const { root, etapes } = service(async () => ({ pret: true, lignes: [] }));
+  ajouterRaisonnement(root);
+  const { documents } = await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', documents: [{ type: 'Courrier', nom: 'Projet' }] });
+  fs.mkdirSync(path.join(root, 'Projets'), { recursive: true });
+  fs.writeFileSync(path.join(root, documents![0].chemin), 'brouillon');
+  const statut = async () => ((await etapes.tableau(true)).cartes as Array<{ documents?: Array<{ statut: string }> }>).find((carte) => carte.documents?.length)!.documents![0].statut;
+  assert.equal(await statut(), 'en cours');
+  await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', documents: [{ ...documents![0], valide: true }] });
+  assert.equal(await statut(), 'validé');
+  await etapes.raisonnement({ projectPath: root, raisonnement: 'demande', documents: [{ ...documents![0], valide: false }] });
+  assert.equal(await statut(), 'en cours');
+});

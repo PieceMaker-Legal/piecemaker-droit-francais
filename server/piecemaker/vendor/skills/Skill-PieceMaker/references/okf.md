@@ -82,12 +82,11 @@ Pour un contrat, chaque clause utile est une prémisse : titre = objet de la cla
 
 ```bash
 pm okf verify
-pm okf verify-graph
 ```
 
 La commande renvoie les erreurs : type hors arborescence, document absent, document sans fiche, relation inconnue, cible absente ou hors graphe, citation introuvable, `index.md` incomplet. Elle renvoie aussi les contradictions : une prémisse à valeur unique avec plusieurs valeurs. Corrige la cause d'une erreur, puis relance. Signale une contradiction à l'avocat ; ne tranche pas.
 
-`verify-graph` ajoute les éléments manquants du graphe :
+Elle liste enfin les éléments manquants du graphe ; un manque lié à un programme Catala nomme ce programme :
 
 | Élément | Manque signalé |
 | --- | --- |
@@ -96,4 +95,4 @@ La commande renvoie les erreurs : type hors arborescence, document absent, docum
 | Partie | aucune mention dans une pièce, aucune prémisse qui la concerne |
 | `#[doc]` Catala (`fichier:ligne`) | prémisse absente de l'index ou sans pièce ; pièce citée directement |
 
-Lance `verify-graph` après avoir complété le graphe ou écrit un programme Catala. Comble chaque manque que les pièces permettent de combler. Signale les autres à l'avocat ; n'invente ni citation ni lien.
+Relance `verify` après avoir complété le graphe ou écrit un programme Catala. Comble chaque manque que les pièces permettent de combler. Signale les autres à l'avocat ; n'invente ni citation ni lien.
