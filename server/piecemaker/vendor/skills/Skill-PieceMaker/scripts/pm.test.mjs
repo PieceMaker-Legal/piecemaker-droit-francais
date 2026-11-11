@@ -204,32 +204,82 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
-test('dossier verifier résume anonymisation, mapping, index et conversion', async () => {
+test('check résume préparation, OKF, prémisses, Catala, suivi, recherche et étape', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-check-'));
+  const write = (relative, content) => { fs.mkdirSync(path.dirname(path.join(dossier, relative)), { recursive: true }); fs.writeFileSync(path.join(dossier, relative), content); };
+  write('.piecemaker/catala/rupture/clerk.toml', '');
+  write('.piecemaker/catala/rupture/rupture.catala_fr', '');
+  write('.piecemaker/catala/bail/clerk.toml', '');
+  write('.piecemaker/catala/bail/resultats/verification.json', '{"passed":true}');
+  const later = new Date(Date.now() + 60000);
+  fs.utimesSync(path.join(dossier, '.piecemaker/catala/bail/resultats/verification.json'), later, later);
+  write('.piecemaker/conclusions-suivi.json', '{}');
+  write('.piecemaker/etapes.json', JSON.stringify({ raisonnements: { conclusions: { etape: 'redaction' } } }));
+  const calls = [];
   const deps = {
     caseState: () => ({ anonymized: true, lifted: false }),
-    tabularFn: async ({ action }) => (action === 'lister' ? { analyses: [{ fichier: 'index.json', index: true }] } : { fichier: 'index.json', absentes: 2 }),
-    piecesFn: async () => ({ pieces: [{ path: 'Pièces/bail.pdf', status: 'ready', protected: true }, { path: 'Pièces/lettre.pdf', status: 'conversion-failed', protected: true }, { path: 'Notes/calcul.py', status: 'not-converted', protected: false }] }),
+    mappingValidated: () => true,
+    tabularFn: async ({ action }) => (action === 'lister'
+      ? { analyses: [], projets: [{ projet: 'p1', nom: 'Rupture fictive', mode: 'recherche', erreur: 'Recherche trop large.' }, { projet: 'p2', nom: 'Index', index: true }] }
+      : { absentes: 3 }),
+    piecesFn: async () => ({ pieces: [{ path: 'Pièces/bail.pdf', status: 'ready', protected: true }] }),
     conversionJob: async () => ({ job: null }),
+    okfFn: async (input) => { calls.push(input); return {
+      erreurs: [{ fiche: 'Pièces/bail.md', erreur: 'lien sans citation' }],
+      contradictions: [],
+      manques: [{ element: '/_premises/date-de-rupture.md', manque: 'prémisse sans valeur' }, { element: 'Pièces/avenant.md', manque: 'pièce sans prémisse ni lien' }],
+    }; },
+    suiviFn: async ({ suivi }) => `Suivi du dossier (.piecemaker/${suivi})\nÉchéances :\n  02/01/2026 — Conclusions (conclusions) — DÉPASSÉE\n  01/06/2027 — Audience (audience) — à venir\n\n1 erreur(s), 0 manque(s).`,
   };
-  assert.equal(await run(['dossier', 'verifier', '--dossier', '/dossiers/Dupont'], { deps }), [
-    'Anonymisation : faite',
+  const text = await run(['check', '--dossier', dossier], { deps });
+  assert.deepEqual(calls, [{ action: 'verify-graph', folder: dossier }]);
+  assert.equal(text, [
+    'Dossier : 6 point(s) à traiter.',
+    'Anonymisation : valide',
+    'Mapping : valide',
+    'Conversion : valide',
+    'Index OKF : 1 erreur(s) → pm okf verify (sous-agent index-maker)',
+    'Prémisses : 1 manque(s) → pm okf verify-graph (sous-agent premise-maker)',
+    'Graphe : 1 manque(s) → pm okf verify-graph',
+    'Catala bail : valide',
+    'Catala rupture : jamais vérifié → pm catala verifier --programme rupture',
+    'Suivi conclusions-suivi.json : 1 erreur(s), 0 manque(s), 1 échéance(s) dépassée(s), du jour ou sans date → pm suivi_dossiers verifier --suivi conclusions-suivi.json',
+    'Revue de recherche Rupture fictive : bloquée → pm tabular_review lister (sous-agent deep-research-maker)',
+    'Étape : conclusions → redaction',
+  ].join('\n'));
+  assert.doesNotMatch(text, /^Index :|raisonnement/m);
+  await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('check sur un dossier à jour ne signale rien', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-check-'));
+  const deps = {
+    caseState: () => ({ anonymized: true, lifted: false }),
+    mappingValidated: () => true,
+    tabularFn: async ({ action }) => (action === 'lister' ? { analyses: [], projets: [] } : {}),
+    piecesFn: async () => ({ pieces: [] }),
+    conversionJob: async () => ({ job: null }),
+    okfFn: async () => ({ erreurs: [], contradictions: [], manques: [] }),
+    suiviFn: async () => { throw new Error('inattendu'); },
+  };
+  assert.equal(await run(['check', '--dossier', dossier], { deps }), [
+    'Dossier : valide.',
+    'Anonymisation : valide',
+    'Mapping : valide',
+    'Conversion : valide',
+    'Index OKF : valide',
+    'Prémisses : valide',
+    'Étape : non choisie (onglet Tableau)',
+  ].join('\n'));
+  const pending = { ...deps, mappingValidated: () => false, piecesFn: async () => ({ pieces: [{ path: 'Pièces/lettre.pdf', status: 'conversion-failed', protected: true }] }) };
+  assert.equal((await run(['check', '--dossier', dossier], { deps: pending })).split('\n').slice(0, 4).join('\n'), [
+    'Dossier : 2 point(s) à traiter.',
+    'Anonymisation : valide',
     'Mapping : à valider par l’avocat (onglet Dossier, Mapping)',
-    'Index : 2 pièce(s) absente(s) de l’index : pm dossier index lancer',
     'Conversion : 1 pièce(s) non convertie(s) : pm dossier conversion',
-    '  - Pièces/lettre.pdf (échec)',
   ].join('\n'));
-  const fresh = {
-    ...deps,
-    caseState: () => ({ anonymized: false, lifted: true }),
-    tabularFn: async () => ({ analyses: [], projets: [] }),
-    conversionJob: async () => ({ job: { state: 'running', phase: 'convert', percent: 40, processed: 2, total: 5 } }),
-  };
-  assert.equal(await run(['dossier', 'verifier', '--dossier', '/dossiers/Dupont'], { deps: fresh }), [
-    'Anonymisation : levée par l’avocat (pièces lisibles par l’IA)',
-    'Mapping : sans objet (anonymisation levée)',
-    'Index : absent : pm dossier index lancer',
-    'Conversion : Conversion en cours : phase convert, 40 %, 2/5 pièce(s).',
-  ].join('\n'));
+  fs.rmSync(dossier, { recursive: true, force: true });
 });
 
 test('etatDossier est prêt quand mapping validé, index à jour et pièces converties', async () => {

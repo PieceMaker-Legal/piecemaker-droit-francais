@@ -83,7 +83,7 @@ describe('autoPanelTarget', () => {
     expect(autoPanelTarget('Bash', { command: "pm dossier sql \"UPDATE piecemaker_nodes SET doc_date='2024-03-01' WHERE id='doc:1'\"" })).toEqual({ kind: 'dossier', view: 'chronology' });
     expect(autoPanelTarget('Bash', { command: 'node .agents/skills/Skill-PieceMaker/scripts/pm.mjs tab afficher fichier Pièces/contrat.pdf' })).toEqual({ kind: 'file', path: 'Pièces/contrat.pdf' });
     expect(autoPanelTarget('Bash', { command: 'pm dossier conversion --force' })).toBeNull();
-    expect(autoPanelTarget('Bash', { command: 'pm dossier verifier' })).toBeNull();
+    expect(autoPanelTarget('Bash', { command: 'pm check' })).toBeNull();
     expect(autoPanelTarget('Bash', { command: 'pm tab afficher bordereau' })).toEqual({ kind: 'tampon' });
     expect(autoPanelTarget('Bash', { command: 'pm tab afficher raisonnement' })).toBeNull();
     expect(autoPanelTarget('Bash', { command: 'pm tab fermer index' })).toBeNull();

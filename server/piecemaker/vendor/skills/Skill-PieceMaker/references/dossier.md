@@ -1,7 +1,6 @@
 # dossier
 
 ```
-pm dossier verifier
 pm dossier sql "REQUÊTE"
 pm dossier conversion [--force] [pièce…]
 pm dossier arborescence --dossiers JSON
@@ -9,10 +8,6 @@ pm dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
 pm dossier index lire
 pm dossier index colonnes --questions JSON
 ```
-
-## verifier
-
-Quatre lignes : anonymisation, mapping, index, conversion. Chaque défaut donne la commande qui le corrige. Le mapping se valide par l’avocat seul, dans l’onglet Dossier : ne le validez pas à sa place. Lancez la commande en début de travail sur un dossier.
 
 ## conversion
 

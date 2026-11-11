@@ -5,13 +5,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { CATALA_COMMANDS, runCatala } from './catala.mjs';
+import { CATALA_COMMANDS, listPrograms, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'okf'];
+const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
 const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'fichier'];
-const DOSSIER_COMMANDS = ['verifier', 'sql', 'conversion', 'arborescence', 'index'];
+const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
@@ -24,8 +24,15 @@ const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
+const SUIVI_FILES = /^(?:.+-)?suivi\.json$/;
+const URGENT_DEADLINE = /— (DÉPASSÉE|AUJOURD’HUI|date à établir)/;
 
 export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossier PATH])
+
+  check
+      bilan du dossier : anonymisation, mapping, conversion, index OKF, prémisses,
+      programmes Catala, suivi, revues de recherche, étape ; chaque défaut donne
+      la commande ou le sous-agent qui le corrige
 
   tab lister
       volets ouverts à côté du chat
@@ -33,8 +40,6 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       cibles : dossier | index | tabular_review [FICHIER.json] | bordereau
                | raisonnement | suivi_dossiers | catala | fichier PATH
 
-  dossier verifier
-      anonymisation, index (pièces absentes), pièces non converties
   dossier sql "REQUÊTE"
       seul accès à la base du dossier ; données masquées par le serveur
   dossier conversion [--force] [pièce…]
@@ -527,9 +532,93 @@ async function dossierState(api, project) {
 
 const DOSSIER_LABELS = { anonymisation: 'Anonymisation', mapping: 'Mapping', index: 'Index', conversion: 'Conversion' };
 
-async function verifyDossier(api, project) {
-  const { lignes } = await dossierState(api, project);
-  return lignes.map((ligne) => `${DOSSIER_LABELS[ligne.nom]} : ${ligne.texte}`).join('\n');
+const isPremiseGap = (entry) => entry.element.startsWith('/_premises/') || entry.manque.includes('#[doc]');
+
+const line = (nom, count, unit, detail, agent) => (count
+  ? { texte: `${nom} : ${count} ${unit} → ${detail}${agent ? ` (sous-agent ${agent})` : ''}`, ok: false }
+  : { texte: `${nom} : valide`, ok: true });
+
+async function okfLines(api, folder) {
+  const { erreurs = [], contradictions = [], manques = [] } = await api.okfFn({ action: 'verify-graph', folder });
+  const premises = manques.filter(isPremiseGap).length;
+  return [
+    line('Index OKF', erreurs.length, 'erreur(s)', 'pm okf verify', 'index-maker'),
+    line('Prémisses', premises, 'manque(s)', 'pm okf verify-graph', 'premise-maker'),
+    ...(contradictions.length ? [line('Contradictions', contradictions.length, 'à présenter à l’avocat', 'pm okf verify')] : []),
+    ...(manques.length > premises ? [line('Graphe', manques.length - premises, 'manque(s)', 'pm okf verify-graph')] : []),
+  ];
+}
+
+function newestSource(directory) {
+  let newest = 0;
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === 'resultats' || entry.name.startsWith('_')) continue;
+    const file = path.join(directory, entry.name);
+    newest = Math.max(newest, entry.isDirectory() ? newestSource(file) : fs.statSync(file).mtimeMs);
+  }
+  return newest;
+}
+
+function catalaLines(folder) {
+  return listPrograms(folder).map((name) => {
+    const directory = path.join(folder, '.piecemaker', 'catala', name);
+    const result = path.join(directory, 'resultats', 'verification.json');
+    let report = null;
+    try { report = JSON.parse(fs.readFileSync(result, 'utf8')); } catch {}
+    const command = `pm catala verifier --programme ${name}`;
+    if (!report) return { texte: `Catala ${name} : jamais vérifié → ${command}`, ok: false };
+    if (newestSource(directory) > fs.statSync(result).mtimeMs) return { texte: `Catala ${name} : modifié depuis la vérification → ${command}`, ok: false };
+    const failed = (report.checks ?? []).filter((entry) => !entry.passed).length;
+    return report.passed ? { texte: `Catala ${name} : valide`, ok: true } : { texte: `Catala ${name} : ${failed || 1} contrôle(s) en échec → ${command}`, ok: false };
+  });
+}
+
+async function suiviLines(api, folder) {
+  let entries = [];
+  try { entries = fs.readdirSync(path.join(folder, '.piecemaker')).filter((entry) => SUIVI_FILES.test(entry)).sort(); } catch {}
+  return Promise.all(entries.map(async (suivi) => {
+    const detail = `pm suivi_dossiers verifier --suivi ${suivi}`;
+    let text;
+    try { text = String(await api.suiviFn({ commande: 'verifier', cwd: folder, suivi })); } catch { return { texte: `Suivi ${suivi} : vérification impossible → ${detail}`, ok: false }; }
+    const issues = /(\d+) erreur\(s\), (\d+) manque\(s\)\./.exec(text);
+    const urgent = text.split('\n').filter((entry) => URGENT_DEADLINE.test(entry)).length;
+    const parts = [...(issues ? [`${issues[1]} erreur(s), ${issues[2]} manque(s)`] : []), ...(urgent ? [`${urgent} échéance(s) dépassée(s), du jour ou sans date`] : [])];
+    return parts.length ? { texte: `Suivi ${suivi} : ${parts.join(', ')} → ${detail}`, ok: false } : { texte: `Suivi ${suivi} : valide`, ok: true };
+  }));
+}
+
+async function researchLines(api, folder) {
+  const { projets = [] } = await api.tabularFn({ action: 'lister', project: folder });
+  return projets.filter((draft) => draft.mode === 'recherche').map((draft) => {
+    const blocked = draft.erreur || (draft.a_completer?.length ? `à compléter : ${draft.a_completer.join(', ')}` : '');
+    return blocked
+      ? { texte: `Revue de recherche ${draft.nom} : bloquée → pm tabular_review lister (sous-agent deep-research-maker)`, ok: false }
+      : { texte: `Revue de recherche ${draft.nom} : en attente`, ok: true };
+  });
+}
+
+function stepLine(folder) {
+  let etapes = {};
+  try { etapes = JSON.parse(fs.readFileSync(path.join(folder, '.piecemaker', 'etapes.json'), 'utf8')); } catch {}
+  if (etapes.nonJuridique) return { texte: 'Étape : dossier non juridique, exclu du tableau', ok: true };
+  const cartes = Object.entries(etapes.raisonnements ?? {}).map(([nom, suite]) => `${nom} → ${suite.etape}`);
+  if (cartes.length) return { texte: `Étape : ${cartes.join(' ; ')}`, ok: true };
+  return { texte: `Étape : ${etapes.etape ?? 'non choisie (onglet Tableau)'}`, ok: true };
+}
+
+async function check(api, folder) {
+  const { lignes } = await dossierState(api, folder);
+  const preparation = lignes.filter((ligne) => ligne.nom !== 'index').map((ligne) => ({ texte: `${DOSSIER_LABELS[ligne.nom]} : ${ligne.ok ? 'valide' : ligne.texte.split('\n')[0]}`, ok: ligne.ok }));
+  const all = [
+    ...preparation,
+    ...await okfLines(api, folder),
+    ...catalaLines(folder),
+    ...await suiviLines(api, folder),
+    ...await researchLines(api, folder),
+    stepLine(folder),
+  ];
+  const failing = all.filter((ligne) => !ligne.ok).length;
+  return [failing ? `Dossier : ${failing} point(s) à traiter.` : 'Dossier : valide.', ...all.map((ligne) => ligne.texte)].join('\n');
 }
 
 export async function etatDossier(project, { deps } = {}) {
@@ -541,7 +630,6 @@ async function dossier(api, positional, flags, resolved) {
   const commande = positional[1];
   if (!DOSSIER_COMMANDS.includes(commande)) usage(`dossier attend ${DOSSIER_COMMANDS.join(', ')}.`);
   const project = path.resolve(resolved);
-  if (commande === 'verifier') return verifyDossier(api, project);
   if (commande === 'conversion') return conversion(api, resolved, positional.slice(2), flags.force === true);
   if (commande === 'sql') {
     const requete = positional.slice(2).join(' ').trim();
@@ -656,6 +744,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   const api = deps || await defaultDeps(cwd);
   const resolved = resolveDossier(flags.dossier, flags.dossier || !api.sessionDossier ? cwd : await api.sessionDossier(cwd));
 
+  if (tool === 'check') return check(api, path.resolve(resolved));
   if (tool === 'tab') return tab(api, positional, cwd, resolved);
   if (tool === 'dossier') return dossier(api, positional, flags, resolved);
   if (tool === 'tabular_review') return tabularReview(api, positional, flags, resolved);

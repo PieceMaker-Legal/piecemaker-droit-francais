@@ -19,8 +19,9 @@ Avant d'utiliser une commande, lisez sa référence dans `<cette-skill>/referenc
 
 | Commande | Rôle | Référence |
 | --- | --- | --- |
+| `pm check` | bilan du dossier, avec la commande ou le sous-agent qui corrige chaque défaut | `check.md` |
 | `pm tab` | lister, afficher ou fermer un volet ou un fichier | `tab.md` |
-| `pm dossier` | verifier le dossier, sql, conversion, arborescence, index des pièces | `dossier.md` |
+| `pm dossier` | sql, conversion, arborescence, index des pièces | `dossier.md` |
 | `pm tabular_review` | analyse de pièces, recherche de jurisprudence, modèles | `tabular.md` |
 | `pm bordereau` | tamponner et numéroter les pièces | `bordereau.md` |
 | `pm raisonnement` | verifier ou lister les raisonnements juridiques | `raisonnement.md` |
@@ -28,7 +29,7 @@ Avant d'utiliser une commande, lisez sa référence dans `<cette-skill>/referenc
 | `pm okf` | `verify` l'index OKF du dossier, `verify-graph` les éléments manquants du graphe, `link` ou `unlink` pièces, prémisses et parties | `okf.md` |
 | `pm catala` | verifier un programme Catala (format, tests, preuve, Catleg) | skill `catala` |
 
-Au début du travail sur un dossier, lancez `pm dossier verifier`.
+Au début du travail sur un dossier, lancez `pm check`.
 
 ## Volets
 
