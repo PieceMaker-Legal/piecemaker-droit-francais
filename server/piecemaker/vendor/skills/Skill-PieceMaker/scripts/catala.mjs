@@ -94,6 +94,10 @@ export function selectProgram(cwd, name) {
 
 const TASK_TYPES = ['contentieux', 'contrat', 'autre'];
 
+function isDay(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+}
+
 function taskErrors(directory, files) {
   const file = path.join(directory, 'tache.json');
   if (!fs.existsSync(file)) return [];
@@ -105,6 +109,7 @@ function taskErrors(directory, files) {
   return [
     typeof task?.tache === 'string' && task.tache.trim() ? '' : 'tâche sans nom : renseignez « tache ».',
     TASK_TYPES.includes(task?.type) ? '' : `type de tâche inconnu : écrivez ${TASK_TYPES.join(', ')}.`,
+    task?.date_vigueur === undefined || isDay(task.date_vigueur) ? '' : 'date_vigueur invalide : écrivez AAAA-MM-JJ.',
     parts.length ? '' : 'tâche sans raisonnement : renseignez « raisonnements ».',
     ...parts.flatMap((part) => [
       part?.champ && declared(part.champ) ? '' : `raisonnement « ${part?.champ ?? ''} » : aucun champ d’application de ce nom.`,
@@ -354,7 +359,6 @@ async function verifier(context, program, flags = {}) {
     execution(),
     record('catleg', 'catleg check-expiry', async () => {
       if (!context.python || !context.credentials) return missing(!context.python ? 'Python partagé absent.' : 'Identifiants PISTE absents.');
-      if (flags.au === undefined) return missing('Date de vigueur absente : relancez avec --au AAAA-MM-JJ (la date du jour est admise).');
       await catleg(context, program, { au: flags.au });
       const report = readJson(path.join(program.directory, 'resultats', 'catleg.json'));
       return { passed: report.passed, message: report.fichiers.filter((file) => !file.passed && !file.skipped).flatMap((file) => file.messages).join(' · ') };
@@ -553,11 +557,12 @@ async function catleg(context, program, flags) {
   const files = flags.fichier && flags.fichier !== true ? [String(flags.fichier)] : sourceFiles(program.directory);
   if (files.some((file) => !sourceFiles(program.directory).includes(file))) throw new Error('Fichier Catala absent du programme.');
   const day = (value, origin) => {
-    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value) throw new Error(`${origin} attend une date valide AAAA-MM-JJ.`);
+    if (!isDay(value)) throw new Error(`${origin} attend une date valide AAAA-MM-JJ.`);
     return value;
   };
-  if (flags.au === undefined) throw new Error('Indiquez la date de vigueur : --au AAAA-MM-JJ (la date du jour est admise).');
-  const dates = [day(flags.au, '--au')];
+  const taskDate = readJson(path.join(program.directory, 'tache.json'))?.date_vigueur;
+  const [date, origine, origineLibelle] = flags.au !== undefined ? [day(flags.au, '--au'), '--au', 'date donnée par --au'] : taskDate !== undefined ? [day(taskDate, 'date_vigueur'), 'tache.json', 'date de tache.json'] : [context.now().slice(0, 10), 'jour', 'date du jour'];
+  const dates = [date];
   const started = context.now();
   const results = [];
   for (const file of files) {
@@ -568,10 +573,8 @@ async function catleg(context, program, flags) {
     let articles = [];
     try { articles = JSON.parse(marker?.[1] ?? '[]'); } catch {}
     const cited = [...new Set(fs.readFileSync(path.join(program.directory, file), 'utf8').match(/\b(?:LEGIARTI|JORFARTI)\d+\b/g) ?? [])];
-    const missing = cited.filter((id) => !articles.some((article) => article.id === id));
-    const checked = articles.map((article) => article.id);
+    const checked = [...new Set([...articles.map((article) => article.id), ...cited])];
     const messages = output.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('PIECEMAKER_ARTICLES='));
-    if (missing.length) messages.push(`Articles non reconnus par Catleg : ${missing.join(', ')}. Placez chaque identifiant dans un titre Markdown d’article.`);
     if (!checked.length) messages.push('Aucun article contrôlé : aucun titre d’article reconnu.');
     const versions = [];
     for (const id of checked) {
@@ -592,12 +595,12 @@ async function catleg(context, program, flags) {
       }
     }
     const skipped = Boolean(marker) && !cited.length && !articles.length;
-    results.push({ fichier: file, exit_code: result.code, passed: Boolean(marker) && checked.length > 0 && !missing.length && versions.every((version) => version.valide === true) && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
+    results.push({ fichier: file, exit_code: result.code, passed: Boolean(marker) && checked.length > 0 && versions.every((version) => version.valide === true) && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
   }
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), dates_reference: dates, passed: results.some((entry) => entry.articles.length) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), fichiers: results };
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), dates_reference: dates, origine_date: origine, passed: results.some((entry) => entry.articles.length) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), fichiers: results };
   writeResult(program.directory, 'catleg.json', report);
   const lines = results.map((entry) => `- ${entry.fichier} : ${entry.skipped ? 'sans article cité, non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s), en vigueur au ${dates.join(', ')}` : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
-  return [`catleg (vigueur au ${dates.join(', ')}, date donnée par --au) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
+  return [`catleg (vigueur au ${dates.join(', ')}, ${origineLibelle}) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
 }
 
 export async function runCatala({ commande, cwd, programme, flags = {}, args = [], deps = {} }) {

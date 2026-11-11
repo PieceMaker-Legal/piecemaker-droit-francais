@@ -31,6 +31,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 {
   "tache": "Conclusions en défense Dupont / Société Exemple, TC Paris",
   "type": "contentieux",
+  "date_vigueur": "2024-01-15",
   "raisonnements": [
     { "champ": "RejetDeLaDemande", "objectif": "Faire rejeter la demande en paiement", "rang": "À titre principal" },
     { "champ": "ReductionDuMontant", "objectif": "Faire réduire le montant", "rang": "À titre subsidiaire" }
@@ -40,6 +41,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 
 - `tache` nomme l'acte, comme l'avocat le nomme.
 - `type` vaut `contentieux`, `contrat` ou `autre`.
+- `date_vigueur` est la date à laquelle le droit s'apprécie, au format AAAA-MM-JJ. Catleg la lit. Elle est facultative.
 - `champ` est le nom exact du champ d'application qui porte la conclusion du raisonnement.
 - `objectif` reprend l'objectif annoncé par l'avocat. N'en inventez pas : demandez-le s'il manque.
 - `rang` situe le raisonnement dans l'acte : `À titre principal`, `À titre subsidiaire`, ou la clause (`Clause 5 — Confidentialité`).
@@ -100,7 +102,8 @@ Le titre nomme la case du graphe. L’avocat le lit sans le code. Aucun contrôl
 
 Contrôler, une seule commande :
 
-- `pm catala verifier --programme <nom> --au AAAA-MM-JJ` met les fichiers au format officiel, puis lance tous les contrôles : typage avec invariants, tests Clerk/Python, preuve de chaque champ métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande.
+- `pm catala verifier --programme <nom>` met les fichiers au format officiel, puis lance tous les contrôles : typage avec invariants, tests Clerk/Python, preuve de chaque champ métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande.
+- Lancez `pm catala verifier` seul. Les commandes séparées (`catleg`, `preuve`, `formater`) servent seulement à isoler un contrôle déjà signalé par `verifier`.
 - La commande réécrit les fichiers : relisez un fichier signalé « reformatés » avant de le modifier.
 - Sous un contrôle en échec, le bilan donne une ligne par erreur (`fichier:ligne.colonne: [ERROR] message`) ou par test faux (`fichier:ligne › Scenario : message`). Tant que la compilation échoue, les contrôles qui en dépendent sont bloqués : corrigez d'abord la compilation.
 - Un `[WARNING]` de preuve est un échec : lisez le contre-exemple dans `resultats/preuve.log`.
@@ -135,7 +138,7 @@ Le bilan distingue réussite, échec, contrôle bloqué et contrôle indisponibl
 
 ## Limites à dire à l'avocat
 
-- Catleg vérifie les articles reconnus dans les titres Markdown, avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient uniquement de `--au AAAA-MM-JJ` ; sans `--au`, `pm catala verifier` marque Catleg « non effectué ». En conseil ou en rédaction de contrat, donnez la date du jour. En contentieux, donnez la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure) ; demandez-la à l’avocat si elle est incertaine. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
+- Catleg vérifie les articles des titres Markdown et les identifiants cités dans le fichier (`source:` des `#[doc]`), avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient de `--au AAAA-MM-JJ`, sinon de `date_vigueur` dans `tache.json`, sinon du jour. En contentieux, inscrivez dans `tache.json` la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure), donnée par l’avocat ; demandez-la s’il l’a omise. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
 - Catala 1.3 peut omettre des obligations pour des définitions globales. La preuve valide seulement les obligations produites. Une preuve sans obligation échoue.
 - Une preuve porte sur le programme. Elle ne prouve ni les faits, ni la fidélité du programme au texte.
 - Le programme ne lit pas les pièces. Le lien entre les entrées du programme et les pièces passe par une table des sources que l'avocat construit (qualification, lien officiel, pièce).

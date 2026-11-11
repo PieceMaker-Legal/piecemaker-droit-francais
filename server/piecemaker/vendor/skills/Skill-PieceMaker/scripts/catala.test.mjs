@@ -231,6 +231,70 @@ test('a proof with an overlap warning fails and a pack without proof refuses it'
   }
 });
 
+function catlegScenario(files, task) {
+  const context = scratch();
+  const directory = program(context.dossier, 'prime-anciennete', files);
+  if (task) fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
+  const runner = async (command, args) => args.includes('lf')
+    ? { code: 0, stdout: JSON.stringify({ article: { id: 'LEGIARTI000000000001', dateDebut: '2020-01-01', dateFin: '2999-01-01' } }), stderr: '' }
+    : { code: 0, stdout: 'PIECEMAKER_ARTICLES=[]\n', stderr: '' };
+  const deps = { env: { PIECEMAKER_HOME: context.home }, homeDir: context.home, run: runner, python: '/py/python3', credentials: { CATLEG_LF_CLIENT_ID: 'id', CATLEG_LF_CLIENT_SECRET: 's' }, now: () => '2026-03-04T10:00:00Z' };
+  const report = () => JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'catleg.json'), 'utf8'));
+  return { ...context, directory, deps, report };
+}
+
+test('catleg checks an identifier cited only in a doc attribute', async () => {
+  const { dossier, deps, report, cleanup } = catlegScenario({ 'prime.catala_fr': '#[doc.source = "LEGIARTI000000000001"]\n' });
+  try {
+    const text = await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-03-04' }, deps });
+    assert.match(text, /1 article\(s\) contrôlé/);
+    assert.equal(report().passed, true);
+    assert.deepEqual(report().fichiers[0].articles, ['LEGIARTI000000000001']);
+    assert.doesNotMatch(JSON.stringify(report()), /non reconnus/);
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2019-12-31' }, deps });
+    assert.equal(report().passed, false);
+  } finally { cleanup(); }
+});
+
+test('catleg takes the reference date from --au, then tache.json, then the day', async () => {
+  const task = { tache: 'Acte', type: 'contentieux', raisonnements: [], date_vigueur: '2024-01-15' };
+  const files = { 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' };
+  const withTask = catlegScenario(files, task);
+  const withoutTask = catlegScenario(files);
+  try {
+    assert.match(await runCatala({ commande: 'catleg', cwd: withTask.dossier, flags: { au: '2023-05-06' }, deps: withTask.deps }), /date donnée par --au/);
+    assert.deepEqual([withTask.report().dates_reference, withTask.report().origine_date], [['2023-05-06'], '--au']);
+    assert.match(await runCatala({ commande: 'catleg', cwd: withTask.dossier, deps: withTask.deps }), /date de tache\.json/);
+    assert.deepEqual([withTask.report().dates_reference, withTask.report().origine_date], [['2024-01-15'], 'tache.json']);
+    assert.match(await runCatala({ commande: 'catleg', cwd: withoutTask.dossier, deps: withoutTask.deps }), /date du jour/);
+    assert.deepEqual([withoutTask.report().dates_reference, withoutTask.report().origine_date], [['2026-03-04'], 'jour']);
+  } finally { withTask.cleanup(); withoutTask.cleanup(); }
+});
+
+test('an invalid date_vigueur in tache.json is reported', async () => {
+  const { dossier, deps, cleanup } = catlegScenario({ 'prime.catala_fr': MODULE }, { tache: 'Acte', type: 'contentieux', raisonnements: [{ champ: 'Prime', objectif: 'Calculer' }], date_vigueur: '2024-02-30' });
+  try {
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /date valide/);
+    await runCatala({ commande: 'verifier', cwd: dossier, deps });
+    const report = JSON.parse(fs.readFileSync(path.join(dossier, '.piecemaker', 'catala', 'prime-anciennete', 'resultats', 'verification.json'), 'utf8'));
+    assert.match(report.checks.find((entry) => entry.name === 'documentation').errors.join(' '), /date_vigueur invalide : écrivez AAAA-MM-JJ\./);
+  } finally { cleanup(); }
+});
+
+test('verifier and catleg give the same catleg verdict', async () => {
+  const { dossier, deps, report, directory, cleanup } = catlegScenario({ 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' }, { tache: 'Acte', type: 'autre', raisonnements: [], date_vigueur: '2019-12-31' });
+  try {
+    await runCatala({ commande: 'catleg', cwd: dossier, deps });
+    const alone = report();
+    await runCatala({ commande: 'verifier', cwd: dossier, deps });
+    const inside = report();
+    const entry = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((check) => check.name === 'catleg');
+    assert.deepEqual([inside.passed, inside.dates_reference, inside.origine_date, inside.fichiers], [alone.passed, alone.dates_reference, alone.origine_date, alone.fichiers]);
+    assert.equal(entry.passed, alone.passed);
+    assert.equal(alone.passed, false);
+  } finally { cleanup(); }
+});
+
 test('catleg counts native parser results, rejects empty checks and uses the user PISTE credentials', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
@@ -255,13 +319,13 @@ test('catleg counts native parser results, rejects empty checks and uses the use
     assert.equal(report().fichiers[0].versions[0].valide, false);
     await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2020-01-01' }, deps });
     assert.equal(report().fichiers[0].versions[0].valide, true);
-    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /--au AAAA-MM-JJ/);
     assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2021-06-01' }, deps }), /donnée par --au/);
     assert.deepEqual(report().dates_reference, ['2021-06-01']);
     stdout = 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":true}]\n';
     await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2021-06-01' }, deps: { ...deps, run: async (command, args, options) => args.includes('lf') ? runner(command, args, options) : { code: 1, stdout, stderr: 'expired' } } });
     assert.equal(report().passed, true);
     assert.deepEqual(report().fichiers[0].articles, ['LEGIARTI000000000001']);
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '## Article fictif\n');
     for (const output of ['', 'PIECEMAKER_ARTICLES=[]\n']) {
       stdout = output;
       await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-03-04' }, deps });
