@@ -260,6 +260,7 @@ async function verifier(context, program, flags = {}) {
   const previous = readJson(path.join(program.directory, 'resultats', 'explication.json'));
   for (const file of ['preuve.json', 'catleg.json', 'citations.json', 'tests.json', 'explication.json', 'explication.dot', 'scenarios.json']) fs.rmSync(path.join(program.directory, 'resultats', file), { force: true });
   const checks = [];
+  const provenanceCache = new Map();
   const record = async (name, command, work) => {
     let entry;
     const begin = Date.now();
@@ -340,7 +341,7 @@ async function verifier(context, program, flags = {}) {
       for (const scope of scopes) {
         const matching = tests.filter((file) => path.basename(file) === scope.file);
         if (matching.length !== 1) continue;
-        const trace = await explainScenario(context, program, matching[0], scope.scope_name);
+        const trace = await explainScenario(context, program, matching[0], scope.scope_name, provenanceCache);
         scenarios.push({ ...trace.report, test_reussi: scope.success, graphe: trace.graphe, message: trace.message });
         logs.push(`${matching[0]} › ${scope.scope_name}\n${trace.message || 'Graphe calculé.'}`);
       }
@@ -430,18 +431,26 @@ async function expliquer(context, program, flags) {
   return `Explication ${file} › ${flags.scope} : graphe des formules et conditions appliquées.\nGraphe : .piecemaker/catala/${program.name}/resultats/explication.dot`;
 }
 
-async function explainScenario(context, program, file, scope) {
+async function explainScenario(context, program, file, scope, cache) {
   const started = context.now();
   const digest = sourcesDigest(program.directory, sourceFiles(program.directory));
   const { entry, result } = await check(context, program.directory, 'explication', 'catala', ['explain', '--color=never', '--whole-program', '--conditions', '--dot', '-I', '.', file, '-s', scope, '-o', '-']);
-  const provenance = await nativeProvenance(context, program, file, scope);
+  const provenance = await nativeProvenance(context, program, file, scope, cache);
   const dotPassed = entry.passed && /^digraph\s/.test(result.stdout.trim());
   if (!dotPassed && provenance.trace.length) provenance.issues.push('Explication DOT indisponible : graphe issu de la trace JSON et des dépendances Catala.');
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope, passed: (dotPassed || provenance.trace.length > 0) && digest === sourcesDigest(program.directory, sourceFiles(program.directory)), sources_sha256: digest, checks: [entry], provenance };
   return { report, graphe: report.passed && dotPassed ? result.stdout : '', message: report.passed ? '' : `${result.stdout}${result.stderr}` || 'Trace indisponible ou sources modifiées pendant le calcul.' };
 }
 
-async function nativeProvenance(context, program, file, scope) {
+async function nativeProvenance(context, program, file, scope, cache) {
+  const cachedCheck = async (name, args) => {
+    if (!cache) return check(context, program.directory, name, 'catala', args);
+    const key = JSON.stringify(args);
+    if (!cache.has(key)) cache.set(key, check(context, program.directory, name, 'catala', args));
+    const cached = await cache.get(key);
+    writeResult(program.directory, `${name}.log`, `${cached.result.stdout}${cached.result.stderr}`);
+    return cached;
+  };
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-catala-trace-'));
   const traceFile = path.join(directory, 'trace.json');
   const data = { trace: [], definitions: [], dependencies: [], issues: [] };
@@ -469,7 +478,7 @@ async function nativeProvenance(context, program, file, scope) {
     };
     visit(trace);
     for (const name of new Set([...declarations.values()].map((entry) => entry.file))) {
-      const listed = await check(context, program.directory, 'provenance-dependances', 'catala', ['dependency-graph', '--color=never', '-I', '.', name]);
+      const listed = await cachedCheck('provenance-dependances', ['dependency-graph', '--color=never', '-I', '.', name]);
       try {
         if (!listed.entry.passed) throw new Error();
         const graph = JSON.parse(listed.result.stdout);
@@ -478,7 +487,7 @@ async function nativeProvenance(context, program, file, scope) {
       } catch { data.issues.push(`Dépendances Catala indisponibles pour ${name}.`); }
     }
     for (const declaration of declarations.values()) {
-      const result = await check(context, program.directory, 'provenance-definitions', 'catala', ['exceptions', '--color=never', '--output-format=json', '-I', '.', declaration.file, '-s', declaration.scope, '-v', declaration.variable]);
+      const result = await cachedCheck('provenance-definitions', ['exceptions', '--color=never', '--output-format=json', '-I', '.', declaration.file, '-s', declaration.scope, '-v', declaration.variable]);
       try {
         if (!result.entry.passed) throw new Error();
         const definitions = JSON.parse(result.result.stdout);

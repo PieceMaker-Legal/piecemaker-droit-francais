@@ -119,6 +119,46 @@ test('expliquer retains native provenance and succeeds through JSON when explain
   } finally { cleanup(); }
 });
 
+test('verifier computes dependencies and exceptions once for all scenarios', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime');
+    const position = { file: 'prime.catala_fr', start: { line: 4, character: 1 }, end: { line: 4, character: 10 }, law_headings: ['Texte fictif'] };
+    const scopes = [{ scope_name: 'AvecDemande', success: true, errors: [] }, { scope_name: 'SansDemande', success: true, errors: [] }];
+    const { runner } = fakeRun({ scopes });
+    const counts = new Map();
+    const run = async (command, args, options) => {
+      if (args[0] === 'interpret') {
+        fs.writeFileSync(args.find((arg) => arg.startsWith('--trace=')).slice(8), JSON.stringify([{ element: { kind: 'scope_call', name: 'Prime', decl_pos: { ...position } }, pos: { ...position }, value: {}, trace: [{ element: { kind: 'scope_var', name: 'montant', decl_pos: { ...position }, output: true }, pos: { ...position }, value: 10 }] }]));
+        return { code: 0, stdout: '', stderr: '' };
+      }
+      if (args[0] === 'dependency-graph' && args.includes('prime.catala_fr') && !args.includes('--whole-program')) {
+        const key = JSON.stringify(args);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        return { code: 0, stdout: JSON.stringify({ intra_scopes: { Prime: { nodes: { 1: 'montant' }, edges: [] } } }), stderr: '' };
+      }
+      if (args[0] === 'exceptions') {
+        const key = JSON.stringify(args);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        return { code: 0, stdout: JSON.stringify({ scope: 'Prime', variable: 'montant', trees: [] }), stderr: '' };
+      }
+      return runner(command, args, options);
+    };
+    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } });
+    const exceptionCalls = [...counts].filter(([key]) => key.includes('"exceptions"'));
+    const dependencyCalls = [...counts].filter(([key]) => key.includes('"dependency-graph"'));
+    assert.equal(exceptionCalls.length, 1);
+    assert.equal(exceptionCalls[0][1], 1);
+    assert.ok(dependencyCalls.every(([, count]) => count <= 2));
+    const saved = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'scenarios.json'), 'utf8'));
+    assert.equal(saved.scenarios.length, 2);
+    for (const scenario of saved.scenarios) {
+      assert.equal(scenario.provenance.definitions[0].variable, 'montant');
+      assert.equal(scenario.provenance.dependencies[0].intra_scopes.Prime.nodes[1], 'montant');
+    }
+  } finally { cleanup(); }
+});
+
 test('PISTE credentials are mapped to the catleg variables', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-catala-piste-'));
   try {
