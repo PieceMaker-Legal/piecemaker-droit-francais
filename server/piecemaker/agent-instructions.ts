@@ -41,7 +41,8 @@ const OLD_TREE_RULE = '3° Arborescence: Respecte arborescence convenue dans per
 const TEMPLATE_HEADER = 'Tu es un assistant juridique. Voici les règles :';
 const TOOLS_RULE_START = '6° Outils:';
 const HELP_LINE = '- Syntaxe d’une commande → pm --help';
-const DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala ; question de droit → sous-agent research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
+const OLD_DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala ; question de droit → sous-agent research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
+const DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala ; question de droit → sous-agent research-maker ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
 const TOOLS_RULE_LINES = [
   `${TOOLS_RULE_START} Avant d’agir, charge le skill qui correspond à la demande, puis suis-le.`,
   '- Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement → skill piecemaker',
@@ -57,6 +58,7 @@ const RULE_UPDATES = new Map([
   ...OLD_SUIVI_RULES.map((rule): [string, string] => [rule, SUIVI_RULE]),
   [OLD_GENERAL_RULE, GENERAL_RULE],
   [OLD_TREE_RULE, TREE_RULE],
+  [OLD_DELEGATION_LINE, DELEGATION_LINE],
   [PREVIOUS_TREE_RULE, TREE_RULE],
 ]);
 

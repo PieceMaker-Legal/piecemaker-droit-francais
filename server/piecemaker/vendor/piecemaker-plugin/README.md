@@ -16,11 +16,14 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   - `premise-maker` — prémisses attendues par un programme Catala, cherchées dans les pièces.
   - `reasoning-maker` — raisonnement YAML d'un acte, puis programme Catala.
   - `research-maker` — recherche Légifrance et Judilibre (modèle léger) ; l'agent principal relit chaque source.
-  Noms d'affichage (`metadata.title`) : IndexMaker, PremiseMaker, ReasoningMaker, ResearchMaker.
+  - `deep-research-maker` — prépare et soumet une tabular review en mode recherche pour examiner
+    tout un point de droit ; n'analyse pas les décisions.
+  Noms d'affichage (`metadata.title`) : IndexMaker, PremiseMaker, ReasoningMaker, ResearchMaker,
+  DeepResearchMaker.
 - **Hooks** : `guard-legal-search` (Claude) refuse `Search_Code` et `Search_Jurisprudence` à l'agent
-  principal quand `research-maker` est installé ; il lui laisse `consulter_article` et `consulter_decision`.
+  principal quand `research-maker` est installé (il renvoie aussi vers `deep-research-maker`) ; il lui laisse `consulter_article` et `consulter_decision`.
   Commandes de l'avocat qui lancent ces sous-agents (`context: fork`) : `/indexer`, `/premisses`,
-  `/raisonner`, `/rechercher` (`server/piecemaker/vendor/skills/`).
+  `/raisonner`, `/rechercher`, `/recherche-approfondie` (`server/piecemaker/vendor/skills/`).
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).

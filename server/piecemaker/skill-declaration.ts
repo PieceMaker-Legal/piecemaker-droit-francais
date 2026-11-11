@@ -20,6 +20,7 @@ const BUNDLED_SKILLS = [
   { slug: 'premisses', segments: ['vendor', 'skills', 'premisses'] },
   { slug: 'raisonner', segments: ['vendor', 'skills', 'raisonner'] },
   { slug: 'rechercher', segments: ['vendor', 'skills', 'rechercher'] },
+  { slug: 'recherche-approfondie', segments: ['vendor', 'skills', 'recherche-approfondie'] },
 ] as const;
 
 const RETIRED_BUNDLED_SKILLS = ['redaction-juridique'];

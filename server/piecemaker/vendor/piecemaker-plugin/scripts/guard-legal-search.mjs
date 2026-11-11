@@ -16,7 +16,8 @@ export function searchDecision(payload, { home = os.homedir() } = {}) {
   if (!payload || !SEARCH_TOOL.test(String(payload.tool_name || ''))) return null;
   if (payload.agent_id || payload.agent_type) return null;
   if (!researchMakerInstalled(payload.cwd, home)) return null;
-  const reason = 'Recherche Légifrance réservée au sous-agent research-maker. Déléguez-lui la question, '
+  const reason = 'Recherche Légifrance réservée aux sous-agents : question ponctuelle → research-maker, '
+    + 'examen complet d’un point de droit → deep-research-maker. Déléguez la question, '
     + 'puis relisez chaque source qu’il cite avec consulter_article ou consulter_decision.';
   return {
     hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason },

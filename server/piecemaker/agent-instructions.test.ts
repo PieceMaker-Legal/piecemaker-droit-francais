@@ -100,6 +100,15 @@ test('adds the delegation line once to a previous tools rule, keeping CRLF', () 
   assert.equal(await read(root, 'AGENTS.md'), `${lines.join('\r\n')}\r\n`);
 }));
 
+test('replaces the previous delegation line without duplicating it', () => withProject(async (root) => {
+  const template = agentInstructionsTemplate();
+  const previous = template.replace(' ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker.', '.');
+  assert.notEqual(previous, template);
+  await writeFile(path.join(root, 'AGENTS.md'), previous);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await read(root, 'AGENTS.md'), template);
+}));
+
 test('leaves a tools rule rewritten by the lawyer untouched',() => withProject(async (root) => {
   const content = `${agentInstructionsTemplate().split('\n')[0]}\n6° Outils: ma propre table\n`;
   await writeFile(path.join(root, 'AGENTS.md'), content);

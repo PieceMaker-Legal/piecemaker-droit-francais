@@ -35,7 +35,7 @@ test('installe docx-cli et style-redaction-cabinet dans .agents/skills et les re
   assert.match(fs.readFileSync(skillPath(folder, 'style-redaction-cabinet'), 'utf8'), /^---\nname: style-redaction-cabinet\n/);
   assert.match(fs.readFileSync(skillPath(folder, 'Skill-PieceMaker'), 'utf8'), /^---\nname: piecemaker\n/);
   assert.match(fs.readFileSync(skillPath(folder, 'catala'), 'utf8'), /^---\nname: catala\n/);
-  for (const [slug, agent] of [['indexer', 'index-maker'], ['premisses', 'premise-maker'], ['raisonner', 'reasoning-maker'], ['rechercher', 'research-maker']]) {
+  for (const [slug, agent] of [['indexer', 'index-maker'], ['premisses', 'premise-maker'], ['raisonner', 'reasoning-maker'], ['rechercher', 'research-maker'], ['recherche-approfondie', 'deep-research-maker']]) {
     assert.match(fs.readFileSync(skillPath(folder, slug), 'utf8'), new RegExp(`^---\\nname: ${slug}\\n[^]*\\ncontext: fork\\nagent: ${agent}\\n`));
   }
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'catala.mjs')), true);
@@ -139,5 +139,5 @@ test('un répertoire à la place d’un lien provider est remplacé', () => {
 test('un dossier inexistant est journalisé sans lever d’erreur', (context) => {
   const warn = context.mock.method(console, 'warn', () => undefined);
   declareBundledSkills(path.join(temporaryFolder(), 'absent'));
-  assert.equal(warn.mock.callCount(), 9);
+  assert.equal(warn.mock.callCount(), 10);
 });
