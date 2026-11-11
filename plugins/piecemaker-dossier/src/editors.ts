@@ -1,6 +1,6 @@
 import { aliasEditorMarkup, citationListMarkup, companySearchResultMarkup, documentResource, entityKinds, escapeHtml, kindLabels, natureOptionsMarkup, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
 import { knowledgeApi } from './api.js';
-import { factStatements, facts, okfApi } from './okf.js';
+import { factStatements, facts, okfApi, partyFacts } from './okf.js';
 import type { CompanySearchResult } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { citableEntities, citationSource, citationsOfEntity, citationsOfMention, pieceMentionOperations } from './citations.js';
@@ -355,6 +355,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const mentionCount = relations.filter((relation) => relation.relation === 'mentions').length;
   const entityCitations = node ? citationsOfEntity(data.graph.citations, node.id) : [];
   const linkTargets = data.graph.nodes.filter((entry) => entry.id !== id && (entry.kind === 'person' || entry.kind === 'company'));
+  const involvedFacts = node ? partyFacts(data.okf ?? null, node.id.replace(/^entity:/, '')) : [];
   const layer = modal(root, `
     <div class="pmd-profile-editor" data-kind="${selectedKind}" data-side="${selectedSide}">
     <form class="pmd-form" data-node-form>
@@ -399,6 +400,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <label data-custom-relation hidden>Lien personnalisé<input class="pmd-input" name="customRelation" placeholder="Saisissez le type de lien"></label>
       ${mentionCount || entityCitations.length ? `<details class="pmd-profile-mentions"><summary>${mentionCount ? `Cité dans ${mentionCount} pièce${mentionCount > 1 ? 's' : ''}` : 'Citations des mentions'}</summary><p class="pmd-form-note">Mentions à corriger depuis l’index.</p>${citationListMarkup(entityCitations.map((citation) => ({ texte: citation.texte, source: citationSource(citation, data.graph.nodes) })))}</details>` : ''}
       </section>
+      ${involvedFacts.length ? `<section class="pmd-form-section pmd-profile-section"><h3>${profileFileIcon}Faits du dossier</h3><div class="pmd-relation-list">${involvedFacts.map((fact) => `<div class="pmd-relation-row"><span class="pmd-relation-copy"><span class="pmd-relation-type">concerne</span><strong class="pmd-relation-target">${escapeHtml(fact.title)}</strong>${fact.description ? `<small class="pmd-relation-kind">${escapeHtml(fact.description)}</small>` : ''}</span></div>`).join('')}</div></section>` : ''}
       <p class="pmd-form-note pmd-button-danger" data-delete-error role="alert" hidden></p>
       <div class="pmd-form-actions">${node ? '<button type="button" class="pmd-button pmd-button-danger piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-delete-entity>Supprimer</button><span class="pmd-spacer"></span>' : ''}<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm">Enregistrer</button></div>
     </form></div>`);

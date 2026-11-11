@@ -59,7 +59,7 @@ export function ficheLinks(index: OkfIndex | null, resource: string): Array<{ la
 export function graphElements(index: OkfIndex): Array<{ data: Record<string, string> }> {
   const fiches = index.fiches.filter((fiche) => [...index.typesGraphe, FACT_TYPE, PARTY_TYPE].includes(fiche.type));
   const ids = new Set(fiches.map((fiche) => fiche.id));
-  const kind = (fiche: OkfFiche) => fiche.type === FACT_TYPE ? 'fact' : fiche.type === PARTY_TYPE ? `party-${fiche.side || 'tiers'}` : 'document';
+  const kind = (fiche: OkfFiche) => fiche.type === FACT_TYPE ? 'fact' : fiche.type === PARTY_TYPE ? `party-${fiche.side === 'adversaire' ? 'adverse' : fiche.side || 'tiers'}` : 'document';
   return [
     ...fiches.map((fiche) => ({ data: { id: fiche.id, label: fiche.title, resource: fiche.resource, kind: kind(fiche), type: fiche.type } })),
     ...fiches.flatMap((fiche) => fiche.relations
@@ -68,22 +68,43 @@ export function graphElements(index: OkfIndex): Array<{ data: Record<string, str
   ];
 }
 
-export function factEstablishers(index: OkfIndex, factId: string): Array<{ piece: string; value: string; citation: string }> {
+export function factEstablishers(index: OkfIndex, factId: string): Array<{ piece: string; resource: string; value: string; citation: string }> {
   return index.fiches.flatMap((fiche) => fiche.relations
     .filter((entry) => entry.relation === 'states' && entry.target === factId)
-    .map((entry) => ({ piece: fiche.title, value: entry.value || '', citation: entry.citation })));
+    .map((entry) => ({ piece: fiche.title, resource: fiche.resource, value: entry.value || '', citation: entry.citation })));
+}
+
+export function factParties(index: OkfIndex, factId: string): OkfFiche[] {
+  const targets = new Set((index.fiches.find((fiche) => fiche.id === factId)?.relations || []).filter((entry) => entry.relation === 'involves').map((entry) => entry.target));
+  return index.fiches.filter((fiche) => fiche.type === PARTY_TYPE && targets.has(fiche.id));
+}
+
+export function partyFacts(index: OkfIndex | null, code: string): OkfFiche[] {
+  const party = index?.fiches.find((fiche) => fiche.type === PARTY_TYPE && fiche.title === code);
+  if (!party) return [];
+  return facts(index).filter((fiche) => fiche.relations.some((entry) => entry.relation === 'involves' && entry.target === party.id));
 }
 
 const escapeText = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] || char);
+const factIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l9 9-9 9-9-9z"></path></svg>';
+const pieceIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"></path><path d="M14 3v5h5"></path></svg>';
+const partyIcon = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="7" r="4"></circle><path d="M5 20v-2a7 7 0 0 1 14 0v2a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1z"></path></svg>';
 
-export function factDetailMarkup(index: OkfIndex, factId: string): string {
+export function factFicheMarkup(index: OkfIndex, factId: string): string {
   const fact = index.fiches.find((fiche) => fiche.id === factId);
   if (!fact) return '';
-  const rows = factEstablishers(index, factId).map((entry) => `<li><strong>${escapeText(entry.piece)}</strong>${entry.value ? ` : ${escapeText(entry.value)}` : ''}${entry.citation ? `<blockquote>${escapeText(entry.citation)}</blockquote>` : ''}</li>`).join('');
-  return `<div class="pmd-okf-detail-head"><strong>${escapeText(fact.title)}</strong><button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-okf-detail-close aria-label="Fermer le détail">×</button></div><div class="pmd-okf-detail-label">Pièces qui établissent ce fait</div>${rows ? `<ul>${rows}</ul>` : '<p class="pmd-okf-detail-empty">Aucune pièce n’établit ce fait.</p>'}`;
+  const pieces = factEstablishers(index, factId).map((entry) => `<button type="button" class="pmd-relation-row pmd-relation-open" data-open-resource="${escapeText(entry.resource)}"><span class="pmd-relation-copy">${entry.value ? `<span class="pmd-relation-type">${escapeText(entry.value)}</span>` : ''}<strong class="pmd-relation-target">${escapeText(entry.piece)}</strong>${entry.citation ? `<small class="pmd-relation-kind pmd-relation-quote">« ${escapeText(entry.citation)} »</small>` : ''}</span></button>`).join('');
+  const parties = factParties(index, factId).map((party) => `<div class="pmd-relation-row"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeText(party.description)}</span><strong class="pmd-relation-target">${escapeText(party.title)}</strong></span></div>`).join('');
+  return `<div class="pmd-profile-editor" data-kind="fact" data-side="fact"><div class="pmd-form">
+    <header class="pmd-profile-identity"><span class="pmd-profile-avatar">${factIcon}</span><div class="pmd-profile-identity-copy"><span class="pmd-profile-eyebrow">Fait</span><strong>${escapeText(fact.title)}</strong>${fact.single ? '<span class="pmd-profile-kind">Valeur unique</span>' : ''}</div><button type="button" class="pmd-icon-button pmd-profile-close" data-close aria-label="Fermer">×</button></header>
+    ${fact.description ? `<section class="pmd-form-section pmd-profile-section"><h3>${factIcon}Description</h3><p class="pmd-form-note">${escapeText(fact.description)}</p></section>` : ''}
+    <section class="pmd-form-section pmd-profile-section"><h3>${pieceIcon}Pièces qui établissent ce fait</h3>${pieces ? `<div class="pmd-relation-list">${pieces}</div>` : '<p class="pmd-form-note">Aucune pièce n’établit ce fait.</p>'}</section>
+    ${parties ? `<section class="pmd-form-section pmd-profile-section"><h3>${partyIcon}Parties concernées</h3><div class="pmd-relation-list">${parties}</div></section>` : ''}
+    <div class="pmd-form-actions"><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button></div>
+  </div></div>`;
 }
 
-export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen: (resource: string) => void): Promise<() => void> {
+export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen: (fiche: OkfFiche) => void): Promise<() => void> {
   const { default: cytoscape } = await import('cytoscape');
   const probe = document.createElement('span');
   container.appendChild(probe);
@@ -126,10 +147,6 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen
       { selector: 'node:selected', style: { 'border-width': 3, 'border-color': accent, 'overlay-color': accent, 'overlay-opacity': 0.08, 'overlay-padding': 6 } },
     ],
   });
-  const detail = container.parentElement?.querySelector<HTMLElement>('[data-okf-detail]') ?? null;
-  const closeDetail = () => {
-    if (detail) detail.hidden = true;
-  };
   const focusOn = (node: cytoscape.NodeSingular | null) => {
     graph.elements().removeClass('pmd-dim pmd-near');
     if (!node) return;
@@ -142,27 +159,11 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen
   graph.on('mouseout', 'node', () => focusOn(selectedNode().nonempty() ? selectedNode() : null));
   graph.on('tap', 'node', (event) => {
     focusOn(event.target);
-    if (!detail) return;
-    if (event.target.data('kind') === 'fact') {
-      detail.innerHTML = factDetailMarkup(index, String(event.target.id()));
-      detail.hidden = false;
-    } else closeDetail();
+    const fiche = index.fiches.find((entry) => entry.id === String(event.target.id()));
+    if (fiche) onOpen(fiche);
   });
   graph.on('tap', (event) => {
-    if (event.target !== graph) return;
-    closeDetail();
-    focusOn(null);
+    if (event.target === graph) focusOn(null);
   });
-  graph.on('tap', 'node[kind = "document"]', (event) => onOpen(String(event.target.data('resource'))));
-  const onDetailClick = (event: Event) => {
-    if (!(event.target as HTMLElement).closest('[data-okf-detail-close]')) return;
-    closeDetail();
-    graph.elements().unselect();
-    focusOn(null);
-  };
-  detail?.addEventListener('click', onDetailClick);
-  return () => {
-    detail?.removeEventListener('click', onDetailClick);
-    graph.destroy();
-  };
+  return () => graph.destroy();
 }

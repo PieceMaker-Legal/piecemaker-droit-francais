@@ -84,7 +84,7 @@ Le serveur refuse une citation absente du document source.
 Onglet Index du plugin `piecemaker-dossier` :
 
 - Tableau : colonne Liens (survol : citation).
-- Graphe (cytoscape) : pièces, faits, parties. Un clic sur une pièce ouvre la visionneuse.
+- Graphe (cytoscape) : pièces, faits, parties. Un clic ouvre la fiche : visionneuse pour une pièce, fiche de l'onglet Parties pour une partie (avec ses faits), fiche du même design pour un fait (pièces, valeurs, citations, parties).
 - Visionneuse : texte de la pièce, passages repérés surlignés (parties, date, citations des faits), section « Faits établis par la pièce » avec retrait. Les faits s'écrivent dans l'OKF dès le choix, par `POST /api/piecemaker/okf/link` et `/unlink`.
 
 ## Agent

@@ -1,7 +1,7 @@
 import { openIndexAnalysis } from './index-analysis.js';
 import { editClassification } from './classification.js';
 import { etapesApi, knowledgeApi } from './api.js';
-import { mountGraph, okfApi } from './okf.js';
+import { FACT_TYPE, PARTY_TYPE, factFicheMarkup, mountGraph, okfApi } from './okf.js';
 import type { OkfView } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
@@ -405,9 +405,23 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const graphHost = content.querySelector<HTMLElement>('[data-okf-graph]');
     const projectPath = context.project?.path || '';
     if (!graphHost || !data?.okf) return;
-    void mountGraph(graphHost, data.okf, (resource) => {
+    const openDocument = (resource: string) => {
       const node = data?.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === resource);
       if (data && node) documentEditor(root, data, node, projectPath, save, renamePiece, okfHandle());
+    };
+    void mountGraph(graphHost, data.okf, (fiche) => {
+      if (!data?.okf) return;
+      if (fiche.type === PARTY_TYPE) {
+        const node = data.graph.nodes.find((entry) => entry.id === `entity:${fiche.title}`);
+        if (node) nodeEditor(root, data, node, save);
+        return;
+      }
+      if (fiche.type !== FACT_TYPE) return openDocument(fiche.resource);
+      const layer = modal(root, factFicheMarkup(data.okf, fiche.id));
+      layer.querySelectorAll<HTMLElement>('[data-open-resource]').forEach((row) => row.addEventListener('click', () => {
+        layer.remove();
+        openDocument(row.dataset.openResource || '');
+      }));
     }).then((destroy) => {
       if (graphHost.isConnected) destroyGraph = destroy;
       else destroy();

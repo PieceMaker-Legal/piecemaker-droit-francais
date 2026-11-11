@@ -382,7 +382,7 @@ function okfGraph(okf: OkfIndex | null): string {
   const count = okf.fiches.filter((fiche) => okf.typesGraphe.includes(fiche.type)).length;
   if (!count) return `<div class="pmd-empty">Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.</div>`;
   const key = (kind: string, label: string) => `<span class="pmd-okf-key" data-kind="${kind}"><i aria-hidden="true"></i>${label}</span>`;
-  return `<div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, faits et parties.</div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('document', 'Pièce')}${key('fact', 'Fait')}${key('party-client', 'Partie cliente')}${key('party-adverse', 'Partie adverse')}</div><div class="pmd-okf-graph-wrap"><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, faits et parties reliés entre eux"></div><aside class="pmd-okf-detail" data-okf-detail aria-label="Détail du fait" hidden></aside></div>`;
+  return `<div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, faits et parties.</div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('document', 'Pièce')}${key('fact', 'Fait')}${key('party-client', 'Partie cliente')}${key('party-adverse', 'Partie adverse')}</div><div class="pmd-okf-graph-wrap"><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, faits et parties reliés entre eux"></div></div>`;
 }
 
 export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }, view: Pick<OkfView, 'mode' | 'errors' | 'contradictions'> = { mode: 'table', errors: null }): string {

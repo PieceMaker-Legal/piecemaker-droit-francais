@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { factDetailMarkup, factEstablishers, factStatements, facts, ficheLinks, graphElements } from '../okf.js';
+import { factFicheMarkup, factEstablishers, factParties, factStatements, facts, ficheLinks, graphElements, partyFacts } from '../okf.js';
 import type { OkfIndex } from '../okf.js';
 import { chronologyView } from '../views.js';
 
@@ -55,7 +55,7 @@ const factIndex: OkfIndex = {
     fiche('Faits/Dommage', 'Fait', 'Dommage'),
     fiche('Faits/Clause', 'Fait', 'Clause <pénale>'),
     { ...fiche('Parties/Jean Dupont', 'Partie', 'Jean Dupont'), side: 'client' },
-    { ...fiche('Parties/Société Exemple SAS', 'Partie', 'Société Exemple SAS'), side: 'adverse' },
+    { ...fiche('Parties/Société Exemple SAS', 'Partie', 'Société Exemple SAS'), side: 'adversaire' },
     fiche('Parties/ZETABIO', 'Partie', 'ZETABIO'),
   ],
 };
@@ -101,29 +101,31 @@ describe('faits de l’index OKF', () => {
 
   it('factEstablishers donne les pièces, valeurs et citations d’un fait', () => {
     expect(factEstablishers(factIndex, '/Faits/Prix.md')).toEqual([
-      { piece: 'Contrat', value: '1 000 €', citation: 'Le prix est de 1 000 euros.' },
-      { piece: 'Courrier', value: '1 200 €', citation: 'Le prix convenu est de 1 200 euros.' },
+      { piece: 'Contrat', resource: 'Pièces/Contrat.pdf', value: '1 000 €', citation: 'Le prix est de 1 000 euros.' },
+      { piece: 'Courrier', resource: 'Pièces/Courrier.pdf', value: '1 200 €', citation: 'Le prix convenu est de 1 200 euros.' },
     ]);
     expect(factEstablishers(factIndex, '/Faits/Inconnu.md')).toEqual([]);
   });
 
-  it('factDetailMarkup affiche les pièces, valeurs et citations', () => {
-    const html = factDetailMarkup(factIndex, '/Faits/Prix.md');
-    expect(html).toContain('<strong>Prix</strong>');
-    expect(html).toContain('<strong>Contrat</strong> : 1 000 €<blockquote>Le prix est de 1 000 euros.</blockquote>');
-    expect(html).toContain('<strong>Courrier</strong> : 1 200 €');
+  it('factFicheMarkup affiche les pièces, valeurs et citations', () => {
+    const html = factFicheMarkup(factIndex, '/Faits/Prix.md');
+    expect(html).toContain('<span class="pmd-profile-eyebrow">Fait</span><strong>Prix</strong>');
+    expect(html).toContain('data-open-resource="Pièces/Contrat.pdf"');
+    expect(html).toContain('<span class="pmd-relation-type">1 000 €</span><strong class="pmd-relation-target">Contrat</strong>');
+    expect(html).toContain('« Le prix est de 1 000 euros. »');
+    expect(html).toContain('<strong class="pmd-relation-target">Courrier</strong>');
     expect(html).not.toContain('Aucune pièce');
   });
 
-  it('factDetailMarkup échappe le titre et signale un fait sans pièce', () => {
-    const html = factDetailMarkup(factIndex, '/Faits/Clause.md');
+  it('factFicheMarkup échappe le titre et signale un fait sans pièce', () => {
+    const html = factFicheMarkup(factIndex, '/Faits/Clause.md');
     expect(html).toContain('Clause &lt;pénale&gt;');
     expect(html).not.toContain('<pénale>');
     expect(html).toContain('Aucune pièce n’établit ce fait.');
   });
 
-  it('factDetailMarkup reste vide pour un fait inconnu', () => {
-    expect(factDetailMarkup(factIndex, '/Faits/Inconnu.md')).toBe('');
+  it('factFicheMarkup reste vide pour un fait inconnu', () => {
+    expect(factFicheMarkup(factIndex, '/Faits/Inconnu.md')).toBe('');
   });
 
   it('ficheLinks affiche la valeur d’un fait établi', () => {
@@ -132,5 +134,28 @@ describe('faits de l’index OKF', () => {
       { label: '← établi par', title: 'Contrat', citation: 'Le prix est de 1 000 euros.' },
       { label: '← établi par', title: 'Courrier', citation: 'Le prix convenu est de 1 200 euros.' },
     ]);
+  });
+});
+
+describe('fiches du graphe', () => {
+  const linked: OkfIndex = {
+    ...factIndex,
+    fiches: factIndex.fiches.map((entry) => entry.title === 'Prix' ? { ...entry, single: true, description: 'Prix de vente', relations: [{ relation: 'involves', target: '/Parties/Jean Dupont.md', citation: '', origin: 'piecemaker/agent' }] } : entry),
+  };
+
+  it('factParties et partyFacts relient un fait à ses parties', () => {
+    expect(factParties(linked, '/Faits/Prix.md').map((party) => party.title)).toEqual(['Jean Dupont']);
+    expect(partyFacts(linked, 'Jean Dupont').map((fact) => fact.title)).toEqual(['Prix']);
+    expect(partyFacts(linked, 'ZETABIO')).toEqual([]);
+    expect(partyFacts(null, 'Jean Dupont')).toEqual([]);
+  });
+
+  it('la fiche d’un fait reprend le design de la fiche de partie', () => {
+    const html = factFicheMarkup(linked, '/Faits/Prix.md');
+    expect(html).toContain('class="pmd-profile-editor" data-kind="fact" data-side="fact"');
+    expect(html).toContain('<span class="pmd-profile-kind">Valeur unique</span>');
+    expect(html).toContain('Prix de vente');
+    expect(html).toContain('Parties concernées');
+    expect(html).toContain('<strong class="pmd-relation-target">Jean Dupont</strong>');
   });
 });
