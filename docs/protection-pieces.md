@@ -96,7 +96,7 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 
 | Code | Rôle |
 | --- | --- |
-| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | sous bouclier vert seulement : refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine |
+| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | sous bouclier vert seulement : refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine ; `pm okf link`/`unlink` seuls (commande unique, sans substitution) peuvent citer une pièce protégée, ils n'en lisent pas le contenu |
 | `classify-ai-documents.mjs` (`PostToolUse` Write/Bash) | exceptions pour les PDF/images produits par l'IA |
 | `lib/commits.cjs` | historique : pas d'extraction de texte des pièces protégées |
 | `knowledge/pipeline.ts` | exclut les « ressources » de la conversion et du scan |

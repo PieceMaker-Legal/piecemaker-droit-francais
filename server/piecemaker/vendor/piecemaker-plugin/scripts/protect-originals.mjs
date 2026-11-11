@@ -246,6 +246,16 @@ function isDocxReadCommand(command, cwd) {
   return reads.length > 0 && reads.every((words) => isCaseDocxRead(words, cwd));
 }
 
+const OKF_LINK_VERBS = new Set(['link', 'unlink']);
+
+function isOkfLinkCommand(command) {
+  const text = String(command || '');
+  if (!text || text.length > MAX_COMMAND_LENGTH) return false;
+  if (text.replace(SAFE_SHELL_TOKEN, '').trim()) return false;
+  const words = (text.match(SAFE_SHELL_TOKEN) || []).map((token) => token.replace(/^["']|["']$/g, ''));
+  return !words.includes('&&') && words[0] === 'pm' && words[1] === 'okf' && OKF_LINK_VERBS.has(words[2]);
+}
+
 const SHELL_WORD = /"[^"]*"|'[^']*'|[^\s;|&<>()]+/g;
 
 function missingFileWords(command, cwd) {
@@ -348,12 +358,13 @@ async function main() {
     if (ambiguous?.length) return deny(ambiguityReason(ambiguous));
     const gitReason = gitHistoryReason(command, cwd);
     if (gitReason) return deny(gitReason);
+    const okfLink = isOkfLinkCommand(command);
     for (const candidate of commandPaths(command, cwd)) {
       const located = locateProjectCase(candidate);
       if (!shieldActive(located)) continue;
       if (isMappingFile(candidate)) return deny(mappingReason(candidate));
       if (isSecretFile(candidate)) return deny(secretReason(candidate));
-      if (isProtectedFile(candidate, located.caseRoot)) {
+      if (!okfLink && isProtectedFile(candidate, located.caseRoot)) {
         return deny(protectionReason(candidate, located.caseRoot));
       }
     }
