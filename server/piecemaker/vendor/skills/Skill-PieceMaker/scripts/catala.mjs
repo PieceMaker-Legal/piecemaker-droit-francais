@@ -98,6 +98,15 @@ function isDay(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 }
 
+function vigueurOf(context, program, flags = {}) {
+  const taskDate = readJson(path.join(program.directory, 'tache.json'))?.date_vigueur;
+  const [value, origine, libelle] = flags.au !== undefined && flags.au !== true ? [flags.au, '--au', 'date donnée par --au'] : taskDate !== undefined ? [taskDate, 'tache.json', 'date de tache.json'] : [];
+  if (value === undefined) throw new Error('Date de vigueur absente : inscrivez date_vigueur dans tache.json ou passez --au, avec today ou AAAA-MM-JJ.');
+  if (value === 'today') return { date: context.now().slice(0, 10), origine, libelle: `${libelle} (today)` };
+  if (!isDay(value)) throw new Error(`${origine === '--au' ? '--au' : 'date_vigueur'} attend today ou une date valide AAAA-MM-JJ.`);
+  return { date: value, origine, libelle };
+}
+
 function taskErrors(directory, files) {
   const file = path.join(directory, 'tache.json');
   if (!fs.existsSync(file)) return [];
@@ -109,7 +118,7 @@ function taskErrors(directory, files) {
   return [
     typeof task?.tache === 'string' && task.tache.trim() ? '' : 'tâche sans nom : renseignez « tache ».',
     TASK_TYPES.includes(task?.type) ? '' : `type de tâche inconnu : écrivez ${TASK_TYPES.join(', ')}.`,
-    task?.date_vigueur === undefined || isDay(task.date_vigueur) ? '' : 'date_vigueur invalide : écrivez AAAA-MM-JJ.',
+    task?.date_vigueur === undefined || task.date_vigueur === 'today' || isDay(task.date_vigueur) ? '' : 'date_vigueur invalide : écrivez today ou AAAA-MM-JJ.',
     parts.length ? '' : 'tâche sans raisonnement : renseignez « raisonnements ».',
     ...parts.flatMap((part) => [
       part?.champ && declared(part.champ) ? '' : `raisonnement « ${part?.champ ?? ''} » : aucun champ d’application de ce nom.`,
@@ -254,6 +263,7 @@ async function clerkTests(context, program, tests) {
 async function verifier(context, program, flags = {}) {
   const files = sourceFiles(program.directory);
   if (!files.length) throw new TypeError(`Aucun fichier .catala_fr dans .piecemaker/catala/${program.name}/.`);
+  vigueurOf(context, program, flags);
   const started = context.now();
   const formatted = context.pack ? await formatSources(context, program, files) : null;
   const digest = sourcesDigest(program.directory, files);
@@ -590,12 +600,7 @@ async function catleg(context, program, flags) {
   if (!credentials) throw new Error('Identifiants PISTE absents : configurez Légifrance dans PieceMaker (~/.config/mcp-legifrance/.env).');
   const files = flags.fichier && flags.fichier !== true ? [String(flags.fichier)] : sourceFiles(program.directory);
   if (files.some((file) => !sourceFiles(program.directory).includes(file))) throw new Error('Fichier Catala absent du programme.');
-  const day = (value, origin) => {
-    if (!isDay(value)) throw new Error(`${origin} attend une date valide AAAA-MM-JJ.`);
-    return value;
-  };
-  const taskDate = readJson(path.join(program.directory, 'tache.json'))?.date_vigueur;
-  const [date, origine, origineLibelle] = flags.au !== undefined ? [day(flags.au, '--au'), '--au', 'date donnée par --au'] : taskDate !== undefined ? [day(taskDate, 'date_vigueur'), 'tache.json', 'date de tache.json'] : [context.now().slice(0, 10), 'jour', 'date du jour'];
+  const { date, origine, libelle: origineLibelle } = vigueurOf(context, program, flags);
   const dates = [date];
   const started = context.now();
   const results = [];

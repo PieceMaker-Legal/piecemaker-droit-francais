@@ -86,7 +86,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       la prémisse concerne une partie du dossier ; pas de citation
   okf unlink <source> <relation> <target>
 
-  catala verifier [--au AAAA-MM-JJ] [--programme NOM]
+  catala verifier [--au today|AAAA-MM-JJ] [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
       mise au format, typage, tests Clerk/Python, preuves, Catleg, citations, explication → resultats/verification.json ;
       --programme est requis quand le dossier en compte plusieurs
@@ -101,8 +101,8 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       exécute un scénario et affiche sa trace
   catala squelette --scope CHAMP [--fichier F] [--programme NOM]
       squelette de test Catala, entrées à leur valeur par défaut
-  catala catleg [--au AAAA-MM-JJ] [--fichier F] [--programme NOM]
-      vigueur des articles à la date --au, sinon date_vigueur de tache.json, sinon la date du jour
+  catala catleg [--au today|AAAA-MM-JJ] [--fichier F] [--programme NOM]
+      vigueur des articles à la date --au, sinon date_vigueur de tache.json ; sans date : erreur
   catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 

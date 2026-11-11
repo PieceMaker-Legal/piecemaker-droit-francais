@@ -82,7 +82,7 @@ test('verifier stores every test scenario and keeps failed assertions distinct f
       }
       return runner(command, args, options);
     };
-    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } });
+    await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } });
     const saved = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'scenarios.json'), 'utf8'));
     assert.deepEqual(saved.scenarios.map((scenario) => [scenario.scope, scenario.test_reussi, scenario.passed]), [['AvecDemande', true, true], ['SansDemande', true, true], ['AssertionFausse', false, false]]);
     assert.match(saved.scenarios[1].graphe, /SansDemande/);
@@ -144,7 +144,7 @@ test('verifier computes dependencies and exceptions once for all scenarios', asy
       }
       return runner(command, args, options);
     };
-    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } });
+    await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } });
     const exceptionCalls = [...counts].filter(([key]) => key.includes('"exceptions"'));
     const dependencyCalls = [...counts].filter(([key]) => key.includes('"dependency-graph"'));
     assert.equal(exceptionCalls.length, 1);
@@ -222,11 +222,11 @@ test('a failing test fails the verification, verifier rewrites unformatted files
     const directory = program(dossier, 'prime-anciennete');
     const { runner } = fakeRun({ testsPass: false });
     const deps = { env: { PIECEMAKER_HOME: home }, homeDir: home, python: null, credentials: null };
-    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: runner } });
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { ...deps, run: runner } });
     assert.match(text, /tests : échec/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).passed, false);
     const broken = async (command, args, options) => (path.basename(command) === 'catala-format' ? { code: 1, stdout: '', stderr: 'Failed idempotence check' } : runner(command, args, options));
-    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: broken } }), /format : échec \(prime.catala_fr, test_prime.catala_fr\)/);
+    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { ...deps, run: broken } }), /format : échec \(prime.catala_fr, test_prime.catala_fr\)/);
     assert.equal(fs.readFileSync(path.join(directory, 'prime.catala_fr'), 'utf8'), MODULE);
     const rewriting = async (command, args, options) => {
       if (path.basename(command) !== 'catala-format') return runner(command, args, options);
@@ -234,7 +234,7 @@ test('a failing test fails the verification, verifier rewrites unformatted files
       fs.writeFileSync(path.join(options.cwd, args.at(-1)), `${fs.readFileSync(path.join(options.cwd, args.at(-1)), 'utf8')}\n`);
       return { code: 0, stdout: '', stderr: '' };
     };
-    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, deps: { ...deps, run: rewriting } }), /format : ok — reformatés : prime.catala_fr, test_prime.catala_fr/);
+    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { ...deps, run: rewriting } }), /format : ok — reformatés : prime.catala_fr, test_prime.catala_fr/);
     assert.equal(fs.readFileSync(path.join(directory, 'prime.catala_fr'), 'utf8'), `${MODULE}\n`);
     assert.doesNotMatch(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'), /Code modifié/);
   } finally {
@@ -296,28 +296,41 @@ test('catleg checks an identifier cited only in a doc attribute', async () => {
   } finally { cleanup(); }
 });
 
-test('catleg takes the reference date from --au, then tache.json, then the day', async () => {
+test('catleg takes the reference date from --au, then tache.json, and accepts today', async () => {
   const task = { tache: 'Acte', type: 'contentieux', raisonnements: [], date_vigueur: '2024-01-15' };
   const files = { 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' };
   const withTask = catlegScenario(files, task);
-  const withoutTask = catlegScenario(files);
+  const today = catlegScenario(files, { ...task, date_vigueur: 'today' });
   try {
     assert.match(await runCatala({ commande: 'catleg', cwd: withTask.dossier, flags: { au: '2023-05-06' }, deps: withTask.deps }), /date donnée par --au/);
     assert.deepEqual([withTask.report().dates_reference, withTask.report().origine_date], [['2023-05-06'], '--au']);
     assert.match(await runCatala({ commande: 'catleg', cwd: withTask.dossier, deps: withTask.deps }), /date de tache\.json/);
     assert.deepEqual([withTask.report().dates_reference, withTask.report().origine_date], [['2024-01-15'], 'tache.json']);
-    assert.match(await runCatala({ commande: 'catleg', cwd: withoutTask.dossier, deps: withoutTask.deps }), /date du jour/);
-    assert.deepEqual([withoutTask.report().dates_reference, withoutTask.report().origine_date], [['2026-03-04'], 'jour']);
-  } finally { withTask.cleanup(); withoutTask.cleanup(); }
+    assert.match(await runCatala({ commande: 'catleg', cwd: withTask.dossier, flags: { au: 'today' }, deps: withTask.deps }), /date donnée par --au \(today\)/);
+    assert.deepEqual([withTask.report().dates_reference, withTask.report().origine_date], [['2026-03-04'], '--au']);
+    assert.match(await runCatala({ commande: 'catleg', cwd: today.dossier, deps: today.deps }), /date de tache\.json \(today\)/);
+    assert.deepEqual([today.report().dates_reference, today.report().origine_date], [['2026-03-04'], 'tache.json']);
+  } finally { withTask.cleanup(); today.cleanup(); }
+});
+
+test('a missing reference date stops catleg and verifier before any check', async () => {
+  const { dossier, deps, directory, cleanup } = catlegScenario({ 'prime.catala_fr': MODULE });
+  const calls = [];
+  const counted = { ...deps, run: async (...input) => { calls.push(input); return deps.run(...input); } };
+  try {
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps: counted }), /Date de vigueur absente/);
+    await assert.rejects(() => runCatala({ commande: 'verifier', cwd: dossier, deps: counted }), /Date de vigueur absente/);
+    await assert.rejects(() => runCatala({ commande: 'verifier', cwd: dossier, flags: { au: true }, deps: counted }), /Date de vigueur absente/);
+    assert.equal(calls.length, 0);
+    assert.equal(fs.existsSync(path.join(directory, 'resultats', 'verification.json')), false);
+  } finally { cleanup(); }
 });
 
 test('an invalid date_vigueur in tache.json is reported', async () => {
   const { dossier, deps, cleanup } = catlegScenario({ 'prime.catala_fr': MODULE }, { tache: 'Acte', type: 'contentieux', raisonnements: [{ champ: 'Prime', objectif: 'Calculer' }], date_vigueur: '2024-02-30' });
   try {
-    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /date valide/);
-    await runCatala({ commande: 'verifier', cwd: dossier, deps });
-    const report = JSON.parse(fs.readFileSync(path.join(dossier, '.piecemaker', 'catala', 'prime-anciennete', 'resultats', 'verification.json'), 'utf8'));
-    assert.match(report.checks.find((entry) => entry.name === 'documentation').errors.join(' '), /date_vigueur invalide : écrivez AAAA-MM-JJ\./);
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /date_vigueur attend today ou une date valide/);
+    await assert.rejects(() => runCatala({ commande: 'verifier', cwd: dossier, deps }), /date_vigueur attend today ou une date valide/);
   } finally { cleanup(); }
 });
 
@@ -451,13 +464,13 @@ test('independent checks finish despite compilation failure and stale reports ar
       if (args[0] === 'typecheck') { await networkStarted; return { code: 1, stdout: '', stderr: 'Erreur de type' }; }
       return runner(command, args, options);
     };
-    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => { release(); return { passed: false, status: 'failed', message: 'Citation introuvable', results: [] }; } } });
+    await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => { release(); return { passed: false, status: 'failed', message: 'Citation introuvable', results: [] }; } } });
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
     assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['documentation', 'passed'], ['typecheck', 'failed'], ['format', 'blocked'], ['premisses', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
     assert.equal(report.passed, false);
     assert.ok(!calls.some((call) => ['proof', 'explain', 'runtest'].includes(call.args[0])));
     for (const file of ['preuve.json', 'tests.json', 'explication.json']) assert.equal(fs.existsSync(path.join(directory, 'resultats', file)), false);
-    const unavailable = await runCatala({ commande: 'verifier', cwd: dossier, deps: { findPack: () => ({ pack: null }), python: null, credentials: null, citations: async () => ({ passed: true, status: 'passed', results: [] }) } });
+    const unavailable = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { findPack: () => ({ pack: null }), python: null, credentials: null, citations: async () => ({ passed: true, status: 'passed', results: [] }) } });
     assert.match(unavailable, /typecheck : non effectué/);
     assert.match(unavailable, /citations : ok/);
   } finally { cleanup(); }
@@ -473,7 +486,7 @@ test('a failed Python scenario does not prevent the remaining scenarios from run
       if (args.at(-1) === '--test') { executed.push(args[2]); return { code: executed.length === 1 ? 1 : 0, stdout: '', stderr: '' }; }
       return runner(command, args, options);
     };
-    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: '/python', credentials: null } });
+    await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: '/python', credentials: null } });
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
     assert.equal(executed.length, 2);
     assert.equal(report.checks.find((entry) => entry.name === 'tests-python').status, 'failed');
@@ -493,7 +506,7 @@ test('verifier prints the compiler error lines under the failed typecheck', asyn
     program(dossier, 'prime');
     const { runner, calls } = fakeRun();
     const run = async (command, args, options) => (args[0] === 'typecheck' ? { code: 1, stdout: 'prime.catala_fr:4.3-4.6: [ERROR] Syntax error\nMaybe you wanted to write: "égal à"?\n', stderr: '' } : runner(command, args, options));
-    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => ({ passed: true, status: 'passed', results: [] }) } });
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => ({ passed: true, status: 'passed', results: [] }) } });
     assert.match(text, /typecheck : échec[^\n]*\n  prime\.catala_fr:4\.3-4\.6: \[ERROR\] Syntax error/);
     assert.match(text, /format : bloqué/);
   } finally { cleanup(); }
@@ -552,7 +565,7 @@ test('verifier requires doc, a nonempty quote and a title, in any language', asy
     ];
     for (const [annotation, message] of cases) {
       fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\nCitation : « Une citation extérieure ne suffit pas. »\n\n```catala\nchamp d\'application Prime:\n' + annotation + 'définition montant égal à 10 €\n```\n');
-      const output = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
+      const output = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
       const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'));
       const check = report.checks.find((entry) => entry.name === 'documentation');
       assert.equal(check.passed, !message);
@@ -563,13 +576,13 @@ test('verifier requires doc, a nonempty quote and a title, in any language', asy
       }
     }
     fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n#[doc="titre: Fixer le montant\\nquote: « Passage exact. »"]\ndéfinition montant égal à 10 €\ndéfinition autre égal à 20 €\ndéclaration taux contenu décimal égal à 0.1\n```\n');
-    await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
+    await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
     const check = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation');
     assert.equal(check.errors.length, 2);
     assert.match(check.errors[0], /doc.*manquant/);
     const verify = async (task) => {
       fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
-      await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
+      await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
       return JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation').errors.filter((error) => error.startsWith('tache.json:1: '));
     };
     assert.deepEqual(await verify({ tache: 'Conclusions en défense Dupont / Société Exemple', type: 'contentieux', raisonnements: [{ champ: 'Prime', objectif: 'Obtenir la prime', rang: 'principal' }] }), []);
@@ -603,7 +616,7 @@ test('verifier accepts an OKF premise read by a rule', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime', { 'prime.catala_fr': PREMISE_SOURCE });
-    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }, { from: 2, to: 3 }]), python: null, credentials: null } });
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }, { from: 2, to: 3 }]), python: null, credentials: null } });
     assert.match(text, /- premisses : ok/);
     assert.doesNotMatch(text, /Prémisse sans effet/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'premisses').passed, true);
@@ -614,7 +627,7 @@ test('verifier blocks an OKF premise that no rule reads', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime', { 'prime.catala_fr': PREMISE_SOURCE });
-    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }]), python: null, credentials: null } });
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }]), python: null, credentials: null } });
     assert.match(text, /- premisses : échec/);
     assert.match(text, /Prémisse sans effet : Prime\.mention_morte cite okf:\/_premises\/exemple mais aucune règle ne la lit\./);
     assert.doesNotMatch(text, /Prime\.mention_lue/);
