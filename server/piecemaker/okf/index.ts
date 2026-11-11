@@ -40,7 +40,6 @@ export function createOkfBackend(options: OkfOptions) {
   };
 
   const verify = async (projectId: string) => {
-    build(projectId);
     const projectPath = projectPathOf(projectId);
     const resources = (await options.listDocuments(projectPath)).map((filePath) => resourceOf(projectPath, filePath));
     return { erreurs: verifyBundle({ projectPath, resources, markdownOf: markdownOf(projectPath) }), contradictions: contradictions(projectPath) };
@@ -49,7 +48,6 @@ export function createOkfBackend(options: OkfOptions) {
   const verifyGraph = async (projectId: string) => ({ ...await verify(projectId), manques: graphGaps(projectPathOf(projectId)) });
 
   const read = (projectId: string) => {
-    build(projectId);
     const projectPath = projectPathOf(projectId);
     return {
       types: readTypes(projectPath),

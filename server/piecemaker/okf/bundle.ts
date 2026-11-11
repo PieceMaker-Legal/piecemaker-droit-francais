@@ -37,6 +37,7 @@ export const conceptFile = (projectPath: string, id: string): string => path.joi
 export const resourceOf = (projectPath: string, filePath: string): string => posix(path.relative(projectPath, filePath));
 export const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 export const squash = (value: string): string => value.replace(/\s+/g, ' ').trim();
+export const typographic = (value: string): string => squash(value.replace(/[\u2018\u2019\u02BC\u2032]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u00A0\u202F]/g, ' '));
 export const fold = (value: string): string => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
 export const migratedId = (id: string): string => id.startsWith(LEGACY_PREMISE_FOLDER) ? `${PREMISE_FOLDER}${id.slice(LEGACY_PREMISE_FOLDER.length)}` : id;
 export const isPremiseId = (id: string): boolean => id.startsWith(PREMISE_FOLDER);
@@ -124,4 +125,26 @@ export function writeIfChanged(filePath: string, content: string): boolean {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content);
   return true;
+}
+
+const MONTHS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+const DATE_FORMS: Array<{ pattern: RegExp; year: number; month: number | ((name: string) => number); day: number }> = [
+  { pattern: /^(\d{1,2})[/.](\d{1,2})[/.](\d{4})$/, day: 1, month: 2, year: 3 },
+  { pattern: /^(\d{4})-(\d{2})-(\d{2})$/, year: 1, month: 2, day: 3 },
+  { pattern: /^(\d{1,2})(?:er)? ([a-z]+) (\d{4})$/, day: 1, month: (name) => MONTHS.indexOf(name) + 1, year: 3 },
+];
+
+export function isoDateOf(value: string): string | null {
+  const candidate = fold(squash(value));
+  for (const form of DATE_FORMS) {
+    const match = form.pattern.exec(candidate);
+    if (!match) continue;
+    const year = Number(match[form.year]);
+    const month = typeof form.month === 'function' ? form.month(match[2]) : Number(match[form.month]);
+    const day = Number(match[form.day]);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    if (month < 1 || month > 12 || date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+  return null;
 }

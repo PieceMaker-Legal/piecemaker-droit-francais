@@ -13,6 +13,7 @@ import {
   bundleRoot,
   conceptId,
   fold,
+  isoDateOf,
   isPremiseId,
   isPartyId,
   parseConcept,
@@ -23,14 +24,23 @@ import {
   squash,
   text,
   typeOf,
+  typographic,
 } from './bundle.js';
 
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
 
 export function quoted(markdown: string | null, citation: string): boolean {
-  const needle = squash(citation.replace(/^…|…$/g, ''));
-  return Boolean(markdown && needle && squash(markdown).includes(needle));
+  const fragments = typographic(citation.replace(/^(?:…|\.\.\.)|(?:…|\.\.\.)$/g, '')).split(/…|\.\.\./).map((fragment) => fragment.trim()).filter(Boolean);
+  if (!markdown || !fragments.length) return false;
+  const haystack = typographic(markdown);
+  let from = 0;
+  for (const fragment of fragments) {
+    const found = haystack.indexOf(fragment, from);
+    if (found < 0) return false;
+    from = found + fragment.length;
+  }
+  return true;
 }
 
 function indexErrors(projectPath: string, ids: string[]): OkfError[] {
@@ -112,6 +122,6 @@ export function contradictions(projectPath: string): OkfContradiction[] {
     const valeurs = concepts.flatMap((concept) => (relationsOf(concept.frontmatter)[STATES] || [])
       .filter((entry) => entry.target === premise.id && !entry.dismissed && entry.value)
       .map((entry) => ({ piece: concept.id, valeur: entry.value as string })));
-    return new Set(valeurs.map((entry) => fold(squash(entry.valeur)))).size > 1 ? [{ premise: premise.id, titre: text(premise.frontmatter.title), valeurs }] : [];
+    return new Set(valeurs.map((entry) => isoDateOf(entry.valeur) ?? fold(squash(entry.valeur)))).size > 1 ? [{ premise: premise.id, titre: text(premise.frontmatter.title), valeurs }] : [];
   });
 }

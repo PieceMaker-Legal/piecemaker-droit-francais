@@ -13,7 +13,8 @@ import { graphGaps, premiseEvidence } from '../premises.js';
 import { premisesFromReviews } from '../reviews.js';
 import type { ReviewPremise } from '../reviews.js';
 import { addLink, removeLink } from '../links.js';
-import { contradictions, verifyBundle } from '../verify.js';
+import { createOkfBackend } from '../index.js';
+import { contradictions, quoted, verifyBundle } from '../verify.js';
 
 const CONTRACT = 'Pièces/Contrat.pdf';
 const LETTER = 'Pièces/Courrier.pdf';
@@ -340,4 +341,60 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf);
   fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à vrai', '```', ''].join('\n'));
   assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element === RESILIATION_ID || gap.element.includes('catala')), []);
+});
+
+function backendOf(projectPath: string, markdownOf: (resource: string) => string | null) {
+  return createOkfBackend({
+    projects: { getProjectById: () => ({ project_path: projectPath }), getProjectPath: () => ({ project_id: 'p', project_path: projectPath }) },
+    snapshot: (projectId) => ({ projectId, nodes: [], links: [], mappings: [], citations: [] }),
+    convertedMarkdown: (_projectPath, filePath) => markdownOf(path.relative(projectPath, filePath)),
+    listDocuments: async () => resources.map((resource) => path.join(projectPath, resource)),
+    isLoopback: () => true,
+  });
+}
+
+const filesUnder = (directory: string): string[] => fs.readdirSync(directory, { recursive: true }).map(String).sort();
+
+test('verify lit les fiches telles qu\'elles sont sur le disque et signale une fiche modifiée à la main', async () => {
+  const { projectPath: createdPath, documents, markdownOf } = dossier();
+  const projectPath = fs.realpathSync(createdPath);
+  buildBundle({ projectPath, documents, markdownOf });
+  const letterFile = conceptFile(projectPath, `/${LETTER}.md`);
+  fs.writeFileSync(letterFile, fs.readFileSync(letterFile, 'utf8').replace(`resource: ${LETTER}`, `resource: ${CONTRACT}`));
+  const { erreurs } = await backendOf(projectPath, markdownOf).verify('p');
+  assert.ok(erreurs.some((entry) => entry.fiche === `/${LETTER}.md` && entry.erreur.startsWith('la fiche ne correspond pas à son document')));
+});
+
+test('read n\'écrit aucun fichier', () => {
+  const { projectPath: createdPath, documents, markdownOf } = dossier();
+  const projectPath = fs.realpathSync(createdPath);
+  buildBundle({ projectPath, documents, markdownOf });
+  fs.rmSync(conceptFile(projectPath, `/${LETTER}.md`));
+  const before = filesUnder(projectPath);
+  const view = backendOf(projectPath, markdownOf).read('p');
+  assert.deepEqual(filesUnder(projectPath), before);
+  assert.equal(view.fiches.some((fiche) => fiche.resource === LETTER), false);
+});
+
+test('quoted accepte les apostrophes typographiques et une ellipse au milieu', () => {
+  const markdown = 'Article 3 : l’avenant du contrat\u00A0est conclu. Le prix est fixé à 5 000 euros.';
+  assert.equal(quoted(markdown, "l'avenant du contrat est conclu."), true);
+  assert.equal(quoted("l'avenant du contrat est conclu.", 'l’avenant du contrat est conclu.'), true);
+  assert.equal(quoted(markdown, 'avenant … 5 000 euros'), true);
+  assert.equal(quoted(markdown, 'avenant ... 5 000 euros'), true);
+  assert.equal(quoted(markdown, '5 000 euros … avenant'), false);
+  assert.equal(quoted(markdown, '…Le prix est fixé'), true);
+  assert.equal(quoted(markdown, 'avenant … prix inconnu'), false);
+});
+
+test('contradictions normalise les dates avant de comparer', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  buildBundle({ projectPath, documents, markdownOf });
+  const states = (title: string, value: string, source = CONTRACT, single = false) => addLink(projectPath, { source, relation: 'states', target: title, citation: source === CONTRACT ? MARKDOWN[CONTRACT] : 'Nous contestons la facture.', value, single }, markdownOf);
+  states('Date de signature', '3 mars 2024', CONTRACT, true);
+  states('Date de signature', '03/03/2024', LETTER);
+  states('Date de réception', '3 mars 2024', CONTRACT, true);
+  states('Date de réception', '4 mars 2024', LETTER);
+  assert.deepEqual(contradictions(projectPath).map((entry) => entry.titre), ['Date de réception']);
+  assert.deepEqual(contradictions(projectPath)[0].valeurs.map((entry) => entry.valeur), ['3 mars 2024', '4 mars 2024']);
 });
