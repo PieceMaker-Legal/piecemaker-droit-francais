@@ -120,7 +120,7 @@ Onglet Index du plugin `piecemaker-dossier` :
 
 Skill `okf` (`server/piecemaker/vendor/skills/okf/`), déclaré dans chaque dossier.
 
-Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activés par dossier depuis la Bibliothèque : `index-maker`, affiché IndexMaker (documents, parties, liens entre pièces, jamais de prémisse), et `premise-maker`, affiché PremiseMaker (prémisses qu'un programme Catala attend). Claude précharge le skill ; Codex et Vibe le lisent en première étape. Une prémisse ne se crée que pour une condition Catala qui la demande. L'entête du skill invite l'agent principal à déléguer l'écriture ; l'avocat lance aussi `/indexer` ou `/premisses`. Après chaque sous-agent, le hook `verify-subagent.mjs` (Claude seulement) donne le résultat de `pm okf verify` ou `verify-graph` à l'agent principal et l'invite à relancer le sous-agent si une erreur subsiste.
+Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activés par dossier depuis la Bibliothèque : `index-maker`, affiché IndexMaker (documents, parties, liens entre pièces, jamais de prémisse), et `premise-maker`, affiché PremiseMaker (prémisses qu'un programme Catala attend). Claude précharge le skill ; Codex et Vibe le lisent en première étape. Une prémisse ne se crée que pour une condition Catala qui la demande. L'entête du skill invite l'agent principal à déléguer l'écriture. Après chaque sous-agent, le hook `verify-subagent.mjs` (Claude seulement) donne le résultat de `pm okf verify` ou `verify-graph` à l'agent principal et l'invite à relancer le sous-agent si une erreur subsiste.
 
 ## Limites connues
 

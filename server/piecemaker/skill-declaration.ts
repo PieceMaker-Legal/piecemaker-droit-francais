@@ -16,14 +16,9 @@ const BUNDLED_SKILLS = [
   { slug: 'Skill-PieceMaker', segments: ['vendor', 'skills', 'Skill-PieceMaker'] },
   { slug: 'catala', segments: ['vendor', 'skills', 'catala'] },
   { slug: 'okf', segments: ['vendor', 'skills', 'okf'] },
-  { slug: 'indexer', segments: ['vendor', 'skills', 'indexer'] },
-  { slug: 'premisses', segments: ['vendor', 'skills', 'premisses'] },
-  { slug: 'raisonner', segments: ['vendor', 'skills', 'raisonner'] },
-  { slug: 'rechercher', segments: ['vendor', 'skills', 'rechercher'] },
-  { slug: 'recherche-approfondie', segments: ['vendor', 'skills', 'recherche-approfondie'] },
 ] as const;
 
-const RETIRED_BUNDLED_SKILLS = ['redaction-juridique'];
+const RETIRED_BUNDLED_SKILLS = ['redaction-juridique', 'raisonner', 'indexer', 'premisses', 'rechercher', 'recherche-approfondie'];
 
 type BundledSkill = (typeof BUNDLED_SKILLS)[number];
 

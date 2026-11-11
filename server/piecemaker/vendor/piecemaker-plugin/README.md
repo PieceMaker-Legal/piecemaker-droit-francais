@@ -14,28 +14,28 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
 - **Agents** (`agents/`) :
   - `index-maker` — fiches de documents, parties et liens entre pièces ; jamais de prémisse.
   - `premise-maker` — prémisses attendues par un programme Catala, cherchées dans les pièces.
-  - `reasoning-maker` — programme Catala d'un acte, sur le modèle par défaut de l'utilisateur ;
-    jamais le raisonnement YAML.
   - `research-maker` — recherche Légifrance et Judilibre (modèle léger) ; l'agent principal relit chaque source.
   - `deep-research-maker` — prépare et soumet une tabular review en mode recherche pour examiner
     tout un point de droit ; n'analyse pas les décisions.
-  Noms d'affichage (`metadata.title`) : IndexMaker, PremiseMaker, ReasoningMaker, ResearchMaker,
+  Noms d'affichage (`metadata.title`) : IndexMaker, PremiseMaker, ResearchMaker,
   DeepResearchMaker.
 - **Hooks** : `guard-legal-search` (Claude) refuse `Search_Code` et `Search_Jurisprudence` à l'agent
   principal quand `research-maker` est installé (il signale aussi `deep-research-maker`) ; il lui laisse `consulter_article` et `consulter_decision`.
-  Commandes de l'avocat qui lancent ces sous-agents (`context: fork`) : `/indexer`, `/premisses`,
-  `/raisonner`, `/rechercher`, `/recherche-approfondie` (`server/piecemaker/vendor/skills/`).
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).
   Un document créé par l'IA dans un dossier enregistré est classé d'office
   « espace de travail » (`classify-ai-documents.mjs`, `PostToolUse`) : sans
   quoi il naîtrait au coffre-fort et l'IA ne pourrait pas se relire.
-  Après un sous-agent `index-maker`, `premise-maker` ou `reasoning-maker`,
-  `verify-subagent.mjs` (`PostToolUse` sur `Agent|Task`, Claude seulement)
-  relance les vérifications rapides (`pm okf verify`, `verify-graph`,
-  `verification.json` de Catala) et donne le bilan
-  à l'agent principal, avec l'invitation à relancer le sous-agent fautif.
+  Après chaque sous-agent, `verify-subagent.mjs` (`PostToolUse` sur `Agent|Task`,
+  Claude seulement) lance la vérification qui lui correspond et donne le bilan
+  à l'agent principal, avec l'invitation à relancer le sous-agent fautif :
+  `index-maker` → `pm okf verify` ; `premise-maker` → manques de prémisses et
+  de `#[doc]` de `pm okf verify-graph` ; `research-maker` → décisions citées
+  absentes du cache `~/.piecemaker/decisions/`, donc jamais lues ;
+  `deep-research-maker` → `pm tabular_review lister` (revue en erreur, à
+  compléter ou encore en attente). Le programme Catala et le raisonnement YAML
+  sont écrits par l'agent principal.
   Le mapping PII est appliqué par le proxy PII, pas par ces hooks. Tous
   les hooks échouent "ouverts" (fail-open) : aucune erreur, timeout ou
   absence de configuration ne bloque jamais une session.

@@ -6,7 +6,6 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
 
-const RECENT_MS = 2 * 60 * 60 * 1000;
 const PM_TIMEOUT_MS = 20000;
 const MAX_LINES = 40;
 
@@ -63,61 +62,55 @@ async function okfCheck(cwd, run, { command, keepGap, owner, gapOwner = owner })
   return { lines, failing: [...(erreurs.length ? [owner] : []), ...(gaps.length ? [gapOwner] : [])] };
 }
 
-function newestMtime(directory, skipped = new Set()) {
-  let newest = 0;
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (skipped.has(entry.name)) continue;
-    const full = path.join(directory, entry.name);
-    newest = Math.max(newest, entry.isDirectory() ? newestMtime(full, skipped) : fs.statSync(full).mtimeMs);
-  }
-  return newest;
+const DECISION_ID = /\b(JURITEXT\d{12}|[0-9a-f]{24})\b/g;
+
+function decisionsFolder() {
+  return path.join(process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker'), 'decisions');
 }
 
-function recentPrograms(cwd, now) {
-  const directory = path.join(cwd, '.piecemaker', 'catala');
-  if (!fs.existsSync(directory)) return [];
-  return fs.readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({ name: entry.name, changed: newestMtime(path.join(directory, entry.name), new Set(['resultats', '_build'])) }))
-    .filter((program) => now - program.changed <= RECENT_MS);
+function researchCheck(report) {
+  const cited = [...new Set(String(report).match(DECISION_ID) ?? [])];
+  const unread = cited.filter((id) => !fs.existsSync(path.join(decisionsFolder(), `${id}.json`)));
+  if (!cited.length) return { lines: ['Aucune décision citée.'], failing: [] };
+  return {
+    lines: [`Décisions citées : ${cited.length} ; jamais lues par consulter_decision : ${unread.length}.`, ...unread.map((id) => `- ${id}`)],
+    failing: unread.length ? ['research-maker'] : [],
+  };
 }
 
-function catalaCheck(cwd, now) {
-  const lines = [];
-  let failing = false;
-  for (const program of recentPrograms(cwd, now)) {
-    const report = path.join(cwd, '.piecemaker', 'catala', program.name, 'resultats', 'verification.json');
-    let verification = null;
-    try { verification = JSON.parse(fs.readFileSync(report, 'utf8')); } catch { verification = null; }
-    const verifiedAt = Date.parse(verification?.finished_utc ?? '');
-    if (!verification) lines.push(`Catala ${program.name} : jamais vérifié.`);
-    else if (!(verifiedAt >= program.changed - 1000)) lines.push(`Catala ${program.name} : modifié après la dernière vérification.`);
-    else if (!verification.passed) lines.push(`Catala ${program.name} : à corriger (voir resultats/verification.json).`);
-    else { lines.push(`Catala ${program.name} : vérifié.`); continue; }
-    failing = true;
-  }
-  return { lines, failing: failing ? ['reasoning-maker'] : [] };
+async function tabularCheck(cwd, run) {
+  const result = await run(['tabular_review', 'lister'], cwd);
+  let listing;
+  try { listing = JSON.parse(String(result.stdout).split('\n')[0]); } catch { listing = null; }
+  if (result.code !== 0 || !Array.isArray(listing?.projets)) return unavailable('tabular_review lister', result);
+  const drafts = listing.projets.filter((draft) => draft.mode === 'recherche');
+  const blocked = drafts.filter((draft) => draft.erreur || draft.a_completer?.length);
+  return {
+    lines: [
+      ...blocked.map((draft) => `- ${draft.projet} ${draft.nom} : ${draft.erreur || `à compléter : ${draft.a_completer.join(', ')}`}`),
+      ...drafts.filter((draft) => !blocked.includes(draft)).map((draft) => `- ${draft.projet} ${draft.nom} : téléchargement en cours ou revue non lancée.`),
+      ...(drafts.length ? [] : ['Aucune revue en recherche en attente : la revue lancée figure dans les analyses.']),
+    ],
+    failing: blocked.length ? ['deep-research-maker'] : [],
+  };
 }
 
 const isPremiseGap = (gap) => gap.startsWith('/_premises/') || gap.includes('#[doc]');
-const isDocGap = (gap) => gap.includes('#[doc]');
 
 const CHECKS = {
   'index-maker': async (cwd, run) => [await okfCheck(cwd, run, { command: 'verify', keepGap: () => false, owner: 'index-maker' })],
   'premise-maker': async (cwd, run) => [await okfCheck(cwd, run, { command: 'verify-graph', keepGap: isPremiseGap, owner: 'premise-maker' })],
-  'reasoning-maker': async (cwd, run, now) => [
-    catalaCheck(cwd, now),
-    await okfCheck(cwd, run, { command: 'verify-graph', keepGap: isDocGap, owner: 'premise-maker', gapOwner: 'premise-maker' }),
-  ],
+  'research-maker': async (cwd, run, report) => [researchCheck(report)],
+  'deep-research-maker': async (cwd, run) => [await tabularCheck(cwd, run)],
 };
 
-export async function subagentReport(payload, { run = runPm, now = Date.now() } = {}) {
+export async function subagentReport(payload, { run = runPm } = {}) {
   if (!payload || !['Agent', 'Task'].includes(payload.tool_name)) return null;
   const agent = String(payload.tool_input?.subagent_type || '');
   const check = CHECKS[agent];
   const cwd = payload.cwd;
   if (!check || !cwd || !fs.existsSync(path.join(cwd, '.piecemaker'))) return null;
-  const results = await check(cwd, run, now);
+  const results = await check(cwd, run, JSON.stringify(payload.tool_response ?? ''));
   const lines = results.flatMap((result) => result.lines);
   if (!lines.length) return null;
   const owners = [...new Set(results.flatMap((result) => result.failing))];

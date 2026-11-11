@@ -32,7 +32,7 @@ test('ignores other tools, unknown agents and folders without .piecemaker', asyn
   const { subagentReport } = await load();
   const pm = fakePm({});
   assert.equal(await subagentReport({ tool_name: 'Bash', tool_input: {}, cwd: caseFolder('a') }, pm), null);
-  assert.equal(await subagentReport(call('research-maker', caseFolder('b')), pm), null);
+  assert.equal(await subagentReport(call('reasoning-maker', caseFolder('b')), pm), null);
   assert.equal(await subagentReport(call('index-maker', path.join(sandbox, 'absent')), pm), null);
   assert.deepEqual(pm.calls, []);
 });
@@ -69,21 +69,37 @@ test('clean verification says there is nothing to fix', async () => {
   assert.match(context, /Aucune erreur à corriger\./);
 });
 
-test('reasoning-maker checks stale Catala results and #[doc] gaps, not the YAML reasoning', async () => {
+test('research-maker flags decisions it cites without reading them', async () => {
   const { subagentReport } = await load();
-  const root = caseFolder('f');
-  const now = Date.now();
-  const program = path.join(root, '.piecemaker', 'catala', 'conclusions-fictives');
-  fs.mkdirSync(path.join(program, 'resultats'), { recursive: true });
-  fs.writeFileSync(path.join(program, 'regle.catala_fr'), '');
-  fs.writeFileSync(path.join(program, 'resultats', 'verification.json'), JSON.stringify({ passed: true, finished_utc: new Date(now - 3600000).toISOString() }));
-  const pm = fakePm({
-    'okf verify-graph': 'Index OKF : aucune erreur.\nGraphe : 1 élément(s) manquant(s).\n- conclusions-fictives/regle.catala_fr:12 : #[doc] cite une prémisse absente de l\'index : date-de-rupture\n',
-  });
-  const context = (await subagentReport(call('reasoning-maker', root), { ...pm, now })).hookSpecificOutput.additionalContext;
-  assert.ok(!pm.calls.includes('raisonnement lister'));
-  assert.match(context, /Catala conclusions-fictives : modifié après la dernière vérification\./);
-  assert.match(context, /Relancez le sous-agent reasoning-maker, puis le sous-agent premise-maker/);
+  const home = fs.mkdtempSync(path.join(sandbox, 'home-'));
+  fs.mkdirSync(path.join(home, 'decisions'));
+  fs.writeFileSync(path.join(home, 'decisions', 'JURITEXT000000000001.json'), '{}');
+  process.env.PIECEMAKER_HOME = home;
+  try {
+    const payload = { ...call('research-maker', caseFolder('h')), tool_response: { content: [{ type: 'text', text: 'Sources : JURITEXT000000000001 ; JURITEXT000000000002 ; 0123456789abcdef01234567' }] } };
+    const context = (await subagentReport(payload, fakePm({}))).hookSpecificOutput.additionalContext;
+    assert.match(context, /Décisions citées : 3 ; jamais lues par consulter_decision : 2\./);
+    assert.doesNotMatch(context, /- JURITEXT000000000001/);
+    assert.match(context, /- 0123456789abcdef01234567/);
+    assert.match(context, /Relancez le sous-agent research-maker/);
+  } finally {
+    delete process.env.PIECEMAKER_HOME;
+  }
+});
+
+test('deep-research-maker flags a research review that failed or is incomplete', async () => {
+  const { subagentReport } = await load();
+  const listing = { projets: [
+    { projet: 'p1', nom: 'Rupture fictive', mode: 'recherche', erreur: 'Recherche trop large : 900 résultats.', a_completer: [] },
+    { projet: 'p2', nom: 'Bail fictif', mode: 'recherche', a_completer: [] },
+    { projet: 'p3', nom: 'Analyse fictive', mode: 'analyse', a_completer: ['documents'] },
+  ], analyses: [] };
+  const pm = fakePm({ 'tabular_review lister': `${JSON.stringify(listing)}\nVolet ouvert.` });
+  const context = (await subagentReport(call('deep-research-maker', caseFolder('i')), pm)).hookSpecificOutput.additionalContext;
+  assert.match(context, /- p1 Rupture fictive : Recherche trop large/);
+  assert.match(context, /- p2 Bail fictif : téléchargement en cours/);
+  assert.doesNotMatch(context, /p3/);
+  assert.match(context, /Relancez le sous-agent deep-research-maker/);
 });
 
 test('a failing pm call says verification was impossible without asking for a relaunch', async () => {
