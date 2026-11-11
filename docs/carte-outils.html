@@ -242,6 +242,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td><code>protect-originals</code></td><td>avant</td><td><code>Read|Grep|Glob|Bash</code></td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>
+        <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude) : bilan de vérification, relance du sous-agent</td></tr>
       </table></div>
       <p style="margin-top:12px">Codex reçoit la protection des pièces. Mistral exécute <code>protect-originals</code> et <code>guard-secrets</code> avant ses outils intégrés.</p>
     </section>
