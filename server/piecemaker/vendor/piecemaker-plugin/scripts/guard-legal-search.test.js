@@ -31,6 +31,20 @@ test('lets the research-maker sub-agent search', async () => {
   assert.equal(searchDecision(search({ agent_id: 'x1', agent_type: 'research-maker' }), { home: home('b', true) }), null);
 });
 
+test('denies a Légifrance search from any other sub-agent', async () => {
+  const { searchDecision } = await load();
+  const installed = home('e', true);
+  for (const agent_type of ['index-maker', 'deep-research-maker', 'general-purpose']) {
+    assert.equal(searchDecision(search({ agent_id: 'x2', agent_type }), { home: installed }).hookSpecificOutput.permissionDecision, 'deny');
+  }
+  assert.equal(searchDecision(search({ agent_id: 'x3' }), { home: installed }).hookSpecificOutput.permissionDecision, 'deny');
+});
+
+test('lets a namespaced research-maker search', async () => {
+  const { searchDecision } = await load();
+  assert.equal(searchDecision(search({ agent_id: 'x4', agent_type: 'piecemaker:research-maker' }), { home: home('f', true) }), null);
+});
+
 test('lets reads and other tools through', async () => {
   const { searchDecision } = await load();
   const installed = home('c', true);

@@ -7,6 +7,7 @@ import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
 
 const SEARCH_TOOL = /^mcp__.*legifrance.*__Search_/;
 const AGENT_FILE = path.join('.claude', 'agents', 'research-maker.md');
+const RESEARCH_AGENT = /(^|:)research-maker$/;
 
 function researchMakerInstalled(cwd, home) {
   return [home, cwd].filter(Boolean).some((root) => fs.existsSync(path.join(root, AGENT_FILE)));
@@ -14,7 +15,7 @@ function researchMakerInstalled(cwd, home) {
 
 export function searchDecision(payload, { home = os.homedir() } = {}) {
   if (!payload || !SEARCH_TOOL.test(String(payload.tool_name || ''))) return null;
-  if (payload.agent_id || payload.agent_type) return null;
+  if (RESEARCH_AGENT.test(String(payload.agent_type || ''))) return null;
   if (!researchMakerInstalled(payload.cwd, home)) return null;
   const reason = 'Recherche Légifrance réservée au sous-agent research-maker ; pour examiner tout un point de droit, '
     + 'deep-research-maker prépare une tabular review. Déléguez la question, '

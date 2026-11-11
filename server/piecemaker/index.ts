@@ -14,6 +14,7 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
+import { reconcileClaudeHooks } from './claude-hooks.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime, projectOfDirectory } from './anonymizer/session-runtime.js';
@@ -158,6 +159,12 @@ try {
   installPmCommand({ applicationRoot, piecemakerHome: piecemakerHome() });
 } catch (error) {
   console.warn(`[piecemaker] commande pm non installée : ${error instanceof Error ? error.message : String(error)}`);
+}
+try {
+  const hooks = reconcileClaudeHooks(applicationRoot);
+  if (!hooks.ok) console.warn(`[piecemaker] hooks Claude incomplets : ${hooks.reason ?? [...(hooks.missing ?? []), ...(hooks.deprecated ?? [])].map((entry) => entry.script).join(', ')}`);
+} catch (error) {
+  console.warn(`[piecemaker] hooks Claude non enregistrés : ${error instanceof Error ? error.message : String(error)}`);
 }
 startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => row.project_path), path.join(piecemakerHome(), 'CLAUDE.md'), (workspace) => {
   declarePieceMakerServer(workspace);
