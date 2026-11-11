@@ -80,6 +80,52 @@ champ d'application TestUrgence:
 - Énumérations : `déclaration énumération Nom:` puis `-- Cas`, filtrées par `selon x sous forme -- Cas: … -- Autre: …`.
 - Champ d'une structure : `personne.salaire`.
 
+## Types admis
+
+- Types de base : `contenu booléen`, `contenu entier`, `contenu décimal`, `contenu argent`, `contenu date`, `contenu durée`.
+- Types composés : une énumération, une structure (`contenu Ligne`) ou une liste (`contenu liste de entier`).
+- Catala n'a pas de type texte : n'écrivez jamais `contenu texte`. Modélisez un libellé par une énumération.
+- `état` est un mot réservé : ne nommez pas une entrée `état`.
+
+## Utiliser une énumération d'un autre module
+
+Le module A déclare l'énumération dans un bloc `catala-metadata` : `a.catala_fr`.
+
+````
+> Module A
+
+```catala-metadata
+déclaration énumération État:
+  -- Établi
+  -- Écarté
+  -- Inconnu
+```
+````
+
+Le module B l'importe avec `> Usage de A`, puis écrit `A.État` pour le type et `A.État.Inconnu` pour le constructeur : `b.catala_fr`. `A.Inconnu` seul est refusé (« No enum named A found »).
+
+````
+> Module B
+> Usage de A
+
+```catala-metadata
+déclaration champ d'application Qualification:
+  entrée situation contenu A.État
+  résultat retenu contenu booléen
+```
+
+```catala
+champ d'application Qualification:
+  définition retenu égal à
+    selon situation sous forme
+    -- A.État.Établi: vrai
+    -- A.État.Écarté: faux
+    -- A.État.Inconnu: faux
+```
+````
+
+Un test qui fixe l'entrée écrit `résultat de B.Qualification avec { -- situation: A.État.Inconnu }` et, en tête de fichier, `> Usage de B` et `> Usage de A`.
+
 ## Bibliothèque standard
 
 `pm catala env` donne `pack.env.CATALA_STDLIB`, le dossier des modules standard. Lisez-y les fichiers `*_fr.catala_fr` (`date_fr`, `decimal_fr`, `money_fr`, `list_fr`, `period_fr`…) pour connaître les fonctions exactes avant de les appeler.

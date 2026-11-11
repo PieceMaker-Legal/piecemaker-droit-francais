@@ -138,10 +138,12 @@ Le bilan distingue réussite, échec, contrôle bloqué et contrôle indisponibl
 
 ## Limites à dire à l'avocat
 
-- Catleg vérifie les articles des titres Markdown et les identifiants cités dans le fichier (`source:` des `#[doc]`), avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient de `--au AAAA-MM-JJ`, sinon de `date_vigueur` dans `tache.json`, sinon du jour. En contentieux, inscrivez dans `tache.json` la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure), donnée par l’avocat ; demandez-la s’il l’a omise. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
+- Catleg vérifie les articles des titres Markdown et les identifiants cités dans le fichier (`source:` des `#[doc]`), avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient de `--au AAAA-MM-JJ`, sinon de `date_vigueur` dans `tache.json`, sinon du jour. En contentieux, inscrivez dans `tache.json` la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure), donnée par l’avocat ; demandez-la s’il l’a omise, puis attendez sa réponse avant de lancer `verifier` et inscrivez-la dans `date_vigueur`. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
 - Catala 1.3 peut omettre des obligations pour des définitions globales. La preuve valide seulement les obligations produites. Une preuve sans obligation échoue.
 - Une preuve porte sur le programme. Elle ne prouve ni les faits, ni la fidélité du programme au texte.
 - Le programme ne lit pas les pièces. Le lien entre les entrées du programme et les pièces passe par une table des sources que l'avocat construit (qualification, lien officiel, pièce).
 - Si le contrôle `format` échoue avec « Failed idempotence check », le formateur bute sur la construction : gardez la forme écrite et signalez-le.
 
 Répondez à l'avocat sans code : la règle codée, les scénarios testés, le résultat des contrôles et ces limites.
+
+Citez dans la réponse les articles lus (identifiant Légifrance) et les pièces lues. Ne citez jamais votre mémoire ni les fichiers que vous avez écrits (programme, résultats) comme source juridique.
