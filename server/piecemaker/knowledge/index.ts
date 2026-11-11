@@ -39,7 +39,7 @@ export function createKnowledgeBackend(applicationRoot: string) {
   const getService = () => {
     if (!service) {
       const pipeline = createKnowledgePipeline({ applicationRoot, projects: projectsDb, store: getStore() });
-      service = createKnowledgeService(getStore(), projectsDb, {
+      const created = createKnowledgeService(getStore(), projectsDb, {
         ...pipeline,
         async scan(...scanArguments: Parameters<typeof pipeline.scan>) {
           const result = await pipeline.scan(...scanArguments);
@@ -52,6 +52,14 @@ export function createKnowledgeBackend(applicationRoot: string) {
           return renamed;
         },
       });
+      service = {
+        ...created,
+        update(input: Parameters<typeof created.update>[0]) {
+          const result = created.update(input);
+          rebuildOkf(input.projectId);
+          return result;
+        },
+      };
     }
     return service;
   };
