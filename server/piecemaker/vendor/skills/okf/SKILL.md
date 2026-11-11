@@ -24,7 +24,7 @@ Les prémisses viennent des colonnes de revue tabulaire marquées « Index du do
 ## Liens
 
 1. Un lien part d'une fiche source et pointe vers une fiche cible.
-2. Un lien qui part d'une pièce porte une citation mot pour mot de cette pièce, sauf `mentions`.
+2. Un lien qui part d'une pièce porte une citation mot pour mot de cette pièce. Seul `involves` n'a pas de citation.
 3. Le serveur refuse une citation absente de la pièce.
 
 Entre pièces, quatre relations existent : `amends`, `responds-to`, `refers-to`, `supersedes`. `supersedes` signifie qu'une version remplace une autre.

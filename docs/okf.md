@@ -6,7 +6,7 @@ L'index du dossier suit Open Knowledge Format 0.2, avec les relations typées d'
 
 L'OKF fait autorité sur les types, les liens entre pièces, les prémisses et le lien d'une pièce à une partie. Une prémisse n'existe que par un lien cité dans la fiche d'une pièce.
 
-SQLite garde ce qui sert à l'anonymisation : personnes, pseudonymes, mentions, qualification de partie. L'OKF reflète cette qualification à chaque reconstruction ; il ne contient jamais d'identité réelle.
+SQLite garde ce qui sert à l'anonymisation : personnes, pseudonymes, mentions, qualification de partie. L'OKF reflète cette qualification à chaque reconstruction. Les fiches Partie portent des codes, pas des noms. Les citations et les titres de pièces sont en clair et peuvent contenir des identités réelles.
 
 ## Périmètre
 
@@ -35,7 +35,7 @@ Dans le frontmatter de la fiche source : `relations: { <relation>: [{ target, ci
 | --- | --- | --- | --- |
 | `amends`, `responds-to`, `refers-to`, `supersedes` | document → document (types du graphe) | oui | scan (`refers-to`), agent, avocat |
 | `states` | document → Premise | oui, plus `value` facultative | avocat (visionneuse), agent, revue tabulaire |
-| `mentions` | document → Partie | non | scan seulement |
+| `mentions` | document → Partie | oui | scan seulement |
 | `involves` | Premise → Partie | non | agent |
 
 `supersedes` relie une version à celle qu'elle remplace. Aucun champ de statut (projet, signé) n'existe.
@@ -88,7 +88,7 @@ flowchart LR
 3. Le scan pose `refers-to` quand une phrase du Markdown converti contient la date et la nature d'un seul autre document.
 4. `premisesFromReviews` lit `Tabular Review/*.json` et pose les liens `states` des colonnes marquées.
 
-La reconstruction a lieu après un scan, après un renommage (les cibles suivent), après chaque écriture de lien et à chaque lecture. Un fichier n'est réécrit que si son contenu change.
+La reconstruction a lieu après un scan, après un renommage (les cibles suivent) et après chaque écriture de lien. La lecture (`GET /okf`) et la vérification (`verify`) ne reconstruisent pas : elles lisent les fiches sur le disque. Un fichier n'est réécrit que si son contenu change.
 
 Le serveur refuse une citation absente du document source.
 
@@ -96,8 +96,8 @@ Le serveur refuse une citation absente du document source.
 
 `pm okf verify`, ou le bouton Vérifier de l'onglet Index. Deux listes :
 
-- **Erreurs** : frontmatter, type, document présent, fiche alignée sur son document, relation connue et permise pour le type de la source, cible présente, citation retrouvée mot pour mot, document sans fiche, `index.md`.
-- **Contradictions** : prémisse `single_value` qui reçoit plusieurs valeurs distinctes (comparaison sans casse ni accents).
+- **Erreurs** : frontmatter, type, document présent, fiche alignée sur son document, relation connue et permise pour le type de la source, cible présente, citation retrouvée dans le document (apostrophes et guillemets typographiques, espaces insécables et ellipse « … » au milieu tolérés ; les fragments se suivent dans l'ordre), document sans fiche, `index.md`.
+- **Contradictions** : prémisse `single_value` qui reçoit plusieurs valeurs distinctes (comparaison sans casse ni accents ; une valeur qui est une date est ramenée au format `AAAA-MM-JJ` avant comparaison : « 3 mars 2024 », « 03/03/2024 » et « 2024-03-03 » comptent pour une seule valeur).
 
 `pm okf verify-graph` ajoute la liste **Manques**, pour l'agent. Chaque ligne nomme un élément et ce qui lui manque :
 
@@ -123,7 +123,7 @@ Skill `okf` (`server/piecemaker/vendor/skills/okf/`), déclaré dans chaque doss
 ## Limites connues
 
 - Un changement de code d'une partie laisse les liens `involves` pendants ; `verify` les signale.
-- Les valeurs sont comparées comme des chaînes : « 3 mars 2024 » et « 2024-03-03 » comptent pour deux valeurs.
+- Les valeurs sont comparées comme des chaînes, sauf les dates (formats `JJ/MM/AAAA`, `JJ.MM.AAAA`, `AAAA-MM-JJ`, `J mois AAAA`) ramenées au format ISO.
 - Une prémisse créée dans la visionneuse n'est pas `single_value` ; l'agent la pose avec `--single`.
 - La valeur d'une prémisse est une chaîne : elle n'est pas comparée à la valeur typée du programme Catala.
 - Le renvoi d'une clause à une autre n'a pas de relation propre.

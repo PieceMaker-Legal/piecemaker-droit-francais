@@ -32,6 +32,7 @@ relations:
       origin: piecemaker/agent
   mentions:
     - target: /_parties/CLIENT_01.md
+      citation: Contrat de prestation conclu entre CLIENT_01 et ADVERSE_01.
       origin: piecemaker/gliner
 ---
 ```
