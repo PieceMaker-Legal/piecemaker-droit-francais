@@ -50,10 +50,10 @@ test('la construction écrit une fiche OKF par document et relie les pièces par
   assert.equal(letter.frontmatter.type, 'Pièces');
   assert.equal(letter.frontmatter.resource, LETTER);
   assert.deepEqual(letter.frontmatter.generated, { by: 'piecemaker/gliner', at: '2026-01-01T00:00:00.000Z' });
-  assert.deepEqual(relationsOf(letter.frontmatter)['se-refere-a'], [{
-    cible: `/${CONTRACT}.md`,
+  assert.deepEqual(relationsOf(letter.frontmatter)['refers-to'], [{
+    target: `/${CONTRACT}.md`,
     citation: 'Nous faisons suite au contrat de prestation du 12 mars 2021.',
-    origine: 'piecemaker/gliner',
+    origin: 'piecemaker/gliner',
   }]);
   assert.equal(concept(projectPath, DRAFT).frontmatter.type, 'Projets');
   assert.equal(concept(projectPath, DRAFT).frontmatter.relations, undefined);
@@ -72,10 +72,10 @@ test('une reconstruction sans changement ne réécrit rien', () => {
 test('un lien ajouté est contrôlé, conservé à la reconstruction et suit un renommage', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
-  assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'modifie', cible: CONTRACT, citation: 'Phrase absente.' }, markdownOf), /citation introuvable/);
-  assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'modifie', cible: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /seuls les types Pièces/);
-  assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'annule', cible: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /relation inconnue/);
-  addLink(projectPath, { source: LETTER, relation: 'modifie', cible: CONTRACT, citation: 'Il est résilié.' }, markdownOf);
+  assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Phrase absente.' }, markdownOf), /citation introuvable/);
+  assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'amends', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /seuls les types Pièces/);
+  assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'annule', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /relation inconnue/);
+  addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf);
 
   const moved = 'Pièces/Contrat signé.pdf';
   fs.renameSync(path.join(projectPath, CONTRACT), path.join(projectPath, moved));
@@ -83,7 +83,7 @@ test('un lien ajouté est contrôlé, conservé à la reconstruction et suit un 
   const renamedMarkdown = (resource: string) => resource === moved ? MARKDOWN[CONTRACT] : markdownOf(resource);
   buildBundle({ projectPath, documents: renamedDocuments, markdownOf: renamedMarkdown, renamed: { previous: CONTRACT, current: moved } });
 
-  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).modifie, [{ cible: `/${moved}.md`, citation: 'Il est résilié.', origine: 'piecemaker/agent' }]);
+  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).amends, [{ target: `/${moved}.md`, citation: 'Il est résilié.', origin: 'piecemaker/agent' }]);
   assert.equal(fs.existsSync(conceptFile(projectPath, `/${CONTRACT}.md`)), false);
   assert.deepEqual(verifyBundle({ projectPath, resources: [moved, LETTER, DRAFT], markdownOf: renamedMarkdown }), []);
 });
@@ -91,9 +91,9 @@ test('un lien ajouté est contrôlé, conservé à la reconstruction et suit un 
 test('un lien du scan écarté ne revient pas', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
-  removeLink(projectPath, { source: LETTER, relation: 'se-refere-a', cible: CONTRACT });
+  removeLink(projectPath, { source: LETTER, relation: 'refers-to', target: CONTRACT });
   buildBundle({ projectPath, documents, markdownOf });
-  assert.equal(relationsOf(concept(projectPath, LETTER).frontmatter)['se-refere-a'][0].ecarte, true);
+  assert.equal(relationsOf(concept(projectPath, LETTER).frontmatter)['refers-to'][0].dismissed, true);
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
@@ -104,15 +104,15 @@ test('la vérification signale types, cibles, citations et documents sans fiche'
   const letterFile = conceptFile(projectPath, `/${LETTER}.md`);
   fs.writeFileSync(letterFile, fs.readFileSync(letterFile, 'utf8')
     .replace('Nous faisons suite au contrat', 'Nous faisons référence au contrat')
-    .replace('relations:', `relations:\n  annule:\n    - cible: /Pièces/Absent.pdf.md\n      citation: Il est résilié.\n      origine: piecemaker/agent`));
+    .replace('relations:', `relations:\n  annule:\n    - target: /Pièces/Absent.pdf.md\n      citation: Il est résilié.\n      origin: piecemaker/agent`));
   fs.writeFileSync(path.join(projectPath, 'Pièces', 'Facture.pdf'), '');
 
   const errors = verifyBundle({ projectPath, resources: [...resources, 'Pièces/Facture.pdf'], markdownOf }).map((entry) => `${entry.fiche} | ${entry.erreur}`);
   assert.deepEqual(errors, [
     '/Hors classement.pdf.md | type « Non classé » hors arborescence (Pièces, Projets)',
-    `/${LETTER}.md | relation inconnue : annule (modifie, repond-a, se-refere-a)`,
+    `/${LETTER}.md | relation inconnue : annule (amends, responds-to, refers-to)`,
     `/${LETTER}.md | annule → /Pièces/Absent.pdf.md : cible absente du dossier`,
-    `/${LETTER}.md | se-refere-a → /${CONTRACT}.md : citation introuvable dans le document`,
+    `/${LETTER}.md | refers-to → /${CONTRACT}.md : citation introuvable dans le document`,
     '/Pièces/Facture.pdf.md | document sans fiche : relancer l\'analyse du dossier',
   ]);
   assert.equal(readBundle(projectPath).length, 4);

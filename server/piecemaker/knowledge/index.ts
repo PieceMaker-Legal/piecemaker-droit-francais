@@ -65,7 +65,7 @@ export function createKnowledgeBackend(applicationRoot: string) {
   });
   const rebuildOkf = (projectId: string, renamed?: { previous: string; current: string }) => {
     try {
-      okf.construire(projectId, renamed);
+      okf.build(projectId, renamed);
     } catch (error) {
       console.warn(`[piecemaker] index OKF non mis à jour : ${error instanceof Error ? error.message : String(error)}`);
     }

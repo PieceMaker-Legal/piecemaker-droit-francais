@@ -66,11 +66,11 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
     for (const [name, entries] of Object.entries(relationsOf(concept.frontmatter))) {
       if (!RELATIONS.includes(name)) report(`relation inconnue : ${name} (${RELATIONS.join(', ')})`);
       for (const entry of entries) {
-        if (entry.ecarte) continue;
-        const link = `${name} → ${entry.cible || '?'}`;
-        if (!typeById.has(entry.cible)) report(`${link} : cible absente du dossier`);
-        else if (!graphTypes.includes(typeById.get(entry.cible) as string)) report(`${link} : la cible n'est pas de type ${graphTypes.join(', ')}`);
-        if (entry.cible === concept.id) report(`${link} : lien vers soi-même`);
+        if (entry.dismissed) continue;
+        const link = `${name} → ${entry.target || '?'}`;
+        if (!typeById.has(entry.target)) report(`${link} : cible absente du dossier`);
+        else if (!graphTypes.includes(typeById.get(entry.target) as string)) report(`${link} : la cible n'est pas de type ${graphTypes.join(', ')}`);
+        if (entry.target === concept.id) report(`${link} : lien vers soi-même`);
         if (!graphTypes.includes(type)) report(`${link} : la source n'est pas de type ${graphTypes.join(', ')}`);
         if (!entry.citation) report(`${link} : citation absente`);
         else if (!quoted(markdown, entry.citation)) report(`${link} : citation introuvable dans le document`);

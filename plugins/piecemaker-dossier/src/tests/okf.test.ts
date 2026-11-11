@@ -10,7 +10,7 @@ const index: OkfIndex = {
   typesGraphe: ['Pièces'],
   fiches: [
     fiche('Pièces/Contrat.pdf', 'Pièces', 'Contrat'),
-    fiche('Pièces/Courrier.pdf', 'Pièces', 'Courrier', [{ relation: 'se-refere-a', cible: '/Pièces/Contrat.pdf.md', citation: 'Nous faisons suite au contrat.', origine: 'piecemaker/gliner' }]),
+    fiche('Pièces/Courrier.pdf', 'Pièces', 'Courrier', [{ relation: 'refers-to', target: '/Pièces/Contrat.pdf.md', citation: 'Nous faisons suite au contrat.', origin: 'piecemaker/gliner' }]),
     fiche('Projets/Conclusions.docx', 'Projets', 'Conclusions'),
   ],
 };

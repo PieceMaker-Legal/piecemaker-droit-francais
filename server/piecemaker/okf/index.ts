@@ -31,20 +31,20 @@ export function createOkfBackend(options: OkfOptions) {
   };
   const markdownOf = (projectPath: string) => (resource: string) => options.convertedMarkdown(projectPath, path.join(projectPath, resource));
 
-  const construire = (projectId: string, renamed?: Renamed) => {
+  const build = (projectId: string, renamed?: Renamed) => {
     const projectPath = projectPathOf(projectId);
     return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, options.snapshot(projectId)), markdownOf: markdownOf(projectPath), renamed });
   };
 
-  const verifier = async (projectId: string) => {
-    construire(projectId);
+  const verify = async (projectId: string) => {
+    build(projectId);
     const projectPath = projectPathOf(projectId);
     const resources = (await options.listDocuments(projectPath)).map((filePath) => resourceOf(projectPath, filePath));
     return { erreurs: verifyBundle({ projectPath, resources, markdownOf: markdownOf(projectPath) }) };
   };
 
-  const lire = (projectId: string) => {
-    construire(projectId);
+  const read = (projectId: string) => {
+    build(projectId);
     const projectPath = projectPathOf(projectId);
     return {
       types: readTypes(projectPath),
@@ -58,19 +58,19 @@ export function createOkfBackend(options: OkfOptions) {
         date: text(concept.frontmatter.date),
         atomes: parseAtoms(concept.body).length,
         relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
-          .filter((entry) => !entry.ecarte)
-          .map((entry) => ({ relation, cible: entry.cible, citation: entry.citation, origine: entry.origine }))),
+          .filter((entry) => !entry.dismissed)
+          .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin }))),
       })),
     };
   };
 
-  const lier = (projectId: string, input: LinkInput) => {
-    construire(projectId);
+  const link = (projectId: string, input: LinkInput) => {
+    build(projectId);
     const projectPath = projectPathOf(projectId);
     return addLink(projectPath, input, markdownOf(projectPath));
   };
 
-  const delier = (projectId: string, input: LinkInput) => removeLink(projectPathOf(projectId), input);
+  const unlink = (projectId: string, input: LinkInput) => removeLink(projectPathOf(projectId), input);
 
   const statusFor = (error: unknown): number => error instanceof TypeError ? 400 : error instanceof Error && error.message === 'Project not found.' ? 404 : 500;
   const respond = (operation: () => unknown | Promise<unknown>, response: express.Response) => {
@@ -80,10 +80,10 @@ export function createOkfBackend(options: OkfOptions) {
   };
 
   const router = express.Router();
-  router.get('/okf', (request, response) => respond(() => lire(String(request.query.projectId || '')), response));
-  router.get('/okf/verifier', (request, response) => respond(() => verifier(String(request.query.projectId || '')), response));
+  router.get('/okf', (request, response) => respond(() => read(String(request.query.projectId || '')), response));
+  router.get('/okf/verify', (request, response) => respond(() => verify(String(request.query.projectId || '')), response));
 
-  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verifier, lire, lier, delier };
+  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, link, unlink };
   const localRouter = express.Router();
   localRouter.post('/okf', express.json(), (request, response) => {
     if (!options.isLoopback(request)) {
@@ -99,5 +99,5 @@ export function createOkfBackend(options: OkfOptions) {
     }, response);
   });
 
-  return { construire, verifier, lire, lier, delier, router, localRouter };
+  return { build, verify, read, link, unlink, router, localRouter };
 }

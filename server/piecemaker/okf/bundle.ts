@@ -6,7 +6,7 @@ import { parse, stringify } from 'yaml';
 import { DEFAULT_CLASSIFICATION } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
 export const OKF_VERSION = '0.2';
-export const RELATIONS = ['modifie', 'repond-a', 'se-refere-a'];
+export const RELATIONS = ['amends', 'responds-to', 'refers-to'];
 export const SCAN_ACTOR = 'piecemaker/gliner';
 export const AGENT_ACTOR = 'piecemaker/agent';
 export const UNCLASSIFIED = 'Non classé';
@@ -14,7 +14,7 @@ export const DEFAULT_GRAPH_TYPES = ['Pièces'];
 const RESERVED = new Set(['index.md', 'log.md']);
 
 export type Frontmatter = Record<string, unknown>;
-export type Relation = { cible: string; citation: string; origine: string; ecarte?: boolean };
+export type Relation = { target: string; citation: string; origin: string; dismissed?: boolean };
 export type Relations = Record<string, Relation[]>;
 export type Atom = { code: string; citation: string };
 export type Concept = { id: string; frontmatter: Frontmatter; body: string; error?: string };
@@ -55,8 +55,8 @@ export function relationsOf(frontmatter: Frontmatter): Relations {
   const relations: Relations = {};
   for (const [name, entries] of Object.entries(source as Record<string, unknown>)) {
     relations[name] = (Array.isArray(entries) ? entries : []).map((entry) => {
-      const value = (entry && typeof entry === 'object' ? entry : { cible: entry }) as Record<string, unknown>;
-      return { cible: text(value.cible), citation: text(value.citation), origine: text(value.origine), ...(value.ecarte === true ? { ecarte: true } : {}) };
+      const value = (entry && typeof entry === 'object' ? entry : { target: entry }) as Record<string, unknown>;
+      return { target: text(value.target), citation: text(value.citation), origin: text(value.origin), ...(value.dismissed === true ? { dismissed: true } : {}) };
     });
   }
   return relations;

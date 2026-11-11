@@ -17,7 +17,7 @@ const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lan
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verifier', 'lier', 'delier'];
+const OKF_COMMANDS = ['verify', 'link', 'unlink'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'whole_program']);
@@ -68,13 +68,13 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   suivi_dossiers ecrire <chemin> --json '{...}'
       écrit un document du Matter board
 
-  okf verifier
+  okf verify
       index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
       reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
-  okf lier <source> <relation> <cible> --citation "phrase du document source"
-      relations : modifie | repond-a | se-refere-a ; source et cible : chemins des documents ;
+  okf link <source> <relation> <target> --citation "phrase du document source"
+      relations : amends | responds-to | refers-to ; source et cible : chemins des documents ;
       la citation doit figurer mot pour mot dans le document source
-  okf delier <source> <relation> <cible>
+  okf unlink <source> <relation> <target>
 
   catala verifier --au AAAA-MM-JJ [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
@@ -577,16 +577,16 @@ async function okf(api, positional, flags, resolved) {
   const action = positional[1];
   if (!OKF_COMMANDS.includes(action)) usage(`okf attend ${OKF_COMMANDS.join(', ')}.`);
   const folder = path.resolve(resolved);
-  if (action === 'verifier') {
+  if (action === 'verify') {
     const { erreurs } = await api.okfFn({ action, folder });
     if (!erreurs.length) return 'Index OKF : aucune erreur.';
     return [`Index OKF : ${erreurs.length} erreur(s).`, ...erreurs.map((entry) => `- ${entry.fiche} : ${entry.erreur}`)].join('\n');
   }
-  const [source, relation, cible] = positional.slice(2);
-  if (!source || !relation || !cible) usage(`okf ${action} attend <source> <relation> <cible>.`);
-  if (action === 'lier' && !value(flags.citation)) usage('okf lier attend --citation.');
-  const lien = await api.okfFn({ action, folder, source, relation, cible, ...(action === 'lier' ? { citation: String(flags.citation) } : {}) });
-  return `${action === 'lier' ? 'Lien enregistré' : 'Lien retiré'} : ${lien.source} ${lien.relation} ${lien.cible}`;
+  const [source, relation, target] = positional.slice(2);
+  if (!source || !relation || !target) usage(`okf ${action} attend <source> <relation> <target>.`);
+  if (action === 'link' && !value(flags.citation)) usage('okf link attend --citation.');
+  const lien = await api.okfFn({ action, folder, source, relation, target, ...(action === 'link' ? { citation: String(flags.citation) } : {}) });
+  return `${action === 'link' ? 'Lien enregistré' : 'Lien retiré'} : ${lien.source} ${lien.relation} ${lien.target}`;
 }
 
 async function suiviDossiers(api, positional, flags, resolved) {

@@ -74,8 +74,8 @@ function scanRelations(source: SourceDocument, targets: SourceDocument[], markdo
       const folded = fold(sentence);
       const matching = (candidates as SourceDocument[]).filter((target) => folded.includes(fold(target.nature)));
       if (matching.length !== 1) continue;
-      const cible = conceptId(matching[0].resource);
-      if (!found.has(cible)) found.set(cible, { cible, citation: sentence, origine: SCAN_ACTOR });
+      const target = conceptId(matching[0].resource);
+      if (!found.has(target)) found.set(target, { target, citation: sentence, origin: SCAN_ACTOR });
     }
   }
   return [...found.values()];
@@ -87,7 +87,7 @@ function renamedConcepts(concepts: Concept[], renamed?: Renamed): Map<string, Co
   const move = (id: string): string => id === from ? to : id;
   return new Map(concepts.filter((concept) => !concept.error).map((concept) => {
     const relations = relationsOf(concept.frontmatter);
-    for (const entries of Object.values(relations)) for (const entry of entries) entry.cible = move(entry.cible);
+    for (const entries of Object.values(relations)) for (const entry of entries) entry.target = move(entry.target);
     return [move(concept.id), { ...concept, id: move(concept.id), frontmatter: { ...concept.frontmatter, relations } }];
   }));
 }
@@ -95,13 +95,13 @@ function renamedConcepts(concepts: Concept[], renamed?: Renamed): Map<string, Co
 function mergedRelations(existing: Relations, scanned: Relation[]): Relations {
   const relations: Relations = {};
   for (const [name, entries] of Object.entries(existing)) {
-    const kept = entries.filter((entry) => entry.origine !== SCAN_ACTOR || entry.ecarte);
+    const kept = entries.filter((entry) => entry.origin !== SCAN_ACTOR || entry.dismissed);
     if (kept.length) relations[name] = kept;
   }
-  const known = new Set(Object.values(relations).flat().map((entry) => entry.cible));
-  const added = scanned.filter((entry) => !known.has(entry.cible));
-  if (added.length) relations['se-refere-a'] = [...(relations['se-refere-a'] || []), ...added];
-  for (const entries of Object.values(relations)) entries.sort((left, right) => left.cible.localeCompare(right.cible));
+  const known = new Set(Object.values(relations).flat().map((entry) => entry.target));
+  const added = scanned.filter((entry) => !known.has(entry.target));
+  if (added.length) relations['refers-to'] = [...(relations['refers-to'] || []), ...added];
+  for (const entries of Object.values(relations)) entries.sort((left, right) => left.target.localeCompare(right.target));
   return relations;
 }
 

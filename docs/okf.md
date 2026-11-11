@@ -18,19 +18,19 @@ Le graphe ne montre que certains types : `['Pièces']` par défaut, ou `typesGra
 
 1. Le scan GLiNER remplit SQLite.
 2. `buildBundle` écrit une fiche par document : titre, nature, date, atomes (citation de chaque entité).
-3. Le scan pose `se-refere-a` quand une phrase du Markdown converti contient la date et la nature d'un seul autre document.
+3. Le scan pose `refers-to` quand une phrase du Markdown converti contient la date et la nature d'un seul autre document.
 
 La reconstruction a lieu après un scan, après un renommage (les cibles suivent) et à chaque lecture. Un fichier n'est réécrit que si son contenu change. Les liens ajoutés par l'agent et les liens du scan écartés sont conservés.
 
-L'IA n'intervient qu'à la demande, par `pm okf lier`. Le serveur refuse une citation absente du document source.
+L'IA n'intervient qu'à la demande, par `pm okf link`. Le serveur refuse une citation absente du document source.
 
 ## Relations
 
-`modifie`, `repond-a`, `se-refere-a`, dans le frontmatter : `relations: { <relation>: [{ cible, citation, origine, ecarte? }] }`. `origine` vaut `piecemaker/gliner` ou `piecemaker/agent`.
+`amends`, `responds-to`, `refers-to`, dans le frontmatter : `relations: { <relation>: [{ target, citation, origin, dismissed? }] }`. `origin` vaut `piecemaker/gliner` ou `piecemaker/agent`.
 
 ## Vérification
 
-`pm okf verifier`, ou le bouton Vérifier de l'onglet Index. Contrôles : frontmatter, type, document présent, fiche alignée sur son document, relation connue, cible présente et de type graphe, citation des liens et des atomes retrouvée mot pour mot, document sans fiche, `index.md`.
+`pm okf verify`, ou le bouton Vérifier de l'onglet Index. Contrôles : frontmatter, type, document présent, fiche alignée sur son document, relation connue, cible présente et de type graphe, citation des liens et des atomes retrouvée mot pour mot, document sans fiche, `index.md`.
 
 ## Interface
 
