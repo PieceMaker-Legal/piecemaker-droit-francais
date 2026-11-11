@@ -14,7 +14,8 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
 - **Agents** (`agents/`) :
   - `index-maker` — fiches de documents, parties et liens entre pièces ; jamais de prémisse.
   - `premise-maker` — prémisses attendues par un programme Catala, cherchées dans les pièces.
-  - `reasoning-maker` — raisonnement YAML d'un acte, puis programme Catala.
+  - `reasoning-maker` — programme Catala d'un acte, sur le modèle par défaut de l'utilisateur ;
+    jamais le raisonnement YAML.
   - `research-maker` — recherche Légifrance et Judilibre (modèle léger) ; l'agent principal relit chaque source.
   - `deep-research-maker` — prépare et soumet une tabular review en mode recherche pour examiner
     tout un point de droit ; n'analyse pas les décisions.
@@ -33,7 +34,7 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   Après un sous-agent `index-maker`, `premise-maker` ou `reasoning-maker`,
   `verify-subagent.mjs` (`PostToolUse` sur `Agent|Task`, Claude seulement)
   relance les vérifications rapides (`pm okf verify`, `verify-graph`,
-  `pm raisonnement lister`, `verification.json` de Catala) et donne le bilan
+  `verification.json` de Catala) et donne le bilan
   à l'agent principal, avec l'invitation à relancer le sous-agent fautif.
   Le mapping PII est appliqué par le proxy PII, pas par ces hooks. Tous
   les hooks échouent "ouverts" (fail-open) : aucune erreur, timeout ou

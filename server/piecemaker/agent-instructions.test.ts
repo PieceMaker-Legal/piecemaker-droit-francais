@@ -102,11 +102,13 @@ test('adds the delegation line once to a previous tools rule, keeping CRLF', () 
 
 test('replaces the previous delegation line without duplicating it', () => withProject(async (root) => {
   const template = agentInstructionsTemplate();
-  const previous = template.replace(' ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker.', '.');
-  assert.notEqual(previous, template);
-  await writeFile(path.join(root, 'AGENTS.md'), previous);
-  await ensureAgentInstructionFiles(root, SHARED);
-  assert.equal(await read(root, 'AGENTS.md'), template);
+  const reasoning = template.replace('programme Catala d’un acte → sous-agent reasoning-maker, puis premise-maker pour ses prémisses', 'raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala');
+  for (const previous of [reasoning, reasoning.replace(' ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker.', '.')]) {
+    assert.notEqual(previous, template);
+    await writeFile(path.join(root, 'AGENTS.md'), previous);
+    await ensureAgentInstructionFiles(root, SHARED);
+    assert.equal(await read(root, 'AGENTS.md'), template);
+  }
 }));
 
 test('leaves a tools rule rewritten by the lawyer untouched',() => withProject(async (root) => {

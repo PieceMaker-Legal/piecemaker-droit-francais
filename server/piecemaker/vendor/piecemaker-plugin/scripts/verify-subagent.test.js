@@ -69,23 +69,19 @@ test('clean verification says there is nothing to fix', async () => {
   assert.match(context, /Aucune erreur à corriger\./);
 });
 
-test('reasoning-maker checks recent reasonings, stale Catala results and #[doc] gaps', async () => {
+test('reasoning-maker checks stale Catala results and #[doc] gaps, not the YAML reasoning', async () => {
   const { subagentReport } = await load();
   const root = caseFolder('f');
   const now = Date.now();
-  fs.mkdirSync(path.join(root, '.piecemaker', 'raisonnements'));
-  fs.writeFileSync(path.join(root, '.piecemaker', 'raisonnements', 'conclusions-fictives.yaml'), 'objectif: test\n');
   const program = path.join(root, '.piecemaker', 'catala', 'conclusions-fictives');
   fs.mkdirSync(path.join(program, 'resultats'), { recursive: true });
   fs.writeFileSync(path.join(program, 'regle.catala_fr'), '');
   fs.writeFileSync(path.join(program, 'resultats', 'verification.json'), JSON.stringify({ passed: true, finished_utc: new Date(now - 3600000).toISOString() }));
   const pm = fakePm({
-    'raisonnement lister': 'conclusions-fictives — .piecemaker/raisonnements/conclusions-fictives.yaml — 2 erreur(s), 0 manque(s), vérifié le 2026-11-11\nautre — .piecemaker/raisonnements/autre.yaml — non vérifié\n',
     'okf verify-graph': 'Index OKF : aucune erreur.\nGraphe : 1 élément(s) manquant(s).\n- conclusions-fictives/regle.catala_fr:12 : #[doc] cite une prémisse absente de l\'index : date-de-rupture\n',
   });
   const context = (await subagentReport(call('reasoning-maker', root), { ...pm, now })).hookSpecificOutput.additionalContext;
-  assert.match(context, /Raisonnement conclusions-fictives — .* 2 erreur/);
-  assert.doesNotMatch(context, /autre —/);
+  assert.ok(!pm.calls.includes('raisonnement lister'));
   assert.match(context, /Catala conclusions-fictives : modifié après la dernière vérification\./);
   assert.match(context, /Relancez le sous-agent reasoning-maker, puis le sous-agent premise-maker/);
 });

@@ -73,14 +73,6 @@ function newestMtime(directory, skipped = new Set()) {
   return newest;
 }
 
-function recentReasonings(cwd, now) {
-  const directory = path.join(cwd, '.piecemaker', 'raisonnements');
-  if (!fs.existsSync(directory)) return [];
-  return fs.readdirSync(directory)
-    .filter((name) => name.endsWith('.yaml') && now - fs.statSync(path.join(directory, name)).mtimeMs <= RECENT_MS)
-    .map((name) => name.slice(0, -'.yaml'.length));
-}
-
 function recentPrograms(cwd, now) {
   const directory = path.join(cwd, '.piecemaker', 'catala');
   if (!fs.existsSync(directory)) return [];
@@ -88,16 +80,6 @@ function recentPrograms(cwd, now) {
     .filter((entry) => entry.isDirectory())
     .map((entry) => ({ name: entry.name, changed: newestMtime(path.join(directory, entry.name), new Set(['resultats', '_build'])) }))
     .filter((program) => now - program.changed <= RECENT_MS);
-}
-
-async function reasoningCheck(cwd, run, now) {
-  const names = recentReasonings(cwd, now);
-  if (!names.length) return { lines: [], failing: [] };
-  const result = await run(['raisonnement', 'lister'], cwd);
-  if (result.code !== 0) return unavailable('raisonnement lister', result);
-  const lines = result.stdout.split('\n').filter((line) => names.some((name) => line.startsWith(`${name} — `)));
-  const failing = lines.some((line) => /[1-9]\d* erreur|[1-9]\d* manque|non vérifié/.test(line));
-  return { lines: lines.map((line) => `Raisonnement ${line}`), failing: failing ? ['reasoning-maker'] : [] };
 }
 
 function catalaCheck(cwd, now) {
@@ -124,7 +106,6 @@ const CHECKS = {
   'index-maker': async (cwd, run) => [await okfCheck(cwd, run, { command: 'verify', keepGap: () => false, owner: 'index-maker' })],
   'premise-maker': async (cwd, run) => [await okfCheck(cwd, run, { command: 'verify-graph', keepGap: isPremiseGap, owner: 'premise-maker' })],
   'reasoning-maker': async (cwd, run, now) => [
-    await reasoningCheck(cwd, run, now),
     catalaCheck(cwd, now),
     await okfCheck(cwd, run, { command: 'verify-graph', keepGap: isDocGap, owner: 'premise-maker', gapOwner: 'premise-maker' }),
   ],
