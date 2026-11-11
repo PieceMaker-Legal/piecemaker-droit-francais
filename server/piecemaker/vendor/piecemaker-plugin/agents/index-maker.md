@@ -2,7 +2,7 @@
 name: index-maker
 metadata:
   title: IndexMaker
-description: "Construit et vérifie l'index OKF des pièces du dossier (.piecemaker/okf/) — fiches de documents, parties, liens cités entre pièces (amends, responds-to, refers-to, supersedes). Utiliser quand l'utilisateur demande de lire, compléter, relier ou vérifier l'index des pièces, de dire quelle pièce modifie, remplace, répond à ou cite une autre, ou qui sont les parties. Les prémisses (faits, clauses) relèvent de premise-maker."
+description: "Builds and verifies the OKF index of the case documents in .piecemaker/okf/. It writes document records, party records and cited links between documents (amends, responds-to, refers-to, supersedes). Use this agent when the user asks to read, complete, link or verify the document index. Also use it to find which document amends, supersedes, responds to or cites another document, or to identify the parties. It never writes premises: premise-maker does this task."
 tools: Read, Grep, Glob, Bash
 model: sonnet
 skills:

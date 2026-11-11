@@ -1,6 +1,6 @@
 ---
 name: premisses
-description: Chercher dans les pièces les prémisses qu’un programme Catala attend, dans le sous-agent premise-maker. Argument : le nom du programme.
+description: "Finds in the case documents the premises that a Catala program needs. Runs in the premise-maker sub-agent. Argument: the program name."
 context: fork
 agent: premise-maker
 disable-model-invocation: true

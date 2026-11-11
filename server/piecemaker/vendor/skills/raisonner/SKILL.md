@@ -1,6 +1,6 @@
 ---
 name: raisonner
-description: Écrire et vérifier le raisonnement juridique d’un acte (YAML, puis Catala), dans le sous-agent reasoning-maker.
+description: "Writes and verifies the legal reasoning for one legal document (YAML, then Catala). Runs in the reasoning-maker sub-agent."
 context: fork
 agent: reasoning-maker
 disable-model-invocation: true

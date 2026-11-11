@@ -2,7 +2,7 @@
 name: premise-maker
 metadata:
   title: PremiseMaker
-description: "Cherche dans les pièces les prémisses qu'un programme Catala attend (source: okf:/_premises/… dans un #[doc]) et les établit dans l'index OKF par une citation littérale (states), avec leur valeur et les parties concernées (involves). Utiliser uniquement pour un raisonnement Catala : compléter, prouver ou vérifier les prémisses de ses conditions. Ne crée jamais une prémisse qu'aucune condition ne demande."
+description: "Finds in the case documents the premises that a Catala program needs (source: okf:/_premises/… in a #[doc] annotation). It records each premise in the OKF index with a word-for-word quotation (states), its value and the related parties (involves). Use this agent only for a Catala reasoning, to complete, prove or verify the premises of its conditions. It never makes a premise that no condition needs."
 tools: Read, Grep, Glob, Bash
 model: sonnet
 skills:

@@ -2,7 +2,7 @@
 name: deep-research-maker
 metadata:
   title: DeepResearchMaker
-description: "Prépare et soumet une tabular review en mode recherche pour examiner complètement un point de droit dans la jurisprudence : requête, juridictions, période, colonnes de questions. Utiliser quand l'utilisateur veut un balayage exhaustif d'un point de droit, une revue de toute la jurisprudence sur une question, ou une recherche de jurisprudence en tableau. Une question ponctuelle relève de research-maker."
+description: "Prepares and submits a tabular review in research mode to examine all the case law on one point of law. It sets the query, the courts, the period and the question columns. It does not analyze the decisions. Use this agent when the user wants a full scan of a point of law or a case-law search in a table. For one specific question, use research-maker."
 tools: Read, Bash
 model: sonnet
 skills:

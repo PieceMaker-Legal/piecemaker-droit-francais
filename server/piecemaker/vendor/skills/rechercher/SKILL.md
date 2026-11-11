@@ -1,6 +1,6 @@
 ---
 name: rechercher
-description: Chercher textes et jurisprudence sur une question de droit, dans le sous-agent research-maker.
+description: "Finds statutes and case law for one legal question. Runs in the research-maker sub-agent."
 context: fork
 agent: research-maker
 disable-model-invocation: true

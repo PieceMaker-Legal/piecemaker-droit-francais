@@ -1,6 +1,6 @@
 ---
 name: indexer
-description: Construire, compléter ou vérifier l’index OKF des pièces du dossier, dans le sous-agent index-maker.
+description: "Builds, completes or verifies the OKF index of the case documents. Runs in the index-maker sub-agent."
 context: fork
 agent: index-maker
 disable-model-invocation: true

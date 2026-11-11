@@ -1,6 +1,6 @@
 ---
 name: recherche-approfondie
-description: Examiner complètement un point de droit dans la jurisprudence par une tabular review, préparée et soumise dans le sous-agent deep-research-maker.
+description: "Examines all the case law on one point of law with a tabular review. Runs in the deep-research-maker sub-agent, which prepares and submits the review."
 context: fork
 agent: deep-research-maker
 disable-model-invocation: true

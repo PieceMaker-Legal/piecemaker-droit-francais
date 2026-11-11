@@ -2,7 +2,7 @@
 name: reasoning-maker
 metadata:
   title: ReasoningMaker
-description: "Écrit et vérifie le raisonnement juridique d'un acte : fichier .piecemaker/raisonnements/<nom>.yaml vérifié par pm raisonnement verifier, puis programme Catala dans .piecemaker/catala/<nom>/ quand la règle se calcule (montant, délai, seuil, exceptions). Utiliser quand l'utilisateur demande de modéliser, vérifier ou compléter le raisonnement d'un acte, de calculer une règle ou de prouver que des exceptions ne se chevauchent pas."
+description: "Writes and verifies the legal reasoning for one legal document. It writes .piecemaker/raisonnements/<nom>.yaml and verifies it with pm raisonnement verifier. When the rule gives a calculation (amount, time limit, threshold, exceptions), it then writes a Catala program in .piecemaker/catala/<nom>/. Use this agent when the user asks to model, verify or complete the reasoning of a legal document. Also use it to calculate a rule or to prove that exceptions do not overlap."
 tools: Read, Grep, Glob, Bash, Edit, Write, mcp__legifrance__consulter_article, mcp__legifrance__consulter_decision
 model: sonnet
 skills:
