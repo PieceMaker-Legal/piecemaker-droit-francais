@@ -470,6 +470,14 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
   .pmd-tiers-column[data-collapsed=false]{position:absolute;z-index:5;top:0;right:0;bottom:0;left:0;width:auto;box-shadow:0 12px 32px rgb(0 0 0 / 18%)}
 }
 @container pmd-general (max-width:560px){.pmd-party-layout{grid-template-columns:minmax(0,1fr) 40px;gap:12px}.pmd-party-columns{grid-template-columns:1fr;gap:18px}}
+.pmd-modal-side{inset:0 0 0 auto;width:min(560px,100%);padding:0;background:none;align-items:stretch;justify-content:stretch}
+.pmd-modal-side>.pmd-dialog{width:100%;height:100%;max-height:none;box-sizing:border-box;border-width:0 0 0 1px;border-radius:0;box-shadow:-12px 0 32px rgb(15 23 42 / .12)}
+.pmd-modal-side>.pmd-dialog:has(.pmd-document-dialog){width:100%;height:100%;max-height:none}
+.pmd-modal-side .pmd-document-dialog{border-radius:0;border-width:0 0 0 1px}
+.pmd-modal-side .pmd-document-dialog-body{flex-direction:column;overflow:auto}
+.pmd-modal-side .pmd-document-preview-pane{min-height:240px;border-right:0;border-bottom:1px solid var(--pmd-border)}
+.pmd-modal-side .pmd-document-form{width:auto}
+.pmd-modal-side .pmd-document-grid{grid-template-columns:1fr}
 .pmd-root{min-width:0;overflow-x:hidden}
 .pmd-header{min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none}
 .pmd-header>*{flex-shrink:0}

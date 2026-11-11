@@ -404,20 +404,28 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort, okfView) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
     const graphHost = content.querySelector<HTMLElement>('[data-okf-graph]');
     const projectPath = context.project?.path || '';
+    if (!graphHost) root.querySelector('.pmd-modal-side')?.remove();
     if (!graphHost || !data?.okf) return;
+    const inSidePanel = (open: () => void) => {
+      root.querySelector('.pmd-modal-side')?.remove();
+      const before = new Set(Array.from(root.querySelectorAll(':scope > .pmd-modal')));
+      open();
+      root.querySelectorAll<HTMLElement>(':scope > .pmd-modal').forEach((layer) => { if (!before.has(layer)) layer.classList.add('pmd-modal-side'); });
+    };
     const openDocument = (resource: string) => {
       const node = data?.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === resource);
-      if (data && node) documentEditor(root, data, node, projectPath, save, renamePiece, okfHandle());
+      if (data && node) inSidePanel(() => documentEditor(root, data!, node, projectPath, save, renamePiece, okfHandle()));
     };
     void mountGraph(graphHost, data.okf, (fiche) => {
       if (!data?.okf) return;
       if (fiche.type === PARTY_TYPE) {
         const node = data.graph.nodes.find((entry) => entry.id === `entity:${fiche.title}`);
-        if (node) nodeEditor(root, data, node, save);
+        if (node) inSidePanel(() => nodeEditor(root, data!, node, save));
         return;
       }
       if (fiche.type !== PREMISE_TYPE) return openDocument(fiche.resource);
-      const layer = modal(root, premiseFicheMarkup(data.okf, fiche.id));
+      let layer!: HTMLElement;
+      inSidePanel(() => { layer = modal(root, premiseFicheMarkup(data!.okf!, fiche.id)); });
       const draft = premiseReviewDraft(data.okf, fiche.id, projectPath);
       layer.querySelector<HTMLButtonElement>('[data-premise-review]')?.addEventListener('click', (event) => {
         if (!draft) return;
