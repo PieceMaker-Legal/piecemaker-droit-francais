@@ -268,6 +268,21 @@ test('toggle installs and removes discoverable skills for every provider with th
   assert.ok(store.document(id));
 });
 
+test('le modèle et les skills d’un agent passent à Codex et à Vibe', (t) => {
+  const { store, skill, workspace } = fixture(t);
+  const source = path.join(skill, 'SKILL.md');
+  const base = fs.readFileSync(source, 'utf8');
+  fs.writeFileSync(source, base.replace(/^---\n/, '---\ncodexModel: modele-codex\ncodexReasoningEffort: medium\nvibeModel: modele-vibe\nvibeSkills:\n  - un\n  - deux\n'));
+  const id = store.importFile(source, 'agent')!;
+  store.setEnabled(workspace, id, true);
+  const codex = fs.readFileSync(path.join(workspace, '.codex/agents', 'review.toml'), 'utf8');
+  const vibe = fs.readFileSync(path.join(workspace, '.vibe/agents', 'review.toml'), 'utf8');
+  assert.match(codex, /^model = "modele-codex"$/m);
+  assert.match(codex, /^model_reasoning_effort = "medium"$/m);
+  assert.match(vibe, /^active_model = "modele-vibe"$/m);
+  assert.match(vibe, /^enabled_skills = \["un","deux"\]$/m);
+});
+
 test('toggle installs native subagents for both providers and refreshes their definitions', (t) => {
   const { store, skill, workspace } = fixture(t);
   const id = store.importFile(path.join(skill, 'SKILL.md'), 'agent')!;

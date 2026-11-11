@@ -62,7 +62,20 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let data: ViewData | null = null;
   let closeIndexAnalysis: (() => void) | null = null;
   let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
-  let okfView: Pick<OkfView, 'mode' | 'errors'> = { mode: 'table', errors: null };
+  let okfView: Pick<OkfView, 'mode' | 'errors' | 'contradictions'> = { mode: 'table', errors: null };
+  const okfHandle = () => {
+    const projectId = context.project?.name || '';
+    return {
+      projectId,
+      refresh: () => void okfApi.read(projectId).then((okf) => {
+        if (!data || context.project?.name !== projectId) return;
+        data = { ...data, okf };
+        viewCache.set(projectId, data);
+        if (okfView.mode === 'graph') paintContent();
+        else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
+      }, () => undefined),
+    };
+  };
   let destroyGraph: (() => void) | null = null;
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
@@ -394,7 +407,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (!graphHost || !data?.okf) return;
     void mountGraph(graphHost, data.okf, (resource) => {
       const node = data?.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === resource);
-      if (data && node) documentEditor(root, data, node, projectPath, save, renamePiece);
+      if (data && node) documentEditor(root, data, node, projectPath, save, renamePiece, okfHandle());
     }).then((destroy) => {
       if (graphHost.isConnected) destroyGraph = destroy;
       else destroy();
@@ -470,8 +483,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       }
       const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
       if (action === 'okf-verify' && context.project) {
-        void okfApi.verify(context.project.name).then(({ erreurs }) => {
-          okfView = { ...okfView, errors: erreurs };
+        void okfApi.verify(context.project.name).then(({ erreurs, contradictions }) => {
+          okfView = { ...okfView, errors: erreurs, contradictions };
           paintContent();
         }).catch(showError);
         return;
@@ -633,13 +646,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const editDocument = target.closest<HTMLElement>('[data-edit-document]');
       if (editDocument) {
         const node = data?.graph.nodes.find((entry) => entry.id === editDocument.dataset.editDocument);
-        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece);
+        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece, okfHandle());
         return;
       }
       const openDocument = target.closest<HTMLElement>('[data-open-document]');
       if (openDocument) {
         const node = data?.graph.nodes.find((entry) => entry.id === openDocument.dataset.openDocument);
-        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece);
+        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece, okfHandle());
       }
     });
     root.addEventListener('dragstart', (event) => {

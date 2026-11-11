@@ -169,7 +169,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-name" x="560" y="474">pm suivi_dossiers</text><text class="t-mono" x="730" y="474">verifier | lire | ecrire</text>
         <text class="t-name" x="560" y="492">pm catala</text><text class="t-mono" x="730" y="492">verifier (tous les contrôles)</text>
         <text class="t-mono" x="730" y="510">executer | exceptions | expliquer | squelette</text>
-        <text class="t-name" x="560" y="528">pm okf</text><text class="t-mono" x="730" y="528">verify | link | unlink</text>
+        <text class="t-name" x="560" y="528">pm okf</text><text class="t-mono" x="730" y="528">verify | link | unlink · faits, parties</text>
         <text class="t-note" x="560" y="550">--dossier vise un autre dossier. Lancer l'index : accord de l'avocat.</text>
 
         <text class="t-title t-skill-c" x="306" y="584">Skill docx-cli</text>
@@ -190,6 +190,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-title t-agent" x="306" y="796">Sous-agents</text>
         <text class="t-note" x="306" y="816">déclarés pour Claude, sans skill</text>
         <text class="t-name t-agent" x="560" y="806">analyste-pieces</text><text class="t-mono" x="730" y="806">sonnet · Read Grep Glob Bash</text>
+        <text class="t-name t-agent" x="560" y="826">gestionnaire-okf</text><text class="t-mono" x="730" y="826">sonnet · skill okf · pm okf</text>
 
         <text class="t-title t-mcp" x="306" y="882">MCP piecemaker</text>
         <text class="t-note" x="306" y="902">retiré par défaut, remplacé par pm</text>
@@ -220,6 +221,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Demande</th><th>À charger</th></tr>
         <tr><td>Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement</td><td class="c-skill">piecemaker</td></tr>
+        <tr><td>Index OKF du dossier : liens entre pièces, faits, parties, contradictions</td><td class="c-skill">okf, puis piecemaker (<code>pm okf</code>) ; sous-agent <span class="c-agent">gestionnaire-okf</span></td></tr>
         <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala</td></tr>
         <tr><td>Lire, modifier, annoter ou créer un fichier Word <code>.docx</code></td><td class="c-skill">docx-cli</td></tr>
         <tr><td>Rédiger ou relire un acte, un courrier, un document juridique</td><td class="c-skill">style-redaction-cabinet, puis docx-cli</td></tr>

@@ -328,6 +328,12 @@ test('okf verify, link et unlink passent par okfFn', async () => {
   await run(['okf', 'unlink', 'Pièces/Courrier.pdf', 'amends', 'Pièces/Contrat.pdf'], { cwd: dossier, deps });
   assert.deepEqual(calls.pop(), { action: 'unlink', folder, source: 'Pièces/Courrier.pdf', relation: 'amends', target: 'Pièces/Contrat.pdf' });
   await assert.rejects(run(['okf', 'link', 'Pièces/Courrier.pdf', 'amends', 'Pièces/Contrat.pdf'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
+  await run(['okf', 'link', 'Pièces/Contrat.pdf', 'states', 'Date de signature', '--citation', 'Fait à Paris le 3 mars 2024.', '--value', '2024-03-03', '--single'], { cwd: dossier, deps });
+  assert.deepEqual(calls.pop(), { action: 'link', folder, source: 'Pièces/Contrat.pdf', relation: 'states', target: 'Date de signature', citation: 'Fait à Paris le 3 mars 2024.', value: '2024-03-03', single: true });
+  await run(['okf', 'link', 'Date de signature', 'involves', 'CLIENT_01'], { cwd: dossier, deps });
+  assert.deepEqual(calls.pop(), { action: 'link', folder, source: 'Date de signature', relation: 'involves', target: 'CLIENT_01' });
+  const contradiction = { fait: '/_faits/date-de-signature.md', titre: 'Date de signature', valeurs: [{ piece: '/Pièces/Contrat.pdf.md', valeur: '2024-03-03' }, { piece: '/Pièces/Courrier.pdf.md', valeur: '2024-03-05' }] };
+  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async () => ({ erreurs: [], contradictions: [contradiction] }) } }), 'Index OKF : aucune erreur.\nContradictions : 1.\n- Date de signature : /Pièces/Contrat.pdf.md → 2024-03-03 ; /Pièces/Courrier.pdf.md → 2024-03-05');
   await assert.rejects(run(['okf', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
   fs.rmSync(dossier, { recursive: true, force: true });
 });

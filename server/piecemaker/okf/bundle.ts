@@ -6,17 +6,26 @@ import { parse, stringify } from 'yaml';
 import { DEFAULT_CLASSIFICATION } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
 export const OKF_VERSION = '0.2';
-export const RELATIONS = ['amends', 'responds-to', 'refers-to'];
+export const RELATIONS = ['amends', 'responds-to', 'refers-to', 'supersedes'];
+export const STATES = 'states';
+export const MENTIONS = 'mentions';
+export const INVOLVES = 'involves';
 export const SCAN_ACTOR = 'piecemaker/gliner';
 export const AGENT_ACTOR = 'piecemaker/agent';
+export const LAWYER_ACTOR = 'piecemaker/avocat';
+export const REVIEW_ACTOR = 'piecemaker/tabular-review';
+export const DERIVED_ACTORS = [SCAN_ACTOR, REVIEW_ACTOR];
+export const FACT_TYPE = 'Fait';
+export const PARTY_TYPE = 'Partie';
+const FACT_FOLDER = '/_faits/';
+const PARTY_FOLDER = '/_parties/';
 export const UNCLASSIFIED = 'Non classé';
 export const DEFAULT_GRAPH_TYPES = ['Pièces'];
 const RESERVED = new Set(['index.md', 'log.md']);
 
 export type Frontmatter = Record<string, unknown>;
-export type Relation = { target: string; citation: string; origin: string; dismissed?: boolean };
+export type Relation = { target: string; citation: string; origin: string; value?: string; dismissed?: boolean };
 export type Relations = Record<string, Relation[]>;
-export type Atom = { code: string; citation: string };
 export type Concept = { id: string; frontmatter: Frontmatter; body: string; error?: string };
 
 const posix = (value: string): string => value.split(path.sep).join('/').normalize('NFC');
@@ -27,6 +36,17 @@ export const conceptFile = (projectPath: string, id: string): string => path.joi
 export const resourceOf = (projectPath: string, filePath: string): string => posix(path.relative(projectPath, filePath));
 export const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 export const squash = (value: string): string => value.replace(/\s+/g, ' ').trim();
+export const fold = (value: string): string => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
+export const isFactId = (id: string): boolean => id.startsWith(FACT_FOLDER);
+export const isPartyId = (id: string): boolean => id.startsWith(PARTY_FOLDER);
+export const partyId = (code: string): string => isPartyId(code) ? code : `${PARTY_FOLDER}${code}.md`;
+
+export function factId(title: string): string {
+  if (isFactId(title)) return title;
+  const slug = fold(title).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  if (!slug) throw new TypeError('fait sans titre.');
+  return `${FACT_FOLDER}${slug}.md`;
+}
 
 export function parseConcept(source: string): { frontmatter: Frontmatter; body: string } {
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(source.replace(/^﻿/, ''));
@@ -40,15 +60,6 @@ export function serializeConcept(frontmatter: Frontmatter, body: string): string
   return `---\n${stringify(frontmatter, { lineWidth: 0 })}---\n${body ? `\n${body.trim()}\n` : ''}`;
 }
 
-export function atomsBody(atoms: Atom[]): string {
-  if (!atoms.length) return '';
-  return ['# Atomes', ...atoms.map((atom) => `## ${atom.code}\n\n> ${squash(atom.citation)}`)].join('\n\n');
-}
-
-export function parseAtoms(body: string): Atom[] {
-  return [...body.matchAll(/^## (.+)\n\n> (.+)$/gm)].map((match) => ({ code: match[1].trim(), citation: match[2].trim() }));
-}
-
 export function relationsOf(frontmatter: Frontmatter): Relations {
   const source = frontmatter.relations;
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
@@ -56,7 +67,7 @@ export function relationsOf(frontmatter: Frontmatter): Relations {
   for (const [name, entries] of Object.entries(source as Record<string, unknown>)) {
     relations[name] = (Array.isArray(entries) ? entries : []).map((entry) => {
       const value = (entry && typeof entry === 'object' ? entry : { target: entry }) as Record<string, unknown>;
-      return { target: text(value.target), citation: text(value.citation), origin: text(value.origin), ...(value.dismissed === true ? { dismissed: true } : {}) };
+      return { target: text(value.target), citation: text(value.citation), origin: text(value.origin), ...(text(value.value) ? { value: text(value.value) } : {}), ...(value.dismissed === true ? { dismissed: true } : {}) };
     });
   }
   return relations;

@@ -20,7 +20,7 @@ const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
 const OKF_COMMANDS = ['verify', 'link', 'unlink'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force', 'whole_program']);
+const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
@@ -71,9 +71,15 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   okf verify
       index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
       reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
+      et les contradictions (un fait à valeur unique, plusieurs valeurs selon les pièces)
   okf link <source> <relation> <target> --citation "phrase du document source"
-      relations : amends | responds-to | refers-to ; source et cible : chemins des documents ;
+      entre documents : amends | responds-to | refers-to | supersedes ; source et cible : chemins ;
       la citation doit figurer mot pour mot dans le document source
+  okf link <pièce> states "<titre du fait>" --citation "phrase de la pièce" [--value "valeur"] [--single]
+      la pièce établit un fait ; la fiche du fait est créée si elle manque ;
+      --single : le fait n'a qu'une valeur, un écart entre pièces est une contradiction
+  okf link "<titre du fait>" involves <CODE_PARTIE>
+      le fait concerne une partie du dossier ; pas de citation
   okf unlink <source> <relation> <target>
 
   catala verifier --au AAAA-MM-JJ [--programme NOM]
@@ -578,14 +584,23 @@ async function okf(api, positional, flags, resolved) {
   if (!OKF_COMMANDS.includes(action)) usage(`okf attend ${OKF_COMMANDS.join(', ')}.`);
   const folder = path.resolve(resolved);
   if (action === 'verify') {
-    const { erreurs } = await api.okfFn({ action, folder });
-    if (!erreurs.length) return 'Index OKF : aucune erreur.';
-    return [`Index OKF : ${erreurs.length} erreur(s).`, ...erreurs.map((entry) => `- ${entry.fiche} : ${entry.erreur}`)].join('\n');
+    const { erreurs, contradictions = [] } = await api.okfFn({ action, folder });
+    return [
+      erreurs.length ? `Index OKF : ${erreurs.length} erreur(s).` : 'Index OKF : aucune erreur.',
+      ...erreurs.map((entry) => `- ${entry.fiche} : ${entry.erreur}`),
+      ...(contradictions.length ? [`Contradictions : ${contradictions.length}.`] : []),
+      ...contradictions.map((entry) => `- ${entry.titre} : ${entry.valeurs.map((item) => `${item.piece} → ${item.valeur}`).join(' ; ')}`),
+    ].join('\n');
   }
   const [source, relation, target] = positional.slice(2);
   if (!source || !relation || !target) usage(`okf ${action} attend <source> <relation> <target>.`);
-  if (action === 'link' && !value(flags.citation)) usage('okf link attend --citation.');
-  const lien = await api.okfFn({ action, folder, source, relation, target, ...(action === 'link' ? { citation: String(flags.citation) } : {}) });
+  if (action === 'link' && relation !== 'involves' && !value(flags.citation)) usage('okf link attend --citation.');
+  const detail = action === 'link' ? {
+    ...(value(flags.citation) ? { citation: String(flags.citation) } : {}),
+    ...(value(flags.value) ? { value: String(flags.value) } : {}),
+    ...(flags.single ? { single: true } : {}),
+  } : {};
+  const lien = await api.okfFn({ action, folder, source, relation, target, ...detail });
   return `${action === 'link' ? 'Lien enregistré' : 'Lien retiré'} : ${lien.source} ${lien.relation} ${lien.target}`;
 }
 

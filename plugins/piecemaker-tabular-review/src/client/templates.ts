@@ -1,5 +1,5 @@
-import type { ColumnAction, ColumnFormat, Template, TemplateColumn } from '../shared.js';
-import { COLUMN_ACTIONS, COLUMN_FORMATS } from '../shared.js';
+import type { ColumnAction, ColumnFact, ColumnFormat, Template, TemplateColumn } from '../shared.js';
+import { COLUMN_ACTIONS, COLUMN_FACTS, COLUMN_FORMATS } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, formatDate, openModal, toast } from './dom.js';
 
@@ -74,6 +74,10 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
         <option value="">Aucune action</option>
         ${COLUMN_ACTIONS.map((action) => `<option value="${action.value}"${action.value === column.action ? ' selected' : ''}>${escapeHtml(action.label)}</option>`).join('')}
       </select></label>
+      <label class="ptr-field"><span class="ptr-label">Index du dossier</span><select class="ptr-select" data-field="fact" title="Chaque réponse citée relie la pièce à un fait de l’index du dossier">
+        <option value="">Hors de l’index</option>
+        ${COLUMN_FACTS.map((fact) => `<option value="${fact.value}"${fact.value === column.fact ? ' selected' : ''}>${escapeHtml(fact.label)}</option>`).join('')}
+      </select></label>
       ${column.action === 'custom' ? `<label class="ptr-field"><span class="ptr-label">Action personnalisée</span><textarea class="ptr-textarea" data-field="customAction" rows="2" maxlength="4000" placeholder="Décrivez l’action souhaitée…">${escapeHtml(column.customAction ?? '')}</textarea></label>` : ''}
       <label class="ptr-field"><span class="ptr-label">Question / consigne</span><textarea class="ptr-textarea" data-field="prompt" rows="5" placeholder="Quelle information l’IA doit-elle extraire ?">${escapeHtml(column.prompt)}</textarea></label>
       ${column.format === 'tags' ? `<label class="ptr-field"><span class="ptr-label">Étiquettes autorisées</span><input class="ptr-input" data-field="tagsText" value="${escapeHtml(column.tagsText)}" placeholder="Séparées par des virgules"></label>` : ''}`;
@@ -120,6 +124,8 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
             column.action = (field.value || undefined) as ColumnAction | undefined;
             renderEditor(dialog);
             dialog.querySelector<HTMLSelectElement>('[data-field="action"]')?.focus();
+          } else if (key === 'fact') {
+            column.fact = (field.value || undefined) as ColumnFact | undefined;
           } else if (key === 'name' || key === 'prompt' || key === 'tagsText' || key === 'customAction') {
             column[key] = field.value;
             if (key === 'name') {
@@ -192,6 +198,7 @@ async function editTemplate(app: App, template: Template | null, duplicate = fal
         ...(column.format === 'tags' ? { tags: column.tagsText.split(',').map((tag) => tag.trim()).filter(Boolean) } : {}),
         ...(column.action ? { action: column.action } : {}),
         ...(column.action === 'custom' ? { customAction: column.customAction?.trim() ?? '' } : {}),
+        ...(column.fact ? { fact: column.fact } : {}),
       })),
     };
     try {

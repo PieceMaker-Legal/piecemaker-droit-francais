@@ -13,6 +13,7 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
     français, citations sourcées via legifrance (MCP).
 - **Agents** (`agents/`) :
   - `analyste-pieces` — synthèse structurée d'une pièce du dossier.
+  - `gestionnaire-okf` — lecture et écriture de l'index OKF du dossier (skill `okf`).
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).

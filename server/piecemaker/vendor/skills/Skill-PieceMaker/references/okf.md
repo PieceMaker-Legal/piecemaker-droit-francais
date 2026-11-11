@@ -1,8 +1,14 @@
 # Index OKF (`pm okf`)
 
-L'index du dossier suit le format Open Knowledge Format 0.2. Il vit dans `.piecemaker/okf/` : une fiche Markdown par document et un `index.md`. Le scan GLiNER écrit les fiches sans appel à un modèle. Ne les écris pas à la main : passe par `pm okf`.
+L'index du dossier suit le format Open Knowledge Format 0.2. Il vit dans `.piecemaker/okf/`. Il fait autorité sur les liens entre pièces et sur les faits. Ne l'écris pas à la main : passe par `pm okf`.
 
-## Fiche
+## Fiches
+
+| Fiche | Identifiant | Contenu |
+| --- | --- | --- |
+| Document | `/<chemin du document>.md` | titre, nature, date, liens |
+| Fait | `/_faits/<titre normalisé>.md` | titre, description, pièces qui l'établissent |
+| Partie | `/_parties/<CODE>.md` | code de la partie, côté (client ou adverse) |
 
 ```markdown
 ---
@@ -19,30 +25,47 @@ relations:
     - target: /Pièces/Contrat.pdf.md
       citation: Nous faisons suite au contrat de prestation du 12 mars 2021.
       origin: piecemaker/gliner
+  states:
+    - target: /_faits/date-de-resiliation.md
+      citation: Le contrat est résilié à compter du 1er juin 2021.
+      value: 2021-06-01
+      origin: piecemaker/agent
+  mentions:
+    - target: /_parties/CLIENT_01.md
+      origin: piecemaker/gliner
 ---
-# Atomes
-
-## PERSONNE_PHYSIQUE_01
-
-> Phrase du document qui cite la personne.
 ```
 
-- `type` : dossier de premier niveau de l'arborescence choisie par l'avocat (`.piecemaker/arborescence.json`). Aucun autre type n'existe. Un document hors arborescence reçoit `Non classé` ; `verifier` le signale.
-- Identifiant d'une fiche : `/<chemin du document>.md`, depuis la racine du dossier.
-- Atomes : une citation mot pour mot par entité repérée dans le document.
+- `type` d'un document : dossier de premier niveau de l'arborescence (`.piecemaker/arborescence.json`). Un document hors arborescence reçoit `Non classé` ; `verify` le signale.
+- Seules les personnes qualifiées de parties ont une fiche. Le scan pose `mentions` ; tu ne l'écris pas.
+- Aucun champ de statut (projet, signé) n'existe.
 
-## Liens
+## Liens entre pièces
 
-Trois relations, de la source vers la cible : `amends`, `responds-to`, `refers-to`. Chaque lien porte une citation mot pour mot du document source. Seuls les documents des types du graphe (par défaut `Pièces`) portent des liens.
-
-Le scan pose `refers-to` quand une phrase contient la date et la nature d'un seul autre document. Ajoute un lien seulement si tu as lu la phrase qui le fonde :
+Quatre relations, de la source vers la cible : `amends`, `responds-to`, `refers-to`, `supersedes` (une version remplace une autre). Chaque lien porte une citation mot pour mot du document source. Seuls les documents des types du graphe (par défaut `Pièces`) portent ces liens.
 
 ```bash
 pm okf link "Pièces/Avenant.pdf" amends "Pièces/Contrat.pdf" --citation "L'article 3 du contrat est remplacé."
 pm okf unlink "Pièces/Courrier.pdf" refers-to "Pièces/Contrat.pdf"
 ```
 
-Un lien du scan retiré reste écarté : le scan ne le repose pas.
+Ajoute un lien seulement si tu as lu la phrase qui le fonde. Un lien du scan retiré reste écarté.
+
+## Faits
+
+Une pièce établit un fait par un lien `states`. La fiche du fait est créée si elle manque. Réutilise le titre exact d'un fait existant pour rattacher une autre pièce au même fait.
+
+```bash
+pm okf link "Pièces/Courrier.pdf" states "Date de résiliation" --citation "Le contrat est résilié à compter du 1er juin 2021." --value "2021-06-01" --single
+pm okf link "Date de résiliation" involves CLIENT_01
+pm okf unlink "Pièces/Courrier.pdf" states "Date de résiliation"
+```
+
+- `--value` : ce que la pièce dit du fait. Écris la même valeur sous la même forme d'une pièce à l'autre (date en `AAAA-MM-JJ`, montant en chiffres).
+- `--single` : le fait n'a qu'une valeur. Un écart entre pièces devient une contradiction.
+- `involves` relie un fait à une partie, sans citation. La cible est le code de la partie.
+
+Les colonnes de revue tabulaire marquées « Index du dossier » posent aussi des liens `states`. L'avocat en pose dans la visionneuse.
 
 ## Vérifier
 
@@ -50,4 +73,4 @@ Un lien du scan retiré reste écarté : le scan ne le repose pas.
 pm okf verify
 ```
 
-La commande ne renvoie que les erreurs : type hors arborescence ou différent du dossier du document, document absent, document sans fiche, relation inconnue, cible absente ou hors graphe, citation introuvable dans le document, `index.md` incomplet. Corrige la cause (classement, lien, analyse du dossier), puis relance.
+La commande renvoie les erreurs : type hors arborescence, document absent, document sans fiche, relation inconnue, cible absente ou hors graphe, citation introuvable, `index.md` incomplet. Elle renvoie aussi les contradictions : un fait à valeur unique avec plusieurs valeurs. Corrige la cause d'une erreur, puis relance. Signale une contradiction à l'avocat ; ne tranche pas.

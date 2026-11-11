@@ -3,11 +3,18 @@ import path from 'node:path';
 
 import type { MarkdownOf } from './build.js';
 import {
+  FACT_TYPE,
+  INVOLVES,
+  MENTIONS,
   OKF_VERSION,
+  PARTY_TYPE,
   RELATIONS,
+  STATES,
   bundleRoot,
   conceptId,
-  parseAtoms,
+  fold,
+  isFactId,
+  isPartyId,
   parseConcept,
   readBundle,
   readGraphTypes,
@@ -19,6 +26,7 @@ import {
 } from './bundle.js';
 
 export type OkfError = { fiche: string; erreur: string };
+export type OkfContradiction = { fait: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
 
 export function quoted(markdown: string | null, citation: string): boolean {
   const needle = squash(citation.replace(/^…|…$/g, ''));
@@ -41,6 +49,9 @@ function indexErrors(projectPath: string, ids: string[]): OkfError[] {
   return errors;
 }
 
+const ALLOWED: Record<string, string[]> = { [FACT_TYPE]: [INVOLVES], [PARTY_TYPE]: [] };
+const DOCUMENT_RELATIONS = [...RELATIONS, STATES, MENTIONS];
+
 export function verifyBundle(input: { projectPath: string; resources: string[]; markdownOf: MarkdownOf }): OkfError[] {
   const { projectPath, markdownOf } = input;
   const types = readTypes(projectPath);
@@ -54,30 +65,38 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
     if (concept.error) { report(concept.error); continue; }
     const type = text(concept.frontmatter.type);
     const resource = text(concept.frontmatter.resource);
+    const reserved = isFactId(concept.id) ? FACT_TYPE : isPartyId(concept.id) ? PARTY_TYPE : '';
     if (!type) report('type absent');
-    else if (!types.includes(type)) report(`type « ${type} » hors arborescence (${types.join(', ')})`);
-    if (!resource) report('resource absent');
-    else {
-      if (!fs.existsSync(path.join(projectPath, resource))) report(`document absent : ${resource}`);
-      if (conceptId(resource) !== concept.id) report(`la fiche ne correspond pas à son document : ${resource}`);
-      if (type && typeOf(resource, types) !== type) report(`type « ${type} » différent du dossier du document`);
+    else if (reserved || type === FACT_TYPE || type === PARTY_TYPE) {
+      if (type !== reserved) report(`type « ${type} » incompatible avec l'emplacement de la fiche`);
+      if (!text(concept.frontmatter.title)) report('title absent');
+    } else if (!types.includes(type)) report(`type « ${type} » hors arborescence (${types.join(', ')})`);
+    if (!reserved) {
+      if (!resource) report('resource absent');
+      else {
+        if (!fs.existsSync(path.join(projectPath, resource))) report(`document absent : ${resource}`);
+        if (conceptId(resource) !== concept.id) report(`la fiche ne correspond pas à son document : ${resource}`);
+        if (type && typeOf(resource, types) !== type) report(`type « ${type} » différent du dossier du document`);
+      }
     }
+    const allowed = ALLOWED[reserved] || DOCUMENT_RELATIONS;
     const markdown = resource ? markdownOf(resource) : null;
     for (const [name, entries] of Object.entries(relationsOf(concept.frontmatter))) {
-      if (!RELATIONS.includes(name)) report(`relation inconnue : ${name} (${RELATIONS.join(', ')})`);
+      if (!allowed.includes(name)) report(`relation inconnue : ${name} (${allowed.join(', ')})`);
       for (const entry of entries) {
         if (entry.dismissed) continue;
         const link = `${name} → ${entry.target || '?'}`;
-        if (!typeById.has(entry.target)) report(`${link} : cible absente du dossier`);
-        else if (!graphTypes.includes(typeById.get(entry.target) as string)) report(`${link} : la cible n'est pas de type ${graphTypes.join(', ')}`);
+        const targetType = typeById.get(entry.target);
+        if (targetType === undefined) report(`${link} : cible absente du dossier`);
+        else if (name === STATES) { if (targetType !== FACT_TYPE) report(`${link} : la cible n'est pas un fait`); }
+        else if (name === MENTIONS || name === INVOLVES) { if (targetType !== PARTY_TYPE) report(`${link} : la cible n'est pas une partie`); }
+        else if (!graphTypes.includes(targetType)) report(`${link} : la cible n'est pas de type ${graphTypes.join(', ')}`);
         if (entry.target === concept.id) report(`${link} : lien vers soi-même`);
-        if (!graphTypes.includes(type)) report(`${link} : la source n'est pas de type ${graphTypes.join(', ')}`);
+        if (RELATIONS.includes(name) && !graphTypes.includes(type)) report(`${link} : la source n'est pas de type ${graphTypes.join(', ')}`);
+        if (name === INVOLVES) continue;
         if (!entry.citation) report(`${link} : citation absente`);
         else if (!quoted(markdown, entry.citation)) report(`${link} : citation introuvable dans le document`);
       }
-    }
-    for (const atom of parseAtoms(concept.body)) {
-      if (!quoted(markdown, atom.citation)) report(`atome ${atom.code} : citation introuvable dans le document`);
     }
   }
 
@@ -85,4 +104,14 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
     if (!typeById.has(conceptId(resource))) errors.push({ fiche: conceptId(resource), erreur: 'document sans fiche : relancer l\'analyse du dossier' });
   }
   return [...errors, ...indexErrors(projectPath, concepts.map((concept) => concept.id))];
+}
+
+export function contradictions(projectPath: string): OkfContradiction[] {
+  const concepts = readBundle(projectPath).filter((concept) => !concept.error);
+  return concepts.filter((concept) => concept.frontmatter.type === FACT_TYPE && concept.frontmatter.single_value === true).flatMap((fact) => {
+    const valeurs = concepts.flatMap((concept) => (relationsOf(concept.frontmatter)[STATES] || [])
+      .filter((entry) => entry.target === fact.id && !entry.dismissed && entry.value)
+      .map((entry) => ({ piece: concept.id, valeur: entry.value as string })));
+    return new Set(valeurs.map((entry) => fold(squash(entry.valeur)))).size > 1 ? [{ fait: fact.id, titre: text(fact.frontmatter.title), valeurs }] : [];
+  });
 }

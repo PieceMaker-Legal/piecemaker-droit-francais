@@ -6,11 +6,12 @@ import express from 'express';
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
 
 import type { Renamed } from './build.js';
-import { buildBundle, documentsFromSnapshot } from './build.js';
-import { parseAtoms, readBundle, readGraphTypes, readTypes, relationsOf, resourceOf, text } from './bundle.js';
+import { buildBundle, documentsFromSnapshot, partiesFromSnapshot } from './build.js';
+import { LAWYER_ACTOR, readBundle, readGraphTypes, readTypes, relationsOf, resourceOf, text } from './bundle.js';
 import type { LinkInput } from './links.js';
 import { addLink, removeLink } from './links.js';
-import { verifyBundle } from './verify.js';
+import { factsFromReviews } from './reviews.js';
+import { contradictions, verifyBundle } from './verify.js';
 
 type OkfOptions = {
   projects: {
@@ -33,14 +34,15 @@ export function createOkfBackend(options: OkfOptions) {
 
   const build = (projectId: string, renamed?: Renamed) => {
     const projectPath = projectPathOf(projectId);
-    return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, options.snapshot(projectId)), markdownOf: markdownOf(projectPath), renamed });
+    const snapshot = options.snapshot(projectId);
+    return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, snapshot), parties: partiesFromSnapshot(snapshot), reviewFacts: factsFromReviews(projectPath), markdownOf: markdownOf(projectPath), renamed });
   };
 
   const verify = async (projectId: string) => {
     build(projectId);
     const projectPath = projectPathOf(projectId);
     const resources = (await options.listDocuments(projectPath)).map((filePath) => resourceOf(projectPath, filePath));
-    return { erreurs: verifyBundle({ projectPath, resources, markdownOf: markdownOf(projectPath) }) };
+    return { erreurs: verifyBundle({ projectPath, resources, markdownOf: markdownOf(projectPath) }), contradictions: contradictions(projectPath) };
   };
 
   const read = (projectId: string) => {
@@ -56,21 +58,28 @@ export function createOkfBackend(options: OkfOptions) {
         description: text(concept.frontmatter.description),
         resource: text(concept.frontmatter.resource),
         date: text(concept.frontmatter.date),
-        atomes: parseAtoms(concept.body).length,
+        side: text(concept.frontmatter.side),
+        single: concept.frontmatter.single_value === true,
         relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
           .filter((entry) => !entry.dismissed)
-          .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin }))),
+          .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin, value: entry.value || '' }))),
       })),
     };
   };
 
-  const link = (projectId: string, input: LinkInput) => {
+  const link = (projectId: string, input: LinkInput, origin?: string) => {
     build(projectId);
     const projectPath = projectPathOf(projectId);
-    return addLink(projectPath, input, markdownOf(projectPath));
+    const added = addLink(projectPath, input, markdownOf(projectPath), origin);
+    build(projectId);
+    return added;
   };
 
-  const unlink = (projectId: string, input: LinkInput) => removeLink(projectPathOf(projectId), input);
+  const unlink = (projectId: string, input: LinkInput) => {
+    const removed = removeLink(projectPathOf(projectId), input);
+    build(projectId);
+    return removed;
+  };
 
   const statusFor = (error: unknown): number => error instanceof TypeError ? 400 : error instanceof Error && error.message === 'Project not found.' ? 404 : 500;
   const respond = (operation: () => unknown | Promise<unknown>, response: express.Response) => {
@@ -82,8 +91,10 @@ export function createOkfBackend(options: OkfOptions) {
   const router = express.Router();
   router.get('/okf', (request, response) => respond(() => read(String(request.query.projectId || '')), response));
   router.get('/okf/verify', (request, response) => respond(() => verify(String(request.query.projectId || '')), response));
+  router.post('/okf/link', express.json(), (request, response) => respond(() => link(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
+  router.post('/okf/unlink', express.json(), (request, response) => respond(() => unlink(String(request.body?.projectId || ''), request.body), response));
 
-  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, link, unlink };
+  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, link: (projectId, body) => link(projectId, body), unlink };
   const localRouter = express.Router();
   localRouter.post('/okf', express.json(), (request, response) => {
     if (!options.isLoopback(request)) {
