@@ -27,6 +27,7 @@ champ d'application Exemple:
 `#[doc]` appartient à Catala. Le contenu `titre: …`, `source: …` et `quote: « … »` suit la convention PieceMaker. Rédigez `titre` selon « Style des titres » de `SKILL.md`.
 Écrivez le lien après `source:` sans crochets Markdown dans l’attribut : le formateur du pack refuse certains liens avec crochets.
 Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait ou une clause, indiquez la prémisse : `source: okf:/_premises/<titre normalisé>.md`. N’indiquez pas la pièce : le graphe affiche les pièces de la prémisse.
+Une prémisse alimente une entrée de qualification de type énumération (`État` : `Établi`, `Écarté`, `Inconnu`) lue par une règle. Ne déclarez jamais un indicateur `vrai` que rien ne lit : `verifier` bloque une prémisse sans effet.
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées.
 
 La même annotation alimente le contrôle des citations et le graphe. Le graphe la rattache à la définition par sa position native.

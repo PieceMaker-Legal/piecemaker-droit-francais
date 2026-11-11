@@ -201,7 +201,7 @@ test('verifier runs every check inside the pack environment and writes the resul
     assert.equal(explanation.passed, true);
     assert.equal(explanation.sources_sha256, report.sources_sha256);
     assert.equal(explanation.scope, 'JeanDupont');
-    assert.deepEqual(report.checks.map((entry) => entry.name), ['documentation', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
+    assert.deepEqual(report.checks.map((entry) => entry.name), ['documentation', 'typecheck', 'format', 'premisses', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
     const proof = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json')));
     assert.deepEqual(proof.scopes.map((entry) => entry.scope), ['Prime', 'AutrePrime']);
     assert.equal(proof.obligations, 2);
@@ -453,7 +453,7 @@ test('independent checks finish despite compilation failure and stale reports ar
     };
     await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => { release(); return { passed: false, status: 'failed', message: 'Citation introuvable', results: [] }; } } });
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
-    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['documentation', 'passed'], ['typecheck', 'failed'], ['format', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
+    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['documentation', 'passed'], ['typecheck', 'failed'], ['format', 'blocked'], ['premisses', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
     assert.equal(report.passed, false);
     assert.ok(!calls.some((call) => ['proof', 'explain', 'runtest'].includes(call.args[0])));
     for (const file of ['preuve.json', 'tests.json', 'explication.json']) assert.equal(fs.existsSync(path.join(directory, 'resultats', file)), false);
@@ -576,5 +576,48 @@ test('verifier requires doc, a nonempty quote and a title, in any language', asy
     const faults = await verify({ type: 'litige', raisonnements: [{ champ: 'Absent' }] });
     assert.equal(faults.length, 4);
     assert.match(faults.join('\n'), /sans nom[\s\S]*type de tâche inconnu[\s\S]*« Absent » : aucun champ[\s\S]*sans objectif/);
+  } finally { cleanup(); }
+});
+
+const PREMISE_SOURCE = [
+  '```catala-metadata',
+  "déclaration champ d'application Prime:",
+  '  #[doc = "source: okf:/_premises/exemple"]',
+  '  entrée mention_lue contenu booléen',
+  '  #[doc = "source: okf:/_premises/exemple"]',
+  '  entrée mention_morte contenu booléen',
+  '  résultat possible contenu booléen',
+  '```',
+  '',
+].join('\n');
+
+function premiseRun(edges) {
+  const { runner } = fakeRun();
+  return async (command, args, options) => {
+    if (args[0] === 'dependency-graph' && args.includes('prime.catala_fr')) return { code: 0, stdout: JSON.stringify({ intra_scopes: { Prime: { nodes: { 3: 'possible', 2: 'mention_morte', 1: 'mention_lue' }, edges } }, inter_scopes: { nodes: { 1: 'Prime' }, edges: [] } }), stderr: '' };
+    return runner(command, args, options);
+  };
+}
+
+test('verifier accepts an OKF premise read by a rule', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime', { 'prime.catala_fr': PREMISE_SOURCE });
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }, { from: 2, to: 3 }]), python: null, credentials: null } });
+    assert.match(text, /- premisses : ok/);
+    assert.doesNotMatch(text, /Prémisse sans effet/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'premisses').passed, true);
+  } finally { cleanup(); }
+});
+
+test('verifier blocks an OKF premise that no rule reads', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime', { 'prime.catala_fr': PREMISE_SOURCE });
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }]), python: null, credentials: null } });
+    assert.match(text, /- premisses : échec/);
+    assert.match(text, /Prémisse sans effet : Prime\.mention_morte cite okf:\/_premises\/exemple mais aucune règle ne la lit\./);
+    assert.doesNotMatch(text, /Prime\.mention_lue/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).passed, false);
   } finally { cleanup(); }
 });

@@ -74,7 +74,7 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 
 | Commande | Effet | Résultat |
 | --- | --- | --- |
-| `pm catala verifier --programme <nom> [--au AAAA-MM-JJ]` | mise au format (`catala-format --in-place`), puis typage, tests Clerk/Python, preuves, Catleg, citations PieceMaker, explication | fichiers réécrits, `resultats/verification.json`, `tests.json` |
+| `pm catala verifier --programme <nom> [--au AAAA-MM-JJ]` | mise au format (`catala-format --in-place`), puis typage, prémisses `okf:` lues par une règle (sinon « Prémisse sans effet »), tests Clerk/Python, preuves, Catleg, citations PieceMaker, explication | fichiers réécrits, `resultats/verification.json`, `tests.json` |
 | `pm catala formater` | `catala-format --in-place` seul ; absent du skill | fichiers réécrits |
 | `pm catala preuve --scope <Champ> [--fichier F]` | `catala proof` sur un seul champ, sans compilation OCaml ; absent du skill | `resultats/preuve.json` |
 | `pm catala expliquer --programme <nom> --fichier test_prime.catala_fr --scope Exemple` | Graphe des formules et conditions d’une exécution | `resultats/explication.dot`, `explication.json` |

@@ -102,7 +102,7 @@ Le titre nomme la case du graphe. L’avocat le lit sans le code. Aucun contrôl
 
 Contrôler, une seule commande :
 
-- `pm catala verifier --programme <nom>` met les fichiers au format officiel, puis lance tous les contrôles : typage avec invariants, tests Clerk/Python, preuve de chaque champ métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande.
+- `pm catala verifier --programme <nom>` met les fichiers au format officiel, puis lance tous les contrôles : typage avec invariants, tests Clerk/Python, lecture de chaque prémisse `okf:` par une règle, preuve de chaque champ métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande.
 - Lancez `pm catala verifier` seul. Les commandes séparées (`catleg`, `preuve`, `formater`) servent seulement à isoler un contrôle déjà signalé par `verifier`.
 - La commande réécrit les fichiers : relisez un fichier signalé « reformatés » avant de le modifier.
 - Sous un contrôle en échec, le bilan donne une ligne par erreur (`fichier:ligne.colonne: [ERROR] message`) ou par test faux (`fichier:ligne › Scenario : message`). Tant que la compilation échoue, les contrôles qui en dépendent sont bloqués : corrigez d'abord la compilation.

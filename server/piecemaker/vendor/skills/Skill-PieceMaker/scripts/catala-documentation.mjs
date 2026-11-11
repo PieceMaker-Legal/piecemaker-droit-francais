@@ -53,3 +53,15 @@ export function catalaDocumentation(content) {
   if (code) inspect();
   return { entries, errors };
 }
+
+export function okfCitedVariables(content) {
+  const found = [];
+  let scope = '';
+  const pattern = /champ d'application\s+([\p{L}\p{N}_]+)\s*:|#\[\s*doc\s*=\s*"((?:\\[\s\S]|[^"\\])*)"\s*\]\s*(?:(?:étiquette|label|exception)\s+[\p{L}\p{N}_]+\s+)?(?:(?:déclaration|declaration|entrée|input|résultat|output|interne|internal|contexte|context|définition|definition|règle|rule)\s+)?([\p{L}\p{N}_]+)/gu;
+  for (const match of content.matchAll(pattern)) {
+    if (match[1]) { scope = match[1]; continue; }
+    const source = decode(match[2]).match(/^\s*source\s*:\s*(okf:\S+)/im)?.[1];
+    if (source && scope) found.push({ scope, variable: match[3], source, line: content.slice(0, match.index).split('\n').length });
+  }
+  return found;
+}

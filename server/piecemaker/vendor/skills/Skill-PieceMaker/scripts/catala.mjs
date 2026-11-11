@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { catalaDocumentation } from './catala-documentation.mjs';
+import { catalaDocumentation, okfCitedVariables } from './catala-documentation.mjs';
 
 export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
@@ -295,6 +295,31 @@ async function verifier(context, program, flags = {}) {
       writeResult(program.directory, 'format.log', formatted.log);
       return { passed: !formatted.failed.length, exit_code: formatted.failed.length ? 1 : 0, files: formatted.failed, message: formatted.rewritten.length ? `reformatés : ${formatted.rewritten.join(', ')}` : '' };
     });
+    await record('premisses', 'catala dependency-graph + prémisses OKF lues', async () => {
+      if (!typed.passed) return blocked('Compilation non validée.');
+      const errors = [];
+      for (const file of files) {
+        const cited = okfCitedVariables(fs.readFileSync(path.join(program.directory, file), 'utf8'));
+        if (!cited.length) continue;
+        const args = ['dependency-graph', '--color=never', '-I', '.', file];
+        const key = JSON.stringify(args);
+        if (!provenanceCache.has(key)) provenanceCache.set(key, check(context, program.directory, 'provenance-dependances', 'catala', args));
+        const listed = await provenanceCache.get(key);
+        let graph;
+        try {
+          if (!listed.entry.passed) throw new Error();
+          graph = JSON.parse(listed.result.stdout).intra_scopes;
+          if (!graph) throw new Error();
+        } catch { errors.push(`Dépendances Catala indisponibles pour ${file}.`); continue; }
+        for (const { scope, variable, source } of cited) {
+          const nodes = graph[scope]?.nodes ?? {};
+          const id = Object.keys(nodes).find((candidate) => nodes[candidate] === variable);
+          const read = id !== undefined && (graph[scope].edges ?? []).some((edge) => String(edge.from) === id && String(edge.to) !== id);
+          if (!read) errors.push(`${file}: Prémisse sans effet : ${scope}.${variable} cite ${source} mais aucune règle ne la lit.`);
+        }
+      }
+      return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
+    });
     const tests = files.filter((file) => isTestFile(program.directory, file));
     let scopes = [];
     await record('tests', 'clerk runtest + clerk report', async () => {
@@ -373,7 +398,7 @@ async function verifier(context, program, flags = {}) {
   ]);
   const changed = digest !== sourcesDigest(program.directory, sourceFiles(program.directory));
   if (changed) { checks.push({ name: 'sources', command: '', exit_code: 1, seconds: 0, passed: false, status: 'blocked', message: 'Code modifié pendant la vérification : relancez verifier.' }); writeResult(program.directory, 'explication.dot', ''); }
-  const order = ['documentation', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
+  const order = ['documentation', 'typecheck', 'format', 'premisses', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
   checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed), sources_sha256: digest, checks };
   writeResult(program.directory, 'verification.json', report);
