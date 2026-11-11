@@ -95,7 +95,7 @@ async function tabularCheck(cwd, run) {
   };
 }
 
-const isPremiseGap = (gap) => gap.startsWith('/_premises/') || gap.includes('#[doc]');
+const isPremiseGap = (gap) => gap.includes('(programme ');
 
 const CHECKS = {
   'index-maker': async (cwd, run) => [await okfCheck(cwd, run, { keepGap: () => false, owner: 'index-maker' })],
@@ -104,17 +104,34 @@ const CHECKS = {
   'deep-research-maker': async (cwd, run) => [await tabularCheck(cwd, run)],
 };
 
-export async function subagentReport(payload, { run = runPm } = {}) {
-  if (!payload || !['Agent', 'Task'].includes(payload.tool_name)) return null;
-  const agent = String(payload.tool_input?.subagent_type || '');
+async function verification(agent, cwd, report, run) {
   const check = CHECKS[agent];
-  const cwd = payload.cwd;
   if (!check || !cwd || !fs.existsSync(path.join(cwd, '.piecemaker'))) return null;
-  const results = await check(cwd, run, JSON.stringify(payload.tool_response ?? ''));
+  const results = await check(cwd, run, report);
   const lines = results.flatMap((result) => result.lines);
   if (!lines.length) return null;
-  const owners = [...new Set(results.flatMap((result) => result.failing))];
   const shown = lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), `… ${lines.length - MAX_LINES} ligne(s) de plus.`] : lines;
+  return { results, shown, owners: [...new Set(results.flatMap((result) => result.failing))] };
+}
+
+async function subagentStop(payload, run) {
+  const agent = String(payload.agent_type || '');
+  const found = await verification(agent, payload.cwd, String(payload.last_assistant_message ?? ''), run);
+  if (!found?.owners.length) return null;
+  if (payload.stop_hook_active) return { systemMessage: [`Le sous-agent ${agent} termine avec des erreurs ou manques :`, ...found.shown].join('\n') };
+  return {
+    decision: 'block',
+    reason: [`Vérification avant la fin du sous-agent ${agent} :`, ...found.shown, 'Corrigez ces erreurs ou manques avant de rendre votre compte rendu. Ce que les pièces ne prouvent pas, signalez-le comme absent.'].join('\n'),
+  };
+}
+
+export async function subagentReport(payload, { run = runPm } = {}) {
+  if (payload?.hook_event_name === 'SubagentStop') return subagentStop(payload, run);
+  if (!payload || !['Agent', 'Task'].includes(payload.tool_name)) return null;
+  const agent = String(payload.tool_input?.subagent_type || '');
+  const found = await verification(agent, payload.cwd, JSON.stringify(payload.tool_response ?? ''), run);
+  if (!found) return null;
+  const { results, shown, owners } = found;
   const verdict = owners.length
     ? [
       `Des erreurs ou manques subsistent. Relancez ${owners.map((owner) => `le sous-agent ${owner}`).join(', puis ')} en lui donnant ces lignes. Ne corrigez pas vous-même.`,

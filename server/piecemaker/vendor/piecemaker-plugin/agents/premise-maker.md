@@ -33,10 +33,10 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 
 ## Méthode
 
-1. Relevez chaque `source: okf:/_premises/…` du programme `.piecemaker/catala/<nom>/` désigné dans la demande. C'est la liste complète de votre travail.
-2. Pour chaque prémisse de la liste, lisez sa fiche si elle existe. Si elle a déjà sa pièce, sa valeur et ses parties, passez à la suivante.
-3. Cherchez le fait dans les pièces : Markdown converti ou `pm dossier sql`.
-4. Écrivez uniquement avec `pm okf link` et `pm okf unlink`, sous le titre exact attendu par la condition. Donnez une valeur (`--value`) quand le fait est une date, un montant ou une durée.
+1. La demande donne, pour chaque prémisse : son chemin `okf:`, la question, le type, la valeur attendue, les pièces repérées et le passage Catala. C'est la liste complète de votre travail. Sans cette liste, relevez chaque `source: okf:/_premises/…` du programme désigné.
+2. Pour chaque prémisse de la liste, lisez sa fiche si elle existe.
+3. Vérifiez la valeur attendue dans les pièces repérées, puis dans les autres pièces utiles : Markdown converti ou `pm dossier sql`.
+4. Écrivez uniquement avec `pm okf link` et `pm okf unlink`, sous le titre exact attendu par la condition. Donnez la valeur trouvée (`--value`) quand le fait est une date, un montant ou une durée, dans le type demandé.
 5. Après toute écriture, lancez `pm okf verify`. Corrigez les erreurs et relancez jusqu'à zéro erreur.
 6. Lancez `pm okf verify`. Traitez seulement les manques des prémisses de la liste.
 
@@ -44,7 +44,7 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 
 - Conservez les pseudonymes. Ne cherchez pas les identités réelles.
 - Ne posez aucun `states` sans extrait littéral de la pièce.
-- Sans pièce qui le prouve, un fait reste à prouver. Ne créez pas la prémisse ; signalez-la.
+- Sans pièce qui le prouve, le fait est absent. Ne créez pas la prémisse ; signalez-la avec les pièces consultées.
 - Un fait utile que vous croisez sans qu'une condition le demande : signalez-le, ne l'écrivez pas.
 - Si deux pièces donnent des valeurs différentes, rattachez les deux et signalez la contradiction. Ne tranchez pas.
 - Ne qualifiez pas juridiquement le fait. Décrivez ce que la pièce établit.
@@ -52,6 +52,6 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 ## Compte rendu
 
 Rendez un compte rendu court :
-1. Les prémisses créées ou complétées, avec leur valeur et leurs pièces.
+1. Pour chaque prémisse : confirmée, corrigée (valeur trouvée et citation) ou absente (pièces consultées).
 2. Le résultat de `pm okf verify`.
-3. Les faits restés à prouver et les contradictions.
+3. Les contradictions.

@@ -343,6 +343,11 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf);
   fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à vrai', '```', ''].join('\n'));
   assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element === RESILIATION_ID || gap.element.includes('catala')), []);
+
+  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à 1 200 €', '```', ''].join('\n'));
+  assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element.includes('catala')), []);
+  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à 1 500 €', '```', ''].join('\n'));
+  assert.ok(graphGaps(projectPath).some((gap) => gap.manque === `#[doc] valeur du scénario (1 500 €) différente de la prémisse (1 200 euros) : ${RESILIATION_ID}` && gap.programmes?.[0] === 'demo'));
 });
 
 function backendOf(projectPath: string, markdownOf: (resource: string) => string | null) {

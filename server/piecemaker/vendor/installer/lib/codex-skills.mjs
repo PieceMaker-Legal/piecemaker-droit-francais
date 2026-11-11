@@ -30,7 +30,7 @@ export function codexHooksFile(userHome = os.homedir()) {
   return path.join(userHome, '.codex', 'hooks.json');
 }
 
-function readCodexHooks(userHome) {
+function readCodexHooks(userHome, event = 'PreToolUse') {
   const file = codexHooksFile(userHome);
   if (!fs.existsSync(file)) return { file, document: { hooks: {} } };
   try {
@@ -40,7 +40,7 @@ function readCodexHooks(userHome) {
     }
     if (document.hooks === undefined) document.hooks = {};
     if (!document.hooks || typeof document.hooks !== 'object' || Array.isArray(document.hooks)
-      || (document.hooks.PreToolUse !== undefined && !Array.isArray(document.hooks.PreToolUse))) {
+      || (document.hooks[event] !== undefined && !Array.isArray(document.hooks[event]))) {
       return { file, error: 'hooks-invalides' };
     }
     return { file, document };
@@ -83,11 +83,11 @@ export function codexLegalSearchHookStatus(repoRoot, userHome = os.homedir()) {
   return codexHookGroupStatus(userHome, codexLegalSearchGroup(repoRoot), isPieceMakerLegalSearch);
 }
 
-function codexHookGroupStatus(userHome, expected, owned) {
-  const loaded = readCodexHooks(userHome);
+function codexHookGroupStatus(userHome, expected, owned, event = 'PreToolUse') {
+  const loaded = readCodexHooks(userHome, event);
   if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
-  const groups = Array.isArray(loaded.document.hooks.PreToolUse)
-    ? loaded.document.hooks.PreToolUse
+  const groups = Array.isArray(loaded.document.hooks[event])
+    ? loaded.document.hooks[event]
     : [];
   const managed = groups.flatMap((group) => Array.isArray(group?.hooks) ? group.hooks : [])
     .filter(owned);
@@ -131,12 +131,40 @@ export function installCodexLegalSearchHook(repoRoot, userHome = os.homedir()) {
   return installCodexHookGroup(userHome, codexLegalSearchGroup(repoRoot), isPieceMakerLegalSearch);
 }
 
-function installCodexHookGroup(userHome, expected, owned) {
-  const loaded = readCodexHooks(userHome);
+function isPieceMakerSubagentCheck(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return command.includes('verify-subagent.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexSubagentCheckGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'verify-subagent.mjs');
+  return {
+    matcher: '^(premise-maker|index-maker|research-maker|deep-research-maker)$',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 60,
+      statusMessage: 'Vérification du travail du sous-agent PieceMaker',
+    }],
+  };
+}
+
+/** Vérifie l'index OKF ou les décisions citées avant qu'un sous-agent PieceMaker ne rende son compte rendu. */
+export function installCodexSubagentCheckHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexSubagentCheckGroup(repoRoot), isPieceMakerSubagentCheck, 'SubagentStop');
+}
+
+export function codexSubagentCheckHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexSubagentCheckGroup(repoRoot), isPieceMakerSubagentCheck, 'SubagentStop');
+}
+
+function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') {
+  const loaded = readCodexHooks(userHome, event);
   if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
   const document = loaded.document;
-  const groups = Array.isArray(document.hooks.PreToolUse)
-    ? document.hooks.PreToolUse
+  const groups = Array.isArray(document.hooks[event])
+    ? document.hooks[event]
     : [];
   const preserved = [];
   for (const group of groups) {
@@ -148,7 +176,7 @@ function installCodexHookGroup(userHome, expected, owned) {
     if (hooks.length || !Array.isArray(group.hooks)) preserved.push({ ...group, hooks });
   }
   document.description ||= 'Hooks locaux Codex, dont la protection des pièces PieceMaker.';
-  document.hooks.PreToolUse = [...preserved, expected];
+  document.hooks[event] = [...preserved, expected];
   const output = `${JSON.stringify(document, null, 2)}\n`;
   let current = null;
   try { current = fs.readFileSync(loaded.file, 'utf8'); } catch { /* fichier absent */ }

@@ -14,7 +14,7 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
-import { reconcileClaudeHooks, reconcileCodexLegalSearchHook } from './claude-hooks.js';
+import { reconcileClaudeHooks, reconcileCodexHooks } from './claude-hooks.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime, projectOfDirectory } from './anonymizer/session-runtime.js';
@@ -166,9 +166,9 @@ try {
 } catch (error) {
   console.warn(`[piecemaker] hooks Claude non enregistrés : ${error instanceof Error ? error.message : String(error)}`);
 }
-reconcileCodexLegalSearchHook(applicationRoot)
-  .then((hook) => { if (!hook.ok) console.warn(`[piecemaker] garde de recherche Codex absent : ${hook.reason}`); })
-  .catch((error) => console.warn(`[piecemaker] garde de recherche Codex non enregistré : ${error instanceof Error ? error.message : String(error)}`));
+reconcileCodexHooks(applicationRoot)
+  .then((hook) => { if (!hook.ok) console.warn(`[piecemaker] hooks Codex incomplets : ${hook.reason}`); })
+  .catch((error) => console.warn(`[piecemaker] hooks Codex non enregistrés : ${error instanceof Error ? error.message : String(error)}`));
 startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => row.project_path), path.join(piecemakerHome(), 'CLAUDE.md'), (workspace) => {
   declarePieceMakerServer(workspace);
   declareBundledSkills(workspace);

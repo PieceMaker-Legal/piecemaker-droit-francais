@@ -51,13 +51,14 @@ test('premise-maker keeps premise gaps only and reports a clean index', async ()
   const { subagentReport } = await load();
   const output = [
     'Index OKF : aucune erreur.',
-    'Graphe : 2 élément(s) manquant(s).',
+    'Graphe : 3 élément(s) manquant(s).',
     '- Pièces/avenant-fictif.md : pièce sans prémisse ni lien vers une autre pièce',
-    '- /_premises/date-de-rupture.md : prémisse à valeur unique sans valeur',
+    '- /_premises/date-de-rupture.md : prémisse à valeur unique sans valeur (programme rupture)',
+    '- /_premises/date-de-livraison.md : prémisse citée par aucun programme Catala',
   ].join('\n');
   const report = await subagentReport(call('premise-maker', caseFolder('d')), fakePm({ 'okf verify': output }));
   const context = report.hookSpecificOutput.additionalContext;
-  assert.doesNotMatch(context, /avenant-fictif/);
+  assert.doesNotMatch(context, /avenant-fictif|date-de-livraison/);
   assert.match(context, /Manques : 1\./);
   assert.match(context, /Relancez le sous-agent premise-maker/);
 });
@@ -109,4 +110,29 @@ test('a failing pm call says verification was impossible without asking for a re
   assert.match(context, /vérification impossible \(serveur PieceMaker injoignable\)/);
   assert.match(context, /Vérification incomplète\./);
   assert.doesNotMatch(context, /Relancez|Aucune erreur/);
+});
+
+const stop = (agent, cwd, extra = {}) => ({ hook_event_name: 'SubagentStop', agent_type: agent, cwd, stop_hook_active: false, last_assistant_message: '', ...extra });
+
+test('Codex SubagentStop blocks premise-maker once while a scenario value differs from the premise', async () => {
+  const { subagentReport } = await load();
+  const output = [
+    'Index OKF : aucune erreur.',
+    'Graphe : 1 élément(s) manquant(s).',
+    '- .piecemaker/catala/rupture/rupture.catala_fr:4 : #[doc] valeur du scénario (1 500 €) différente de la prémisse (1 200 euros) : /_premises/montant.md (programme rupture)',
+  ].join('\n');
+  const folder = caseFolder('j');
+  const blocked = await subagentReport(stop('premise-maker', folder), fakePm({ 'okf verify': output }));
+  assert.equal(blocked.decision, 'block');
+  assert.match(blocked.reason, /valeur du scénario \(1 500 €\)/);
+  const released = await subagentReport(stop('premise-maker', folder, { stop_hook_active: true }), fakePm({ 'okf verify': output }));
+  assert.equal(released.decision, undefined);
+  assert.match(released.systemMessage, /montant\.md/);
+});
+
+test('Codex SubagentStop stays silent when nothing is left to fix', async () => {
+  const { subagentReport } = await load();
+  const pm = fakePm({ 'okf verify': 'Index OKF : aucune erreur.\n' });
+  assert.equal(await subagentReport(stop('index-maker', caseFolder('k')), pm), null);
+  assert.equal(await subagentReport(stop('explorer', caseFolder('l')), pm), null);
 });

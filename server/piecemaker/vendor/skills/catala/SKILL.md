@@ -5,7 +5,7 @@ description: Écrire et vérifier un programme Catala qui code une règle juridi
 
 # Catala
 
-> **Délégation.** Agent principal : écrivez vous-même le programme avec ce skill. Puis confiez les prémisses de ses conditions à `premise-maker`, avec le nom du programme. Une source manque → `research-maker`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
+> **Délégation.** Agent principal : lisez les pièces, puis écrivez vous-même le programme avec ce skill. Confiez ensuite ses prémisses à `premise-maker`, avec le nom du programme et, pour chacune : le chemin `okf:`, la question, le type et l’unité, la valeur attendue, les pièces repérées et le passage Catala qui lit le fait. `premise-maker` confirme, corrige ou déclare le fait absent ; un fait absent est écarté faute de preuve. Une source manque → `research-maker`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
 
 Catala code une règle juridique en programme exécutable. Le pack Catala est installé par l'app de bureau PieceMaker. Lancez chaque outil par `pm catala`, jamais par un chemin direct.
 
@@ -76,7 +76,7 @@ Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destin
 2. Dans chaque `#[doc]`, indiquez `titre: …`, `source: URL ou chemin` et une balise `quote: « passage exact »` non vide. Rédigez le titre selon « Style des titres ».
 3. Pour une règle, citez son fondement juridique.
    Pour une donnée factuelle ou une clause, citez la prémisse de l’index OKF : `source: okf:/_premises/<titre normalisé>.md`, sans `quote`. La prémisse porte les pièces et leurs citations. Ne citez jamais une pièce directement.
-   Si la prémisse manque, nommez-la quand même dans le `#[doc]`. `premise-maker` la cherche ensuite dans les pièces (skill `okf`).
+   Si la prémisse manque, nommez-la quand même dans le `#[doc]`, avec `question: …`. `premise-maker` la cherche ensuite dans les pièces (skill `okf`).
 4. Pour une qualification ou un calcul, citez le fondement de l’opération et gardez les dépendances vers les faits distincts.
 5. Conservez les titres juridiques avec identifiant. Utilisez les inclusions natives de PDF seulement comme annexes documentaires.
 6. Lancez `pm catala verifier`, puis `pm okf verify`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]` et `titre manquant dans #[doc]`, et chaque manque du graphe.
@@ -140,7 +140,7 @@ Le bilan distingue réussite, échec, contrôle bloqué et contrôle indisponibl
 
 ## Limites à dire à l'avocat
 
-- Catleg vérifie les articles des titres Markdown et les identifiants cités dans le fichier (`source:` des `#[doc]`), avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient de `--au`, sinon de `date_vigueur` dans `tache.json` : `today` ou AAAA-MM-JJ. Sans date, `verifier` et `catleg` s'arrêtent sur une erreur. En contentieux, inscrivez dans `tache.json` la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure), donnée par l’avocat ; demandez-la s’il l’a omise, puis attendez sa réponse avant de lancer `verifier` et inscrivez-la dans `date_vigueur`. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
+- Catleg vérifie les articles des titres Markdown et les identifiants cités dans le fichier (`source:` des `#[doc]`), avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient de `--au`, sinon de `date_vigueur` dans `tache.json` : `today` ou AAAA-MM-JJ. Sans date, `verifier` et `catleg` s'arrêtent sur une erreur. En contentieux, inscrivez dans `tache.json` la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure), tirée des pièces ou donnée par l’avocat. Demandez-la seulement si les pièces ne la donnent pas, et inscrivez-la dans `date_vigueur`. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
 - Catala 1.3 peut omettre des obligations pour des définitions globales. La preuve valide seulement les obligations produites. Une preuve sans obligation échoue.
 - Une preuve porte sur le programme. Elle ne prouve ni les faits, ni la fidélité du programme au texte.
 - Le programme ne lit pas les pièces. Le lien entre les entrées du programme et les pièces passe par une table des sources que l'avocat construit (qualification, lien officiel, pièce).

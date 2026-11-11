@@ -12,6 +12,7 @@ import {
   RELATIONS,
   STATES,
   isPremiseId,
+  isoDateOf,
   migratedId,
   readBundle,
   readGraphTypes,
@@ -54,13 +55,40 @@ function catalaFiles(directory: string): string[] {
   });
 }
 
-function catalaSources(projectPath: string): Array<{ place: string; source: string }> {
+function catalaSources(projectPath: string): Array<{ place: string; source: string; expression: string }> {
   return catalaFiles(path.join(projectPath, '.piecemaker', 'catala')).sort().flatMap((filePath) => {
     const place = path.relative(projectPath, filePath).split(path.sep).join('/');
-    return catalaDocumentation(fs.readFileSync(filePath, 'utf8')).entries
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n');
+    return catalaDocumentation(content).entries
       .filter((entry: { hasDoc: boolean }) => entry.hasDoc)
-      .flatMap((entry: { startLine: number; doc: string }) => [...entry.doc.matchAll(/^\s*source\s*:\s*(\S+)\s*$/gim)].map((match) => ({ place: `${place}:${entry.startLine}`, source: match[1] })));
+      .flatMap((entry: { startLine: number; endLine: number; doc: string }) => {
+        const expression = lines.slice(entry.startLine - 1, entry.endLine).join('\n').match(/(?:égal à|equals)[ \t]+([^\n]+)/)?.[1].trim() ?? '';
+        return [...entry.doc.matchAll(/^\s*source\s*:\s*(\S+)\s*$/gim)].map((match) => ({ place: `${place}:${entry.startLine}`, source: match[1], expression }));
+      });
   });
+}
+
+const NUMBER = /-?\d[\d   ]*(?:[.,]\d+)*/;
+
+function numberOf(value: string): number | null {
+  const digits = value.match(NUMBER)?.[0].replace(/[   ]/g, '');
+  if (!digits) return null;
+  const normalized = digits.includes('.') && digits.includes(',') ? digits.replace(/,/g, '') : digits.replace(',', '.');
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+}
+
+function expectedValue(expression: string): { date: string } | { number: number } | null {
+  const date = expression.match(/^\|(\d{4}-\d{2}-\d{2})\|$/)?.[1];
+  if (date) return { date };
+  if (!/^\$?-?\d[\d   .,]*(?:\s*(?:€|[\p{L}]+))?$/u.test(expression)) return null;
+  const number = numberOf(expression);
+  return number === null ? null : { number };
+}
+
+function matchesExpected(expected: { date: string } | { number: number }, value: string): boolean {
+  return 'date' in expected ? isoDateOf(value) === expected.date : numberOf(value) === expected.number;
 }
 
 const programOf = (place: string) => place.split('/')[2] ?? '';
@@ -101,13 +129,16 @@ export function graphGaps(projectPath: string): OkfGap[] {
   }
 
   const used = new Set<string>();
-  for (const { place, source } of sources) {
+  for (const { place, source, expression } of sources) {
     if (isOkfSource(source)) {
       const id = premiseIdOf(source);
       used.add(id);
       const evidence = evidenceOf(concepts, id);
+      const expected = expectedValue(expression);
+      const values = evidence?.pieces.map((piece) => piece.value).filter(Boolean) ?? [];
       if (!evidence) report(place, `#[doc] cite une prémisse absente de l'index : ${id}`, [programOf(place)]);
       else if (!evidence.pieces.length) report(place, `#[doc] cite une prémisse sans pièce citée : ${id}`, [programOf(place)]);
+      else if (expected && values.length && !values.some((value) => matchesExpected(expected, value))) report(place, `#[doc] valeur du scénario (${expression}) différente de la prémisse (${values.join(' ; ')}) : ${id}`, [programOf(place)]);
     } else if (!LEGAL_SOURCE.test(source) && !/^[a-z][\w+.-]*:/i.test(source)) {
       report(place, `#[doc] cite une pièce directement (${source}) : citer une prémisse, source: ${OKF_SCHEME}/_premises/<titre>.md`, [programOf(place)]);
     }

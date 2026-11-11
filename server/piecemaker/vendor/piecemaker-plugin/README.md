@@ -28,11 +28,12 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   Un document créé par l'IA dans un dossier enregistré est classé d'office
   « espace de travail » (`classify-ai-documents.mjs`, `PostToolUse`) : sans
   quoi il naîtrait au coffre-fort et l'IA ne pourrait pas se relire.
-  Après chaque sous-agent, `verify-subagent.mjs` (`PostToolUse` sur `Agent|Task`,
-  Claude seulement) lance la vérification qui lui correspond et donne le bilan
-  à l'agent principal, avec l'invitation à relancer le sous-agent fautif :
-  `index-maker` → `pm okf verify` ; `premise-maker` → manques de prémisses et
-  de `#[doc]` de `pm okf verify` ; `research-maker` → décisions citées
+  Après chaque sous-agent, `verify-subagent.mjs` (`PostToolUse` sur `Agent|Task`
+  sous Claude, `SubagentStop` sous Codex) lance la vérification qui lui
+  correspond. Claude donne le bilan à l'agent principal, avec l'invitation à
+  relancer le sous-agent fautif ; Codex renvoie une fois le sous-agent au travail :
+  `index-maker` → `pm okf verify` ; `premise-maker` → manques de `pm okf verify`
+  des prémisses citées par un programme, dont l'écart de valeur ; `research-maker` → décisions citées
   absentes du cache `~/.piecemaker/decisions/`, donc jamais lues ;
   `deep-research-maker` → `pm tabular_review lister` (revue en erreur, à
   compléter ou encore en attente). Le programme Catala et le raisonnement YAML

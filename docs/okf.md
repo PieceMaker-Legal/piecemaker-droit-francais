@@ -120,14 +120,14 @@ Onglet Index du plugin `piecemaker-dossier` :
 
 Skill `okf` (`server/piecemaker/vendor/skills/okf/`), déclaré dans chaque dossier.
 
-Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activés par dossier depuis la Bibliothèque : `index-maker`, affiché IndexMaker (documents, parties, liens entre pièces, jamais de prémisse), et `premise-maker`, affiché PremiseMaker (prémisses qu'un programme Catala attend). Claude précharge le skill ; Codex et Vibe le lisent en première étape. Une prémisse ne se crée que pour une condition Catala qui la demande. L'entête du skill invite l'agent principal à déléguer l'écriture. Après chaque sous-agent, le hook `verify-subagent.mjs` (Claude seulement) donne le résultat de `pm okf verify` à l'agent principal et l'invite à relancer le sous-agent si une erreur subsiste.
+Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activés par dossier depuis la Bibliothèque : `index-maker`, affiché IndexMaker (documents, parties, liens entre pièces, jamais de prémisse), et `premise-maker`, affiché PremiseMaker (prémisses qu'un programme Catala attend). Claude précharge le skill ; Codex et Vibe le lisent en première étape. Une prémisse ne se crée que pour une condition Catala qui la demande. L'entête du skill invite l'agent principal à déléguer l'écriture. L'agent principal donne à `premise-maker`, pour chaque prémisse, la question, le type, la valeur attendue, les pièces repérées et le passage Catala ; le sous-agent confirme, corrige ou déclare le fait absent. Après chaque sous-agent, le hook `verify-subagent.mjs` lance `pm okf verify`. Sous Claude (`PostToolUse` sur `Agent|Task`), il donne le bilan à l'agent principal et l'invite à relancer le sous-agent. Sous Codex (`SubagentStop`, installé au démarrage du serveur dans `~/.codex/hooks.json`, à approuver une fois par `/hooks`), il renvoie une fois le sous-agent au travail tant qu'une erreur ou un manque subsiste. Pour `premise-maker`, seuls comptent les manques des prémisses citées par un programme.
 
 ## Limites connues
 
 - Un changement de code d'une partie laisse les liens `involves` pendants ; `verify` les signale.
 - Les valeurs sont comparées comme des chaînes, sauf les dates (formats `JJ/MM/AAAA`, `JJ.MM.AAAA`, `AAAA-MM-JJ`, `J mois AAAA`) ramenées au format ISO.
 - Une prémisse créée dans la visionneuse n'est pas `single_value` ; l'agent la pose avec `--single`.
-- La valeur d'une prémisse est une chaîne : elle n'est pas comparée à la valeur typée du programme Catala.
+- `pm okf verify` compare la valeur du scénario Catala (`définition … égal à`) aux valeurs des pièces de la prémisse seulement pour une date `|AAAA-MM-JJ|` ou un nombre ; les autres valeurs ne sont pas comparées.
 - Le renvoi d'une clause à une autre n'a pas de relation propre.
 
 ## Fichiers

@@ -2,11 +2,11 @@
 
 1. Formulez la question juridique avant de coder sa réponse.
 2. Décomposez la réponse en qualifications, conditions et exceptions nommées. Gardez les liens dans les expressions Catala.
-3. Séparez les données observées des qualifications. Une entrée `vrai` ou `faux` décrit seulement un scénario.
+3. Une entrée est un fait typé (date, montant, durée, texte d’une clause), jamais une question. La règle le qualifie.
 4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque donnée à sa prémisse OKF ; la prémisse porte les pièces et leurs citations.
-5. Si un fait reste inconnu ou contesté, conservez cet état. Utilisez une énumération Catala quand le calcul doit traiter cet état.
-6. Si le programme attend un booléen, testez les deux hypothèses. Ne remplacez jamais un fait inconnu par `faux`.
-7. Écrivez un scénario `#[test]` pour chaque branche utile : conditions remplies, condition absente, exception applicable, hypothèse différente.
+5. Établissez chaque fait par les pièces. Un fait que les pièces ne prouvent pas est écarté, faute de preuve, au détriment de la partie qui le supporte (art. 1353 C. civ.). Ne le laissez pas inconnu.
+6. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée, sourcée par le texte ou la jurisprudence, pas une entrée.
+7. Écrivez un scénario `#[test]` du dossier, avec les faits établis. Ajoutez un scénario seulement quand un fait contesté change l’issue.
 8. Ajoutez des assertions aux résultats attendus. Un test réussi peut confirmer une conclusion négative.
 9. Lancez `pm catala verifier`. Le volet propose les scénarios du rapport Clerk et leurs graphes Catala.
 10. Consultez la couverture Clerk dans la vue Raisonnement. Un passage exercé ne prouve pas que toutes ses branches sont testées.
@@ -27,7 +27,14 @@ champ d'application Exemple:
 `#[doc]` appartient à Catala. Le contenu `titre: …`, `source: …` et `quote: « … »` suit la convention PieceMaker. Rédigez `titre` selon « Style des titres » de `SKILL.md`.
 Écrivez le lien après `source:` sans crochets Markdown dans l’attribut : le formateur du pack refuse certains liens avec crochets.
 Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait ou une clause, indiquez la prémisse : `source: okf:/_premises/<titre normalisé>.md`. N’indiquez pas la pièce : le graphe affiche les pièces de la prémisse.
-Une prémisse alimente une entrée de qualification de type énumération (`État` : `Établi`, `Écarté`, `Inconnu`) lue par une règle. Ne déclarez jamais un indicateur `vrai` que rien ne lit : `verifier` bloque une prémisse sans effet.
+Dans le scénario du dossier, la définition du fait porte la valeur attendue, la prémisse et la question posée aux pièces. `pm okf verify` compare cette valeur aux valeurs des pièces de la prémisse (date ou nombre).
+
+````catala
+  #[doc="titre: Date de réception de la mise en demeure\nsource: okf:/_premises/date-de-reception-de-la-mise-en-demeure.md\nquestion: À quelle date le débiteur a-t-il reçu la mise en demeure ?"]
+  définition date_réception égal à |2026-03-02|
+````
+
+Une règle lit chaque fait. Ne déclarez jamais un fait que rien ne lit : `verifier` bloque une prémisse sans effet.
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées.
 
 La même annotation alimente le contrôle des citations et le graphe. Le graphe la rattache à la définition par sa position native.
@@ -75,4 +82,4 @@ Répétez `Démarche` pour conserver les démarches effectuées et leurs résult
 
 Dans un fichier de test, ces notes concernent seulement les exécutions qui utilisent ce fichier. Placez les explications communes dans le module métier.
 
-Le graphe signale les données sans pièce, les états inconnus ou contestés, les fondements absents et les citations non validées. Il ne décide pas de la valeur probante des pièces ni de la justesse juridique.
+Le graphe signale les données sans pièce, les fondements absents et les citations non validées. Il ne décide pas de la valeur probante des pièces ni de la justesse juridique.
