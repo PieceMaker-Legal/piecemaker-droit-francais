@@ -71,7 +71,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
   <figure>
     <div class="map">
-      <svg viewBox="0 0 1180 940" role="img" aria-label="Le moteur passe par le proxy pour parler au modèle. Il appelle le MCP legifrance sans hook. Il lit les skills piecemaker et docx-cli, sources des commandes pm et docx, puis les lance par Bash sous le contrôle des hooks. Il lance aussi les sous-agents sous ce contrôle. Seuls ResearchMaker et DeepResearchMaker cherchent sur Légifrance. Le MCP piecemaker est retiré par défaut.">
+      <svg viewBox="0 0 1180 940" role="img" aria-label="Le moteur passe par le proxy pour parler au modèle. Il appelle le MCP legifrance sans hook. Il lit les skills piecemaker et docx-cli, sources des commandes pm et docx, puis les lance par Bash sous le contrôle des hooks. Il lance aussi les sous-agents sous ce contrôle. Seul ResearchMaker cherche sur Légifrance. Le MCP piecemaker est retiré par défaut.">
         <defs>
           <marker id="n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8c8c93"/></marker>
           <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7ea2ff"/></marker>
@@ -190,7 +190,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-title t-agent" x="306" y="796">Sous-agents</text>
         <text class="t-note" x="306" y="816">activés par dossier, Bibliothèque</text>
         <text class="t-name t-agent" x="560" y="806">IndexMaker · PremiseMaker · ReasoningMaker</text><text class="t-mono" x="880" y="806">sonnet · okf · catala</text>
-        <text class="t-name t-agent" x="560" y="826">ResearchMaker · DeepResearchMaker</text><text class="t-mono" x="820" y="826">haiku · sonnet + tabular review</text>
+        <text class="t-name t-agent" x="560" y="826">ResearchMaker · DeepResearchMaker</text><text class="t-mono" x="820" y="826">haiku · legifrance / sonnet · pm tabular_review</text>
         <text class="t-mono" x="560" y="846">/indexer /premisses /raisonner /rechercher /recherche-approfondie</text>
 
         <text class="t-title t-mcp" x="306" y="882">MCP piecemaker</text>
@@ -199,7 +199,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-off" x="560" y="900">afficher · tabular_review · tabular_review_index</text>
       </svg>
     </div>
-    <figcaption>Les filtres des hooks visent <code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Bash</code>, <code>Write</code> et, après un sous-agent, <code>Agent</code> (bilan de vérification), et, avant une recherche Légifrance, ses outils <code>Search_*</code> : réservés à ResearchMaker et DeepResearchMaker, la lecture d'une source reste à l'agent principal. Le moteur va chercher le skill : le skill n'appelle ni le moteur ni un outil. Les commandes <code>docx</code> viennent de <code>docx --help</code>, version 0.28.0.</figcaption>
+    <figcaption>Les filtres des hooks visent <code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Bash</code>, <code>Write</code> et, après un sous-agent, <code>Agent</code> (bilan de vérification), et, avant une recherche Légifrance, ses outils <code>Search_*</code> : réservés à ResearchMaker, la lecture d'une source reste à l'agent principal. Le moteur va chercher le skill : le skill n'appelle ni le moteur ni un outil. Les commandes <code>docx</code> viennent de <code>docx --help</code>, version 0.28.0.</figcaption>
   </figure>
 
   <div class="cards">
@@ -239,7 +239,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Hook</th><th>Moment</th><th>Outils visés</th></tr>
         <tr><td><code>protect-originals</code></td><td>avant</td><td><code>Read|Grep|Glob|Bash</code></td></tr>
-        <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_Code|Search_Jurisprudence</code> (Claude) : recherche réservée aux sous-agents de recherche</td></tr>
+        <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_Code|Search_Jurisprudence</code> (Claude) : recherche réservée à research-maker</td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>
         <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude) : bilan de vérification, relance du sous-agent</td></tr>

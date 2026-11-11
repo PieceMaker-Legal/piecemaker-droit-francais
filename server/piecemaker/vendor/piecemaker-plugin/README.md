@@ -21,7 +21,7 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   Noms d'affichage (`metadata.title`) : IndexMaker, PremiseMaker, ReasoningMaker, ResearchMaker,
   DeepResearchMaker.
 - **Hooks** : `guard-legal-search` (Claude) refuse `Search_Code` et `Search_Jurisprudence` à l'agent
-  principal quand `research-maker` est installé (il renvoie aussi vers `deep-research-maker`) ; il lui laisse `consulter_article` et `consulter_decision`.
+  principal quand `research-maker` est installé (il signale aussi `deep-research-maker`) ; il lui laisse `consulter_article` et `consulter_decision`.
   Commandes de l'avocat qui lancent ces sous-agents (`context: fork`) : `/indexer`, `/premisses`,
   `/raisonner`, `/rechercher`, `/recherche-approfondie` (`server/piecemaker/vendor/skills/`).
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
