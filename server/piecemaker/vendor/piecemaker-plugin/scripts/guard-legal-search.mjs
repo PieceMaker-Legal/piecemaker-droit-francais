@@ -6,11 +6,11 @@ import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
 
 const SEARCH_TOOL = /^mcp__.*legifrance.*__Search_/;
-const AGENT_FILE = path.join('.claude', 'agents', 'research-maker.md');
+const AGENT_FILES = [path.join('.claude', 'agents', 'research-maker.md'), path.join('.codex', 'agents', 'research-maker.toml')];
 const RESEARCH_AGENT = /(^|:)research-maker$/;
 
 function researchMakerInstalled(cwd, home) {
-  return [home, cwd].filter(Boolean).some((root) => fs.existsSync(path.join(root, AGENT_FILE)));
+  return [home, cwd].filter(Boolean).some((root) => AGENT_FILES.some((file) => fs.existsSync(path.join(root, file))));
 }
 
 export function searchDecision(payload, { home = os.homedir() } = {}) {

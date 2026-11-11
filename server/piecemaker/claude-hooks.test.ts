@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
-import { reconcileClaudeHooks } from './claude-hooks.js';
+import { reconcileClaudeHooks, reconcileCodexLegalSearchHook } from './claude-hooks.js';
 
 const applicationRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
 
@@ -22,6 +22,26 @@ test('registers the Légifrance search guard in Claude settings and keeps person
     assert.ok(groups.some((group) => group.matcher === 'mcp__.*legifrance.*__Search_.*' && group.hooks[0].command.includes('guard-legal-search.mjs')));
     assert.ok(groups.some((group) => group.hooks[0].command === 'echo perso'));
     assert.equal(reconcileClaudeHooks(applicationRoot, home).ok, true);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('registers the Légifrance search guard in Codex hooks only when Codex is present', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-codex-hooks-'));
+  try {
+    assert.deepEqual(await reconcileCodexLegalSearchHook(applicationRoot, home), { ok: true, skipped: true });
+    assert.equal(fs.existsSync(path.join(home, '.codex', 'hooks.json')), false);
+    const file = path.join(home, '.codex', 'hooks.json');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo perso' }] }] } }));
+    assert.equal((await reconcileCodexLegalSearchHook(applicationRoot, home)).ok, true);
+    assert.equal((await reconcileCodexLegalSearchHook(applicationRoot, home)).ok, true);
+    const groups = JSON.parse(fs.readFileSync(file, 'utf8')).hooks.PreToolUse as Array<{ matcher: string; hooks: Array<{ command: string }> }>;
+    const guards = groups.filter((group) => group.matcher === 'mcp__.*legifrance.*__Search_.*');
+    assert.equal(guards.length, 1);
+    assert.ok(guards[0].hooks[0].command.includes('PIECEMAKER_HOOK_CLIENT=codex'));
+    assert.ok(groups.some((group) => group.hooks[0].command === 'echo perso'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

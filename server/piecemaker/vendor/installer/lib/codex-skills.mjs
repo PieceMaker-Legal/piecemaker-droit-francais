@@ -76,14 +76,21 @@ function codexProtectionGroup(repoRoot) {
 }
 
 export function codexProtectionHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexProtectionGroup(repoRoot), isPieceMakerProtection);
+}
+
+export function codexLegalSearchHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexLegalSearchGroup(repoRoot), isPieceMakerLegalSearch);
+}
+
+function codexHookGroupStatus(userHome, expected, owned) {
   const loaded = readCodexHooks(userHome);
   if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
-  const expected = codexProtectionGroup(repoRoot);
   const groups = Array.isArray(loaded.document.hooks.PreToolUse)
     ? loaded.document.hooks.PreToolUse
     : [];
   const managed = groups.flatMap((group) => Array.isArray(group?.hooks) ? group.hooks : [])
-    .filter(isPieceMakerProtection);
+    .filter(owned);
   const exact = groups.some((group) => group?.matcher === expected.matcher
     && Array.isArray(group.hooks)
     && group.hooks.some((handler) => JSON.stringify(handler) === JSON.stringify(expected.hooks[0])));
@@ -97,6 +104,34 @@ export function codexProtectionHookStatus(repoRoot, userHome = os.homedir()) {
 
 /** Fusionne uniquement le refus PreToolUse de lecture des pièces ; tous les hooks personnels sont conservés. */
 export function installCodexProtectionHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexProtectionGroup(repoRoot), isPieceMakerProtection);
+}
+
+function isPieceMakerLegalSearch(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return command.includes('guard-legal-search.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexLegalSearchGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'guard-legal-search.mjs');
+  return {
+    matcher: 'mcp__.*legifrance.*__Search_.*',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 5,
+      statusMessage: 'Recherche Légifrance réservée à research-maker',
+    }],
+  };
+}
+
+/** Réserve les recherches Légifrance au sous-agent research-maker ; tous les hooks personnels sont conservés. */
+export function installCodexLegalSearchHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexLegalSearchGroup(repoRoot), isPieceMakerLegalSearch);
+}
+
+function installCodexHookGroup(userHome, expected, owned) {
   const loaded = readCodexHooks(userHome);
   if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
   const document = loaded.document;
@@ -109,11 +144,11 @@ export function installCodexProtectionHook(repoRoot, userHome = os.homedir()) {
       preserved.push(group);
       continue;
     }
-    const hooks = Array.isArray(group.hooks) ? group.hooks.filter((handler) => !isPieceMakerProtection(handler)) : [];
+    const hooks = Array.isArray(group.hooks) ? group.hooks.filter((handler) => !owned(handler)) : [];
     if (hooks.length || !Array.isArray(group.hooks)) preserved.push({ ...group, hooks });
   }
   document.description ||= 'Hooks locaux Codex, dont la protection des pièces PieceMaker.';
-  document.hooks.PreToolUse = [...preserved, codexProtectionGroup(repoRoot)];
+  document.hooks.PreToolUse = [...preserved, expected];
   const output = `${JSON.stringify(document, null, 2)}\n`;
   let current = null;
   try { current = fs.readFileSync(loaded.file, 'utf8'); } catch { /* fichier absent */ }

@@ -1,6 +1,8 @@
+import fs from 'node:fs';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 type HookStatus = { ok: boolean; reason?: string; missing?: Array<{ script: string }>; deprecated?: Array<{ script: string }> };
 type ClaudeHooksModule = {
@@ -14,4 +16,18 @@ export function reconcileClaudeHooks(applicationRoot: string, userHome = os.home
   const installed = hooks.installClaudeHooks(vendorRoot, userHome);
   if (!installed.ok) return { ok: false, reason: installed.reason };
   return hooks.claudeHooksStatus(vendorRoot, userHome);
+}
+
+type CodexHooksModule = {
+  installCodexLegalSearchHook(repoRoot: string, userHome: string): { ok: boolean; reason?: string | null };
+  codexLegalSearchHookStatus(repoRoot: string, userHome: string): { ok: boolean; reason?: string | null };
+};
+
+export async function reconcileCodexLegalSearchHook(applicationRoot: string, userHome = os.homedir()): Promise<{ ok: boolean; skipped?: boolean; reason?: string | null }> {
+  if (!fs.existsSync(path.join(userHome, '.codex'))) return { ok: true, skipped: true };
+  const vendorRoot = path.join(applicationRoot, 'server', 'piecemaker', 'vendor');
+  const hooks = await import(pathToFileURL(path.join(vendorRoot, 'installer', 'lib', 'codex-skills.mjs')).href) as CodexHooksModule;
+  const installed = hooks.installCodexLegalSearchHook(vendorRoot, userHome);
+  if (!installed.ok) return installed;
+  return hooks.codexLegalSearchHookStatus(vendorRoot, userHome);
 }

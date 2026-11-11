@@ -238,7 +238,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Hook</th><th>Moment</th><th>Outils visés</th></tr>
         <tr><td><code>protect-originals</code></td><td>avant</td><td><code>Read|Grep|Glob|Bash</code></td></tr>
-        <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_Code|Search_Jurisprudence</code> (Claude) : recherche réservée à research-maker</td></tr>
+        <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_*</code> (Claude, Codex) : recherche réservée à research-maker ; Mistral : outil <code>research_maker</code> (délégation serveur)</td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>
         <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude) : vérification propre à chaque sous-agent (index, prémisses, décisions lues, revue soumise), relance du sous-agent</td></tr>

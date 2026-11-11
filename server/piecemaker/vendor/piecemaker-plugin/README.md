@@ -19,8 +19,8 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
     tout un point de droit ; n'analyse pas les décisions.
   Noms d'affichage (`metadata.title`) : IndexMaker, PremiseMaker, ResearchMaker,
   DeepResearchMaker.
-- **Hooks** : `guard-legal-search` (Claude) refuse `Search_Code` et `Search_Jurisprudence` à l'agent
-  principal quand `research-maker` est installé (il signale aussi `deep-research-maker`) ; il lui laisse `consulter_article` et `consulter_decision`.
+- **Hooks** : `guard-legal-search` (Claude, Codex) refuse les outils `Search_*` à tout agent autre que
+  `research-maker` quand celui-ci est installé ; Mistral les remplace par l'outil `research_maker` (il signale aussi `deep-research-maker`) ; il lui laisse `consulter_article` et `consulter_decision`.
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).

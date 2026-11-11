@@ -56,3 +56,12 @@ test('lets the main agent search when research-maker is not installed', async ()
   const { searchDecision } = await load();
   assert.equal(searchDecision(search(), { home: home('d', false) }), null);
 });
+
+test('denies a Légifrance search when only the Codex research-maker is installed', async () => {
+  const { searchDecision } = await load();
+  const root = path.join(sandbox, 'codex');
+  fs.mkdirSync(path.join(root, '.codex', 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.codex', 'agents', 'research-maker.toml'), 'name = "research-maker"\n');
+  assert.equal(searchDecision(search(), { home: root }).hookSpecificOutput.permissionDecision, 'deny');
+  assert.equal(searchDecision(search({ agent_id: 'x5', agent_type: 'research-maker' }), { home: root }), null);
+});
