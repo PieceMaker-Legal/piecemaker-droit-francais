@@ -8,7 +8,7 @@ import type { Concept, Frontmatter, Relation, Relations } from './bundle.js';
 import {
   AGENT_ACTOR,
   DERIVED_ACTORS,
-  FACT_TYPE,
+  PREMISE_TYPE,
   MENTIONS,
   OKF_VERSION,
   PARTY_TYPE,
@@ -21,6 +21,7 @@ import {
   conceptFile,
   conceptId,
   fold,
+  migratedId,
   partyId,
   readBundle,
   readGraphTypes,
@@ -33,7 +34,7 @@ import {
   typeOf,
   writeIfChanged,
 } from './bundle.js';
-import type { ReviewFact } from './reviews.js';
+import type { ReviewPremise } from './reviews.js';
 import { quoted } from './verify.js';
 
 export type PartyMention = { code: string; citation: string };
@@ -107,7 +108,7 @@ function scanRelations(source: SourceDocument, targets: SourceDocument[], markdo
 function renamedConcepts(concepts: Concept[], renamed?: Renamed): Map<string, Concept> {
   const from = renamed ? conceptId(renamed.previous) : '';
   const to = renamed ? conceptId(renamed.current) : '';
-  const move = (id: string): string => id === from ? to : id;
+  const move = (id: string): string => id === from ? to : migratedId(id);
   return new Map(concepts.filter((concept) => !concept.error).map((concept) => {
     const relations = relationsOf(concept.frontmatter);
     for (const entries of Object.values(relations)) for (const entry of entries) entry.target = move(entry.target);
@@ -115,10 +116,10 @@ function renamedConcepts(concepts: Concept[], renamed?: Renamed): Map<string, Co
   }));
 }
 
-function mergedRelations(existing: Relations, derived: Relations, liveFacts: Set<string>): Relations {
+function mergedRelations(existing: Relations, derived: Relations, livePremises: Set<string>): Relations {
   const relations: Relations = {};
   for (const [name, entries] of Object.entries(existing)) {
-    const kept = entries.filter((entry) => name !== MENTIONS && (!DERIVED_ACTORS.includes(entry.origin) || entry.dismissed) && (name !== STATES || liveFacts.has(entry.target)));
+    const kept = entries.filter((entry) => name !== MENTIONS && (!DERIVED_ACTORS.includes(entry.origin) || entry.dismissed) && (name !== STATES || livePremises.has(entry.target)));
     if (kept.length) relations[name] = kept;
   }
   const linkedDocuments = new Set(RELATIONS.flatMap((name) => relations[name] || []).map((entry) => entry.target));
@@ -132,7 +133,7 @@ function mergedRelations(existing: Relations, derived: Relations, liveFacts: Set
 }
 
 function indexContent(entries: Array<{ id: string; frontmatter: Frontmatter }>, types: string[]): string {
-  const sections = [...types, UNCLASSIFIED, FACT_TYPE, PARTY_TYPE].flatMap((type) => {
+  const sections = [...types, UNCLASSIFIED, PREMISE_TYPE, PARTY_TYPE].flatMap((type) => {
     const lines = entries
       .filter((entry) => entry.frontmatter.type === type)
       .map((entry) => `* [${text(entry.frontmatter.title)}](${encodeURI(entry.id)}) - ${text(entry.frontmatter.description)}`);
@@ -155,10 +156,10 @@ function pruneEmptyDirectories(directory: string, root: string): void {
   }
 }
 
-export function buildBundle(input: { projectPath: string; documents: SourceDocument[]; markdownOf: MarkdownOf; parties?: SourceParty[]; reviewFacts?: ReviewFact[]; renamed?: Renamed; now?: string }): { written: number; removed: number } {
+export function buildBundle(input: { projectPath: string; documents: SourceDocument[]; markdownOf: MarkdownOf; parties?: SourceParty[]; reviewPremises?: ReviewPremise[]; renamed?: Renamed; now?: string }): { written: number; removed: number } {
   const { projectPath, documents } = input;
   const parties = input.parties || [];
-  const reviewFacts = input.reviewFacts || [];
+  const reviewPremises = input.reviewPremises || [];
   const now = input.now || new Date().toISOString();
   const types = readTypes(projectPath);
   const graphTypes = readGraphTypes(projectPath);
@@ -187,24 +188,24 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
 
   const byResource = new Map(documents.map((document) => [document.resource, document]));
   const statements = new Map<string, Map<string, Relation>>();
-  for (const fact of reviewFacts) {
-    for (const statement of fact.statements) {
+  for (const premise of reviewPremises) {
+    for (const statement of premise.statements) {
       const named = statement.candidates.map((candidate) => byResource.get(candidate)).find(Boolean);
       const quoting = named ? [] : documents.filter((document) => quoted(markdown(document.resource), statement.quote));
       const document = named || (quoting.length === 1 ? quoting[0] : undefined);
       if (!document || !quoted(markdown(document.resource), statement.quote)) continue;
       const links = statements.get(document.resource) || new Map<string, Relation>();
-      links.set(fact.id, { target: fact.id, citation: statement.quote, origin: REVIEW_ACTOR, ...(statement.value ? { value: statement.value } : {}) });
+      links.set(premise.id, { target: premise.id, citation: statement.quote, origin: REVIEW_ACTOR, ...(statement.value ? { value: statement.value } : {}) });
       statements.set(document.resource, links);
     }
   }
 
   const documentIds = new Set(documents.map((document) => conceptId(document.resource)));
-  const liveFacts = new Set(reviewFacts.map((fact) => fact.id));
+  const livePremises = new Set(reviewPremises.map((premise) => premise.id));
   for (const [id, concept] of existing) {
     if (!documentIds.has(id)) continue;
     for (const entry of relationsOf(concept.frontmatter)[STATES] || []) {
-      if (!entry.dismissed && !DERIVED_ACTORS.includes(entry.origin) && existing.has(entry.target)) liveFacts.add(entry.target);
+      if (!entry.dismissed && !DERIVED_ACTORS.includes(entry.origin) && existing.has(entry.target)) livePremises.add(entry.target);
     }
   }
   const partyCodes = new Set(parties.map((party) => party.code));
@@ -217,7 +218,7 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
       [MENTIONS]: document.parties.filter((party) => partyCodes.has(party.code)).map((party) => ({ target: partyId(party.code), citation: party.citation, origin: SCAN_ACTOR })),
       [STATES]: [...(statements.get(document.resource)?.values() || [])],
     };
-    const relations = mergedRelations(previous ? relationsOf(previous.frontmatter) : {}, derived, liveFacts);
+    const relations = mergedRelations(previous ? relationsOf(previous.frontmatter) : {}, derived, livePremises);
     const frontmatter: Frontmatter = {
       ...previous?.frontmatter,
       type: typeOf(document.resource, types),
@@ -233,19 +234,19 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
   }
   const documentEntries = [...entries];
 
-  const reviewed = new Map(reviewFacts.map((fact) => [fact.id, fact]));
-  for (const id of [...liveFacts].sort()) {
+  const reviewed = new Map(reviewPremises.map((premise) => [premise.id, premise]));
+  for (const id of [...livePremises].sort()) {
     const previous = existing.get(id);
-    const fact = reviewed.get(id);
+    const premise = reviewed.get(id);
     const frontmatter: Frontmatter = {
       ...previous?.frontmatter,
-      type: FACT_TYPE,
-      title: fact?.title || text(previous?.frontmatter.title),
-      description: fact?.description || text(previous?.frontmatter.description) || text(previous?.frontmatter.title),
-      ...(fact ? { single_value: fact.single } : {}),
+      type: PREMISE_TYPE,
+      title: premise?.title || text(previous?.frontmatter.title),
+      description: premise?.description || text(previous?.frontmatter.description) || text(previous?.frontmatter.title),
+      ...(premise ? { single_value: premise.single } : {}),
     };
     if (!frontmatter.single_value) delete frontmatter.single_value;
-    write(id, frontmatter, backlinksBody(id, STATES, documentEntries), fact ? REVIEW_ACTOR : AGENT_ACTOR);
+    write(id, frontmatter, backlinksBody(id, STATES, documentEntries), premise ? REVIEW_ACTOR : AGENT_ACTOR);
   }
   for (const party of parties) {
     const id = partyId(party.code);

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { ColumnAction, ColumnFormat, Template, TemplateColumn } from '../shared.js';
-import { COLUMN_ACTIONS, COLUMN_FACTS, COLUMN_FORMATS, INDEX_TEMPLATE_NAME, LEGACY_INDEX_NAME } from '../shared.js';
+import { COLUMN_ACTIONS, COLUMN_PREMISES, COLUMN_FORMATS, INDEX_TEMPLATE_NAME, LEGACY_INDEX_NAME } from '../shared.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const TEMPLATES_FILE = path.join(PLUGIN_HOME, 'templates.json');
@@ -159,8 +159,8 @@ export function normalizeColumn(value: unknown): TemplateColumn {
   const action = input.action === 'classify' || COLUMN_ACTIONS.some((entry) => entry.value === input.action) ? input.action as ColumnAction : undefined;
   const customAction = text(input.customAction, 4000);
   if (action === 'custom' && !customAction) throw new UserError('Décrivez l’action personnalisée.');
-  const fact = COLUMN_FACTS.find((entry) => entry.value === input.fact)?.value;
-  return { name, prompt, format, ...(format === 'tags' && tags.length ? { tags } : {}), ...(action ? { action } : {}), ...(action === 'custom' ? { customAction } : {}), ...(fact ? { fact } : {}) };
+  const premise = COLUMN_PREMISES.find((entry) => entry.value === input.premise)?.value;
+  return { name, prompt, format, ...(format === 'tags' && tags.length ? { tags } : {}), ...(action ? { action } : {}), ...(action === 'custom' ? { customAction } : {}), ...(premise ? { premise } : {}) };
 }
 
 export function normalizeTemplate(value: unknown): Template {

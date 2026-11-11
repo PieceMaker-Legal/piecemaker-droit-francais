@@ -15,9 +15,10 @@ export const AGENT_ACTOR = 'piecemaker/agent';
 export const LAWYER_ACTOR = 'piecemaker/avocat';
 export const REVIEW_ACTOR = 'piecemaker/tabular-review';
 export const DERIVED_ACTORS = [SCAN_ACTOR, REVIEW_ACTOR];
-export const FACT_TYPE = 'Fait';
+export const PREMISE_TYPE = 'Premise';
 export const PARTY_TYPE = 'Partie';
-const FACT_FOLDER = '/_faits/';
+const PREMISE_FOLDER = '/_premises/';
+const LEGACY_PREMISE_FOLDER = '/_faits/';
 const PARTY_FOLDER = '/_parties/';
 export const UNCLASSIFIED = 'Non classé';
 export const DEFAULT_GRAPH_TYPES = ['Pièces'];
@@ -37,15 +38,16 @@ export const resourceOf = (projectPath: string, filePath: string): string => pos
 export const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 export const squash = (value: string): string => value.replace(/\s+/g, ' ').trim();
 export const fold = (value: string): string => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
-export const isFactId = (id: string): boolean => id.startsWith(FACT_FOLDER);
+export const migratedId = (id: string): string => id.startsWith(LEGACY_PREMISE_FOLDER) ? `${PREMISE_FOLDER}${id.slice(LEGACY_PREMISE_FOLDER.length)}` : id;
+export const isPremiseId = (id: string): boolean => id.startsWith(PREMISE_FOLDER);
 export const isPartyId = (id: string): boolean => id.startsWith(PARTY_FOLDER);
 export const partyId = (code: string): string => isPartyId(code) ? code : `${PARTY_FOLDER}${code}.md`;
 
-export function factId(title: string): string {
-  if (isFactId(title)) return title;
+export function premiseId(title: string): string {
+  if (isPremiseId(title)) return title;
   const slug = fold(title).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  if (!slug) throw new TypeError('fait sans titre.');
-  return `${FACT_FOLDER}${slug}.md`;
+  if (!slug) throw new TypeError('prémisse sans titre.');
+  return `${PREMISE_FOLDER}${slug}.md`;
 }
 
 export function parseConcept(source: string): { frontmatter: Frontmatter; body: string } {

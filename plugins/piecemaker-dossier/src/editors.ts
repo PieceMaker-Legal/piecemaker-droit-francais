@@ -1,6 +1,6 @@
 import { aliasEditorMarkup, citationListMarkup, companySearchResultMarkup, documentResource, entityKinds, escapeHtml, kindLabels, natureOptionsMarkup, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
 import { knowledgeApi } from './api.js';
-import { factStatements, facts, okfApi, partyFacts } from './okf.js';
+import { premiseStatements, premises, okfApi, partyPremises } from './okf.js';
 import type { CompanySearchResult } from './api.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { citableEntities, citationSource, citationsOfEntity, citationsOfMention, pieceMentionOperations } from './citations.js';
@@ -355,7 +355,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   const mentionCount = relations.filter((relation) => relation.relation === 'mentions').length;
   const entityCitations = node ? citationsOfEntity(data.graph.citations, node.id) : [];
   const linkTargets = data.graph.nodes.filter((entry) => entry.id !== id && (entry.kind === 'person' || entry.kind === 'company'));
-  const involvedFacts = node ? partyFacts(data.okf ?? null, node.id.replace(/^entity:/, '')) : [];
+  const involvedPremises = node ? partyPremises(data.okf ?? null, node.id.replace(/^entity:/, '')) : [];
   const layer = modal(root, `
     <div class="pmd-profile-editor" data-kind="${selectedKind}" data-side="${selectedSide}">
     <form class="pmd-form" data-node-form>
@@ -400,7 +400,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       <label data-custom-relation hidden>Lien personnalisé<input class="pmd-input" name="customRelation" placeholder="Saisissez le type de lien"></label>
       ${mentionCount || entityCitations.length ? `<details class="pmd-profile-mentions"><summary>${mentionCount ? `Cité dans ${mentionCount} pièce${mentionCount > 1 ? 's' : ''}` : 'Citations des mentions'}</summary><p class="pmd-form-note">Mentions à corriger depuis l’index.</p>${citationListMarkup(entityCitations.map((citation) => ({ texte: citation.texte, source: citationSource(citation, data.graph.nodes) })))}</details>` : ''}
       </section>
-      ${involvedFacts.length ? `<section class="pmd-form-section pmd-profile-section"><h3>${profileFileIcon}Faits du dossier</h3><div class="pmd-relation-list">${involvedFacts.map((fact) => `<div class="pmd-relation-row"><span class="pmd-relation-copy"><span class="pmd-relation-type">concerne</span><strong class="pmd-relation-target">${escapeHtml(fact.title)}</strong>${fact.description ? `<small class="pmd-relation-kind">${escapeHtml(fact.description)}</small>` : ''}</span></div>`).join('')}</div></section>` : ''}
+      ${involvedPremises.length ? `<section class="pmd-form-section pmd-profile-section"><h3>${profileFileIcon}Prémisses du dossier</h3><div class="pmd-relation-list">${involvedPremises.map((premise) => `<div class="pmd-relation-row"><span class="pmd-relation-copy"><span class="pmd-relation-type">concerne</span><strong class="pmd-relation-target">${escapeHtml(premise.title)}</strong>${premise.description ? `<small class="pmd-relation-kind">${escapeHtml(premise.description)}</small>` : ''}</span></div>`).join('')}</div></section>` : ''}
       <p class="pmd-form-note pmd-button-danger" data-delete-error role="alert" hidden></p>
       <div class="pmd-form-actions">${node ? '<button type="button" class="pmd-button pmd-button-danger piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-delete-entity>Supprimer</button><span class="pmd-spacer"></span>' : ''}<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm">Enregistrer</button></div>
     </form></div>`);
@@ -575,12 +575,12 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
   });
 }
 
-type HighlightCategory = 'client' | 'adverse' | 'tiers' | 'date' | 'fact';
+type HighlightCategory = 'client' | 'adverse' | 'tiers' | 'date' | 'premise';
 
 export function documentEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode, projectPath: string, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>, rename: (piecePath: string, name: string) => Promise<void>, okf?: { projectId: string; refresh: () => void }): void {
   const resource = documentResource(node, projectPath);
-  const statements = factStatements(data.okf ?? null, resource);
-  const knownFacts = facts(data.okf ?? null).map((fiche) => ({ id: fiche.id, title: fiche.title, description: fiche.description }));
+  const statements = premiseStatements(data.okf ?? null, resource);
+  const knownPremises = premises(data.okf ?? null).map((fiche) => ({ id: fiche.id, title: fiche.title, description: fiche.description }));
   const mentionLinks = data.graph.links.filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id));
   const linked = new Set(mentionLinks.map((link) => link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId));
   const pathValue = textValue(node.data.path);
@@ -610,7 +610,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
             </div>
             <p class="pmd-document-muted pmd-selection-message" data-selection-message hidden></p>
             <div class="pmd-document-form-section"><span>Personnes citées</span><div class="pmd-document-entities" data-document-entities></div><select class="pmd-select pmd-document-entity-add" data-add-entity aria-label="Ajouter une personne citée"></select></div>
-            <div class="pmd-document-form-section"><span>Faits établis par la pièce</span><div class="pmd-document-entities" data-document-facts></div></div>
+            <div class="pmd-document-form-section"><span>Prémisses établies par la pièce</span><div class="pmd-document-entities" data-document-premises></div></div>
             <div class="pmd-document-form-section"><div class="pmd-document-section-heading"><span>Champs libres</span><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" type="button" data-add-field>＋ Ajouter</button></div><div data-fields>${fieldRows}</div><p class="pmd-document-muted" data-empty-fields ${fields.length ? 'hidden' : ''}>Aucun champ libre.</p></div>
           </div>
           <div class="pmd-document-form-actions"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" type="button" data-close>Annuler</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" type="submit" data-document-submit>Enregistrer</button></div>
@@ -626,7 +626,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   const renamed = (id: string): string => renamedIds.get(id) || id;
   const removedCitationIds = new Set<number>();
   const pendingCitations: PendingCitation[] = [];
-  const selectionValues: Record<'date' | 'fact', string[]> = { date: [], fact: [] };
+  const selectionValues: Record<'date' | 'premise', string[]> = { date: [], premise: [] };
   const dateInput = layer.querySelector<HTMLInputElement>('input[name="date"]');
   const readFields = () => Array.from(layer.querySelectorAll<HTMLElement>('[data-field-row]')).map((row) => ({ label: row.querySelector<HTMLInputElement>('[data-field-label]')?.value.trim() || '', value: row.querySelector<HTMLInputElement>('[data-field-value]')?.value.trim() || '' })).filter((field) => field.label || field.value);
   const datePreviewValues = (): string[] => {
@@ -649,11 +649,11 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
   };
   const previewValues = (category: HighlightCategory): string[] => {
     if (category === 'date') return datePreviewValues();
-    if (category === 'fact') return [...statements.map((entry) => entry.citation), nature, textValue(node.data.localisation), ...readFields().flatMap((field) => [field.label, field.value]), ...selectionValues.fact, ...mappedPreviewValues(null)].filter(Boolean);
+    if (category === 'premise') return [...statements.map((entry) => entry.citation), nature, textValue(node.data.localisation), ...readFields().flatMap((field) => [field.label, field.value]), ...selectionValues.premise, ...mappedPreviewValues(null)].filter(Boolean);
     return [...working.nodes.filter((entry) => (entry.kind === 'person' || entry.kind === 'company') && sideOf(entry) === category).flatMap((entry) => [entry.label, ...entry.aliases]), ...mappedPreviewValues(category)];
   };
   const highlightPreview = (content: string): string => {
-    const categories: HighlightCategory[] = ['client', 'adverse', 'tiers', 'date', 'fact'];
+    const categories: HighlightCategory[] = ['client', 'adverse', 'tiers', 'date', 'premise'];
     const spans: Array<{ start: number; end: number; category: HighlightCategory }> = [];
     for (const category of categories) {
       const values = [...new Set(previewValues(category))].sort((left, right) => right.length - left.length);
@@ -750,47 +750,47 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     renderEntities();
   });
   renderEntities();
-  const factList = layer.querySelector<HTMLElement>('[data-document-facts]');
-  const renderFacts = () => {
-    if (factList) factList.innerHTML = statements.map((entry, index) => `<div class="pmd-document-cited" data-citations><span class="pmd-document-entity">${escapeHtml(entry.value ? `${entry.title} : ${entry.value}` : entry.title)}<button type="button" class="pmd-document-entity-remove" data-remove-fact="${index}" aria-label="Retirer ${escapeHtml(entry.title)}">×</button></span>${citationListMarkup([{ texte: entry.citation, source: node.label }])}</div>`).join('')
-      || '<p class="pmd-document-muted">Aucun fait. Sélectionnez un passage dans la pièce, faites un clic droit puis choisissez « Fait ».</p>';
+  const premiseList = layer.querySelector<HTMLElement>('[data-document-premises]');
+  const renderPremises = () => {
+    if (premiseList) premiseList.innerHTML = statements.map((entry, index) => `<div class="pmd-document-cited" data-citations><span class="pmd-document-entity">${escapeHtml(entry.value ? `${entry.title} : ${entry.value}` : entry.title)}<button type="button" class="pmd-document-entity-remove" data-remove-premise="${index}" aria-label="Retirer ${escapeHtml(entry.title)}">×</button></span>${citationListMarkup([{ texte: entry.citation, source: node.label }])}</div>`).join('')
+      || '<p class="pmd-document-muted">Aucune prémisse. Sélectionnez un passage dans la pièce, faites un clic droit puis choisissez « Prémisse ».</p>';
   };
-  const failFact = (error: unknown) => showSelectionMessage(error instanceof Error ? error.message : String(error));
-  factList?.addEventListener('click', (event) => {
-    const index = (event.target as HTMLElement).closest<HTMLElement>('[data-remove-fact]')?.dataset.removeFact;
+  const failPremise = (error: unknown) => showSelectionMessage(error instanceof Error ? error.message : String(error));
+  premiseList?.addEventListener('click', (event) => {
+    const index = (event.target as HTMLElement).closest<HTMLElement>('[data-remove-premise]')?.dataset.removePremise;
     const entry = index === undefined ? undefined : statements[Number(index)];
     if (!entry || !okf) return;
-    void okfApi.unlink(okf.projectId, { source: resource, relation: 'states', target: entry.fact }).then(() => {
+    void okfApi.unlink(okf.projectId, { source: resource, relation: 'states', target: entry.premise }).then(() => {
       statements.splice(statements.indexOf(entry), 1);
-      renderFacts();
+      renderPremises();
       renderPreview();
       okf.refresh();
-    }, failFact);
+    }, failPremise);
   });
-  bindCitationToggles(factList);
-  renderFacts();
-  const stateFact = async (selection: string) => {
+  bindCitationToggles(premiseList);
+  renderPremises();
+  const statePremise = async (selection: string) => {
     if (!okf) {
-      showSelectionMessage('Index indisponible : le fait n’est pas enregistré.');
+      showSelectionMessage('Index indisponible : la prémisse n’est pas enregistrée.');
       return;
     }
-    const created = '__piecemaker_new_fact__';
-    const choice = await askEntity(root, 'Ce passage établit…', [...knownFacts.map((fact) => ({ id: fact.id, label: fact.title, detail: fact.description === fact.title ? 'Fait du dossier' : fact.description })), { id: created, label: 'Nouveau fait…', detail: 'Ajouter un fait à l’index' }]);
+    const created = '__piecemaker_new_premise__';
+    const choice = await askEntity(root, 'Ce passage établit…', [...knownPremises.map((premise) => ({ id: premise.id, label: premise.title, detail: premise.description === premise.title ? 'Prémisse du dossier' : premise.description })), { id: created, label: 'Nouveau fait…', detail: 'Ajouter un fait à l’index' }]);
     if (!choice) return;
-    const title = choice === created ? await askPrompt(root, 'Nom du fait', '', 'Continuer') : knownFacts.find((fact) => fact.id === choice)?.title;
+    const title = choice === created ? await askPrompt(root, 'Nom de la prémisse', '', 'Continuer') : knownPremises.find((premise) => premise.id === choice)?.title;
     if (!title) return;
     const value = await askPrompt(root, `Valeur de « ${title} » dans cette pièce (facultatif)`, '', 'Enregistrer') || '';
     try {
       const link = await okfApi.link(okf.projectId, { source: resource, relation: 'states', target: choice === created ? title : choice, citation: selection, value });
-      if (!knownFacts.some((fact) => fact.id === link.target)) knownFacts.push({ id: link.target, title, description: title });
-      const previous = statements.findIndex((entry) => entry.fact === link.target);
+      if (!knownPremises.some((premise) => premise.id === link.target)) knownPremises.push({ id: link.target, title, description: title });
+      const previous = statements.findIndex((entry) => entry.premise === link.target);
       if (previous >= 0) statements.splice(previous, 1);
-      statements.push({ fact: link.target, title, citation: selection, value });
-      renderFacts();
+      statements.push({ premise: link.target, title, citation: selection, value });
+      renderPremises();
       renderPreview();
       okf.refresh();
     } catch (error) {
-      failFact(error);
+      failPremise(error);
     }
   };
   const addFieldRow = (value = '') => {
@@ -905,8 +905,8 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
       renderPreview();
       return;
     }
-    if (category === 'fact') {
-      void stateFact(selection);
+    if (category === 'premise') {
+      void statePremise(selection);
       return;
     }
     designateParty(selection, category === 'adverse' ? 'adversaire' : category);
@@ -916,7 +916,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     { category: 'adverse', label: 'Partie adverse' },
     { category: 'tiers', label: 'Tiers' },
     { category: 'date', label: 'Date' },
-    { category: 'fact', label: 'Fait' },
+    { category: 'premise', label: 'Premise' },
   ];
   const citeSelection = async (selection: string) => {
     showSelectionMessage('');

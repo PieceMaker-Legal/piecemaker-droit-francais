@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { factFicheMarkup, factEstablishers, factParties, factStatements, facts, ficheLinks, graphElements, partyFacts } from '../okf.js';
+import { premiseFicheMarkup, premiseReviewDraft, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
 import type { OkfIndex } from '../okf.js';
 import { chronologyView } from '../views.js';
 
@@ -38,55 +38,55 @@ describe('index OKF', () => {
   });
 });
 
-const factIndex: OkfIndex = {
-  types: ['Pièces', 'Projets', 'Fait', 'Partie'],
+const premiseIndex: OkfIndex = {
+  types: ['Pièces', 'Projets', 'Premise', 'Partie'],
   typesGraphe: ['Pièces'],
   fiches: [
     fiche('Pièces/Contrat.pdf', 'Pièces', 'Contrat', [
-      { relation: 'states', target: '/Faits/Prix.md', citation: 'Le prix est de 1 000 euros.', origin: 'piecemaker/gliner', value: '1 000 €' },
-      { relation: 'states', target: '/Faits/Eligibilite.md', citation: 'Le client remplit les conditions.', origin: 'piecemaker/gliner' },
+      { relation: 'states', target: '/_premises/Prix.md', citation: 'Le prix est de 1 000 euros.', origin: 'piecemaker/gliner', value: '1 000 €' },
+      { relation: 'states', target: '/_premises/Eligibilite.md', citation: 'Le client remplit les conditions.', origin: 'piecemaker/gliner' },
     ]),
     fiche('Pièces/Courrier.pdf', 'Pièces', 'Courrier', [
-      { relation: 'states', target: '/Faits/Prix.md', citation: 'Le prix convenu est de 1 200 euros.', origin: 'piecemaker/gliner', value: '1 200 €' },
+      { relation: 'states', target: '/_premises/Prix.md', citation: 'Le prix convenu est de 1 200 euros.', origin: 'piecemaker/gliner', value: '1 200 €' },
     ]),
     fiche('Projets/Conclusions.docx', 'Projets', 'Conclusions'),
-    fiche('Faits/Prix', 'Fait', 'Prix'),
-    fiche('Faits/Eligibilite', 'Fait', 'Éligibilité'),
-    fiche('Faits/Dommage', 'Fait', 'Dommage'),
-    fiche('Faits/Clause', 'Fait', 'Clause <pénale>'),
+    fiche('_premises/Prix', 'Premise', 'Prix'),
+    fiche('_premises/Eligibilite', 'Premise', 'Éligibilité'),
+    fiche('_premises/Dommage', 'Premise', 'Dommage'),
+    fiche('_premises/Clause', 'Premise', 'Clause <pénale>'),
     { ...fiche('Parties/Jean Dupont', 'Partie', 'Jean Dupont'), side: 'client' },
     { ...fiche('Parties/Société Exemple SAS', 'Partie', 'Société Exemple SAS'), side: 'adversaire' },
     fiche('Parties/ZETABIO', 'Partie', 'ZETABIO'),
   ],
 };
 
-describe('faits de l’index OKF', () => {
-  it('factStatements liste les faits établis par une pièce', () => {
-    expect(factStatements(factIndex, 'Pièces/Contrat.pdf')).toEqual([
-      { fact: '/Faits/Prix.md', title: 'Prix', citation: 'Le prix est de 1 000 euros.', value: '1 000 €' },
-      { fact: '/Faits/Eligibilite.md', title: 'Éligibilité', citation: 'Le client remplit les conditions.', value: '' },
+describe('prémisses de l’index OKF', () => {
+  it('premiseStatements liste les prémisses établies par une pièce', () => {
+    expect(premiseStatements(premiseIndex, 'Pièces/Contrat.pdf')).toEqual([
+      { premise: '/_premises/Prix.md', title: 'Prix', citation: 'Le prix est de 1 000 euros.', value: '1 000 €' },
+      { premise: '/_premises/Eligibilite.md', title: 'Éligibilité', citation: 'Le client remplit les conditions.', value: '' },
     ]);
   });
 
-  it('factStatements reste vide sans index ou pour une pièce inconnue', () => {
-    expect(factStatements(null, 'Pièces/Contrat.pdf')).toEqual([]);
-    expect(factStatements(factIndex, 'Pièces/Inconnue.pdf')).toEqual([]);
+  it('premiseStatements reste vide sans index ou pour une pièce inconnue', () => {
+    expect(premiseStatements(null, 'Pièces/Contrat.pdf')).toEqual([]);
+    expect(premiseStatements(premiseIndex, 'Pièces/Inconnue.pdf')).toEqual([]);
   });
 
-  it('facts ne garde que les fiches Fait, triées sans tenir compte des accents', () => {
-    expect(facts(factIndex).map((fact) => fact.title)).toEqual(['Clause <pénale>', 'Dommage', 'Éligibilité', 'Prix']);
-    expect(facts(null)).toEqual([]);
+  it('premises ne garde que les fiches Premise, triées sans tenir compte des accents', () => {
+    expect(premises(premiseIndex).map((premise) => premise.title)).toEqual(['Clause <pénale>', 'Dommage', 'Éligibilité', 'Prix']);
+    expect(premises(null)).toEqual([]);
   });
 
-  it('le graphe inclut les faits et les parties avec leur nature', () => {
-    const nodes = graphElements(factIndex).filter((element) => !element.data.source);
+  it('le graphe inclut les prémisses et les parties avec leur nature', () => {
+    const nodes = graphElements(premiseIndex).filter((element) => !element.data.source);
     expect(Object.fromEntries(nodes.map((element) => [element.data.label, element.data.kind]))).toEqual({
       Contrat: 'document',
       Courrier: 'document',
-      Prix: 'fact',
-      'Éligibilité': 'fact',
-      Dommage: 'fact',
-      'Clause <pénale>': 'fact',
+      Prix: 'premise',
+      'Éligibilité': 'premise',
+      Dommage: 'premise',
+      'Clause <pénale>': 'premise',
       'Jean Dupont': 'party-client',
       'Société Exemple SAS': 'party-adverse',
       ZETABIO: 'party-tiers',
@@ -94,22 +94,22 @@ describe('faits de l’index OKF', () => {
   });
 
   it('le graphe porte la relation sur chaque arête', () => {
-    const edges = graphElements(factIndex).filter((element) => element.data.source);
-    expect(edges).toContainEqual({ data: { id: '/Pièces/Contrat.pdf.md|states|/Faits/Prix.md', source: '/Pièces/Contrat.pdf.md', target: '/Faits/Prix.md', label: 'établit', relation: 'states' } });
+    const edges = graphElements(premiseIndex).filter((element) => element.data.source);
+    expect(edges).toContainEqual({ data: { id: '/Pièces/Contrat.pdf.md|states|/_premises/Prix.md', source: '/Pièces/Contrat.pdf.md', target: '/_premises/Prix.md', label: 'établit', relation: 'states' } });
     expect(edges.every((element) => element.data.relation)).toBe(true);
   });
 
-  it('factEstablishers donne les pièces, valeurs et citations d’un fait', () => {
-    expect(factEstablishers(factIndex, '/Faits/Prix.md')).toEqual([
+  it('premiseEstablishers donne les pièces, valeurs et citations d’une prémisse', () => {
+    expect(premiseEstablishers(premiseIndex, '/_premises/Prix.md')).toEqual([
       { piece: 'Contrat', resource: 'Pièces/Contrat.pdf', value: '1 000 €', citation: 'Le prix est de 1 000 euros.' },
       { piece: 'Courrier', resource: 'Pièces/Courrier.pdf', value: '1 200 €', citation: 'Le prix convenu est de 1 200 euros.' },
     ]);
-    expect(factEstablishers(factIndex, '/Faits/Inconnu.md')).toEqual([]);
+    expect(premiseEstablishers(premiseIndex, '/_premises/Inconnu.md')).toEqual([]);
   });
 
-  it('factFicheMarkup affiche les pièces, valeurs et citations', () => {
-    const html = factFicheMarkup(factIndex, '/Faits/Prix.md');
-    expect(html).toContain('<span class="pmd-profile-eyebrow">Fait</span><strong>Prix</strong>');
+  it('premiseFicheMarkup affiche les pièces, valeurs et citations', () => {
+    const html = premiseFicheMarkup(premiseIndex, '/_premises/Prix.md');
+    expect(html).toContain('<span class="pmd-profile-eyebrow">Prémisse</span><strong>Prix</strong>');
     expect(html).toContain('data-open-resource="Pièces/Contrat.pdf"');
     expect(html).toContain('<span class="pmd-relation-type">1 000 €</span><strong class="pmd-relation-target">Contrat</strong>');
     expect(html).toContain('« Le prix est de 1 000 euros. »');
@@ -117,20 +117,20 @@ describe('faits de l’index OKF', () => {
     expect(html).not.toContain('Aucune pièce');
   });
 
-  it('factFicheMarkup échappe le titre et signale un fait sans pièce', () => {
-    const html = factFicheMarkup(factIndex, '/Faits/Clause.md');
+  it('premiseFicheMarkup échappe le titre et signale une prémisse sans pièce', () => {
+    const html = premiseFicheMarkup(premiseIndex, '/_premises/Clause.md');
     expect(html).toContain('Clause &lt;pénale&gt;');
     expect(html).not.toContain('<pénale>');
-    expect(html).toContain('Aucune pièce n’établit ce fait.');
+    expect(html).toContain('Aucune pièce n’établit cette prémisse.');
   });
 
-  it('factFicheMarkup reste vide pour un fait inconnu', () => {
-    expect(factFicheMarkup(factIndex, '/Faits/Inconnu.md')).toBe('');
+  it('premiseFicheMarkup reste vide pour une prémisse inconnue', () => {
+    expect(premiseFicheMarkup(premiseIndex, '/_premises/Inconnu.md')).toBe('');
   });
 
-  it('ficheLinks affiche la valeur d’un fait établi', () => {
-    expect(ficheLinks(factIndex, 'Pièces/Contrat.pdf')).toContainEqual({ label: 'établit →', title: 'Prix : 1 000 €', citation: 'Le prix est de 1 000 euros.' });
-    expect(ficheLinks(factIndex, 'Faits/Prix')).toEqual([
+  it('ficheLinks affiche la valeur d’une prémisse établie', () => {
+    expect(ficheLinks(premiseIndex, 'Pièces/Contrat.pdf')).toContainEqual({ label: 'établit →', title: 'Prix : 1 000 €', citation: 'Le prix est de 1 000 euros.' });
+    expect(ficheLinks(premiseIndex, '_premises/Prix')).toEqual([
       { label: '← établi par', title: 'Contrat', citation: 'Le prix est de 1 000 euros.' },
       { label: '← établi par', title: 'Courrier', citation: 'Le prix convenu est de 1 200 euros.' },
     ]);
@@ -139,23 +139,30 @@ describe('faits de l’index OKF', () => {
 
 describe('fiches du graphe', () => {
   const linked: OkfIndex = {
-    ...factIndex,
-    fiches: factIndex.fiches.map((entry) => entry.title === 'Prix' ? { ...entry, single: true, description: 'Prix de vente', relations: [{ relation: 'involves', target: '/Parties/Jean Dupont.md', citation: '', origin: 'piecemaker/agent' }] } : entry),
+    ...premiseIndex,
+    fiches: premiseIndex.fiches.map((entry) => entry.title === 'Prix' ? { ...entry, single: true, description: 'Prix de vente', relations: [{ relation: 'involves', target: '/Parties/Jean Dupont.md', citation: '', origin: 'piecemaker/agent' }] } : entry),
   };
 
-  it('factParties et partyFacts relient un fait à ses parties', () => {
-    expect(factParties(linked, '/Faits/Prix.md').map((party) => party.title)).toEqual(['Jean Dupont']);
-    expect(partyFacts(linked, 'Jean Dupont').map((fact) => fact.title)).toEqual(['Prix']);
-    expect(partyFacts(linked, 'ZETABIO')).toEqual([]);
-    expect(partyFacts(null, 'Jean Dupont')).toEqual([]);
+  it('premiseParties et partyPremises relient une prémisse à ses parties', () => {
+    expect(premiseParties(linked, '/_premises/Prix.md').map((party) => party.title)).toEqual(['Jean Dupont']);
+    expect(partyPremises(linked, 'Jean Dupont').map((premise) => premise.title)).toEqual(['Prix']);
+    expect(partyPremises(linked, 'ZETABIO')).toEqual([]);
+    expect(partyPremises(null, 'Jean Dupont')).toEqual([]);
   });
 
-  it('la fiche d’un fait reprend le design de la fiche de partie', () => {
-    const html = factFicheMarkup(linked, '/Faits/Prix.md');
-    expect(html).toContain('class="pmd-profile-editor" data-kind="fact" data-side="fact"');
+  it('la fiche d’une prémisse reprend le design de la fiche de partie', () => {
+    const html = premiseFicheMarkup(linked, '/_premises/Prix.md');
+    expect(html).toContain('class="pmd-profile-editor" data-kind="premise" data-side="premise"');
     expect(html).toContain('<span class="pmd-profile-kind">Valeur unique</span>');
     expect(html).toContain('Prix de vente');
     expect(html).toContain('Parties concernées');
     expect(html).toContain('<strong class="pmd-relation-target">Jean Dupont</strong>');
+  });
+
+  it('premiseReviewDraft prépare une revue à une colonne qui porte la prémisse', () => {
+    expect(premiseFicheMarkup(premiseIndex, '/_premises/Prix.md')).toContain('data-premise-review');
+    expect(premiseReviewDraft(premiseIndex, '/_premises/Prix.md', '/dossier-fictif')).toEqual({ project: '/dossier-fictif', title: 'Prix', templateName: '', columns: [{ name: 'Prix', prompt: 'Prix', format: 'text', premise: 'checkpoint' }], rows: [] });
+    expect(premiseReviewDraft({ ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, single: true })) }, '/_premises/Prix.md', '/dossier-fictif')?.columns[0].premise).toBe('single');
+    expect(premiseReviewDraft(premiseIndex, '/_premises/Inconnue.md', '/dossier-fictif')).toBeNull();
   });
 });

@@ -3,7 +3,7 @@
 1. Formulez la question juridique avant de coder sa réponse.
 2. Décomposez la réponse en qualifications, conditions et exceptions nommées. Gardez les liens dans les expressions Catala.
 3. Séparez les données observées des qualifications. Une entrée `vrai` ou `faux` décrit seulement un scénario.
-4. Rattachez chaque règle à son texte et chaque donnée à sa pièce, avec une citation exacte.
+4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque donnée à sa prémisse OKF ; la prémisse porte les pièces et leurs citations.
 5. Si un fait reste inconnu ou contesté, conservez cet état. Utilisez une énumération Catala quand le calcul doit traiter cet état.
 6. Si le programme attend un booléen, testez les deux hypothèses. Ne remplacez jamais un fait inconnu par `faux`.
 7. Écrivez un scénario `#[test]` pour chaque branche utile : conditions remplies, condition absente, exception applicable, hypothèse différente.
@@ -15,7 +15,7 @@
 
 ## Annotation obligatoire et citation
 
-Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir une balise `quote` non vide et un `titre`.
+Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir un `titre` et une balise `quote` non vide, sauf si sa `source` est une prémisse `okf:`.
 Le vérificateur produit une erreur localisée pour chacun de ces manques. Cette obligation couvre aussi les définitions des scénarios.
 
 ````catala
@@ -26,7 +26,7 @@ champ d'application Exemple:
 
 `#[doc]` appartient à Catala. Le contenu `titre: …`, `source: …` et `quote: « … »` suit la convention PieceMaker. Rédigez `titre` selon « Style des titres » de `SKILL.md`.
 Écrivez le lien après `source:` sans crochets Markdown dans l’attribut : le formateur du pack refuse certains liens avec crochets.
-Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait, indiquez le lien de la pièce et son passage exact.
+Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait ou une clause, indiquez la prémisse : `source: okf:/_premises/<titre normalisé>.md`. N’indiquez pas la pièce : le graphe affiche les pièces de la prémisse.
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées.
 
 La même annotation alimente le contrôle des citations et le graphe. Le graphe la rattache à la définition par sa position native.

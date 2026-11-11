@@ -46,7 +46,7 @@ function takeShowRequest(): ShowRequest | null {
   return { project: text(request.project), review: text(request.review), draft: text(request.draft) };
 }
 
-export function mount(container: HTMLElement, api: PluginApi, index?: { project: string; onBack(): void }): void {
+export function mount(container: HTMLElement, api: PluginApi, index?: { project: string; onBack(): void; draft?: string }): void {
   unmount(container);
   const style = document.createElement('style');
   style.textContent = PLUGIN_STYLES;
@@ -312,7 +312,7 @@ export function mount(container: HTMLElement, api: PluginApi, index?: { project:
     root.dataset.theme = context.theme;
   });
 
-  if (index) void openCaseIndex(index.project);
+  if (index) void (index.draft ? openDraftById(index.project, index.draft) : openCaseIndex(index.project));
   else showTab('history');
   if (initialRequest?.project && initialRequest.draft) void openDraftById(initialRequest.project, initialRequest.draft);
   else if (initialRequest?.project && initialRequest.review) app.openReview(initialRequest.project, initialRequest.review);

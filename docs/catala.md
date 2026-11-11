@@ -156,7 +156,7 @@ Le graphe reste disponible lorsqu’un scénario réussit, même si une autre v�
 
 Le contrôle des citations utilise les mêmes références que le graphe et les connecteurs PieceMaker existants.
 Les sources officielles passent par le MCP Légifrance et les identifiants PISTE de l’utilisateur.
-Les pièces passent par le lecteur existant du dossier. Aucun extrait absent ou introuvable ne vaut validation.
+Une condition tirée du dossier cite une prémisse de l'index OKF (`source: okf:/_premises/<titre>.md`, sans `quote`), jamais une pièce : le contrôle développe la prémisse en ses pièces citées et vérifie chaque citation (`docs/okf.md`). Les pièces passent par le lecteur existant du dossier. Aucun extrait absent ou introuvable ne vaut validation.
 `citations.json` conserve les résultats et les jetons du lecteur interne. Le graphe affiche les erreurs sur leurs références.
 Le lecteur réutilise ces résultats tant que le programme reste inchangé. Aucun contrôle sémantique supplémentaire n’est ajouté.
 La commande CLI joint le serveur local pour ce contrôle ; serveur absent, le bilan signale l’indisponibilité.

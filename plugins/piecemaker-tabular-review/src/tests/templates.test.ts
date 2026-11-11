@@ -13,16 +13,16 @@ const { normalizeColumn } = await import('../server/templates.js');
 describe('normalizeColumn', () => {
   const question = { name: 'Montant', prompt: 'Quel est le montant ?' };
 
-  it('keeps the fact kind of a question', () => {
-    expect(normalizeColumn({ ...question, fact: 'single' }).fact).toBe('single');
-    expect(normalizeColumn({ ...question, fact: 'checkpoint' }).fact).toBe('checkpoint');
+  it('keeps the premise kind of a question', () => {
+    expect(normalizeColumn({ ...question, premise: 'single' }).premise).toBe('single');
+    expect(normalizeColumn({ ...question, premise: 'checkpoint' }).premise).toBe('checkpoint');
   });
 
-  it('drops an unknown fact kind', () => {
-    expect(normalizeColumn({ ...question, fact: 'autre' })).not.toHaveProperty('fact');
+  it('drops an unknown premise kind', () => {
+    expect(normalizeColumn({ ...question, premise: 'autre' })).not.toHaveProperty('premise');
   });
 
-  it('omits the fact key without a fact kind', () => {
-    expect('fact' in normalizeColumn(question)).toBe(false);
+  it('omits the premise key without a premise kind', () => {
+    expect('premise' in normalizeColumn(question)).toBe(false);
   });
 });

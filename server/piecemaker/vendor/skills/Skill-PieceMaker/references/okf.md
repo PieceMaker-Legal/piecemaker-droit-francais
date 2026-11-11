@@ -1,13 +1,13 @@
 # Index OKF (`pm okf`)
 
-L'index du dossier suit le format Open Knowledge Format 0.2. Il vit dans `.piecemaker/okf/`. Il fait autorité sur les liens entre pièces et sur les faits. Ne l'écris pas à la main : passe par `pm okf`.
+L'index du dossier suit le format Open Knowledge Format 0.2. Il vit dans `.piecemaker/okf/`. Il fait autorité sur les liens entre pièces et sur les prémisses. Ne l'écris pas à la main : passe par `pm okf`.
 
 ## Fiches
 
 | Fiche | Identifiant | Contenu |
 | --- | --- | --- |
 | Document | `/<chemin du document>.md` | titre, nature, date, liens |
-| Fait | `/_faits/<titre normalisé>.md` | titre, description, pièces qui l'établissent |
+| Premise (prémisse) | `/_premises/<titre normalisé>.md` | titre, description, pièces qui l'établissent |
 | Partie | `/_parties/<CODE>.md` | code de la partie, côté (client ou adverse) |
 
 ```markdown
@@ -26,7 +26,7 @@ relations:
       citation: Nous faisons suite au contrat de prestation du 12 mars 2021.
       origin: piecemaker/gliner
   states:
-    - target: /_faits/date-de-resiliation.md
+    - target: /_premises/date-de-resiliation.md
       citation: Le contrat est résilié à compter du 1er juin 2021.
       value: 2021-06-01
       origin: piecemaker/agent
@@ -51,9 +51,11 @@ pm okf unlink "Pièces/Courrier.pdf" refers-to "Pièces/Contrat.pdf"
 
 Ajoute un lien seulement si tu as lu la phrase qui le fonde. Un lien du scan retiré reste écarté.
 
-## Faits
+## Prémisses
 
-Une pièce établit un fait par un lien `states`. La fiche du fait est créée si elle manque. Réutilise le titre exact d'un fait existant pour rattacher une autre pièce au même fait.
+Une prémisse est un point que des pièces établissent : un fait du dossier, ou une clause d'un contrat. Elle justifie qu'une condition du raisonnement Catala est remplie.
+
+Une pièce établit une prémisse par un lien `states`. La fiche `Premise` est créée si elle manque. Réutilise le titre exact d'une prémisse existante pour rattacher une autre pièce à la même prémisse.
 
 ```bash
 pm okf link "Pièces/Courrier.pdf" states "Date de résiliation" --citation "Le contrat est résilié à compter du 1er juin 2021." --value "2021-06-01" --single
@@ -61,16 +63,36 @@ pm okf link "Date de résiliation" involves CLIENT_01
 pm okf unlink "Pièces/Courrier.pdf" states "Date de résiliation"
 ```
 
-- `--value` : ce que la pièce dit du fait. Écris la même valeur sous la même forme d'une pièce à l'autre (date en `AAAA-MM-JJ`, montant en chiffres).
-- `--single` : le fait n'a qu'une valeur. Un écart entre pièces devient une contradiction.
-- `involves` relie un fait à une partie, sans citation. La cible est le code de la partie.
+- `--value` : ce que la pièce dit de la prémisse. Écris la même valeur sous la même forme d'une pièce à l'autre (date en `AAAA-MM-JJ`, montant en chiffres).
+- `--single` : la prémisse n'a qu'une valeur. Un écart entre pièces devient une contradiction.
+- `involves` relie une prémisse à une partie, sans citation. La cible est le code de la partie.
 
 Les colonnes de revue tabulaire marquées « Index du dossier » posent aussi des liens `states`. L'avocat en pose dans la visionneuse.
+
+## Prémisse et raisonnement Catala
+
+1. Une condition Catala se justifie par une prémisse : `source: okf:/_premises/<titre normalisé>.md` dans son `#[doc]`, sans `quote`.
+2. Une prémisse se justifie par des pièces citées (`states`).
+3. Une condition ne cite jamais une pièce directement.
+
+Pour un contrat, chaque clause utile est une prémisse : titre = objet de la clause, citation = texte de la clause, valeur = ce qu'elle stipule.
 
 ## Vérifier
 
 ```bash
 pm okf verify
+pm okf verify-graph
 ```
 
-La commande renvoie les erreurs : type hors arborescence, document absent, document sans fiche, relation inconnue, cible absente ou hors graphe, citation introuvable, `index.md` incomplet. Elle renvoie aussi les contradictions : un fait à valeur unique avec plusieurs valeurs. Corrige la cause d'une erreur, puis relance. Signale une contradiction à l'avocat ; ne tranche pas.
+La commande renvoie les erreurs : type hors arborescence, document absent, document sans fiche, relation inconnue, cible absente ou hors graphe, citation introuvable, `index.md` incomplet. Elle renvoie aussi les contradictions : une prémisse à valeur unique avec plusieurs valeurs. Corrige la cause d'une erreur, puis relance. Signale une contradiction à l'avocat ; ne tranche pas.
+
+`verify-graph` ajoute les éléments manquants du graphe :
+
+| Élément | Manque signalé |
+| --- | --- |
+| Pièce du graphe | aucune prémisse établie, aucun lien vers une autre pièce |
+| Prémisse | aucune pièce citée ; à valeur unique sans valeur ; aucune partie concernée ; citée par aucun programme Catala (si un programme existe) |
+| Partie | aucune mention dans une pièce, aucune prémisse qui la concerne |
+| `#[doc]` Catala (`fichier:ligne`) | prémisse absente de l'index ou sans pièce ; pièce citée directement |
+
+Lance `verify-graph` après avoir complété le graphe ou écrit un programme Catala. Comble chaque manque que les pièces permettent de combler. Signale les autres à l'avocat ; n'invente ni citation ni lien.

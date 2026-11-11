@@ -11,10 +11,10 @@ export const COLUMN_ACTIONS: { value: ColumnAction; label: string }[] = [
   { value: 'custom', label: 'Action personnalisée' },
 ];
 
-export type ColumnFact = 'single' | 'checkpoint';
+export type ColumnPremise = 'single' | 'checkpoint';
 
-export const COLUMN_FACTS: { value: ColumnFact; label: string }[] = [
-  { value: 'single', label: 'Fait unique — un écart entre pièces est une contradiction' },
+export const COLUMN_PREMISES: { value: ColumnPremise; label: string }[] = [
+  { value: 'single', label: 'Prémisse unique — un écart entre pièces est une contradiction' },
   { value: 'checkpoint', label: 'Point de contrôle — la réponse varie selon la pièce' },
 ];
 
@@ -25,7 +25,7 @@ export type TemplateColumn = {
   tags?: string[];
   action?: ColumnAction;
   customAction?: string;
-  fact?: ColumnFact;
+  premise?: ColumnPremise;
 };
 
 export type ClassificationFolder = { name: string; explanation: string };

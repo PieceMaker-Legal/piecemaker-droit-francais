@@ -1,6 +1,6 @@
 ---
 name: okf
-description: Gérer l'index OKF du dossier (.piecemaker/okf/) — fiches de documents, fiches Fait et Partie, liens cités entre pièces (amends, responds-to, refers-to, supersedes), vérification. Use when the user asks to read, build, complete or check the case index, the links between documents, the facts or the parties of the case, or the OKF index.
+description: Gérer l'index OKF du dossier (.piecemaker/okf/) — fiches de documents, fiches Premise (prémisse : fait ou clause) et Partie, liens cités entre pièces (amends, responds-to, refers-to, supersedes), vérification de l'index et du graphe. Use when the user asks to read, build, complete or check the case index, the links between documents, the facts, premises, clauses or parties of the case, or the OKF index.
 ---
 
 # Index OKF
@@ -14,12 +14,12 @@ Chaque fiche a un frontmatter YAML et un corps Markdown.
 | Type | Contenu |
 | --- | --- |
 | Dossier de premier niveau de l'arborescence (par défaut `Pièces`) | Une fiche par document. |
-| `Fait` | Un fait du dossier, par exemple « Rupture du contrat ». En due diligence, un point de contrôle, par exemple « Changement de contrôle ». |
+| `Premise` | Une prémisse : un point établi par des pièces, qui justifie une condition du raisonnement Catala. Un fait du dossier, par exemple « Rupture du contrat ». Une clause d'un contrat, par exemple « Changement de contrôle ». |
 | `Partie` | Une personne qualifiée de partie. La fiche porte le code anonymisé, jamais une identité réelle. |
 
 Aucun champ de statut n'existe (projet, signé). Ne l'ajoutez pas.
 
-Les faits viennent surtout des colonnes de revue tabulaire marquées comme « fait » et des sélections de texte de l'avocat dans la visionneuse.
+Les prémisses viennent des colonnes de revue tabulaire marquées « Index du dossier », des sélections de texte de l'avocat dans la visionneuse et de `pm okf link`.
 
 ## Liens
 
@@ -29,7 +29,13 @@ Les faits viennent surtout des colonnes de revue tabulaire marquées comme « fa
 
 Entre pièces, quatre relations existent : `amends`, `responds-to`, `refers-to`, `supersedes`. `supersedes` signifie qu'une version remplace une autre.
 
-Une pièce établit un `Fait` par `states` (citation, valeur facultative). Le scan relie une pièce à une `Partie` par `mentions`. Un `Fait` concerne une `Partie` par `involves`, sans citation.
+Une pièce établit une `Premise` par `states` (citation, valeur facultative). Le scan relie une pièce à une `Partie` par `mentions`. Une `Premise` concerne une `Partie` par `involves`, sans citation.
+
+## Chaîne de justification
+
+1. Une condition Catala se justifie par une `Premise` : `source: okf:/_premises/<titre normalisé>.md` dans son `#[doc]`.
+2. Une `Premise` se justifie par des pièces citées.
+3. Une condition ne cite jamais une pièce directement.
 
 ## Lire et écrire
 
@@ -37,10 +43,11 @@ Une pièce établit un `Fait` par `states` (citation, valeur facultative). Le sc
 2. N'écrivez jamais une fiche à la main. Passez par `pm okf`.
 3. Avant la première écriture, lisez `references/okf.md` du skill `piecemaker` (`.agents/skills/Skill-PieceMaker/references/okf.md`). Cette référence décrit les sous-commandes à jour.
 4. Après toute écriture, lancez `pm okf verify`. Corrigez chaque erreur et relancez jusqu'à zéro erreur.
+5. Pour compléter le graphe, lancez `pm okf verify-graph`. La commande liste chaque élément manquant : pièce sans prémisse, prémisse sans pièce, sans valeur ou sans partie, partie isolée, `#[doc]` Catala mal relié.
 
 ## Règles de conduite
 
 - Conservez les pseudonymes tels qu'ils apparaissent. Ne cherchez jamais l'identité réelle.
 - Ne citez jamais sans extrait littéral de la pièce.
 - Si deux pièces se contredisent, signalez la contradiction. Ne tranchez pas.
-- Si l'index ne contient pas l'information, répondez « je ne sais pas ». N'inventez ni fait ni lien.
+- Si l'index ne contient pas l'information, répondez « je ne sais pas ». N'inventez ni prémisse ni lien.

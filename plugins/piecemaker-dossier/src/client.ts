@@ -1,7 +1,7 @@
 import { openIndexAnalysis } from './index-analysis.js';
 import { editClassification } from './classification.js';
-import { etapesApi, knowledgeApi } from './api.js';
-import { FACT_TYPE, PARTY_TYPE, factFicheMarkup, mountGraph, okfApi } from './okf.js';
+import { etapesApi, knowledgeApi, tabularReviewRpc } from './api.js';
+import { PREMISE_TYPE, PARTY_TYPE, premiseFicheMarkup, premiseReviewDraft, mountGraph, okfApi } from './okf.js';
 import type { OkfView } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
@@ -416,8 +416,17 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (node) nodeEditor(root, data, node, save);
         return;
       }
-      if (fiche.type !== FACT_TYPE) return openDocument(fiche.resource);
-      const layer = modal(root, factFicheMarkup(data.okf, fiche.id));
+      if (fiche.type !== PREMISE_TYPE) return openDocument(fiche.resource);
+      const layer = modal(root, premiseFicheMarkup(data.okf, fiche.id));
+      const draft = premiseReviewDraft(data.okf, fiche.id, projectPath);
+      layer.querySelector<HTMLButtonElement>('[data-premise-review]')?.addEventListener('click', (event) => {
+        if (!draft) return;
+        (event.currentTarget as HTMLButtonElement).disabled = true;
+        void (tabularReviewRpc('PUT', '/drafts', { draft }) as Promise<{ draft: { id: string } }>)
+          .then((saved) => openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); }, saved.draft.id))
+          .then((dispose) => { closeIndexAnalysis = dispose; layer.remove(); })
+          .catch((error) => { layer.remove(); showError(error); });
+      });
       layer.querySelectorAll<HTMLElement>('[data-open-resource]').forEach((row) => row.addEventListener('click', () => {
         layer.remove();
         openDocument(row.dataset.openResource || '');

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -79,5 +79,34 @@ test('verifies Judilibre and constitutional decisions through the existing sourc
     assert.ok(report.results.every((entry) => 'title' in entry && entry.title === 'Cour fictive, 12 mars 2026'));
     const rejected = await service.verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu: contenu.replace('www.courdecassation.fr', 'www.courdecassation.fr.example.test') }]);
     assert.equal(rejected.passed, false);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
+test('develops an OKF premise into its cited pieces and fails without evidence', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-premise-'));
+  try {
+    const bundle = path.join(home, '.piecemaker', 'okf');
+    await mkdir(path.join(bundle, 'Pièces'), { recursive: true });
+    await mkdir(path.join(bundle, '_premises'), { recursive: true });
+    await writeFile(path.join(bundle, 'Pièces', 'Contrat.pdf.md'), '---\ntype: Pièces\ntitle: Contrat.pdf\nresource: Pièces/Contrat.pdf\nrelations:\n  states:\n    - target: /_premises/prix.md\n      citation: Le prix est de 1 000 euros.\n      origin: piecemaker/agent\n      value: 1 000 euros\n---\n');
+    await writeFile(path.join(bundle, '_premises', 'prix.md'), '---\ntype: Premise\ntitle: Prix\n---\n');
+    await writeFile(path.join(bundle, '_premises', 'delai.md'), '---\ntype: Premise\ntitle: Délai\n---\n');
+    const read: string[] = [];
+    const service = createCatalaCitation({
+      source: async (_cwd, id) => { read.push(id); return { kind: 'piece', title: 'Contrat.pdf', text: 'Le prix est de 1 000 euros.' }; },
+      match: (text, quote) => text.includes(quote) ? quote : null,
+    }, createCitationStore(home));
+    const origin = path.join(home, '.piecemaker/catala/prime/prime.catala_fr');
+    const doc = (title: string, source: string) => '#[doc=' + JSON.stringify(`titre: ${title}\nsource: ${source}`) + ']';
+    const content = ['```catala', doc('Prix', 'okf:/_premises/prix.md'), 'définition a égal à vrai', doc('Délai', 'okf:/_premises/delai.md'), 'définition b égal à vrai', doc('Absente', 'okf:/_premises/absente.md'), 'définition c égal à vrai', '```'].join('\n');
+    const report = await service.verify(home, [{ nom: 'prime.catala_fr', chemin: origin, contenu: content }]);
+    const result = (target: string) => report.results.find((entry) => entry.target === target) as { status: string; title?: string; pieces?: Array<{ target: string; quote: string; verified: boolean }> };
+    assert.equal(report.passed, false);
+    assert.equal(result('okf:/_premises/prix.md').status, 'passed');
+    assert.equal(result('okf:/_premises/prix.md').title, 'Prix');
+    assert.deepEqual(result('okf:/_premises/prix.md').pieces?.map((piece) => [piece.target, piece.quote, piece.verified]), [[encodeURI('../../../Pièces/Contrat.pdf'), 'Le prix est de 1 000 euros.', true]]);
+    assert.deepEqual(read, [path.join(home, 'Pièces/Contrat.pdf')]);
+    assert.equal(result('okf:/_premises/delai.md').status, 'missing');
+    assert.equal(result('okf:/_premises/absente.md').status, 'failed');
   } finally { await rm(home, { recursive: true, force: true }); }
 });

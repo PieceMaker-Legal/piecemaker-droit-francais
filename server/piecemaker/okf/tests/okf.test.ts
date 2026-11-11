@@ -9,8 +9,9 @@ import { REVIEW_FOLDER } from '../../../../plugins/piecemaker-tabular-review/src
 import type { SourceDocument, SourceParty } from '../build.js';
 import { buildBundle, datesIn } from '../build.js';
 import { bundleRoot, conceptFile, parseConcept, readBundle, relationsOf } from '../bundle.js';
-import { factsFromReviews } from '../reviews.js';
-import type { ReviewFact } from '../reviews.js';
+import { graphGaps, premiseEvidence } from '../premises.js';
+import { premisesFromReviews } from '../reviews.js';
+import type { ReviewPremise } from '../reviews.js';
 import { addLink, removeLink } from '../links.js';
 import { contradictions, verifyBundle } from '../verify.js';
 
@@ -45,7 +46,7 @@ function dossier(): { projectPath: string; documents: SourceDocument[]; markdown
 const concept = (projectPath: string, resource: string) => parseConcept(fs.readFileSync(conceptFile(projectPath, `/${resource}.md`), 'utf8'));
 const resources = Object.keys(MARKDOWN);
 const PERSON_ID = `/_parties/${PERSON}.md`;
-const RESILIATION_ID = '/_faits/montant-de-la-facture.md';
+const RESILIATION_ID = '/_premises/montant-de-la-facture.md';
 
 test('datesIn reconnaît les dates françaises écrites et chiffrées', () => {
   assert.deepEqual(datesIn('le 1er août 2020 puis le 12/03/2021').map((entry) => entry.date), ['2020-08-01', '2021-03-12']);
@@ -115,15 +116,15 @@ test('la vérification signale types, cibles, citations et documents sans fiche'
   fs.writeFileSync(letterFile, fs.readFileSync(letterFile, 'utf8')
     .replace('Nous faisons suite au contrat', 'Nous faisons référence au contrat')
     .replace('relations:', `relations:\n  annule:\n    - target: /Pièces/Absent.pdf.md\n      citation: Il est résilié.\n      origin: piecemaker/agent`));
-  fs.writeFileSync(path.join(projectPath, 'Pièces', 'Facture.pdf'), '');
+  fs.writeFileSync(path.join(projectPath, 'Pièces', 'Premiseure.pdf'), '');
 
-  const errors = verifyBundle({ projectPath, resources: [...resources, 'Pièces/Facture.pdf'], markdownOf }).map((entry) => `${entry.fiche} | ${entry.erreur}`);
+  const errors = verifyBundle({ projectPath, resources: [...resources, 'Pièces/Premiseure.pdf'], markdownOf }).map((entry) => `${entry.fiche} | ${entry.erreur}`);
   assert.deepEqual(errors, [
     '/Hors classement.pdf.md | type « Non classé » hors arborescence (Pièces, Projets)',
     `/${LETTER}.md | relation inconnue : annule (amends, responds-to, refers-to, supersedes, states, mentions)`,
     `/${LETTER}.md | annule → /Pièces/Absent.pdf.md : cible absente du dossier`,
     `/${LETTER}.md | refers-to → /${CONTRACT}.md : citation introuvable dans le document`,
-    '/Pièces/Facture.pdf.md | document sans fiche : relancer l\'analyse du dossier',
+    '/Pièces/Premiseure.pdf.md | document sans fiche : relancer l\'analyse du dossier',
   ]);
   assert.equal(readBundle(projectPath).length, 4);
 });
@@ -147,17 +148,17 @@ test('les parties viennent de la liste du dossier, seules les parties listées s
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
-test('un fait lié à une pièce crée sa fiche, garde la valeur et survit à la reconstruction', () => {
+test('une prémisse liée à une pièce crée sa fiche, garde la valeur et survit à la reconstruction', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Phrase absente.' }, markdownOf), /citation introuvable/);
   assert.equal(fs.existsSync(conceptFile(projectPath, RESILIATION_ID)), false);
 
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '  1 200   euros ', single: true }, markdownOf);
-  const fact = parseConcept(fs.readFileSync(conceptFile(projectPath, RESILIATION_ID), 'utf8'));
-  assert.equal(fact.frontmatter.type, 'Fait');
-  assert.equal(fact.frontmatter.title, 'Montant de la facture');
-  assert.equal(fact.frontmatter.single_value, true);
+  const premise = parseConcept(fs.readFileSync(conceptFile(projectPath, RESILIATION_ID), 'utf8'));
+  assert.equal(premise.frontmatter.type, 'Premise');
+  assert.equal(premise.frontmatter.title, 'Montant de la facture');
+  assert.equal(premise.frontmatter.single_value, true);
 
   buildBundle({ projectPath, documents, markdownOf, now: '2026-02-02T00:00:00.000Z' });
   assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: RESILIATION_ID, citation: 'Nous contestons la facture.', origin: 'piecemaker/agent', value: '1 200 euros' }]);
@@ -176,7 +177,7 @@ test('mentions ne peut pas être posé à la main', () => {
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'mentions', target: PERSON, citation: 'Nous contestons la facture.' }, markdownOf), /posé par l'analyse/);
 });
 
-test('involves relie un fait à une partie sans citation', () => {
+test('involves relie une prémisse à une partie sans citation', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf, parties: [{ code: PERSON, side: 'client' }] });
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf);
@@ -198,32 +199,32 @@ test('supersedes relie deux pièces comme amends', () => {
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
-test('une colonne de revue devient un fait lié à la pièce citée, un lien écarté ne revient pas', () => {
+test('une colonne de revue devient une prémisse liée à la pièce citée, un lien écarté ne revient pas', () => {
   const { projectPath, documents, markdownOf } = dossier();
-  const reviewFacts: ReviewFact[] = [
-    { id: '/_faits/statut-du-contrat.md', title: 'Statut du contrat', description: 'Le contrat est-il résilié ?', single: true, statements: [{ candidates: [LETTER], quote: 'Il est résilié.', value: 'résilié' }] },
-    { id: '/_faits/validite-du-contrat.md', title: 'Validité du contrat', description: 'Le contrat est-il valable ?', single: false, statements: [{ candidates: ['Projets/Absent.docx'], quote: 'Le contrat de prestation du 12 mars 2021 est nul.', value: 'nul' }] },
+  const reviewPremises: ReviewPremise[] = [
+    { id: '/_premises/statut-du-contrat.md', title: 'Statut du contrat', description: 'Le contrat est-il résilié ?', single: true, statements: [{ candidates: [LETTER], quote: 'Il est résilié.', value: 'résilié' }] },
+    { id: '/_premises/validite-du-contrat.md', title: 'Validité du contrat', description: 'Le contrat est-il valable ?', single: false, statements: [{ candidates: ['Projets/Absent.docx'], quote: 'Le contrat de prestation du 12 mars 2021 est nul.', value: 'nul' }] },
   ];
-  buildBundle({ projectPath, documents, markdownOf, reviewFacts, now: NOW });
+  buildBundle({ projectPath, documents, markdownOf, reviewPremises, now: NOW });
 
-  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: '/_faits/statut-du-contrat.md', citation: 'Il est résilié.', origin: 'piecemaker/tabular-review', value: 'résilié' }]);
-  assert.deepEqual(relationsOf(concept(projectPath, DRAFT).frontmatter).states, [{ target: '/_faits/validite-du-contrat.md', citation: 'Le contrat de prestation du 12 mars 2021 est nul.', origin: 'piecemaker/tabular-review', value: 'nul' }]);
-  const fact = parseConcept(fs.readFileSync(conceptFile(projectPath, '/_faits/statut-du-contrat.md'), 'utf8'));
-  assert.equal(fact.frontmatter.single_value, true);
-  assert.deepEqual(fact.frontmatter.generated, { by: 'piecemaker/tabular-review', at: NOW });
-  assert.equal(parseConcept(fs.readFileSync(conceptFile(projectPath, '/_faits/validite-du-contrat.md'), 'utf8')).frontmatter.single_value, undefined);
+  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: '/_premises/statut-du-contrat.md', citation: 'Il est résilié.', origin: 'piecemaker/tabular-review', value: 'résilié' }]);
+  assert.deepEqual(relationsOf(concept(projectPath, DRAFT).frontmatter).states, [{ target: '/_premises/validite-du-contrat.md', citation: 'Le contrat de prestation du 12 mars 2021 est nul.', origin: 'piecemaker/tabular-review', value: 'nul' }]);
+  const premise = parseConcept(fs.readFileSync(conceptFile(projectPath, '/_premises/statut-du-contrat.md'), 'utf8'));
+  assert.equal(premise.frontmatter.single_value, true);
+  assert.deepEqual(premise.frontmatter.generated, { by: 'piecemaker/tabular-review', at: NOW });
+  assert.equal(parseConcept(fs.readFileSync(conceptFile(projectPath, '/_premises/validite-du-contrat.md'), 'utf8')).frontmatter.single_value, undefined);
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 
-  removeLink(projectPath, { source: LETTER, relation: 'states', target: '/_faits/statut-du-contrat.md' });
-  buildBundle({ projectPath, documents, markdownOf, reviewFacts });
+  removeLink(projectPath, { source: LETTER, relation: 'states', target: '/_premises/statut-du-contrat.md' });
+  buildBundle({ projectPath, documents, markdownOf, reviewPremises });
   const states = relationsOf(concept(projectPath, LETTER).frontmatter).states;
   assert.equal(states.length, 1);
   assert.equal(states[0].dismissed, true);
-  assert.equal(fs.existsSync(conceptFile(projectPath, '/_faits/statut-du-contrat.md')), true);
+  assert.equal(fs.existsSync(conceptFile(projectPath, '/_premises/statut-du-contrat.md')), true);
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
-test('contradictions signale un fait à valeur unique écrit avec deux valeurs distinctes', () => {
+test('contradictions signale une prémisse à valeur unique écrite avec deux valeurs distinctes', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
   addLink(projectPath, { source: CONTRACT, relation: 'states', target: 'Prix du contrat', citation: MARKDOWN[CONTRACT], value: '5 000 euros', single: true }, markdownOf);
@@ -234,7 +235,7 @@ test('contradictions signale un fait à valeur unique écrit avec deux valeurs d
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Objet de la lettre', citation: 'Nous contestons la facture.', value: 'facture' }, markdownOf);
 
   assert.deepEqual(contradictions(projectPath), [{
-    fait: '/_faits/prix-du-contrat.md',
+    premise: '/_premises/prix-du-contrat.md',
     titre: 'Prix du contrat',
     valeurs: [
       { piece: `/${CONTRACT}.md`, valeur: '5 000 euros' },
@@ -243,7 +244,7 @@ test('contradictions signale un fait à valeur unique écrit avec deux valeurs d
   }]);
 });
 
-test('factsFromReviews lit les colonnes de fait des revues JSON du dossier', () => {
+test('premisesFromReviews lit les colonnes de prémisse des revues JSON du dossier', () => {
   const { projectPath, documents, markdownOf } = dossier();
   const folder = path.join(projectPath, REVIEW_FOLDER);
   fs.mkdirSync(folder, { recursive: true });
@@ -258,8 +259,8 @@ test('factsFromReviews lit les colonnes de fait des revues JSON du dossier', () 
     model: 'modele-test',
     concurrency: 1,
     columns: [
-      { index: 0, name: 'Statut du contrat', prompt: 'Le contrat est-il résilié ?', format: 'text', fact: 'single' },
-      { index: 1, name: 'Ton du courrier', prompt: 'Quel ton ?', format: 'text', fact: 'checkpoint' },
+      { index: 0, name: 'Statut du contrat', prompt: 'Le contrat est-il résilié ?', format: 'text', premise: 'single' },
+      { index: 1, name: 'Ton du courrier', prompt: 'Quel ton ?', format: 'text', premise: 'checkpoint' },
       { index: 2, name: 'Note libre', prompt: 'Note', format: 'text' },
     ],
     rows: [{ id: 'row-1', label: 'Courrier', documents: [], status: 'done', piece: LETTER }],
@@ -274,15 +275,69 @@ test('factsFromReviews lit les colonnes de fait des revues JSON du dossier', () 
   fs.writeFileSync(path.join(folder, 'bruit.json'), '{}');
   fs.writeFileSync(path.join(folder, 'notes.txt'), 'texte');
 
-  const facts = factsFromReviews(projectPath);
-  assert.deepEqual(facts.map((fact) => [fact.id, fact.single, fact.statements.length]), [
-    ['/_faits/statut-du-contrat.md', true, 1],
-    ['/_faits/ton-du-courrier.md', false, 0],
+  const premises = premisesFromReviews(projectPath);
+  assert.deepEqual(premises.map((premise) => [premise.id, premise.single, premise.statements.length]), [
+    ['/_premises/statut-du-contrat.md', true, 1],
+    ['/_premises/ton-du-courrier.md', false, 0],
   ]);
-  assert.deepEqual(facts[0].statements, [{ candidates: [LETTER], quote: 'Il est résilié.', value: 'résilié' }]);
+  assert.deepEqual(premises[0].statements, [{ candidates: [LETTER], quote: 'Il est résilié.', value: 'résilié' }]);
 
-  buildBundle({ projectPath, documents, markdownOf, reviewFacts: facts, now: NOW });
-  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: '/_faits/statut-du-contrat.md', citation: 'Il est résilié.', origin: 'piecemaker/tabular-review', value: 'résilié' }]);
-  assert.equal(fs.existsSync(conceptFile(projectPath, '/_faits/ton-du-courrier.md')), true);
+  buildBundle({ projectPath, documents, markdownOf, reviewPremises: premises, now: NOW });
+  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: '/_premises/statut-du-contrat.md', citation: 'Il est résilié.', origin: 'piecemaker/tabular-review', value: 'résilié' }]);
+  assert.equal(fs.existsSync(conceptFile(projectPath, '/_premises/ton-du-courrier.md')), true);
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
+});
+
+test('un index antérieur sous /_faits/ est migré vers /_premises/', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  buildBundle({ projectPath, documents, markdownOf });
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf);
+  const legacy = '/_faits/montant-de-la-facture.md';
+  const letterFile = conceptFile(projectPath, `/${LETTER}.md`);
+  fs.writeFileSync(letterFile, fs.readFileSync(letterFile, 'utf8').replace(RESILIATION_ID, legacy));
+  fs.mkdirSync(path.dirname(conceptFile(projectPath, legacy)), { recursive: true });
+  fs.writeFileSync(conceptFile(projectPath, legacy), fs.readFileSync(conceptFile(projectPath, RESILIATION_ID), 'utf8').replace('type: Premise', 'type: Fait'));
+  fs.rmSync(conceptFile(projectPath, RESILIATION_ID));
+
+  buildBundle({ projectPath, documents, markdownOf });
+  assert.equal(relationsOf(concept(projectPath, LETTER).frontmatter).states?.[0].target, RESILIATION_ID);
+  assert.equal(parseConcept(fs.readFileSync(conceptFile(projectPath, RESILIATION_ID), 'utf8')).frontmatter.type, 'Premise');
+  assert.equal(fs.existsSync(conceptFile(projectPath, legacy)), false);
+  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
+});
+
+test('premiseEvidence donne les pièces citées d’une prémisse', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  buildBundle({ projectPath, documents, markdownOf });
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros' }, markdownOf);
+  assert.deepEqual(premiseEvidence(projectPath, `okf:${RESILIATION_ID}`), { id: RESILIATION_ID, title: 'Montant de la facture', pieces: [{ resource: LETTER, title: 'Courrier.pdf', citation: 'Nous contestons la facture.', value: '1 200 euros' }] });
+  assert.equal(premiseEvidence(projectPath, 'okf:/_faits/montant-de-la-facture.md')?.id, RESILIATION_ID);
+  assert.equal(premiseEvidence(projectPath, 'okf:/_premises/inconnue.md'), null);
+});
+
+test('graphGaps liste les éléments manquants du graphe', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  const parties: SourceParty[] = [{ code: PERSON, side: 'client' }, { code: COMPANY, side: 'adversaire' }];
+  const build = () => buildBundle({ projectPath, documents: documents.map((document) => ({ ...document, parties: document.parties.filter((party) => party.code === PERSON) })), markdownOf, parties });
+  build();
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', single: true }, markdownOf);
+  build();
+  const program = path.join(projectPath, '.piecemaker', 'catala', 'demo');
+  fs.mkdirSync(program, { recursive: true });
+  const doc = (title: string, source: string) => `#[doc=${JSON.stringify(`titre: ${title}\nsource: ${source}`)}]`;
+  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Prémisse absente', 'okf:/_premises/inconnue.md'), 'définition a égal à vrai', doc('Pièce directe', 'Pièces/Contrat.pdf'), 'définition b égal à vrai', '```', ''].join('\n'));
+
+  const gaps = graphGaps(projectPath).map((gap) => `${gap.element} | ${gap.manque}`);
+  assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse à valeur unique sans valeur`));
+  assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse sans partie concernée (involves)`));
+  assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse citée par aucun programme Catala`));
+  assert.ok(gaps.includes(`/_parties/${COMPANY}.md | partie sans mention dans une pièce ni prémisse qui la concerne`));
+  assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| #\[doc\] cite une prémisse absente de l'index : \/_premises\/inconnue\.md/.test(gap)));
+  assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| #\[doc\] cite une pièce directement \(Pièces\/Contrat\.pdf\)/.test(gap)));
+  assert.equal(gaps.some((gap) => gap.startsWith(`/${LETTER}.md`)), false);
+
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros', single: true }, markdownOf);
+  addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf);
+  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à vrai', '```', ''].join('\n'));
+  assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element === RESILIATION_ID || gap.element.includes('catala')), []);
 });

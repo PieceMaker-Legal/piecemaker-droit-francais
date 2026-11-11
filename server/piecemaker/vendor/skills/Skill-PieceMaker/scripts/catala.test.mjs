@@ -443,6 +443,8 @@ test('verifier requires doc, a nonempty quote and a title, in any language', asy
       ['#[doc="Source : référence fictive.\\nquote: « Passage exact. »"]\n', 'titre manquant'],
       ['#[doc="titre: Amount claimed\\nsource: ../../../pieces/contrat-fictif.md\\nquote: « Passage exact. »"]\n', null],
       ['#[doc="titre: Vérifier le montant de la prime\\nsource: https://example.org/texte-fictif\\nquote: « Passage exact. »"]\n', null],
+      ['#[doc="titre: Montant de la prime\\nsource: okf:/_premises/montant-de-la-prime.md"]\n', null],
+      ['#[doc="source: okf:/_premises/montant-de-la-prime.md"]\n', 'titre manquant'],
     ];
     for (const [annotation, message] of cases) {
       fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\nCitation : « Une citation extérieure ne suffit pas. »\n\n```catala\nchamp d\'application Prime:\n' + annotation + 'définition montant égal à 10 €\n```\n');

@@ -35,7 +35,7 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
   const text = sections.map((section) => section.lines.join('\n').trim()).filter(Boolean).join('\n\n');
   const references: Array<{ label: string; target: string; kind: string }> = [];
   const add = (label: string, target: string, kind?: string) => {
-    const category = kind ?? (/\bjurisprudence\b|\barrêt\b|\/(?:juri|ceta|cons)\/id\/|courdecassation\.fr\/decision\//i.test(label + ' ' + target) ? 'jurisprudence' : /^pièce\b|\.(?:pdf|docx?)(?:[?#]|$)/i.test(label + ' ' + target) ? 'piece' : /legifrance\.gouv\.fr|\barticle\b/i.test(target + ' ' + label) ? 'article' : /^[a-z][\w+.-]*:/i.test(target) ? 'reference' : 'piece');
+    const category = kind ?? (/^okf:/i.test(target) ? 'premise' : /\bjurisprudence\b|\barrêt\b|\/(?:juri|ceta|cons)\/id\/|courdecassation\.fr\/decision\//i.test(label + ' ' + target) ? 'jurisprudence' : /^pièce\b|\.(?:pdf|docx?)(?:[?#]|$)/i.test(label + ' ' + target) ? 'piece' : /legifrance\.gouv\.fr|\barticle\b/i.test(target + ' ' + label) ? 'article' : /^[a-z][\w+.-]*:/i.test(target) ? 'reference' : 'piece');
     if (!references.some((entry) => entry.label === label && entry.target === target)) references.push({ label, target, kind: category });
   };
   const definitions = new Map([...file.contenu.matchAll(/^\s{0,3}\[([^\]]+)\]:\s*<?([^\s>]+)>?/gm)].map((match) => [match[1].toLowerCase(), match[2]]));

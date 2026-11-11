@@ -4,7 +4,7 @@ import type { MarkdownOf } from './build.js';
 import {
   AGENT_ACTOR,
   DERIVED_ACTORS,
-  FACT_TYPE,
+  PREMISE_TYPE,
   INVOLVES,
   MENTIONS,
   PARTY_TYPE,
@@ -12,8 +12,8 @@ import {
   STATES,
   conceptFile,
   conceptId,
-  factId,
-  isFactId,
+  premiseId,
+  isPremiseId,
   isPartyId,
   parseConcept,
   partyId,
@@ -45,7 +45,7 @@ function documentId(resource: unknown, role: string): string {
 
 function loadDocument(projectPath: string, id: string, role: string) {
   const concept = load(projectPath, id, role);
-  if ([FACT_TYPE, PARTY_TYPE].includes(text(concept.frontmatter.type))) throw new TypeError(`${role} : ${concept.id} n'est pas un document.`);
+  if ([PREMISE_TYPE, PARTY_TYPE].includes(text(concept.frontmatter.type))) throw new TypeError(`${role} : ${concept.id} n'est pas un document.`);
   return concept;
 }
 
@@ -57,8 +57,8 @@ function relationName(value: unknown): string {
 }
 
 function endpoints(name: string, input: LinkInput): { source: string; target: string } {
-  if (name === INVOLVES) return { source: factId(text(input.source)), target: partyId(text(input.target)) };
-  return { source: documentId(input.source, 'source'), target: name === STATES ? factId(text(input.target)) : documentId(input.target, 'cible') };
+  if (name === INVOLVES) return { source: premiseId(text(input.source)), target: partyId(text(input.target)) };
+  return { source: documentId(input.source, 'source'), target: name === STATES ? premiseId(text(input.target)) : documentId(input.target, 'cible') };
 }
 
 function save(concept: { filePath: string; frontmatter: Record<string, unknown>; body: string }, relations: ReturnType<typeof relationsOf>): void {
@@ -88,14 +88,14 @@ export function addLink(projectPath: string, input: LinkInput, markdownOf: Markd
     }
   }
   if (name === STATES) {
-    const factFile = conceptFile(projectPath, ids.target);
+    const premiseFile = conceptFile(projectPath, ids.target);
     const title = text(input.target);
-    if (!fs.existsSync(factFile)) {
-      if (isFactId(title)) throw new TypeError(`cible : aucune fiche ${title}. Donner le titre du fait pour le créer.`);
-      writeIfChanged(factFile, serializeConcept({ type: FACT_TYPE, title, description: title, ...(input.single === true ? { single_value: true } : {}), generated: { by: origin, at: now } }, ''));
+    if (!fs.existsSync(premiseFile)) {
+      if (isPremiseId(title)) throw new TypeError(`cible : aucune fiche ${title}. Donner le titre de la prémisse pour la créer.`);
+      writeIfChanged(premiseFile, serializeConcept({ type: PREMISE_TYPE, title, description: title, ...(input.single === true ? { single_value: true } : {}), generated: { by: origin, at: now } }, ''));
     } else if (input.single === true) {
-      const fact = load(projectPath, ids.target, 'cible');
-      fs.writeFileSync(factFile, serializeConcept({ ...fact.frontmatter, single_value: true }, fact.body));
+      const premise = load(projectPath, ids.target, 'cible');
+      fs.writeFileSync(premiseFile, serializeConcept({ ...premise.frontmatter, single_value: true }, premise.body));
     }
   }
 

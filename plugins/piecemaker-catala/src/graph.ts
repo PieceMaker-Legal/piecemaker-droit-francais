@@ -5,7 +5,7 @@ import { nativeExecution, type NativeOrigin, type NativeProvenance } from './nat
 import { applicationMarkup, conditionApplication } from './condition-application.js';
 
 type File = { nom: string; chemin: string; contenu?: string };
-type Citation = { origin: string; target: string; quote: string; status: string; title?: string; id?: string };
+type Citation = { origin: string; target: string; quote: string; status: string; title?: string; id?: string; pieces?: Array<{ target: string; quote: string; status: string; title?: string }> };
 export type Source = { label: string; target: string; kind: string; origin: string; quote: string; status: string; title?: string; id?: string };
 export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: string; refs: string[]; members: Clause[]; met: string };
 type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
@@ -141,6 +141,12 @@ function citationOf(sources: Citation[], origin: string, target: string, quote: 
   return sources.find((entry) => entry.origin === origin && entry.target === target && entry.quote === quote);
 }
 
+function citedSources(entry: Omit<Source, 'status'>, citations: Citation[]): Source[] {
+  const cited = citationOf(citations, entry.origin, entry.target, entry.quote);
+  if (entry.kind === 'premise' && cited?.pieces?.length) return cited.pieces.map((piece) => ({ label: piece.title ?? entry.label, target: piece.target, kind: 'piece', origin: entry.origin, quote: piece.quote, status: piece.status, ...(piece.title ? { title: piece.title } : {}) }));
+  return [{ ...entry, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}) }];
+}
+
 const emptyNotes = (): Notes => ({ question: '', justification: '', recherche: '', demarches: [] });
 
 function documentSources(file: File, citations: Citation[], linked: Map<string, Source[]>, notes: Map<string, Notes>) {
@@ -153,10 +159,7 @@ function documentSources(file: File, citations: Citation[], linked: Map<string, 
   let blockStart = 0;
   const found = (text: string) => sourceContext('https://catala.local/section.md', [{ nom: 'section.md', chemin: file.chemin, contenu: text }], true).references
     .filter((entry) => entry.target)
-    .map((entry) => {
-      const cited = citationOf(citations, file.chemin, entry.target, entry.quote);
-      return { label: entry.label, target: entry.target, kind: entry.kind, origin: file.chemin, quote: entry.quote, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}) };
-    });
+    .flatMap((entry) => citedSources({ label: entry.label, target: entry.target, kind: entry.kind, origin: file.chemin, quote: entry.quote }, citations));
   const commit = () => {
     const text = lines.join('\n');
     lines = [];
@@ -277,12 +280,11 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
       selected = activeFiles.filter((file) => url.protocol === 'file:' ? file.chemin.replaceAll('\\', '/') === pathname : pathname.endsWith(`/${file.nom.replaceAll('\\', '/')}`));
     } catch { return []; }
     if (selected.length !== 1) return [];
-    return sourceContext(source, selected).references.filter((entry) => entry.target).map((entry) => {
-      const cited = citationOf(citations, entry.origin, entry.target, entry.quote);
+    return sourceContext(source, selected).references.filter((entry) => entry.target).flatMap((entry) => {
       const authored = authoredSources.find((item) => item.target === entry.target && item.label !== item.target);
       const id = entry.target.match(/(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+/)?.[0];
       const label = authored?.label ?? (id ? articleNames.get(id) : undefined) ?? entry.label;
-      return { ...entry, label, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}) };
+      return citedSources({ ...entry, label }, citations);
     });
   };
   const documentation = new Map(files.map((file) => [file.chemin, catalaDocumentation(file.contenu ?? '').entries.filter((entry) => entry.hasDoc)]));
@@ -345,7 +347,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   const used = new Set<string>();
   for (const step of steps.values()) {
     step.sources = unique([...step.origins.filter((origin) => origin.selected).flatMap((origin) => origin.sources), ...located(nodes.get(step.id)!.source), ...(step.name ? linked.get(key(step.name)) ?? [] : [])]);
-    if (step.kind === 'rule' && !step.answer && !step.expression && !step.parents.length && step.sources.some((source) => source.kind === 'piece') && !step.sources.some(legal)) step.kind = 'fact';
+    if (step.kind === 'rule' && !step.answer && !step.expression && !step.parents.length && step.sources.some((source) => source.kind === 'piece' || source.kind === 'premise') && !step.sources.some(legal)) step.kind = 'fact';
     step.sources.forEach((source) => used.add(identity(source)));
     step.origins.flatMap((origin) => origin.sources).forEach((source) => used.add(identity(source)));
   }
@@ -396,6 +398,7 @@ const label = (clause: Clause) => {
 };
 const sourceName = (source: Source) => {
   if (source.kind === 'piece' && source.title && !/\.[a-z0-9]{2,5}$/i.test(source.title)) return { main: source.title, note: '' };
+  if (source.kind === 'premise') return { main: source.title || 'Prémisse absente de l’index', note: '' };
   if (source.kind === 'piece' || source.kind === 'origin') {
     let filename = source.target.replaceAll('\\', '/').split(/[?#]/)[0].split('/').pop() || 'Document';
     try { filename = decodeURIComponent(filename); } catch {}

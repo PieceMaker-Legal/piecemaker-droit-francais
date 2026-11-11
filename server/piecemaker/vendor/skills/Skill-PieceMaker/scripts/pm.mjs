@@ -17,7 +17,7 @@ const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lan
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verify', 'link', 'unlink'];
+const OKF_COMMANDS = ['verify', 'verify-graph', 'link', 'unlink'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single']);
@@ -71,15 +71,19 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   okf verify
       index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
       reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
-      et les contradictions (un fait à valeur unique, plusieurs valeurs selon les pièces)
+      et les contradictions (une prémisse à valeur unique, plusieurs valeurs selon les pièces)
+  okf verify-graph
+      verify, plus les éléments manquants du graphe : pièce sans prémisse ni lien, prémisse sans pièce,
+      sans valeur ou sans partie, partie isolée, #[doc] Catala citant une prémisse absente ou une pièce
+      directement, prémisse citée par aucun programme Catala
   okf link <source> <relation> <target> --citation "phrase du document source"
       entre documents : amends | responds-to | refers-to | supersedes ; source et cible : chemins ;
       la citation doit figurer mot pour mot dans le document source
-  okf link <pièce> states "<titre du fait>" --citation "phrase de la pièce" [--value "valeur"] [--single]
-      la pièce établit un fait ; la fiche du fait est créée si elle manque ;
-      --single : le fait n'a qu'une valeur, un écart entre pièces est une contradiction
-  okf link "<titre du fait>" involves <CODE_PARTIE>
-      le fait concerne une partie du dossier ; pas de citation
+  okf link <pièce> states "<titre de la prémisse>" --citation "phrase de la pièce" [--value "valeur"] [--single]
+      la pièce établit une prémisse (fait, ou clause d'un contrat) ; sa fiche Premise est créée si elle manque ;
+      --single : la prémisse n'a qu'une valeur, un écart entre pièces est une contradiction
+  okf link "<titre de la prémisse>" involves <CODE_PARTIE>
+      la prémisse concerne une partie du dossier ; pas de citation
   okf unlink <source> <relation> <target>
 
   catala verifier --au AAAA-MM-JJ [--programme NOM]
@@ -583,13 +587,15 @@ async function okf(api, positional, flags, resolved) {
   const action = positional[1];
   if (!OKF_COMMANDS.includes(action)) usage(`okf attend ${OKF_COMMANDS.join(', ')}.`);
   const folder = path.resolve(resolved);
-  if (action === 'verify') {
-    const { erreurs, contradictions = [] } = await api.okfFn({ action, folder });
+  if (action === 'verify' || action === 'verify-graph') {
+    const { erreurs, contradictions = [], manques } = await api.okfFn({ action, folder });
     return [
       erreurs.length ? `Index OKF : ${erreurs.length} erreur(s).` : 'Index OKF : aucune erreur.',
       ...erreurs.map((entry) => `- ${entry.fiche} : ${entry.erreur}`),
       ...(contradictions.length ? [`Contradictions : ${contradictions.length}.`] : []),
       ...contradictions.map((entry) => `- ${entry.titre} : ${entry.valeurs.map((item) => `${item.piece} → ${item.valeur}`).join(' ; ')}`),
+      ...(manques ? [manques.length ? `Graphe : ${manques.length} élément(s) manquant(s).` : 'Graphe : aucun élément manquant.'] : []),
+      ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}`),
     ].join('\n');
   }
   const [source, relation, target] = positional.slice(2);

@@ -10,7 +10,8 @@ import { buildBundle, documentsFromSnapshot, partiesFromSnapshot } from './build
 import { LAWYER_ACTOR, readBundle, readGraphTypes, readTypes, relationsOf, resourceOf, text } from './bundle.js';
 import type { LinkInput } from './links.js';
 import { addLink, removeLink } from './links.js';
-import { factsFromReviews } from './reviews.js';
+import { graphGaps } from './premises.js';
+import { premisesFromReviews } from './reviews.js';
 import { contradictions, verifyBundle } from './verify.js';
 
 type OkfOptions = {
@@ -35,7 +36,7 @@ export function createOkfBackend(options: OkfOptions) {
   const build = (projectId: string, renamed?: Renamed) => {
     const projectPath = projectPathOf(projectId);
     const snapshot = options.snapshot(projectId);
-    return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, snapshot), parties: partiesFromSnapshot(snapshot), reviewFacts: factsFromReviews(projectPath), markdownOf: markdownOf(projectPath), renamed });
+    return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, snapshot), parties: partiesFromSnapshot(snapshot), reviewPremises: premisesFromReviews(projectPath), markdownOf: markdownOf(projectPath), renamed });
   };
 
   const verify = async (projectId: string) => {
@@ -44,6 +45,8 @@ export function createOkfBackend(options: OkfOptions) {
     const resources = (await options.listDocuments(projectPath)).map((filePath) => resourceOf(projectPath, filePath));
     return { erreurs: verifyBundle({ projectPath, resources, markdownOf: markdownOf(projectPath) }), contradictions: contradictions(projectPath) };
   };
+
+  const verifyGraph = async (projectId: string) => ({ ...await verify(projectId), manques: graphGaps(projectPathOf(projectId)) });
 
   const read = (projectId: string) => {
     build(projectId);
@@ -94,7 +97,7 @@ export function createOkfBackend(options: OkfOptions) {
   router.post('/okf/link', express.json(), (request, response) => respond(() => link(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
   router.post('/okf/unlink', express.json(), (request, response) => respond(() => unlink(String(request.body?.projectId || ''), request.body), response));
 
-  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, link: (projectId, body) => link(projectId, body), unlink };
+  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, 'verify-graph': verifyGraph, read, link: (projectId, body) => link(projectId, body), unlink };
   const localRouter = express.Router();
   localRouter.post('/okf', express.json(), (request, response) => {
     if (!options.isLoopback(request)) {
@@ -110,5 +113,5 @@ export function createOkfBackend(options: OkfOptions) {
     }, response);
   });
 
-  return { build, verify, read, link, unlink, router, localRouter };
+  return { build, verify, verifyGraph, read, link, unlink, router, localRouter };
 }

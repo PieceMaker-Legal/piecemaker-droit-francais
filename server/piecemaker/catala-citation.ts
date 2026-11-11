@@ -7,11 +7,12 @@ import { sourceContext } from '../../shared/piecemaker/catala-sources.js';
 
 import type { createCitationStore } from './harness/citation-store.js';
 import { locateSourcePassages } from './harness/source-passages.js';
+import { premiseEvidence } from './okf/premises.js';
 
 export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
-  const inspect = async (cwd: string, id: string, quote: string, content: string) => {
+  const inspect = async (cwd: string, id: string, quote: string, content?: string) => {
     if (!/^(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) && !/^[0-9a-f]{24}$/i.test(id) && !path.isAbsolute(id)) throw new Error('Source absente du programme Catala.');
-    if (quote && !content.includes(quote) && !sourceContext('https://catala.local/source.catala_fr', [{ nom: 'source.catala_fr', chemin: '/source.catala_fr', contenu: content }], true).text.replace(/^>\s?/gm, '').includes(quote)) throw new Error('Citation absente du programme Catala.');
+    if (content !== undefined && quote && !content.includes(quote) && !sourceContext('https://catala.local/source.catala_fr', [{ nom: 'source.catala_fr', chemin: '/source.catala_fr', contenu: content }], true).text.replace(/^>\s?/gm, '').includes(quote)) throw new Error('Citation absente du programme Catala.');
     const info = await connectors.source(cwd, id);
     if (!info) throw new Error(path.isAbsolute(id) ? 'Pièce ou texte converti indisponible dans le dossier.' : 'Texte officiel indisponible.');
     const verified = Boolean(quote && connectors.match(info.text, quote));
@@ -23,7 +24,7 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
   const entries = (files: Array<{ nom: string; chemin: string; contenu: string }>) => files.flatMap((file) => {
     const found = new Map<string, { target: string; quote: string; origin: string; label: string; kind: string }>();
     const contexts = [sourceContext(`https://catala.local/${encodeURIComponent(path.basename(file.nom))}`, [file], true), ...file.contenu.split('\n').map((_, index) => sourceContext(`https://catala.local/${encodeURIComponent(path.basename(file.nom))}#L${index + 1}`, [file]))];
-    for (const context of contexts) for (const ref of context.references) if (['article', 'piece', 'jurisprudence'].includes(ref.kind)) found.set(JSON.stringify([ref.target || ref.label, ref.quote]), ref);
+    for (const context of contexts) for (const ref of context.references) if (['article', 'piece', 'jurisprudence', 'premise'].includes(ref.kind)) found.set(JSON.stringify([ref.target || ref.label, ref.quote]), ref);
     return [...found.values()];
   });
   return {
@@ -36,6 +37,19 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
       for (const ref of entries(files)) {
         try {
           if (!ref.target) { results.push({ ...ref, verified: false, status: 'missing', message: 'Lien de source absent.' }); continue; }
+          if (ref.kind === 'premise') {
+            const evidence = premiseEvidence(cwd, ref.target);
+            if (!evidence) { results.push({ ...ref, verified: false, status: 'failed', message: 'Prémisse absente de l’index du dossier.' }); continue; }
+            const pieces = [];
+            for (const piece of evidence.pieces) {
+              const id = path.join(cwd, piece.resource);
+              const located = { target: encodeURI(path.relative(path.dirname(ref.origin), id).split(path.sep).join('/')), quote: piece.citation, id };
+              try { pieces.push({ ...located, ...await inspect(cwd, id, piece.citation) }); } catch (error) { pieces.push({ ...located, title: piece.title, verified: false, status: 'failed', message: error instanceof Error ? error.message : String(error) }); }
+            }
+            const verified = pieces.length > 0 && pieces.every((piece) => piece.verified);
+            results.push({ ...ref, title: evidence.title, verified, status: verified ? 'passed' : pieces.length ? 'failed' : 'missing', message: verified ? 'Prémisse établie par des pièces citées.' : pieces.length ? 'Citation non retrouvée dans une pièce de la prémisse.' : 'Prémisse sans pièce citée.', pieces });
+            continue;
+          }
           let id: string;
           if (/^https?:/i.test(ref.target)) {
             const url = new URL(ref.target);

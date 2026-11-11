@@ -299,7 +299,7 @@ describe('citationListMarkup', () => {
 });
 
 describe('index OKF contradictions', () => {
-  const contradiction = { fait: '/Faits/Prix.md', titre: 'Prix', valeurs: [{ piece: 'Contrat', valeur: '1 000 €' }, { piece: 'Courrier', valeur: '1 200 €' }] };
+  const contradiction = { premise: '/_premises/Prix.md', titre: 'Prix', valeurs: [{ piece: 'Contrat', valeur: '1 000 €' }, { piece: 'Courrier', valeur: '1 200 €' }] };
 
   it('shows the contradictions between pieces in the chronology', () => {
     const html = chronologyView({ graph: snapshot }, '', undefined, { mode: 'table', errors: null, contradictions: [contradiction] });

@@ -21,7 +21,7 @@ export function catalaDocumentation(content) {
         previous = undefined;
         pendingLine ||= lineAt(token.index);
         const doc = decode(token[1]);
-        if (![...doc.matchAll(/^\s*quote\s*:\s*«([\s\S]*?)»/gim)].some((match) => match[1].trim())) errors.push({ line: lineAt(token.index), message: 'quote manquante ou vide dans #[doc]. Format attendu : quote: « passage exact ».' });
+        if (!/^\s*source\s*:\s*okf:/im.test(doc) && ![...doc.matchAll(/^\s*quote\s*:\s*«([\s\S]*?)»/gim)].some((match) => match[1].trim())) errors.push({ line: lineAt(token.index), message: 'quote manquante ou vide dans #[doc]. Format attendu : quote: « passage exact », ou source: okf:/_premises/<titre>.md pour un fait.' });
         pending.push(doc);
         continue;
       }

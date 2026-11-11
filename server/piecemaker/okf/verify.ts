@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import type { MarkdownOf } from './build.js';
 import {
-  FACT_TYPE,
+  PREMISE_TYPE,
   INVOLVES,
   MENTIONS,
   OKF_VERSION,
@@ -13,7 +13,7 @@ import {
   bundleRoot,
   conceptId,
   fold,
-  isFactId,
+  isPremiseId,
   isPartyId,
   parseConcept,
   readBundle,
@@ -26,7 +26,7 @@ import {
 } from './bundle.js';
 
 export type OkfError = { fiche: string; erreur: string };
-export type OkfContradiction = { fait: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
+export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
 
 export function quoted(markdown: string | null, citation: string): boolean {
   const needle = squash(citation.replace(/^…|…$/g, ''));
@@ -49,7 +49,7 @@ function indexErrors(projectPath: string, ids: string[]): OkfError[] {
   return errors;
 }
 
-const ALLOWED: Record<string, string[]> = { [FACT_TYPE]: [INVOLVES], [PARTY_TYPE]: [] };
+const ALLOWED: Record<string, string[]> = { [PREMISE_TYPE]: [INVOLVES], [PARTY_TYPE]: [] };
 const DOCUMENT_RELATIONS = [...RELATIONS, STATES, MENTIONS];
 
 export function verifyBundle(input: { projectPath: string; resources: string[]; markdownOf: MarkdownOf }): OkfError[] {
@@ -65,9 +65,9 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
     if (concept.error) { report(concept.error); continue; }
     const type = text(concept.frontmatter.type);
     const resource = text(concept.frontmatter.resource);
-    const reserved = isFactId(concept.id) ? FACT_TYPE : isPartyId(concept.id) ? PARTY_TYPE : '';
+    const reserved = isPremiseId(concept.id) ? PREMISE_TYPE : isPartyId(concept.id) ? PARTY_TYPE : '';
     if (!type) report('type absent');
-    else if (reserved || type === FACT_TYPE || type === PARTY_TYPE) {
+    else if (reserved || type === PREMISE_TYPE || type === PARTY_TYPE) {
       if (type !== reserved) report(`type « ${type} » incompatible avec l'emplacement de la fiche`);
       if (!text(concept.frontmatter.title)) report('title absent');
     } else if (!types.includes(type)) report(`type « ${type} » hors arborescence (${types.join(', ')})`);
@@ -88,7 +88,7 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
         const link = `${name} → ${entry.target || '?'}`;
         const targetType = typeById.get(entry.target);
         if (targetType === undefined) report(`${link} : cible absente du dossier`);
-        else if (name === STATES) { if (targetType !== FACT_TYPE) report(`${link} : la cible n'est pas un fait`); }
+        else if (name === STATES) { if (targetType !== PREMISE_TYPE) report(`${link} : la cible n'est pas une prémisse`); }
         else if (name === MENTIONS || name === INVOLVES) { if (targetType !== PARTY_TYPE) report(`${link} : la cible n'est pas une partie`); }
         else if (!graphTypes.includes(targetType)) report(`${link} : la cible n'est pas de type ${graphTypes.join(', ')}`);
         if (entry.target === concept.id) report(`${link} : lien vers soi-même`);
@@ -108,10 +108,10 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
 
 export function contradictions(projectPath: string): OkfContradiction[] {
   const concepts = readBundle(projectPath).filter((concept) => !concept.error);
-  return concepts.filter((concept) => concept.frontmatter.type === FACT_TYPE && concept.frontmatter.single_value === true).flatMap((fact) => {
+  return concepts.filter((concept) => concept.frontmatter.type === PREMISE_TYPE && concept.frontmatter.single_value === true).flatMap((premise) => {
     const valeurs = concepts.flatMap((concept) => (relationsOf(concept.frontmatter)[STATES] || [])
-      .filter((entry) => entry.target === fact.id && !entry.dismissed && entry.value)
+      .filter((entry) => entry.target === premise.id && !entry.dismissed && entry.value)
       .map((entry) => ({ piece: concept.id, valeur: entry.value as string })));
-    return new Set(valeurs.map((entry) => fold(squash(entry.valeur)))).size > 1 ? [{ fait: fact.id, titre: text(fact.frontmatter.title), valeurs }] : [];
+    return new Set(valeurs.map((entry) => fold(squash(entry.valeur)))).size > 1 ? [{ premise: premise.id, titre: text(premise.frontmatter.title), valeurs }] : [];
   });
 }

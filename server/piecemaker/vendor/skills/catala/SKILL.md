@@ -70,10 +70,12 @@ Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destin
 
 1. Ajoutez un attribut natif `#[doc="…"]` à chaque définition et règle exécutable, y compris dans les scénarios.
 2. Dans chaque `#[doc]`, indiquez `titre: …`, `source: URL ou chemin` et une balise `quote: « passage exact »` non vide. Rédigez le titre selon « Style des titres ».
-3. Pour une règle, citez son fondement juridique. Pour une donnée factuelle, citez la pièce qui la soutient.
+3. Pour une règle, citez son fondement juridique.
+   Pour une donnée factuelle ou une clause, citez la prémisse de l’index OKF : `source: okf:/_premises/<titre normalisé>.md`, sans `quote`. La prémisse porte les pièces et leurs citations. Ne citez jamais une pièce directement.
+   Si la prémisse manque, créez-la d’abord : `pm okf link <pièce> states "<titre>" --citation "…" [--value "…"]` (skill `okf`).
 4. Pour une qualification ou un calcul, citez le fondement de l’opération et gardez les dépendances vers les faits distincts.
 5. Conservez les titres juridiques avec identifiant. Utilisez les inclusions natives de PDF seulement comme annexes documentaires.
-6. Lancez `pm catala verifier`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]` et `titre manquant dans #[doc]`.
+6. Lancez `pm catala verifier`, puis `pm okf verify-graph`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]` et `titre manquant dans #[doc]`, et chaque manque du graphe.
 7. Si une source ou citation manque, signalez le manque et recherchez-la. N’inventez aucun passage pour satisfaire le contrôle.
 
 `doc` est un attribut natif Catala. `titre`, `source` et `quote` sont des conventions PieceMaker dans son texte, pas des attributs natifs spécialisés.
@@ -87,7 +89,7 @@ Le titre nomme la case du graphe. L’avocat le lit sans le code. Aucun contrôl
 | Case | Forme | Exemples | À éviter |
 |---|---|---|---|
 | Règle, condition, qualification, calcul | Verbe d’action à l’infinitif, puis son objet | `Vérifier le montant demandé`, `Calculer l’indemnité` | `Montant`, `Le montant est-il dû ?` |
-| Fait (sa `source` est une pièce) | Nom, puis participe passé qui constate | `Montant demandé`, `Contrat conclu` | `Contrat`, `Vérifier le contrat` |
+| Fait ou clause (sa `source` est une prémisse `okf:`) | Nom, puis participe passé qui constate | `Montant demandé`, `Contrat conclu` | `Contrat`, `Vérifier le contrat` |
 
 - Écrivez dans la langue du programme. En anglais : `Check the amount claimed`, `Amount claimed`.
 - Écrivez 2 à 7 mots. N’écrivez ni phrase, ni question, ni point final, ni identifiant (`montant_demandé`), ni numéro d’article.
