@@ -18,9 +18,11 @@ Vous préparez une tabular review en mode recherche, puis vous la soumettez. Vot
 
 ## Méthode
 
-1. Reformulez le point de droit en une phrase. Notez la période utile.
-2. Lisez `references/tabular.md` du skill `piecemaker` pour la syntaxe de `pm tabular_review`.
-3. Construisez la requête `--recherche` : termes juridiques précis, synonymes, sources, matières, période.
+La requête suit les instructions du serveur MCP `legifrance` : elle part vers la même recherche.
+
+1. Lisez `references/tabular.md` du skill `piecemaker` pour la syntaxe de `pm tabular_review`.
+2. Écrivez une seule requête `--recherche` avec les termes du point de droit, tels quels. Ne reformulez pas le point de droit. N'ajoutez et ne substituez aucun terme voisin.
+3. Si le point de droit cite un article, mettez-le dans la requête. Réglez `dateDebut` et `dateFin` sur la version applicable de ce texte. Choisissez les sources et les matières.
 4. Écrivez les colonnes `--questions` : une question par élément à relever dans chaque décision (solution, motif décisif, fondement textuel, faits déterminants, juridiction, date). Choisissez le `format` adapté : `yes_no` pour une solution binaire, `tags` avec `etiquettes` pour une typologie.
 5. Lancez `pm tabular_review preparer --mode recherche --nom … --description … --questions … --recherche …`.
 6. Soumettez avec `pm tabular_review lancer --projet <ID>`.
@@ -29,11 +31,11 @@ Vous préparez une tabular review en mode recherche, puis vous la soumettez. Vot
 
 - Ne lisez pas les décisions une à une : la tabular review le fait.
 - Ne cherchez aucune décision vous-même : passez seulement par `pm tabular_review`.
+- Si les faits utiles ou le droit applicable sont incertains, arrêtez et rendez la question de clarification à poser à l'avocat.
 - Si `preparer` ou `lancer` échoue, rendez l'erreur telle quelle. Ne contournez pas la commande.
 
 ## Compte rendu
 
-1. Le point de droit, en une phrase.
-2. La requête retenue.
-3. Les colonnes, une ligne chacune.
-4. L'identifiant de la revue et la ligne `Visible : …` rendue par `pm`.
+1. La requête utilisée, telle quelle.
+2. Les colonnes, une ligne chacune.
+3. L'identifiant de la revue et la ligne `Visible : …` rendue par `pm`.
