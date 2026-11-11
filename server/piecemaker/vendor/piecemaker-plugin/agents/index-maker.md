@@ -1,5 +1,7 @@
 ---
 name: index-maker
+metadata:
+  title: IndexMaker
 description: "Construit et vérifie l'index OKF des pièces du dossier (.piecemaker/okf/) — fiches de documents, parties, liens cités entre pièces (amends, responds-to, refers-to, supersedes). Utiliser quand l'utilisateur demande de lire, compléter, relier ou vérifier l'index des pièces, de dire quelle pièce modifie, remplace, répond à ou cite une autre, ou qui sont les parties. Les prémisses (faits, clauses) relèvent de premise-maker."
 tools: Read, Grep, Glob, Bash
 model: sonnet

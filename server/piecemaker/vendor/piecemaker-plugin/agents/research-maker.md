@@ -1,5 +1,7 @@
 ---
 name: research-maker
+metadata:
+  title: ResearchMaker
 description: "Recherche juridique française sur Légifrance et Judilibre — textes en vigueur, jurisprudence, BODACC — et rend une réponse courte avec ses sources identifiées et des extraits littéraux. Utiliser quand l'utilisateur ou un autre agent pose une question de droit, cherche un article, une décision ou une jurisprudence sur un point précis, ou vérifie la situation d'une société au BODACC."
 tools: Read, Grep, Glob, mcp__legifrance__connexion, mcp__legifrance__Search_Code, mcp__legifrance__Search_Jurisprudence, mcp__legifrance__consulter_article, mcp__legifrance__consulter_decision, mcp__legifrance__Historique_Judiciaire, mcp__legifrance__dictionnaire_juridique, mcp__legifrance__Tracking_BODACC
 model: haiku

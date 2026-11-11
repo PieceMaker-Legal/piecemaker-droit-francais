@@ -12,12 +12,13 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   - `style-redaction-cabinet` — rédaction/relecture de documents juridiques
     français, citations sourcées via legifrance (MCP).
 - **Agents** (`agents/`) :
-  - `analyste-pieces` — synthèse structurée d'une pièce du dossier.
-  - `gestionnaire-okf` — lecture et écriture de l'index OKF du dossier (skill `okf`).
   - `index-maker` — fiches de documents, parties et liens entre pièces ; jamais de prémisse.
   - `premise-maker` — prémisses attendues par un programme Catala, cherchées dans les pièces.
   - `reasoning-maker` — raisonnement YAML d'un acte, puis programme Catala.
   - `research-maker` — recherche Légifrance et Judilibre (modèle léger) ; l'agent principal relit chaque source.
+  Noms d'affichage (`metadata.title`) : IndexMaker, PremiseMaker, ReasoningMaker, ResearchMaker.
+- **Hooks** : `guard-legal-search` (Claude) refuse `Search_Code` et `Search_Jurisprudence` à l'agent
+  principal quand `research-maker` est installé ; il lui laisse `consulter_article` et `consulter_decision`.
   Commandes de l'avocat qui lancent ces sous-agents (`context: fork`) : `/indexer`, `/premisses`,
   `/raisonner`, `/rechercher` (`server/piecemaker/vendor/skills/`).
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings

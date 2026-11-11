@@ -121,7 +121,7 @@ function installableComponent(entry: LibraryEntry): LibraryComponent {
     slug,
     markdown: entry.content,
     codex: toml({ name, description, model: text(data.codexModel), model_reasoning_effort: text(data.codexReasoningEffort), developer_instructions: content }),
-    vibe: toml({ display_name: name, description, agent_type: 'subagent', active_model: text(data.vibeModel), enabled_skills: list(data.vibeSkills), instructions: content }),
+    vibe: toml({ display_name: text(data.metadata?.title) ?? name, description, agent_type: 'subagent', active_model: text(data.vibeModel), enabled_skills: list(data.vibeSkills), instructions: content }),
   };
 }
 
