@@ -5,6 +5,8 @@ description: Écrire et vérifier un programme Catala qui code une règle juridi
 
 # Catala
 
+> **Délégation.** Agent principal : déléguez l'écriture du raisonnement et du programme au sous-agent `reasoning-maker`. Puis confiez les prémisses de ses conditions à `premise-maker`, avec le nom du programme. Une source manque → `research-maker`. L'avocat peut aussi lancer `/raisonner`, `/premisses` ou `/rechercher`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
+
 Catala code une règle juridique en programme exécutable. Le pack Catala est installé par l'app de bureau PieceMaker. Lancez chaque outil par `pm catala`, jamais par un chemin direct.
 
 ## Classement
@@ -74,7 +76,7 @@ Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destin
 2. Dans chaque `#[doc]`, indiquez `titre: …`, `source: URL ou chemin` et une balise `quote: « passage exact »` non vide. Rédigez le titre selon « Style des titres ».
 3. Pour une règle, citez son fondement juridique.
    Pour une donnée factuelle ou une clause, citez la prémisse de l’index OKF : `source: okf:/_premises/<titre normalisé>.md`, sans `quote`. La prémisse porte les pièces et leurs citations. Ne citez jamais une pièce directement.
-   Si la prémisse manque, créez-la d’abord : `pm okf link <pièce> states "<titre>" --citation "…" [--value "…"]` (skill `okf`).
+   Si la prémisse manque, nommez-la quand même dans le `#[doc]`. `premise-maker` la cherche ensuite dans les pièces (skill `okf`).
 4. Pour une qualification ou un calcul, citez le fondement de l’opération et gardez les dépendances vers les faits distincts.
 5. Conservez les titres juridiques avec identifiant. Utilisez les inclusions natives de PDF seulement comme annexes documentaires.
 6. Lancez `pm catala verifier`, puis `pm okf verify-graph`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]` et `titre manquant dans #[doc]`, et chaque manque du graphe.

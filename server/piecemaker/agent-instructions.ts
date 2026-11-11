@@ -40,6 +40,8 @@ const PREVIOUS_TREE_RULE = '3° Arborescence: Respecte l’arborescence du dossi
 const OLD_TREE_RULE = '3° Arborescence: Respecte arborescence convenue dans perso.md. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
 const TEMPLATE_HEADER = 'Tu es un assistant juridique. Voici les règles :';
 const TOOLS_RULE_START = '6° Outils:';
+const HELP_LINE = '- Syntaxe d’une commande → pm --help';
+const DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala ; question de droit → sous-agent research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
 const TOOLS_RULE_LINES = [
   `${TOOLS_RULE_START} Avant d’agir, charge le skill qui correspond à la demande, puis suis-le.`,
   '- Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement → skill piecemaker',
@@ -48,7 +50,8 @@ const TOOLS_RULE_LINES = [
   '- Rédiger ou relire un acte, un courrier, un document juridique → skill style-redaction-cabinet, puis docx-cli',
   '- Instruction, gabarit ou skill personnels → skill ajout-de-fonctionnalites',
   '- Textes, jurisprudence, BODACC → outils MCP legifrance, sans skill',
-  '- Syntaxe d’une commande → pm --help',
+  DELEGATION_LINE,
+  HELP_LINE,
 ];
 const RULE_UPDATES = new Map([
   ...OLD_SUIVI_RULES.map((rule): [string, string] => [rule, SUIVI_RULE]),
@@ -77,12 +80,21 @@ const withToolsRule = (content: string) => {
   return content.endsWith('\n') ? content + rule + lineEnd : content + lineEnd + rule;
 };
 
+const withDelegationRule = (content: string) => {
+  const lines = content.split('\n');
+  const bare = lines.map((line) => line.replace(/\r$/, ''));
+  const anchor = bare.indexOf(HELP_LINE);
+  if (!bare.includes(TEMPLATE_HEADER) || bare.includes(DELEGATION_LINE) || anchor < 0) return content;
+  lines.splice(anchor, 0, DELEGATION_LINE + (lines[anchor].endsWith('\r') ? '\r' : ''));
+  return lines.join('\n');
+};
+
 const refreshRules = async (agentsPath: string) => {
   const content = await readFile(agentsPath, 'utf8');
-  const next = withToolsRule(content.split('\n').map((line) => {
+  const next = withDelegationRule(withToolsRule(content.split('\n').map((line) => {
     const updated = RULE_UPDATES.get(line.replace(/\r$/, ''));
     return updated ? updated + (line.endsWith('\r') ? '\r' : '') : line;
-  }).join('\n'));
+  }).join('\n')));
   if (next !== content) await writeFile(agentsPath, next);
 };
 

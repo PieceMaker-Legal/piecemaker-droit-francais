@@ -20,6 +20,16 @@
             "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/classify-ai-documents.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/verify-subagent.mjs\"",
+            "timeout": 60
+          }
+        ]
       }
     ]
   }

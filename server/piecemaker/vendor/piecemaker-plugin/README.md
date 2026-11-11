@@ -14,12 +14,23 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
 - **Agents** (`agents/`) :
   - `analyste-pieces` — synthèse structurée d'une pièce du dossier.
   - `gestionnaire-okf` — lecture et écriture de l'index OKF du dossier (skill `okf`).
+  - `index-maker` — fiches de documents, parties et liens entre pièces ; jamais de prémisse.
+  - `premise-maker` — prémisses attendues par un programme Catala, cherchées dans les pièces.
+  - `reasoning-maker` — raisonnement YAML d'un acte, puis programme Catala.
+  - `research-maker` — recherche Légifrance et Judilibre (modèle léger) ; l'agent principal relit chaque source.
+  Commandes de l'avocat qui lancent ces sous-agents (`context: fork`) : `/indexer`, `/premisses`,
+  `/raisonner`, `/rechercher` (`server/piecemaker/vendor/skills/`).
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).
   Un document créé par l'IA dans un dossier enregistré est classé d'office
   « espace de travail » (`classify-ai-documents.mjs`, `PostToolUse`) : sans
   quoi il naîtrait au coffre-fort et l'IA ne pourrait pas se relire.
+  Après un sous-agent `index-maker`, `premise-maker` ou `reasoning-maker`,
+  `verify-subagent.mjs` (`PostToolUse` sur `Agent|Task`, Claude seulement)
+  relance les vérifications rapides (`pm okf verify`, `verify-graph`,
+  `pm raisonnement lister`, `verification.json` de Catala) et donne le bilan
+  à l'agent principal, avec l'invitation à relancer le sous-agent fautif.
   Le mapping PII est appliqué par le proxy PII, pas par ces hooks. Tous
   les hooks échouent "ouverts" (fail-open) : aucune erreur, timeout ou
   absence de configuration ne bloque jamais une session.

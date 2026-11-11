@@ -88,7 +88,19 @@ test('adds the tools rule once to an AGENTS.md written from the template and kee
   assert.equal(await read(root, 'AGENTS.md'), `${withoutToolsRule}\nMa règle du dossier\n${template.slice(withoutToolsRule.length + 1)}\n`);
 }));
 
-test('leaves a tools rule rewritten by the lawyer untouched', () => withProject(async (root) => {
+test('adds the delegation line once to a previous tools rule, keeping CRLF', () => withProject(async (root) => {
+  const template = agentInstructionsTemplate();
+  const lines = template.split('\n');
+  const delegation = lines.find((line) => line.includes('sous-agent index-maker'));
+  assert.ok(delegation);
+  const previous = lines.filter((line) => line !== delegation).join('\r\n');
+  await writeFile(path.join(root, 'AGENTS.md'), `${previous}\r\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await read(root, 'AGENTS.md'), `${lines.join('\r\n')}\r\n`);
+}));
+
+test('leaves a tools rule rewritten by the lawyer untouched',() => withProject(async (root) => {
   const content = `${agentInstructionsTemplate().split('\n')[0]}\n6° Outils: ma propre table\n`;
   await writeFile(path.join(root, 'AGENTS.md'), content);
   await ensureAgentInstructionFiles(root, SHARED);
