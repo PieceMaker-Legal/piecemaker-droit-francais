@@ -104,7 +104,7 @@ function installationFolder(content: string, fallback = '') {
   return componentFolderName(String(data.name || data.metadata?.title || fallback));
 }
 
-function installableComponent(entry: LibraryEntry): LibraryComponent {
+export function installableComponent(entry: LibraryEntry): LibraryComponent {
   const slug = installationFolder(entry.content, entry.name);
   if (entry.kind === 'skill') {
     const files = Object.fromEntries(Object.entries(entry.assets).map(([name, bytes]) => [name, Buffer.from(bytes, 'base64')]));

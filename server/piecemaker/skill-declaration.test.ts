@@ -136,5 +136,41 @@ test('un répertoire à la place d’un lien provider est remplacé', () => {
 test('un dossier inexistant est journalisé sans lever d’erreur', (context) => {
   const warn = context.mock.method(console, 'warn', () => undefined);
   declareBundledSkills(path.join(temporaryFolder(), 'absent'));
-  assert.equal(warn.mock.callCount(), 5);
+  assert.equal(warn.mock.callCount(), 9);
+});
+
+const AGENT_FILES = ['.claude/agents/research-maker.md', '.codex/agents/research-maker.toml', '.vibe/agents/research-maker.toml', '.opencode/agent/research-maker.md', '.grok/agents/research-maker.md'];
+
+test('installe les sous-agents PieceMaker pour chaque assistant', () => {
+  const folder = temporaryFolder();
+  declareBundledSkills(folder);
+  for (const slug of ['index-maker', 'premise-maker', 'research-maker', 'deep-research-maker']) {
+    assert.match(fs.readFileSync(path.join(folder, '.claude', 'agents', `${slug}.md`), 'utf8'), new RegExp(`^---\\nname: ${slug}\\n`));
+  }
+  for (const relative of AGENT_FILES) assert.equal(fs.existsSync(path.join(folder, relative)), true, relative);
+  assert.match(fs.readFileSync(path.join(folder, '.codex', 'agents', 'research-maker.toml'), 'utf8'), /^name = "research-maker"/m);
+  assert.match(fs.readFileSync(path.join(folder, '.vibe', 'agents', 'research-maker.toml'), 'utf8'), /^agent_type = "subagent"/m);
+});
+
+test('un sous-agent supprimé est réinstallé, un sous-agent modifié est conservé', () => {
+  const folder = temporaryFolder();
+  declareBundledSkills(folder);
+  const removed = path.join(folder, '.codex', 'agents', 'index-maker.toml');
+  const edited = path.join(folder, '.claude', 'agents', 'research-maker.md');
+  fs.rmSync(removed);
+  fs.writeFileSync(edited, '---\nname: research-maker\ndescription: perso\n---\n');
+  declareBundledSkills(folder);
+  assert.equal(fs.existsSync(removed), true);
+  assert.equal(fs.readFileSync(edited, 'utf8'), '---\nname: research-maker\ndescription: perso\n---\n');
+});
+
+test('un sous-agent personnel préexistant n’est pas écrasé', () => {
+  const folder = temporaryFolder();
+  const personal = path.join(folder, '.claude', 'agents', 'index-maker.md');
+  fs.mkdirSync(path.dirname(personal), { recursive: true });
+  fs.writeFileSync(personal, '---\nname: index-maker\ndescription: perso\n---\n');
+  declareBundledSkills(folder);
+  assert.equal(fs.readFileSync(personal, 'utf8'), '---\nname: index-maker\ndescription: perso\n---\n');
+  assert.equal(fs.existsSync(path.join(folder, '.codex', 'agents', 'index-maker.toml')), false);
+  assert.equal(fs.existsSync(path.join(folder, '.claude', 'agents', 'premise-maker.md')), true);
 });

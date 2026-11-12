@@ -14,7 +14,7 @@ L’état d’un skill dans un dossier dépend de son origine : un skill personn
 
 ## Collecte
 
-Au démarrage et à chaque « Actualiser », le backend recopie dans SQLite les skills personnels de chaque provider (dont `~/.claude/skills/synced`, `~/.claude/commands` et `~/.vibe/skills`), les skills de projet des dossiers connus (hors copies du manifeste), les agents, les MCP utilisateur, les plugins Claude installés et le connecteur Registre Public. Les originaux ne sont jamais déplacés ni modifiés. Un fichier invalide est signalé sans interrompre la collecte ; un skill supprimé de la Bibliothèque n’est plus réimporté (table `deleted_origins`). PieceMaker n’importe plus ses skills et agents vendorisés dans ce catalogue.
+Au démarrage et à chaque « Actualiser », le backend recopie dans SQLite les skills personnels de chaque provider (dont `~/.claude/skills/synced`, `~/.claude/commands` et `~/.vibe/skills`), les skills de projet des dossiers connus (hors copies du manifeste), les agents, les MCP utilisateur, les plugins Claude installés et le connecteur Registre Public. Les originaux ne sont jamais déplacés ni modifiés. Un fichier invalide est signalé sans interrompre la collecte ; un skill supprimé de la Bibliothèque n’est plus réimporté (table `deleted_origins`). PieceMaker n’importe plus ses skills et agents vendorisés dans ce catalogue : `server/piecemaker/skill-declaration.ts` les installe d’office dans chaque dossier (sous-agents `index-maker`, `premise-maker`, `research-maker`, `deep-research-maker` pour Claude, Codex, Vibe, OpenCode et Grok), sans écraser une copie modifiée.
 
 ## Limites de portée
 
