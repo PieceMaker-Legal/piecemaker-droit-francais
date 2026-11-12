@@ -104,8 +104,9 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 
 ## Limites connues (audit du 2026-09-26)
 
-- Seuls Claude Code et Codex ont les hooks ; les autres fournisseurs pilotés par
-  CloudCLI ne sont couverts que par le proxy.
+- Seuls Claude Code, Codex et le chat Mistral de l'app ont les hooks ; le CLI
+  `vibe` et les autres fournisseurs pilotés par CloudCLI ne sont couverts que
+  par le proxy.
 - Le hook analyse le texte des commandes : `python -c`, variables, globs
   (`cat *.pdf`), `cd` puis chemin relatif y échappent.
 - `Grep` n'est bloqué qu'à la racine du dossier, pas dans un sous-dossier
@@ -135,6 +136,14 @@ Limites structurelles, à connaître avant de s'y fier :
   changement de logique. `installer/lib/codex-skills.mjs` installe ce même
   script dans `~/.codex/hooks.json` (matcher `"*"`, Codex n'exposant pas de
   tools Read/Grep/Glob distincts).
+- **Codex n'exécute un hook de `hooks.json` qu'approuvé.** Codex (vérifié
+  en 0.167.2) ignore un hook sans entrée `[hooks.state."<hooks.json>:<événement>:<groupe>:<handler>"]`
+  dont le `trusted_hash` égale le hash courant du hook. Au démarrage,
+  `reconcileCodexHooks` écrit cette approbation (`trustCodexHooks`,
+  `codex-skills.mjs`) pour les seuls hooks PieceMaker, comme le ferait
+  `/hooks`, sans toucher aux autres entrées. Si `config.toml` est illisible,
+  rien n'est écrit : approuver alors par `/hooks`. Un appel d'outil fait dans un
+  `exec` Codex (mode code) passe aussi par `PreToolUse`.
 - **Un hook analyse du texte de commande, pas des syscalls.** `python -c
   "open(...)"`, `find -exec cat`, une variable de shell ou un chemin relatif
   après un `cd` échappent à toute analyse textuelle. C'est la raison d'être de

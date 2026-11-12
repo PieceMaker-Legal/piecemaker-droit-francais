@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { ChatCompletionRequest } from '@mistralai/mistralai/models/components';
 
 import { readToml } from '../library/provider-connectors.js';
+import { subagentReport } from '../vendor/piecemaker-plugin/scripts/verify-subagent.mjs';
 import type { createMistralTools } from './tools.js';
 
 type Toolbox = Awaited<ReturnType<typeof createMistralTools>>;
@@ -77,7 +78,11 @@ export function delegateSubagents(toolbox: Toolbox, { cwd, userHome = os.homedir
         const message = completion.choices?.[0]?.message;
         const calls = message?.toolCalls ?? [];
         messages.push({ role: 'assistant', content: text(message?.content) || null, ...(calls.length ? { toolCalls: calls.map(call => ({ ...call, id: call.id ?? undefined, type: 'function' as const, function: { name: call.function.name, arguments: typeof call.function.arguments === 'string' ? call.function.arguments : JSON.stringify(call.function.arguments) } })) } : {}) });
-        if (!calls.length) return text(message?.content) || `${agent.slug} n’a rendu aucun compte rendu.`;
+        if (!calls.length) {
+          const report = text(message?.content) || `${agent.slug} n’a rendu aucun compte rendu.`;
+          const checked = await subagentReport({ tool_name: 'Agent', tool_input: { subagent_type: agent.slug }, tool_response: report, cwd });
+          return checked?.hookSpecificOutput?.additionalContext ? `${report}\n\n${checked.hookSpecificOutput.additionalContext}` : report;
+        }
         for (const call of calls) {
           const tool = tools.get(call.function.name);
           let result: string;

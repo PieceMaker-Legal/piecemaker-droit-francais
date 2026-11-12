@@ -7,9 +7,11 @@
  * jamais remplacé.
  */
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import TOML from '@iarna/toml';
 
 const PLUGIN_DIRECTORY = 'piecemaker-plugin';
 const PLUGIN_SKILL_PATH = /(^|[\\/])piecemaker-plugin[\\/]skills[\\/][^\\/]+$/;
@@ -216,6 +218,87 @@ function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') 
     return { ok: true, changed: true, file: loaded.file, registered: 1 };
   } catch (error) {
     return { ok: false, changed: false, file: loaded.file, reason: error?.message || 'ecriture-impossible' };
+  }
+}
+
+const PIECEMAKER_HOOKS = [isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck];
+const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', SubagentStop: 'subagent_stop' };
+
+function sortedKeys(value) {
+  if (Array.isArray(value)) return value.map(sortedKeys);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortedKeys(value[key])]));
+}
+
+export function codexHookTrustedHash(event, matcher, handler, platform = process.platform) {
+  const hook = {
+    type: 'command',
+    command: platform === 'win32' && handler.commandWindows ? handler.commandWindows : handler.command,
+    timeout: Math.max(1, handler.timeout ?? 600),
+    async: handler.async === true,
+    ...(handler.statusMessage === undefined ? {} : { statusMessage: handler.statusMessage }),
+  };
+  const identity = { event_name: CODEX_EVENT_KEYS[event], ...(matcher == null ? {} : { matcher }), hooks: [hook] };
+  return `sha256:${createHash('sha256').update(JSON.stringify(sortedKeys(identity))).digest('hex')}`;
+}
+
+function pieceMakerHookTrust(file, document) {
+  const entries = [];
+  for (const [event, label] of Object.entries(CODEX_EVENT_KEYS)) {
+    const groups = Array.isArray(document.hooks[event]) ? document.hooks[event] : [];
+    groups.forEach((group, groupIndex) => {
+      const handlers = Array.isArray(group?.hooks) ? group.hooks : [];
+      handlers.forEach((handler, handlerIndex) => {
+        if (handler?.type === 'command' && PIECEMAKER_HOOKS.some((owned) => owned(handler))) {
+          entries.push([`${file}:${label}:${groupIndex}:${handlerIndex}`, codexHookTrustedHash(event, group.matcher, handler)]);
+        }
+      });
+    });
+  }
+  return entries;
+}
+
+function withTrustedHash(text, key, hash) {
+  const headers = [`[hooks.state.${JSON.stringify(key)}]`, `[hooks.state.'${key}']`];
+  const line = `trusted_hash = ${JSON.stringify(hash)}`;
+  const lines = text.split('\n');
+  const start = lines.findIndex((entry) => headers.includes(entry.trim()));
+  if (start === -1) return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n${headers[0]}\n${line}\n`;
+  const next = lines.findIndex((entry, index) => index > start && /^\s*\[/.test(entry));
+  const end = next === -1 ? lines.length : next;
+  const at = lines.findIndex((entry, index) => index > start && index < end && /^\s*trusted_hash\s*=/.test(entry));
+  if (at === -1) lines.splice(start + 1, 0, line);
+  else lines[at] = line;
+  return lines.join('\n');
+}
+
+export function codexConfigFile(userHome = os.homedir()) {
+  return path.join(userHome, '.codex', 'config.toml');
+}
+
+export function trustCodexHooks(userHome = os.homedir()) {
+  const loaded = readCodexHooks(userHome);
+  if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
+  const file = codexConfigFile(userHome);
+  const entries = pieceMakerHookTrust(loaded.file, loaded.document);
+  let current = '';
+  try { current = fs.readFileSync(file, 'utf8'); } catch { current = ''; }
+  const output = entries.reduce((text, [key, hash]) => withTrustedHash(text, key, hash), current);
+  try {
+    const state = TOML.parse(output).hooks?.state ?? {};
+    if (!entries.every(([key, hash]) => state[key]?.trusted_hash === hash)) throw new Error('approbation-illisible');
+  } catch {
+    return { ok: false, changed: false, file, reason: 'config-toml-non-modifiable' };
+  }
+  if (output === current) return { ok: true, changed: false, file, trusted: entries.length };
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temporary = `${file}.tmp-${process.pid}`;
+    fs.writeFileSync(temporary, output, 'utf8');
+    fs.renameSync(temporary, file);
+    return { ok: true, changed: true, file, trusted: entries.length };
+  } catch (error) {
+    return { ok: false, changed: false, file, reason: error?.message || 'ecriture-impossible' };
   }
 }
 

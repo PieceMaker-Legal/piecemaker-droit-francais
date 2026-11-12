@@ -87,7 +87,13 @@ Deux points de branchement distincts :
   deltas (ni `stream_end` ni message final), la liste est donc ajoutée en
   dernier delta avant `complete`. Vibe nomme les outils
   `legifrance_consulter_decision` (un seul `_`) et porte le résultat sur le
-  `tool_use` (`toolResult`) : les deux formes sont reconnues. Sous Windows,
+  `tool_use` (`toolResult`) : les deux formes sont reconnues. Les recherches
+  `Search_*` sont réservées à `research-maker` : hook `guard-legal-search`
+  sous Claude et Codex (approuvé au démarrage dans `~/.codex/config.toml`,
+  appels dans un `exec` compris), outils retirés de l'agent principal dans le
+  chat Mistral. `consulter_article` et `consulter_decision` restent ouverts à
+  tous. Après `research-maker`, `verify-subagent` signale les décisions citées
+  jamais lues, y compris dans le chat Mistral. Sous Windows,
   le pont `cmd` conserve les guillemets et chaînages de commandes ; le chemin
   de Python du venv est ajouté au `PATH`.
 - Dans un `.docx`, l'instruction demande une note de bas de page au lieu de

@@ -210,7 +210,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td class="c-skill">Skills du dossier</td><td><code>.claude/skills</code></td><td><code>.agents/skills</code></td><td><code>.agents/skills</code>, outil <code>skill</code></td></tr>
         <tr><td class="c-skill">Skills globaux</td><td><code>~/.claude</code></td><td><code>~/.codex/skills</code></td><td><code>~/.vibe/skills</code>, <code>~/.agents/skills</code> : lus, mais l'installateur n'y écrit rien</td></tr>
         <tr><td class="c-agent">Sous-agents</td><td><code>~/.claude</code></td><td><code>.codex/agents</code>, depuis la Bibliothèque seulement</td><td><code>.vibe/agents</code>, depuis la Bibliothèque seulement</td></tr>
-        <tr><td>Hooks</td><td><code>~/.claude/settings.json</code></td><td><code>~/.codex/hooks.json</code></td><td>en code, <code>mistral-sdk/tools.ts</code></td></tr>
+        <tr><td>Hooks</td><td><code>~/.claude/settings.json</code></td><td><code>~/.codex/hooks.json</code>, approuvés dans <code>config.toml</code></td><td>en code, <code>mistral-sdk/tools.ts</code></td></tr>
         <tr><td class="c-skill">pm, docx</td><td>Bash</td><td>Bash</td><td>Bash</td></tr>
       </table></div>
     </section>
@@ -242,7 +242,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_*</code> (Claude, Codex) : recherche réservée à research-maker ; Mistral : outil <code>research_maker</code> (délégation serveur)</td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>
-        <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude), <code>SubagentStop</code> (Codex) : vérification propre à chaque sous-agent (index, prémisses et valeur attendue, décisions lues, revue soumise), relance du sous-agent</td></tr>
+        <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude), <code>SubagentStop</code> (Codex), bilan ajouté au compte rendu (Mistral) : vérification propre à chaque sous-agent (index, prémisses et valeur attendue, décisions lues, revue soumise), relance du sous-agent</td></tr>
       </table></div>
       <p style="margin-top:12px">Codex reçoit la protection des pièces, le garde de recherche et la vérification des sous-agents. Mistral exécute <code>protect-originals</code> et <code>guard-secrets</code> avant ses outils intégrés ; il délègue les recherches <code>Search_*</code> à l'outil <code>research_maker</code>. Chaque sous-agent de <code>.vibe/agents</code> devient un outil de délégation du SDK Mistral (<code>index_maker</code>, <code>premise_maker</code>, <code>research_maker</code>, <code>deep_research_maker</code>) ; ses outils d'écriture demandent la même autorisation que ceux de l'agent principal.</p>
     </section>

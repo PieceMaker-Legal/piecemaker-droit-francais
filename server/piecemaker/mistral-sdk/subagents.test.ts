@@ -93,3 +93,25 @@ test('delegates other subagents with write tools behind the same authorization, 
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('appends the PieceMaker check to the research-maker report in a case folder', async () => {
+  const root = workspace({ 'research-maker': 'Méthode de recherche fictive.' });
+  const previous = process.env.PIECEMAKER_HOME;
+  process.env.PIECEMAKER_HOME = path.join(root, 'piecemaker-home');
+  fs.mkdirSync(path.join(root, '.piecemaker'));
+  fs.mkdirSync(path.join(process.env.PIECEMAKER_HOME, 'decisions'), { recursive: true });
+  fs.writeFileSync(path.join(process.env.PIECEMAKER_HOME, 'decisions', 'JURITEXT000000000001.json'), '{}');
+  const client = scripted([{ content: 'Voir JURITEXT000000000001 et JURITEXT000000000002.' }], []);
+  try {
+    const box = delegateSubagents(toolbox([]), { cwd: root, userHome: root, client, fallbackModel: 'mistral-medium-latest', signal: new AbortController().signal, authorize: allow });
+    const report = String(await box.tools.get('research_maker')!.execute({ task: 'Durée du bail commercial ?' }));
+    assert.match(report, /^Voir JURITEXT000000000001 et JURITEXT000000000002\./);
+    assert.match(report, /jamais lues par consulter_decision : 1/);
+    assert.match(report, /- JURITEXT000000000002/);
+    assert.match(report, /Relancez le sous-agent research-maker/);
+  } finally {
+    if (previous === undefined) delete process.env.PIECEMAKER_HOME;
+    else process.env.PIECEMAKER_HOME = previous;
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});

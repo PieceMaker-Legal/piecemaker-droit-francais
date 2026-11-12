@@ -52,3 +52,51 @@ test('registers the Légifrance search guard and the sub-agent check in Codex ho
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
+
+test('approves only the PieceMaker hooks in the Codex config, keeping the other entries', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-codex-trust-'));
+  try {
+    const hooksFile = path.join(home, '.codex', 'hooks.json');
+    const configFile = path.join(home, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(hooksFile), { recursive: true });
+    fs.writeFileSync(hooksFile, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'echo perso' }] }] } }));
+    const foreign = `[hooks.state."${hooksFile}:pre_tool_use:0:0"]\nenabled = false\ntrusted_hash = "sha256:perso"\n`;
+    const stale = `[hooks.state."${hooksFile}:pre_tool_use:1:0"]\nenabled = true\ntrusted_hash = "sha256:ancien"\n`;
+    fs.writeFileSync(configFile, `model = "exemple"\n\n${foreign}\n${stale}`);
+    assert.equal((await reconcileCodexHooks(applicationRoot, home)).ok, true);
+    const TOML = (await import('@iarna/toml')).default;
+    const { codexHookTrustedHash } = await import(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'installer', 'lib', 'codex-skills.mjs'));
+    const document = JSON.parse(fs.readFileSync(hooksFile, 'utf8')).hooks;
+    const config = fs.readFileSync(configFile, 'utf8');
+    const state = (TOML.parse(config) as { hooks: { state: Record<string, { enabled?: boolean; trusted_hash: string }> } }).hooks.state;
+    assert.ok(config.includes(foreign));
+    assert.deepEqual(state[`${hooksFile}:pre_tool_use:0:0`], { enabled: false, trusted_hash: 'sha256:perso' });
+    assert.equal(state[`${hooksFile}:pre_tool_use:1:0`].enabled, true);
+    for (const [event, label] of [['PreToolUse', 'pre_tool_use'], ['SubagentStop', 'subagent_stop']]) {
+      document[event].forEach((group: { matcher: string; hooks: Array<{ command: string }> }, index: number) => {
+        if (group.hooks[0].command === 'echo perso') return;
+        assert.equal(state[`${hooksFile}:${label}:${index}:0`].trusted_hash, codexHookTrustedHash(event, group.matcher, group.hooks[0]));
+      });
+    }
+    assert.equal(Object.keys(state).length, 4);
+    const settled = fs.readFileSync(configFile, 'utf8');
+    assert.equal((await reconcileCodexHooks(applicationRoot, home)).ok, true);
+    assert.equal(fs.readFileSync(configFile, 'utf8'), settled);
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('leaves an unreadable Codex config untouched', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-codex-trust-'));
+  try {
+    const configFile = path.join(home, '.codex', 'config.toml');
+    fs.mkdirSync(path.dirname(configFile), { recursive: true });
+    fs.writeFileSync(configFile, 'model = [\n');
+    const result = await reconcileCodexHooks(applicationRoot, home);
+    assert.deepEqual(result, { ok: false, reason: 'config-toml-non-modifiable' });
+    assert.equal(fs.readFileSync(configFile, 'utf8'), 'model = [\n');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
