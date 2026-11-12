@@ -5,7 +5,7 @@ import { applyChange, ontologyChanges, proposalMarkup, type ChangeDecision } fro
 import { decisionOf } from './proposal.js';
 import { escapeHtml } from './views.js';
 
-const ASK_NOTE = 'ontologie commune à tous les dossiers, lue par pm okf ontologie ; pour la changer, proposez avec pm okf ontologie proposer, l’avocat décide';
+const ASK_NOTE = 'ontologie commune à tous les dossiers, lue par pm okf ontologie ; pour la changer, modifiez ~/.piecemaker/ontologie.json avec Edit ou Write : le hook en fait une proposition, l’avocat décide';
 
 const blank = (): OntologyRelation => ({ name: '', label: '', inverse: '', description: '', source: [], target: [] });
 

@@ -2,13 +2,14 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
+import { proposalMessage } from './lib/proposition-edit.mjs';
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const KEY_REASON = 'La clé de sceau de l’ontologie (~/.piecemaker/ontologie.cle) n’est accessible qu’au serveur PieceMaker.';
 const GUARDED = [
-  { pattern: /(^|[\\/])\.piecemaker[\\/]ontologie\.json$/, reason: 'L’ontologie des liens (~/.piecemaker/ontologie.json), commune à tous les dossiers, est réglée par l’avocat seul, dans l’onglet Index › Ontologie. Lisez-la avec pm okf ontologie ; proposez un changement avec pm okf ontologie proposer.' },
-  { pattern: /(^|[\\/])\.piecemaker[\\/]arborescence\.json$/, reason: 'L’arborescence (.piecemaker/arborescence.json) est réglée par l’avocat seul, dans l’onglet Index › Classement. Proposez un changement avec pm dossier arborescence --dossiers ; l’avocat décide.' },
+  { pattern: /(^|[\\/])\.piecemaker[\\/]ontologie\.json$/, reason: 'L’ontologie des liens (~/.piecemaker/ontologie.json), commune à tous les dossiers, est réglée par l’avocat seul, dans l’onglet Index › Ontologie. Lisez-la avec pm okf ontologie ; pour proposer un changement, modifiez ontologie.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell : la modification devient une proposition, l’avocat décide.' },
+  { pattern: /(^|[\\/])\.piecemaker[\\/]arborescence\.json$/, reason: 'L’arborescence (.piecemaker/arborescence.json) est réglée par l’avocat seul, dans l’onglet Index › Classement. Pour proposer un changement, modifiez arborescence.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell, ou lancez pm dossier arborescence --dossiers : la modification devient une proposition, l’avocat décide.' },
   { pattern: /(^|[\\/])\.piecemaker[\\/]okf([\\/]|$)/, reason: 'Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).' },
 ];
 const SHELL_KEY = /\.piecemaker[\\/]ontologie\.cle\b|\bontologie\.cle\b/;
@@ -61,4 +62,16 @@ export function ontologyDecision(payload) {
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
-if (isMain) runHook(async () => ontologyDecision(await readHookPayload(3000)), { timeoutMs: 5000 }).catch(() => noop());
+export async function hookDecision(payload, run) {
+  const blocked = ontologyDecision(payload);
+  if (blocked?.hookSpecificOutput?.permissionDecisionReason === KEY_REASON) return blocked;
+  try {
+    const message = await proposalMessage(payload, run);
+    if (message) return denial(message);
+  } catch (error) {
+    return denial(`Proposition non enregistrée, rien n’a changé : ${error?.message || error}.`);
+  }
+  return blocked;
+}
+
+if (isMain) runHook(async () => hookDecision(await readHookPayload(3000)), { timeoutMs: 30000 }).catch(() => noop());

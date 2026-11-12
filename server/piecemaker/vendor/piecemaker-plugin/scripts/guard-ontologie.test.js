@@ -54,3 +54,105 @@ test('explique la voie autorisée', async () => {
   assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /onglet Index › Ontologie/);
   assert.match(ontologyDecision({ tool_name: 'Bash', tool_input: { command: 'cp a.md .piecemaker/okf/b.md' }, cwd }).hookSpecificOutput.permissionDecisionReason, /pm okf link/);
 });
+
+const fs = require('node:fs');
+const os = require('node:os');
+
+function caseFolder(tree, proposal) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'Dossier Exemple '));
+  fs.mkdirSync(path.join(root, '.piecemaker'));
+  fs.writeFileSync(path.join(root, '.piecemaker', 'arborescence.json'), `${JSON.stringify(tree, null, 2)}\n`);
+  if (proposal) fs.writeFileSync(path.join(root, '.piecemaker', 'arborescence.proposition.json'), JSON.stringify(proposal));
+  return root;
+}
+
+const recorder = (answer = { ok: true, output: 'Visible dans Index › Classement.' }) => {
+  const calls = [];
+  const run = async (args, where) => { calls.push({ args, where }); return answer; };
+  return { calls, run };
+};
+
+const tree = [{ name: 'Pièces', explanation: 'Pièces du dossier' }, { name: 'Procédure', explanation: '' }];
+
+test('transforme un Edit de l’arborescence en proposition et avertit l’agent', async () => {
+  const root = caseFolder(tree);
+  const { calls, run } = recorder();
+  const result = await (await load()).hookDecision({ tool_name: 'Edit', tool_input: { file_path: '.piecemaker/arborescence.json', old_string: '"name": "Procédure"', new_string: '"name": "Correspondance"' }, cwd: root }, run);
+  assert.equal(result.hookSpecificOutput.permissionDecision, 'deny');
+  const reason = result.hookSpecificOutput.permissionDecisionReason;
+  assert.match(reason, /enregistrée comme proposition dans arborescence\.proposition\.json/);
+  assert.match(reason, /ajout : Correspondance ; suppression : Procédure/);
+  assert.match(reason, /Visible dans Index › Classement/);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].args.slice(0, 4), ['dossier', 'arborescence', '--dossier', root]);
+  assert.deepEqual(JSON.parse(calls[0].args[5]), [{ nom: 'Pièces', explication: 'Pièces du dossier' }, { nom: 'Correspondance', explication: '' }]);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(root, '.piecemaker', 'arborescence.json'), 'utf8'))[1].name, 'Procédure');
+});
+
+test('ajoute la modification à la proposition en attente', async () => {
+  const root = caseFolder(tree, { dossiers: [...tree, { name: 'Expertise', explanation: '' }], motif: 'Rapport attendu', date: '2026-01-01' });
+  const { calls, run } = recorder();
+  const reason = (await (await load()).hookDecision({ tool_name: 'Edit', tool_input: { file_path: `${root}/.piecemaker/arborescence.json`, old_string: '"name": "Expertise",\n    "explanation": ""', new_string: '"name": "Expertise",\n    "explanation": "Rapports"' }, cwd: root }, run)).hookSpecificOutput.permissionDecisionReason;
+  assert.match(reason, /ajout : Expertise/);
+  assert.deepEqual(JSON.parse(calls[0].args[5]).at(-1), { nom: 'Expertise', explication: 'Rapports' });
+});
+
+test('repart du fichier actuel quand la proposition ne contient pas le texte', async () => {
+  const root = caseFolder(tree, { dossiers: [{ name: 'Autre', explanation: '' }], motif: '', date: '2026-01-01' });
+  const { run } = recorder();
+  const reason = (await (await load()).hookDecision({ tool_name: 'Edit', tool_input: { file_path: '.piecemaker/arborescence.json', old_string: '"explanation": "Pièces du dossier"', new_string: '"explanation": "Pièces communiquées"' }, cwd: root }, run)).hookSpecificOutput.permissionDecisionReason;
+  assert.match(reason, /modification : Pièces/);
+  assert.match(reason, /part du fichier actuel/);
+});
+
+test('signale une modification impossible sans appeler pm', async () => {
+  const root = caseFolder(tree);
+  const { calls, run } = recorder();
+  const { hookDecision } = await load();
+  const missing = (await hookDecision({ tool_name: 'Edit', tool_input: { file_path: '.piecemaker/arborescence.json', old_string: 'Inconnu', new_string: 'x' }, cwd: root }, run)).hookSpecificOutput;
+  assert.equal(missing.permissionDecision, 'deny');
+  assert.match(missing.permissionDecisionReason, /Proposition non enregistrée.*introuvable/);
+  const broken = (await hookDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/arborescence.json', content: '[{' }, cwd: root }, run)).hookSpecificOutput;
+  assert.match(broken.permissionDecisionReason, /JSON illisible/);
+  assert.equal(calls.length, 0);
+});
+
+test('relaie le refus de pm', async () => {
+  const root = caseFolder(tree);
+  const { run } = recorder({ ok: false, output: 'Erreur : 31 dossiers, 30 au plus.' });
+  const reason = (await (await load()).hookDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/arborescence.json', content: '[]' }, cwd: root }, run)).hookSpecificOutput.permissionDecisionReason;
+  assert.match(reason, /Proposition non enregistrée.*30 au plus/);
+});
+
+test('transforme un patch Codex de l’ontologie en proposition', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-home '));
+  fs.mkdirSync(path.join(home, '.piecemaker'));
+  const relation = { name: 'amends', label: 'modifie', inverse: 'modifié par', description: '', source: ['Pièces'], target: ['Pièces'] };
+  fs.writeFileSync(path.join(home, '.piecemaker', 'ontologie.json'), `${JSON.stringify({ relations: [relation], sceau: 'abc' }, null, 2)}\n`);
+  const file = path.join(home, '.piecemaker', 'ontologie.json');
+  const patch = `*** Begin Patch\n*** Update File: ${file}\n@@\n-      "label": "modifie",\n+      "label": "amende",\n*** End Patch`;
+  const { calls, run } = recorder({ ok: true, output: '{}' });
+  const reason = (await (await load()).hookDecision({ tool_name: 'apply_patch', tool_input: { command: patch }, cwd: '/tmp/Dossier Exemple' }, run)).hookSpecificOutput.permissionDecisionReason;
+  assert.match(reason, /ontologie\.proposition\.json/);
+  assert.match(reason, /modification : amends/);
+  assert.deepEqual(calls[0].args.slice(0, 3), ['okf', 'ontologie', 'proposer']);
+  assert.equal(JSON.parse(calls[0].args[6]).relations[0].label, 'amende');
+});
+
+test('refuse un patch qui mêle l’arborescence à d’autres fichiers', async () => {
+  const root = caseFolder(tree);
+  const { calls, run } = recorder();
+  const patch = '*** Begin Patch\n*** Update File: notes.md\n@@\n-a\n+b\n*** Update File: .piecemaker/arborescence.json\n@@\n-x\n+y\n*** End Patch';
+  const reason = (await (await load()).hookDecision({ tool_name: 'apply_patch', tool_input: { command: patch }, cwd: root }, run)).hookSpecificOutput.permissionDecisionReason;
+  assert.match(reason, /seul dans son patch/);
+  assert.equal(calls.length, 0);
+});
+
+test('garde le refus simple pour le shell et la clé', async () => {
+  const { hookDecision } = await load();
+  const { calls, run } = recorder();
+  assert.match((await hookDecision({ tool_name: 'Bash', tool_input: { command: 'echo "[]" > .piecemaker/arborescence.json' }, cwd }, run)).hookSpecificOutput.permissionDecisionReason, /jamais par le shell/);
+  assert.match((await hookDecision({ tool_name: 'Write', tool_input: { file_path: '~/.piecemaker/ontologie.cle'.replace('~', os.homedir()) }, cwd }, run)).hookSpecificOutput.permissionDecisionReason, /clé de sceau/);
+  assert.equal(await hookDecision({ tool_name: 'Write', tool_input: { file_path: 'notes.md', content: 'x' }, cwd }, run), null);
+  assert.equal(calls.length, 0);
+});

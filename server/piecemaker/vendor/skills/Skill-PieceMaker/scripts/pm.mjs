@@ -738,7 +738,7 @@ async function okf(api, positional, flags, resolved) {
     return [
       ...(erreur ? [`Attention : ${erreur}`] : []),
       ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}) : ${proposition.relations.map((entry) => entry.name).join(', ')}.`] : []),
-      'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose avec pm okf ontologie proposer) :',
+      'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :',
       ...relations.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source.join(', ')} → ${entry.target.join(', ')}${entry.description ? ` — ${entry.description}` : ''}`),
       'Relations système :',
       ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),

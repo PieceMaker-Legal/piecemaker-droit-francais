@@ -144,8 +144,8 @@ function codexOntologyGuardGroup(repoRoot) {
       type: 'command',
       command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
       commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
-      timeout: 5,
-      statusMessage: 'Ontologie, arborescence et fiches OKF réservées à pm et à l’avocat',
+      timeout: 30,
+      statusMessage: 'Ontologie, arborescence et fiches OKF : modification transformée en proposition pour l’avocat',
     }],
   };
 }

@@ -22,9 +22,10 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
 - **Hooks** : `guard-legal-search` (Claude, Codex) refuse les outils `Search_*` à tout agent autre que
   `research-maker` quand celui-ci est installé ; Mistral les remplace par l'outil `research_maker` ; il lui laisse `consulter_article` et `consulter_decision`.
   Avec le SDK Mistral, chaque `.vibe/agents/*.toml` devient un outil de délégation (`index_maker`, `premise_maker`, `research_maker`, `deep_research_maker`) : boucle `chat.complete`, outils d'écriture soumis à la même autorisation que l'agent principal.
-- **Hooks** : `guard-ontologie` (Claude, Codex) refuse toute écriture directe dans
-  `.piecemaker/ontologie.json`, `.piecemaker/arborescence.json` et `.piecemaker/okf/` ; l'agent passe par
-  `pm okf link|unlink` et `pm dossier arborescence`.
+- **Hooks** : `guard-ontologie` (Claude, Codex, chat Mistral) refuse toute écriture directe dans
+  `.piecemaker/ontologie.json`, `.piecemaker/arborescence.json` et `.piecemaker/okf/`. Une modification de
+  l'ontologie ou de l'arborescence par Edit, Write ou apply_patch devient une proposition pour l'avocat
+  (`scripts/lib/proposition-edit.mjs`) ; les fiches passent par `pm okf link|unlink`.
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).
