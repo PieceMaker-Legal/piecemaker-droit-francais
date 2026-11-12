@@ -83,7 +83,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       sans valeur ou sans partie, partie isolée, #[doc] Catala citant une prémisse absente ou une pièce
       directement, prémisse citée par aucun programme Catala ; chaque manque nomme son programme
   okf ontologie
-      relations admises entre documents (.piecemaker/ontologie.json, réglée par l'avocat dans l'onglet Index) :
+      relations admises entre documents (~/.piecemaker/ontologie.json, commune à tous les dossiers, réglée par l'avocat dans l'onglet Index) :
       nom, sens, types de la source et de la cible ; lecture seule
   okf link <source> <relation> <target> --citation "phrase du document source"
       entre documents : une relation de l'ontologie (pm okf ontologie), entre les types qu'elle admet ;
@@ -725,7 +725,7 @@ async function okf(api, positional, flags, resolved) {
     const { relations, systeme, erreur } = await api.okfFn({ action, folder });
     return [
       ...(erreur ? [`Attention : ${erreur}`] : []),
-      'Relations entre documents (ontologie du dossier, modifiable par l’avocat seul) :',
+      'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul) :',
       ...relations.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source.join(', ')} → ${entry.target.join(', ')}${entry.description ? ` — ${entry.description}` : ''}`),
       'Relations système :',
       ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),

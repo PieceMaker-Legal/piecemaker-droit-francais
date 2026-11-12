@@ -13,7 +13,7 @@ import { graphGaps, premiseEvidence } from '../premises.js';
 import { premisesFromReviews } from '../reviews.js';
 import type { ReviewPremise } from '../reviews.js';
 import { addLink, removeLink } from '../links.js';
-import { ontologyFile, readOntology, saveOntology } from '../ontology.js';
+import { graphTypesOf, ontologyFile, readOntology, saveOntology } from '../ontology.js';
 import { createOkfBackend } from '../index.js';
 import { contradictions, quoted, verifyBundle } from '../verify.js';
 
@@ -28,8 +28,10 @@ const MARKDOWN: Record<string, string> = {
   [DRAFT]: 'Le contrat de prestation du 12 mars 2021 est nul.',
 };
 const NOW = '2026-01-01T00:00:00.000Z';
+process.env.PIECEMAKER_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-home-'));
 
 function dossier(): { projectPath: string; documents: SourceDocument[]; markdownOf: (resource: string) => string | null } {
+  fs.rmSync(ontologyFile(), { force: true });
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-'));
   for (const resource of Object.keys(MARKDOWN)) {
     fs.mkdirSync(path.dirname(path.join(projectPath, resource)), { recursive: true });
@@ -425,14 +427,13 @@ test('l\'ontologie enregistrée refuse les noms, types et relations système inv
   assert.throws(() => saveOntology(projectPath, { relations: [{ ...relation, name: 'Conteste' }] }), /minuscules/);
   assert.throws(() => saveOntology(projectPath, { relations: [{ ...relation, name: 'states' }] }), /relation système/);
   assert.throws(() => saveOntology(projectPath, { relations: [relation, relation] }), /en double/);
-  assert.throws(() => saveOntology(projectPath, { relations: [{ ...relation, target: ['Courriers'] }] }), /types absents de l'arborescence : Courriers/);
   assert.throws(() => saveOntology(projectPath, { relations: [{ ...relation, source: ['Premise'] }] }), /type réservé/);
   const saved = saveOntology(projectPath, { relations: [relation] });
   assert.deepEqual(saved.relations, [{ ...relation, inverse: 'conteste', description: '' }]);
   assert.equal(saved.personnalisee, true);
 });
 
-test('les liens, le scan et la vérification suivent l\'ontologie du dossier', () => {
+test('les liens, le scan et la vérification suivent l\'ontologie globale', () => {
   const { projectPath, documents, markdownOf } = dossier();
   saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', inverse: 'contesté par', source: ['Projets'], target: ['Pièces'] }] });
   buildBundle({ projectPath, documents, markdownOf });
@@ -451,11 +452,32 @@ test('les liens, le scan et la vérification suivent l\'ontologie du dossier', (
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
-test('la vérification signale une ontologie illisible ou des types sortis de l\'arborescence', () => {
+test('l\'ontologie globale est commune aux dossiers et ne s\'applique qu\'aux types présents', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
-  fs.writeFileSync(ontologyFile(projectPath), '{ "relations": [ { "name": "Conteste" } ] }');
+  fs.writeFileSync(ontologyFile(), '{ "relations": [ { "name": "Conteste" } ] }');
+  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf })[0].fiche, '~/.piecemaker/ontologie.json');
   assert.match(verifyBundle({ projectPath, resources, markdownOf })[0].erreur, /ontologie illisible, ontologie par défaut appliquée/);
-  fs.writeFileSync(ontologyFile(projectPath), JSON.stringify({ relations: [{ name: 'conteste', label: 'conteste', source: ['Courriers'], target: ['Pièces'] }] }));
-  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf })[0], { fiche: '/.piecemaker/ontologie.json', erreur: 'types de l\'ontologie absents de l\'arborescence : Courriers' });
+  const other = dossier().projectPath;
+  saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', source: ['Courriers', 'Projets'], target: ['Pièces'] }] });
+  fs.writeFileSync(path.join(other, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Courriers', explanation: '' }, { name: 'Pièces', explanation: '' }]));
+  assert.deepEqual(readOntology(other).relations.map((relation) => relation.name), ['conteste']);
+  assert.deepEqual(graphTypesOf(projectPath), ['Projets', 'Pièces']);
+  assert.deepEqual(graphTypesOf(other), ['Courriers', 'Pièces']);
+  buildBundle({ projectPath, documents, markdownOf });
+  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
+});
+
+test('une ontologie modifiée hors du serveur perd son sceau et n\'est pas appliquée', () => {
+  const { projectPath } = dossier();
+  saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'] }] });
+  assert.equal(readOntology(projectPath).erreur, undefined);
+  const stored = JSON.parse(fs.readFileSync(ontologyFile(), 'utf8'));
+  stored.relations.push({ name: 'invente', label: 'invente', inverse: 'invente', description: '', source: ['Pièces'], target: ['Pièces'] });
+  fs.writeFileSync(ontologyFile(), JSON.stringify(stored));
+  const tampered = readOntology(projectPath);
+  assert.match(tampered.erreur || '', /modifiée hors de l’onglet Index/);
+  assert.deepEqual(tampered.relations.map((relation) => relation.name), ['amends', 'responds-to', 'refers-to', 'supersedes']);
+  fs.writeFileSync(ontologyFile(), JSON.stringify({ relations: stored.relations }));
+  assert.match(readOntology(projectPath).erreur || '', /modifiée hors de l’onglet Index/);
 });

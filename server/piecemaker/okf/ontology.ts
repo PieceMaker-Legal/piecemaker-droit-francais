@@ -1,4 +1,6 @@
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { INVOLVES, MENTIONS, PARTY_TYPE, PREMISE_TYPE, STATES, readGraphTypes, readTypes, text } from './bundle.js';
@@ -23,7 +25,27 @@ const DEFAULT_RELATIONS: Array<Omit<OntologyRelation, 'source' | 'target'>> = [
   { name: 'supersedes', label: 'remplace', inverse: 'remplacé par', description: 'Un document remplace un autre document (nouvelle version).' },
 ];
 
-export const ontologyFile = (projectPath: string): string => path.join(projectPath, '.piecemaker', 'ontologie.json');
+const home = (): string => process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
+export const ontologyFile = (): string => path.join(home(), 'ontologie.json');
+const keyFile = (): string => path.join(home(), 'ontologie.cle');
+const TAMPERED = 'ontologie modifiée hors de l’onglet Index, ontologie par défaut appliquée : enregistrez-la de nouveau dans l’onglet Index › Ontologie.';
+
+function sealKey(create: boolean): Buffer | null {
+  const filePath = keyFile();
+  if (fs.existsSync(filePath)) return fs.readFileSync(filePath);
+  if (!create) return null;
+  fs.writeFileSync(filePath, randomBytes(32), { mode: 0o600, flag: 'wx' });
+  return fs.readFileSync(filePath);
+}
+
+const sealOf = (key: Buffer, relations: OntologyRelation[]): string => createHmac('sha256', key).update(JSON.stringify(relations)).digest('hex');
+
+function sealed(key: Buffer | null, relations: OntologyRelation[], seal: unknown): boolean {
+  if (!key || typeof seal !== 'string') return false;
+  const expected = Buffer.from(sealOf(key, relations));
+  const actual = Buffer.from(seal);
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+}
 
 export function defaultOntology(projectPath: string): OntologyRelation[] {
   const graphTypes = readGraphTypes(projectPath);
@@ -60,28 +82,24 @@ export function normalizeOntology(value: unknown): OntologyRelation[] {
 }
 
 export function readOntology(projectPath: string): Ontology {
-  const filePath = ontologyFile(projectPath);
+  const filePath = ontologyFile();
   if (!fs.existsSync(filePath)) return { relations: defaultOntology(projectPath), personnalisee: false };
   try {
-    return { relations: normalizeOntology(JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^﻿/, ''))), personnalisee: true };
+    const stored = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^﻿/, ''));
+    const relations = normalizeOntology(stored);
+    if (!sealed(sealKey(false), relations, stored?.sceau)) return { relations: defaultOntology(projectPath), personnalisee: true, erreur: TAMPERED };
+    return { relations, personnalisee: true };
   } catch (error) {
     return { relations: defaultOntology(projectPath), personnalisee: true, erreur: `ontologie illisible, ontologie par défaut appliquée : ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
-export function missingTypes(projectPath: string, relations: OntologyRelation[]): string[] {
-  const types = readTypes(projectPath);
-  return [...new Set(relations.flatMap((relation) => [...relation.source, ...relation.target]))].filter((type) => !types.includes(type));
-}
-
 export function saveOntology(projectPath: string, value: unknown): Ontology {
   const relations = normalizeOntology(value);
-  const missing = missingTypes(projectPath, relations);
-  if (missing.length) throw new TypeError(`types absents de l'arborescence : ${missing.join(', ')}. Types : ${readTypes(projectPath).join(', ')}.`);
-  const filePath = ontologyFile(projectPath);
+  const filePath = ontologyFile();
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify({ relations }, null, 2)}\n`);
+  fs.writeFileSync(temporary, `${JSON.stringify({ relations, sceau: sealOf(sealKey(true)!, relations) }, null, 2)}\n`);
   fs.renameSync(temporary, filePath);
   return readOntology(projectPath);
 }
@@ -89,7 +107,8 @@ export function saveOntology(projectPath: string, value: unknown): Ontology {
 export const relationNames = (ontology: Ontology): string[] => ontology.relations.map((relation) => relation.name);
 export const ruleOf = (ontology: Ontology, name: string): OntologyRelation | undefined => ontology.relations.find((relation) => relation.name === name);
 export function graphTypesOf(projectPath: string, ontology = readOntology(projectPath)): string[] {
-  const types = [...new Set(ontology.relations.flatMap((relation) => [...relation.source, ...relation.target]))];
+  const present = readTypes(projectPath);
+  const types = [...new Set(ontology.relations.flatMap((relation) => [...relation.source, ...relation.target]))].filter((type) => present.includes(type));
   return types.length ? types : readGraphTypes(projectPath);
 }
 export const isSystemRelation = (name: string): boolean => SYSTEM_NAMES.includes(name);

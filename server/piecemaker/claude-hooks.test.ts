@@ -20,7 +20,7 @@ test('registers the Légifrance search guard in Claude settings and keeps person
     assert.equal(status.ok, true);
     const groups = JSON.parse(fs.readFileSync(settings, 'utf8')).hooks.PreToolUse as Array<{ matcher: string; hooks: Array<{ command: string }> }>;
     assert.ok(groups.some((group) => group.matcher === 'mcp__.*legifrance.*__Search_.*' && group.hooks[0].command.includes('guard-legal-search.mjs')));
-    assert.ok(groups.some((group) => group.matcher === 'Write|Edit|MultiEdit|NotebookEdit|Bash' && group.hooks[0].command.includes('guard-ontologie.mjs')));
+    assert.ok(groups.some((group) => group.matcher === 'Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob' && group.hooks[0].command.includes('guard-ontologie.mjs')));
     assert.ok(groups.some((group) => group.hooks[0].command === 'echo perso'));
     assert.equal(reconcileClaudeHooks(applicationRoot, home).ok, true);
   } finally {

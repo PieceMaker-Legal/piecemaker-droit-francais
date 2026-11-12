@@ -50,7 +50,7 @@ export async function editOntology(root: HTMLElement, projectId: string, onSaved
   const layer = modal(root, `
     <form class="pmd-form" data-ontology-form>
       <h2 class="pmd-title piecemaker-display">Ontologie des liens</h2>
-      <p class="pmd-form-note">Les relations admises entre documents, et les types de documents qu’elles relient. Les types sont les dossiers de premier niveau de l’arborescence. L’assistant ne pose que ces liens et ne modifie pas cette liste. « Vérifier l’index » signale les liens qui en sortent.</p>
+      <p class="pmd-form-note">Les relations admises entre documents, et les types de documents qu’elles relient. Cette ontologie est commune à tous les dossiers : une relation ne s’applique que là où ses types existent. Les types sont les dossiers de premier niveau de l’arborescence. L’assistant ne pose que ces liens et ne modifie pas cette liste. « Vérifier l’index » signale les liens qui en sortent.</p>
       ${state.erreur ? `<div class="pmd-error" role="alert">${escapeHtml(state.erreur)}</div>` : ''}
       <div class="pmd-form" data-ontology-rows>${rowsHtml()}</div>
       <button type="button" class="pmd-button" data-ontology-add>+ Relation</button>

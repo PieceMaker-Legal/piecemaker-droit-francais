@@ -404,7 +404,7 @@ test('okf verify, link et unlink passent par okfFn', async () => {
   assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return { erreurs: [], contradictions: [], manques: [manque] }; } } }), 'Index OKF : aucune erreur.\nGraphe : 1 élément(s) manquant(s).\n- /_premises/date-de-signature.md : prémisse sans pièce citée (programme bail)');
   assert.deepEqual(calls.pop(), { action: 'verify', folder });
   const ontologie = { relations: [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'], description: 'Un acte conteste une pièce.' }], systeme: [{ name: 'states', label: 'établit', source: 'document', target: 'Premise' }] };
-  assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return ontologie; } } }), 'Relations entre documents (ontologie du dossier, modifiable par l’avocat seul) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nRelations système :\n- states (établit) : document → Premise');
+  assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return ontologie; } } }), 'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nRelations système :\n- states (établit) : document → Premise');
   assert.deepEqual(calls.pop(), { action: 'ontologie', folder });
   await assert.rejects(run(['okf', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
   fs.rmSync(dossier, { recursive: true, force: true });

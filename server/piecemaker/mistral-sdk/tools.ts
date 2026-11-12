@@ -23,6 +23,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
   const applicationRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
   const guardScripts = [
     'server/piecemaker/vendor/piecemaker-plugin/scripts/protect-originals.mjs',
+    'server/piecemaker/vendor/piecemaker-plugin/scripts/guard-ontologie.mjs',
     'server/piecemaker/vendor/installer/assets/claude-hooks/piecemaker-guard-secrets.mjs',
   ].map(file => path.join(applicationRoot, file));
 

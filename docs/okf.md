@@ -31,13 +31,16 @@ L'avocat seul fixe les types de documents. Quand l'arborescence existe, `pm doss
 
 ## Ontologie
 
-`.piecemaker/ontologie.json`, un fichier par dossier : `{ "relations": [{ name, label, inverse, description, source: [types], target: [types] }] }`. Sans fichier, l'ontologie par défaut s'applique : les quatre relations ci-dessous entre documents des types du graphe. Un fichier illisible fait appliquer l'ontologie par défaut, avec un message.
+`~/.piecemaker/ontologie.json` (ou `$PIECEMAKER_HOME/ontologie.json`), un seul fichier commun à tous les dossiers : `{ "relations": [{ name, label, inverse, description, source: [types], target: [types] }], "sceau" }`. Une relation ne s'applique que dans les dossiers où ses types existent. Sans fichier, chaque dossier reçoit l'ontologie par défaut : les quatre relations ci-dessous entre documents des types du graphe. Un fichier illisible fait appliquer l'ontologie par défaut, avec un message.
 
-- L'avocat l'édite dans l'onglet Index, bouton Ontologie (`GET`/`PUT /api/piecemaker/okf/ontologie`). Les types doivent exister dans l'arborescence. `Premise` et `Partie` sont réservés ; les relations système (`states`, `mentions`, `involves`) ne se redéfinissent pas.
+Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA256 des relations, calculé avec la clé `ontologie.cle` du même répertoire (créée au premier enregistrement, mode 600). Un fichier dont le sceau ne correspond pas a été modifié hors de l'onglet Index : l'ontologie par défaut s'applique, `verify` et l'onglet Index le signalent, et l'avocat l'enregistre de nouveau.
+
+- L'avocat l'édite dans l'onglet Index, bouton Ontologie (`GET`/`PUT /api/piecemaker/okf/ontologie`). Les types proposés sont ceux du dossier ouvert et ceux déjà employés par l'ontologie. `Premise` et `Partie` sont réservés ; les relations système (`states`, `mentions`, `involves`) ne se redéfinissent pas.
 - L'agent la lit avec `pm okf ontologie`. `pm okf link` refuse une relation absente de l'ontologie ou un type source ou cible non admis.
 - `verify` signale chaque lien hors ontologie, y compris un lien posé avant une modification de l'ontologie.
 - Les libellés du tableau et du graphe suivent l'ontologie.
-- Le hook `guard-ontologie` (Claude : `Write|Edit|MultiEdit|NotebookEdit|Bash` ; Codex : `Bash|apply_patch`) refuse à l'agent toute écriture directe dans `.piecemaker/ontologie.json`, `.piecemaker/arborescence.json` et `.piecemaker/okf/`.
+- Le hook `guard-ontologie` refuse à l'agent toute écriture directe dans `~/.piecemaker/ontologie.json`, `.piecemaker/arborescence.json` et `.piecemaker/okf/`, et tout accès à `ontologie.cle`. Il est branché sous Claude (`Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob`), sous Codex (`Bash|apply_patch`, patch lu dans `tool_input.command`) et dans le chat Mistral (`mistral-sdk/tools.ts`, avec `protect-originals`).
+- Une commande shell qui nomme l'un de ces fichiers n'est admise que si chacun de ses segments est une lecture (`cat`, `grep`, `jq` sans `-i`, `find` sans `-delete` ni `-exec`, `pm`…), sans redirection vers un fichier ni substitution de commande.
 
 ## Relations
 
@@ -141,7 +144,8 @@ Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activ
 - Une prémisse créée dans la visionneuse n'est pas `single_value` ; l'agent la pose avec `--single`.
 - `pm okf verify` compare la valeur du scénario Catala (`définition … égal à`) aux valeurs des pièces de la prémisse seulement pour une date `|AAAA-MM-JJ|` ou un nombre ; les autres valeurs ne sont pas comparées.
 - Le renvoi d'une clause à une autre n'a pas de relation propre, sauf si l'avocat en ajoute une à l'ontologie.
-- Vibe (Mistral) n'a pas le hook `guard-ontologie` : sous Vibe, seuls le serveur (`pm okf link`, `pm dossier arborescence`) et `verify` font respecter l'ontologie et les types. Le hook Bash repère les écritures par motifs (redirection, `cp`, `sed -i`, interpréteur…) : une commande détournée peut lui échapper ; `verify` signale alors le lien hors ontologie.
+- Le CLI `vibe` lancé hors de PieceMaker n'exécute aucun hook ; le chat Mistral de l'app, lui, passe par `guard-ontologie`.
+- Une commande qui fabrique le chemin sans le nommer (concaténation, variable) échappe au hook. Le sceau détecte alors une ontologie modifiée, et `verify` un lien hors ontologie posé dans une fiche.
 
 ## Fichiers
 

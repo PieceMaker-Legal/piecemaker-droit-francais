@@ -24,7 +24,7 @@ import {
   typeOf,
   typographic,
 } from './bundle.js';
-import { missingTypes, readOntology, relationNames, ruleOf } from './ontology.js';
+import { readOntology, relationNames, ruleOf } from './ontology.js';
 
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
@@ -59,7 +59,7 @@ function indexErrors(projectPath: string, ids: string[]): OkfError[] {
 }
 
 const ALLOWED: Record<string, string[]> = { [PREMISE_TYPE]: [INVOLVES], [PARTY_TYPE]: [] };
-const ONTOLOGY_FICHE = '/.piecemaker/ontologie.json';
+const ONTOLOGY_FICHE = '~/.piecemaker/ontologie.json';
 
 export function verifyBundle(input: { projectPath: string; resources: string[]; markdownOf: MarkdownOf }): OkfError[] {
   const { projectPath, markdownOf } = input;
@@ -70,8 +70,6 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
   const typeById = new Map(concepts.map((concept) => [concept.id, text(concept.frontmatter.type)]));
   const errors: OkfError[] = [];
   if (ontology.erreur) errors.push({ fiche: ONTOLOGY_FICHE, erreur: ontology.erreur });
-  const missing = missingTypes(projectPath, ontology.relations);
-  if (missing.length) errors.push({ fiche: ONTOLOGY_FICHE, erreur: `types de l'ontologie absents de l'arborescence : ${missing.join(', ')}` });
 
   for (const concept of concepts) {
     const report = (erreur: string) => errors.push({ fiche: concept.id, erreur });
