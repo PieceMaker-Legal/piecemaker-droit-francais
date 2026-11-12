@@ -56,6 +56,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   style.textContent = PLUGIN_STYLES;
   const root = document.createElement('div');
   root.className = 'pmd-root piecemaker-ui';
+  root.dataset.chatTab = 'plugin:piecemaker-dossier';
   root.style.position = 'relative';
   container.replaceChildren(style, root);
   let context = api.context;

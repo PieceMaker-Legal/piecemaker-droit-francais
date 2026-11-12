@@ -1,6 +1,10 @@
 import { modal } from './editors.js';
 import { okfApi, PARTY_TYPE, PREMISE_TYPE, type OntologyRelation, type OntologyState } from './okf.js';
+import { applyChange, ontologyChanges, proposalMarkup, type ChangeDecision } from './ontology-proposal.js';
 import { escapeHtml } from './views.js';
+
+const TAB = 'plugin:piecemaker-dossier';
+const ASK_NOTE = 'ontologie commune à tous les dossiers, lue par pm okf ontologie ; pour la changer, proposez avec pm okf ontologie proposer, l’avocat décide';
 
 const blank = (): OntologyRelation => ({ name: '', label: '', inverse: '', description: '', source: [], target: [] });
 
@@ -13,13 +17,23 @@ function typeChecks(types: string[], selected: string[], side: 'source' | 'targe
   return `<div class="pmd-ontology-types" data-ontology-${side}>${types.map((type) => `<label><input type="checkbox" value="${escapeHtml(type)}"${selected.includes(type) ? ' checked' : ''}> ${escapeHtml(type)}</label>`).join('')}</div>`;
 }
 
-function relationMarkup(relation: OntologyRelation, index: number, types: string[]): string {
+type ChatPlace = { fichier?: string; debut?: number; fin?: number };
+
+const chatAttributes = (title: string, kind: string, place: ChatPlace) => ` data-chat-pick="${escapeHtml(title)}" data-chat-kind="${kind}" data-chat-note="${escapeHtml(ASK_NOTE)}"${place.fichier ? ` data-chat-file="${escapeHtml(place.fichier)}"` : ''}${place.debut ? ` data-chat-line="${place.debut}" data-chat-end="${place.fin ?? place.debut}"` : ''}`;
+
+function askChat(title: string, kind: string, place: ChatPlace): void {
+  window.dispatchEvent(new CustomEvent('piecemaker:chat-pick', { detail: { titre: title, nature: kind, note: ASK_NOTE, ...place } }));
+  window.dispatchEvent(new CustomEvent('piecemaker:panel-picked', { detail: { tab: TAB } }));
+}
+
+function relationMarkup(relation: OntologyRelation, index: number, types: string[], place: ChatPlace): string {
   return `
-    <div class="pmd-form-section" data-ontology-row>
+    <div class="pmd-form-section" data-ontology-row${relation.name ? chatAttributes(relation.name, 'Relation', place) : ''}>
       <div class="pmd-ontology-head">
         <label>Nom technique<input class="pmd-input" data-ontology-name maxlength="40" value="${escapeHtml(relation.name)}" placeholder="conteste"></label>
         <label>Libellé<input class="pmd-input" data-ontology-label maxlength="60" value="${escapeHtml(relation.label)}" placeholder="conteste"></label>
         <label>Libellé inverse<input class="pmd-input" data-ontology-inverse maxlength="60" value="${escapeHtml(relation.inverse)}" placeholder="contesté par"></label>
+        <button type="button" class="pmd-icon-button" data-ontology-ask="${index}" title="Demander à l’assistant sur cette relation" aria-label="Demander à l’assistant sur cette relation">?</button>
         <button type="button" class="pmd-icon-button" data-ontology-remove="${index}" title="Supprimer cette relation" aria-label="Supprimer cette relation">×</button>
       </div>
       <label>Description<input class="pmd-input" data-ontology-description maxlength="500" value="${escapeHtml(relation.description)}" placeholder="Quand poser ce lien"></label>
@@ -42,16 +56,27 @@ export function readOntologyRows(list: HTMLElement): OntologyRelation[] {
 }
 
 export async function editOntology(root: HTMLElement, projectId: string, onSaved: () => void): Promise<void> {
-  const state = await okfApi.ontology(projectId);
-  const types = ontologyTypes(state);
+  let state = await okfApi.ontology(projectId);
+  const proposed = state.proposition?.relations ?? [];
+  const types = ontologyTypes({ ...state, relations: [...state.relations, ...proposed] });
+  const changes = state.proposition ? ontologyChanges(state.relations, proposed) : [];
+  const decisions: Array<ChangeDecision | undefined> = changes.map(() => undefined);
   let relations = state.relations;
-  const rowsHtml = () => relations.map((relation, index) => relationMarkup(relation, index, types)).join('');
+  const fileShown = Boolean(state.fichier && state.total);
+  const placeOf = (name: string): ChatPlace => {
+    const lines = state.lignes?.[name];
+    return fileShown && lines ? { fichier: state.fichier, ...lines } : {};
+  };
+  const wholePlace = (): ChatPlace => (fileShown ? { fichier: state.fichier, debut: 1, fin: state.total } : {});
+  const rowsHtml = () => relations.map((relation, index) => relationMarkup(relation, index, types, placeOf(relation.name))).join('');
+  const proposalHtml = () => (state.proposition ? proposalMarkup(changes, decisions, state.proposition.motif) : '');
   const system = state.systeme.map((relation) => `<li><strong>${escapeHtml(relation.label)}</strong> <code>${escapeHtml(relation.name)}</code> : ${escapeHtml(relation.source)} → ${escapeHtml(relation.target)}. ${escapeHtml(relation.description)}</li>`).join('');
   const layer = modal(root, `
-    <form class="pmd-form" data-ontology-form>
-      <h2 class="pmd-title piecemaker-display">Ontologie des liens</h2>
-      <p class="pmd-form-note">Les relations admises entre documents, et les types de documents qu’elles relient. Cette ontologie est commune à tous les dossiers : une relation ne s’applique que là où ses types existent. Les types sont les dossiers de premier niveau de l’arborescence. L’assistant ne pose que ces liens et ne modifie pas cette liste. « Vérifier l’index » signale les liens qui en sortent.</p>
+    <form class="pmd-form" data-ontology-form${chatAttributes('Ontologie des liens', 'Ontologie', wholePlace())}>
+      <div class="pmd-ontology-change-head"><h2 class="pmd-title piecemaker-display">Ontologie des liens</h2><span class="pmd-spacer"></span><button type="button" class="pmd-button" data-ontology-ask-all>Demander à l’assistant</button></div>
+      <p class="pmd-form-note">Les relations admises entre documents, et les types de documents qu’elles relient. Cette ontologie est commune à tous les dossiers : une relation ne s’applique que là où ses types existent. Les types sont les dossiers de premier niveau de l’arborescence. L’assistant ne pose que ces liens ; il peut proposer de modifier cette liste, et vous acceptez, refusez ou modifiez chaque changement. « Vérifier l’index » signale les liens qui en sortent.</p>
       ${state.erreur ? `<div class="pmd-error" role="alert">${escapeHtml(state.erreur)}</div>` : ''}
+      <div data-ontology-proposal>${proposalHtml()}</div>
       <div class="pmd-form" data-ontology-rows>${rowsHtml()}</div>
       <button type="button" class="pmd-button" data-ontology-add>+ Relation</button>
       <div class="pmd-form-section"><h3>Relations système (non modifiables)</h3><ul class="pmd-form-note">${system}</ul></div>
@@ -62,8 +87,43 @@ export async function editOntology(root: HTMLElement, projectId: string, onSaved
       </div>
     </form>`);
   const list = layer.querySelector<HTMLElement>('[data-ontology-rows]')!;
+  const proposalHost = layer.querySelector<HTMLElement>('[data-ontology-proposal]')!;
+  const showError = (error: unknown) => {
+    const message = layer.querySelector<HTMLElement>('[data-ontology-error]')!;
+    message.textContent = error instanceof Error ? error.message : String(error);
+    message.hidden = false;
+  };
+  const decide = (index: number, decision: ChangeDecision) => {
+    decisions[index] = decision;
+    relations = readOntologyRows(list);
+    if (decision !== 'refusee') relations = applyChange(relations, changes[index]);
+    list.innerHTML = rowsHtml();
+    proposalHost.innerHTML = proposalHtml();
+    if (decision !== 'modifiee') return;
+    const row = list.querySelectorAll<HTMLElement>('[data-ontology-row]')[relations.findIndex((relation) => relation.name === changes[index].name)];
+    row?.classList.add('pmd-ontology-row-edited');
+    row?.scrollIntoView({ block: 'nearest' });
+    row?.querySelector<HTMLInputElement>('[data-ontology-label]')?.focus();
+  };
   layer.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
+    const choice = target.closest<HTMLElement>('[data-change-accept],[data-change-refuse],[data-change-edit]');
+    if (choice) {
+      const { changeAccept, changeRefuse, changeEdit } = choice.dataset;
+      decide(Number(changeAccept ?? changeRefuse ?? changeEdit), changeAccept !== undefined ? 'acceptee' : changeRefuse !== undefined ? 'refusee' : 'modifiee');
+      return;
+    }
+    if (target.closest('[data-proposal-drop]')) {
+      void okfApi.dropProposal(projectId).then(() => { state = { ...state, proposition: null }; proposalHost.innerHTML = ''; }).catch(showError);
+      return;
+    }
+    if (target.closest('[data-ontology-ask-all]')) return askChat('Ontologie des liens', 'Ontologie', wholePlace());
+    const ask = target.closest<HTMLElement>('[data-ontology-ask]');
+    if (ask) {
+      const relation = readOntologyRows(list)[Number(ask.dataset.ontologyAsk)];
+      if (relation?.name) askChat(relation.name, 'Relation', placeOf(relation.name));
+      return;
+    }
     const remove = target.closest<HTMLElement>('[data-ontology-remove]');
     if (!remove && !target.closest('[data-ontology-add]')) return;
     relations = readOntologyRows(list);
@@ -78,11 +138,7 @@ export async function editOntology(root: HTMLElement, projectId: string, onSaved
     const submit = layer.querySelector<HTMLButtonElement>('[type="submit"]')!;
     if (submit.disabled) return;
     submit.disabled = true;
-    void okfApi.saveOntology(projectId, readOntologyRows(list)).then(() => { layer.remove(); onSaved(); }).catch((error: unknown) => {
-      const message = layer.querySelector<HTMLElement>('[data-ontology-error]')!;
-      message.textContent = error instanceof Error ? error.message : String(error);
-      message.hidden = false;
-    }).finally(() => { submit.disabled = false; });
+    void okfApi.saveOntology(projectId, readOntologyRows(list)).then(() => { layer.remove(); onSaved(); }).catch(showError).finally(() => { submit.disabled = false; });
   });
   list.querySelector<HTMLInputElement>('[data-ontology-name]')?.focus();
 }

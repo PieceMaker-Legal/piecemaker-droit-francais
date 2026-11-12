@@ -255,7 +255,21 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-confirm-option{display:flex;align-items:flex-start;gap:8px;color:var(--pmd-muted);font-size:13px;cursor:pointer}
 .pmd-form{display:grid;gap:12px}
 .pmd-tree-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto auto;gap:8px;align-items:center}
-.pmd-ontology-head{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:8px;align-items:end}
+.pmd-ontology-head{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto auto;gap:8px;align-items:end}
+.pmd-ontology-change-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pmd-ontology-change-head h2,.pmd-ontology-change-head h3{margin:0}
+.pmd-ontology-change{border:1px solid var(--pmd-border);border-radius:6px;padding:8px 10px;display:grid;gap:6px}
+.pmd-ontology-change[data-change-kind="ajout"]{border-left:3px solid #2f8f4e}
+.pmd-ontology-change[data-change-kind="suppression"]{border-left:3px solid #c0392b}
+.pmd-ontology-change[data-change-kind="modification"]{border-left:3px solid #c98a12}
+.pmd-ontology-change[data-decided]{opacity:.65}
+.pmd-ontology-change-fields{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:2px 10px;margin:0;font-size:12px}
+.pmd-ontology-change-fields dt{color:var(--pmd-muted)}
+.pmd-ontology-change-fields dd{margin:0}
+.pmd-ontology-change del{color:#c0392b;text-decoration:line-through}
+.pmd-ontology-change ins{color:#2f8f4e;text-decoration:underline}
+.pmd-ontology-decision{font-size:12px;color:var(--pmd-muted)}
+.pmd-ontology-row-edited{outline:2px solid #c98a12;outline-offset:2px}
 .pmd-ontology-side{display:grid;grid-template-columns:56px minmax(0,1fr);gap:8px;align-items:start;font-size:12px;color:var(--pmd-muted)}
 .pmd-ontology-types{display:flex;flex-wrap:wrap;gap:6px 14px}
 .pmd-form .pmd-ontology-types label{display:flex;gap:5px;align-items:center;color:var(--pmd-text)}

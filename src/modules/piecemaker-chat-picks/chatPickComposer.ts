@@ -1,7 +1,7 @@
-type Card = { titre: string; fichier?: string; debut?: number; fin?: number; identifiant?: string; valeur?: string; scenario?: string; demande?: string };
+type Card = { titre: string; nature?: string; note?: string; fichier?: string; debut?: number; fin?: number; identifiant?: string; valeur?: string; scenario?: string; demande?: string };
 type Pending = { target: HTMLTextAreaElement; original: string; full: string };
 
-const PICK_EVENT = 'piecemaker:catala-card-pick';
+const PICK_EVENTS = ['piecemaker:chat-pick', 'piecemaker:catala-card-pick'];
 const FORM = 'form[data-slot="prompt-input"]';
 const FIELD = 'textarea[data-slot="prompt-input-textarea"]';
 const WATCH_INTERVAL = 200;
@@ -17,19 +17,21 @@ const STYLES = `
 `;
 
 const escape = (text: string) => text.replace(/[&<>"]/g, (sign) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[sign]!);
-const place = (card: Card) => (card.fichier && card.debut ? `${card.fichier}, ${card.fin && card.fin > card.debut ? `lignes ${card.debut} à ${card.fin}` : `ligne ${card.debut}`}` : '');
+const heading = (card: Card) => `${card.nature || 'Carte'} « ${card.titre.replace(/[[\]]/g, '')} »`;
+const lines = (card: Card) => (card.debut ? (card.fin && card.fin > card.debut ? `lignes ${card.debut} à ${card.fin}` : `ligne ${card.debut}`) : '');
+const place = (card: Card) => [card.fichier, card.fichier && lines(card)].filter(Boolean).join(', ');
 
 export function cardReference(card: Card): string {
   if (card.demande) return card.demande;
-  const label = `Carte « ${card.titre.replace(/[[\]]/g, '')} »`;
-  const link = card.fichier && card.debut ? `[${label}](${card.fichier}:${card.debut}${card.fin && card.fin > card.debut ? ` "lignes ${card.debut} à ${card.fin}"` : ''})` : label;
+  const label = heading(card);
+  const link = card.fichier ? `[${label}](${card.fichier}${card.debut ? `:${card.debut}` : ''}${card.fin && card.debut && card.fin > card.debut ? ` "${lines(card)}"` : ''})` : label;
   const name = card.identifiant ? `\`${card.identifiant.replace(/`/g, '')}\`` : '';
   const value = card.valeur ? `${name ? '= ' : 'valeur '}${card.valeur.replace(/\s+/g, ' ').trim()}` : '';
   const state = [[name, value].filter(Boolean).join(' '), card.scenario && value ? `scénario ${card.scenario}` : ''].filter(Boolean).join(', ');
-  return state ? `${link} — ${state}` : link;
+  return [link, state, card.note?.replace(/\s+/g, ' ').trim()].filter(Boolean).join(' — ');
 }
 
-export function inject(): () => void {
+export function startChatPickComposer(): () => void {
   let cards: Card[] = [];
   let pending: Pending | null = null;
   let watch = 0;
@@ -51,7 +53,7 @@ export function inject(): () => void {
   };
   const paint = () => {
     row.hidden = !cards.length;
-    row.innerHTML = cards.map((card, index) => `<span class="pmc-pick" title="${escape(place(card))}"><span>${card.demande ? escape(card.titre) : `Carte « ${escape(card.titre)} »`}</span><button type="button" data-remove="${index}" aria-label="Retirer la carte">×</button></span>`).join('');
+    row.innerHTML = cards.map((card, index) => `<span class="pmc-pick" title="${escape(place(card))}"><span>${escape(card.demande ? card.titre : heading(card))}</span><button type="button" data-remove="${index}" aria-label="Retirer">×</button></span>`).join('');
     attach();
   };
   const stopWatch = () => { window.clearInterval(watch); watch = 0; };
@@ -110,7 +112,7 @@ export function inject(): () => void {
   const observer = new window.MutationObserver(attach);
   observer.observe(document.body, { childList: true, subtree: true });
   row.addEventListener('click', remove);
-  window.addEventListener(PICK_EVENT, pick);
+  for (const type of PICK_EVENTS) window.addEventListener(type, pick);
   window.addEventListener('input', typed, true);
   for (const type of ['keydown', 'click', 'submit']) {
     window.addEventListener(type, sending, true);
@@ -121,7 +123,7 @@ export function inject(): () => void {
   return () => {
     observer.disconnect();
     stopWatch();
-    window.removeEventListener(PICK_EVENT, pick);
+    for (const type of PICK_EVENTS) window.removeEventListener(type, pick);
     window.removeEventListener('input', typed, true);
     for (const type of ['keydown', 'click', 'submit']) {
       window.removeEventListener(type, sending, true);

@@ -10,7 +10,8 @@ import { buildBundle, documentsFromSnapshot, partiesFromSnapshot } from './build
 import { LAWYER_ACTOR, readBundle, readTypes, relationsOf, resourceOf, text } from './bundle.js';
 import type { LinkInput } from './links.js';
 import { addLink, removeLink } from './links.js';
-import { SYSTEM_RELATIONS, graphTypesOf, readOntology, saveOntology } from './ontology.js';
+import { SYSTEM_RELATIONS, graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
+import { dropProposal, ontologyLines, proposeOntology, readProposal } from './ontology-proposal.js';
 import { graphGaps } from './premises.js';
 import { premisesFromReviews } from './reviews.js';
 import { contradictions, verifyBundle } from './verify.js';
@@ -48,11 +49,19 @@ export function createOkfBackend(options: OkfOptions) {
 
   const ontology = (projectId: string) => {
     const projectPath = projectPathOf(projectId);
-    return { ...readOntology(projectPath), systeme: SYSTEM_RELATIONS, types: readTypes(projectPath) };
+    const current = readOntology(projectPath);
+    const lines = current.erreur ? { lignes: {}, total: 0 } : ontologyLines(current.relations.map((relation) => relation.name));
+    return { ...current, systeme: SYSTEM_RELATIONS, types: readTypes(projectPath), fichier: ontologyFile(), ...lines, proposition: readProposal() };
+  };
+
+  const propose = (projectId: string, value: unknown) => {
+    projectPathOf(projectId);
+    return proposeOntology(value);
   };
 
   const saveOntologyOf = (projectId: string, value: unknown) => {
     saveOntology(projectPathOf(projectId), value);
+    dropProposal();
     build(projectId);
     return ontology(projectId);
   };
@@ -105,11 +114,12 @@ export function createOkfBackend(options: OkfOptions) {
   router.get('/okf', (request, response) => respond(() => read(String(request.query.projectId || '')), response));
   router.get('/okf/ontologie', (request, response) => respond(() => ontology(String(request.query.projectId || '')), response));
   router.put('/okf/ontologie', express.json(), (request, response) => respond(() => saveOntologyOf(String(request.body?.projectId || ''), request.body), response));
+  router.delete('/okf/ontologie/proposition', (request, response) => respond(() => { projectPathOf(String(request.query.projectId || '')); dropProposal(); return ontology(String(request.query.projectId || '')); }, response));
   router.get('/okf/verify', (request, response) => respond(() => verify(String(request.query.projectId || '')), response));
   router.post('/okf/link', express.json(), (request, response) => respond(() => link(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
   router.post('/okf/unlink', express.json(), (request, response) => respond(() => unlink(String(request.body?.projectId || ''), request.body), response));
 
-  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, ontologie: ontology, link: (projectId, body) => link(projectId, body), unlink };
+  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, ontologie: ontology, proposer: propose, link: (projectId, body) => link(projectId, body), unlink };
   const localRouter = express.Router();
   localRouter.post('/okf', express.json(), (request, response) => {
     if (!options.isLoopback(request)) {

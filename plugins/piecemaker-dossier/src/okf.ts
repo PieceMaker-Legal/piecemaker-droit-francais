@@ -4,7 +4,8 @@ export type OkfRelationLabel = { name: string; label: string; inverse: string };
 export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[] };
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
 export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
-export type OntologyState = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[] };
+export type OntologyProposal = { relations: OntologyRelation[]; motif: string; date: string };
+export type OntologyState = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: OntologyProposal | null };
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
 export type OkfReport = { erreurs: OkfError[]; contradictions: OkfContradiction[] };
@@ -24,7 +25,7 @@ export function relationLabel(index: OkfIndex | null, name: string, incoming = f
 async function request<T>(path: string, payload?: unknown, method = 'POST'): Promise<T> {
   const token = localStorage.getItem('auth-token');
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(payload ? { 'Content-Type': 'application/json' } : {}) };
-  const response = await fetch(`/api/piecemaker/okf${path}`, payload ? { method, headers, body: JSON.stringify(payload) } : { headers });
+  const response = await fetch(`/api/piecemaker/okf${path}`, payload ? { method, headers, body: JSON.stringify(payload) } : { method: method === 'POST' ? 'GET' : method, headers });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `Index OKF indisponible (${response.status}).`);
   return body as T;
@@ -37,6 +38,7 @@ export const okfApi = {
   unlink: (projectId: string, link: OkfLink) => request<OkfLink>('/unlink', { projectId, ...link }),
   ontology: (projectId: string) => request<OntologyState>(`/ontologie?projectId=${encodeURIComponent(projectId)}`),
   saveOntology: (projectId: string, relations: OntologyRelation[]) => request<OntologyState>('/ontologie', { projectId, relations }, 'PUT'),
+  dropProposal: (projectId: string) => request<OntologyState>(`/ontologie/proposition?projectId=${encodeURIComponent(projectId)}`, undefined, 'DELETE'),
 };
 
 export type PremiseStatement = { premise: string; title: string; citation: string; value: string };

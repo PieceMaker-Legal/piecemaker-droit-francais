@@ -12,7 +12,7 @@ it('demande le ciblage au volet Catala et reflète son état', () => {
   const listen = (event: Event) => asked.push((event as CustomEvent).detail);
   window.addEventListener('piecemaker:panel-pick', listen);
   render(<><PanelPickButton tab="plugin:piecemaker-catala" /><PanelPickButton tab="plugin:example" /></>);
-  const buttons = screen.getAllByRole('button', { name: 'Cibler une carte pour le chat' });
+  const buttons = screen.getAllByRole('button', { name: 'Cibler un élément pour le chat' });
   expect(buttons).toHaveLength(1);
   fireEvent.click(buttons[0]);
   expect(asked).toEqual([{ tab: 'plugin:piecemaker-catala' }]);

@@ -8,9 +8,7 @@
   "slot": "tab",
   "entry": "dist/index.js",
   "permissions": [],
-  "piecemakerInjections": ["dist/composer.js"],
   "piecemakerSources": {
-    "index": "src/client.ts",
-    "composer": "src/composer.ts"
+    "index": "src/client.ts"
   }
 }

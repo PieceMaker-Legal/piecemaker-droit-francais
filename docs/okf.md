@@ -36,7 +36,8 @@ L'avocat seul fixe les types de documents. Quand l'arborescence existe, `pm doss
 Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA256 des relations, calculé avec la clé `ontologie.cle` du même répertoire (créée au premier enregistrement, mode 600). Un fichier dont le sceau ne correspond pas a été modifié hors de l'onglet Index : l'ontologie par défaut s'applique, `verify` et l'onglet Index le signalent, et l'avocat l'enregistre de nouveau.
 
 - L'avocat l'édite dans l'onglet Index, bouton Ontologie (`GET`/`PUT /api/piecemaker/okf/ontologie`). Les types proposés sont ceux du dossier ouvert et ceux déjà employés par l'ontologie. `Premise` et `Partie` sont réservés ; les relations système (`states`, `mentions`, `involves`) ne se redéfinissent pas.
-- L'agent la lit avec `pm okf ontologie`. `pm okf link` refuse une relation absente de l'ontologie ou un type source ou cible non admis.
+- L'agent la lit avec `pm okf ontologie`. Il propose une modification avec `pm okf ontologie proposer --json '{"relations":[…]}' --motif "…"` : l'ontologie complète proposée, écrite dans `ontologie.proposition.json` (même répertoire, non scellé, une seule proposition à la fois). Elle ne s'applique pas. L'onglet Index › Ontologie la montre en suivi des modifications (ajout, modification, suppression ; texte retiré barré, texte ajouté souligné). L'avocat accepte, refuse ou modifie chaque changement, puis enregistre : seuls les changements acceptés ou modifiés passent dans l'ontologie, le reste est écarté, et l'enregistrement supprime la proposition (`DELETE /api/piecemaker/okf/ontologie/proposition` pour « Tout refuser »).
+- L'avocat interroge l'assistant sur l'ontologie : bouton « Demander à l’assistant » (toute l'ontologie) ou « ? » d'une relation. La pastille du chat transmet `ontologie.json` et les lignes de la relation (`lignes` dans la réponse du `GET`). `pm okf link` refuse une relation absente de l'ontologie ou un type source ou cible non admis.
 - `verify` signale chaque lien hors ontologie, y compris un lien posé avant une modification de l'ontologie.
 - Les libellés du tableau et du graphe suivent l'ontologie.
 - Le hook `guard-ontologie` refuse à l'agent toute écriture directe dans `~/.piecemaker/ontologie.json`, `.piecemaker/arborescence.json` et `.piecemaker/okf/`, et tout accès à `ontologie.cle`. Il est branché sous Claude (`Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob`), sous Codex (`Bash|apply_patch`, patch lu dans `tool_input.command`) et dans le chat Mistral (`mistral-sdk/tools.ts`, avec `protect-originals`).
@@ -159,6 +160,7 @@ Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activ
 | Liens à la demande | `server/piecemaker/okf/links.ts` |
 | Ontologie des liens | `server/piecemaker/okf/ontology.ts` |
 | Éditeur de l'ontologie | `plugins/piecemaker-dossier/src/ontology.ts` |
+| Proposition de l'assistant | `server/piecemaker/okf/ontology-proposal.ts`, `plugins/piecemaker-dossier/src/ontology-proposal.ts` |
 | Garde d'écriture | `server/piecemaker/vendor/piecemaker-plugin/scripts/guard-ontologie.mjs` |
 | Routes `/api/piecemaker/okf` et locale | `server/piecemaker/okf/index.ts` |
 | Commande `pm okf` | `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/pm.mjs` |

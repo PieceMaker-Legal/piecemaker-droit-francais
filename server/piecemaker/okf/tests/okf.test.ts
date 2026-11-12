@@ -15,6 +15,7 @@ import type { ReviewPremise } from '../reviews.js';
 import { addLink, removeLink } from '../links.js';
 import { graphTypesOf, ontologyFile, readOntology, saveOntology } from '../ontology.js';
 import { createOkfBackend } from '../index.js';
+import { dropProposal, proposeOntology, readProposal } from '../ontology-proposal.js';
 import { contradictions, quoted, verifyBundle } from '../verify.js';
 
 const CONTRACT = 'Pièces/Contrat.pdf';
@@ -480,4 +481,35 @@ test('une ontologie modifiée hors du serveur perd son sceau et n\'est pas appli
   assert.deepEqual(tampered.relations.map((relation) => relation.name), ['amends', 'responds-to', 'refers-to', 'supersedes']);
   fs.writeFileSync(ontologyFile(), JSON.stringify({ relations: stored.relations }));
   assert.match(readOntology(projectPath).erreur || '', /modifiée hors de l’onglet Index/);
+});
+
+test('l\'assistant propose une ontologie que seul l\'enregistrement de l\'avocat applique', () => {
+  const { projectPath: createdPath, markdownOf } = dossier();
+  const projectPath = fs.realpathSync(createdPath);
+  const backend = backendOf(projectPath, markdownOf);
+  backend.saveOntology('p', { relations: [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'] }, { name: 'annule', label: 'annule', source: ['Pièces'], target: ['Pièces'] }] });
+  const saved = backend.ontology('p');
+  assert.equal(saved.fichier, ontologyFile());
+  const lines = fs.readFileSync(ontologyFile(), 'utf8').replace(/\n$/, '').split('\n');
+  assert.equal(saved.total, lines.length);
+  assert.equal(lines[saved.total - 1], '}');
+  for (const name of ['conteste', 'annule']) {
+    const { debut, fin } = saved.lignes[name];
+    assert.equal(lines[debut - 1].trim(), '{');
+    assert.match(lines[fin - 1].trim(), /^},?$/);
+    assert.ok(lines.slice(debut - 1, fin).some((line) => line.includes(`"name": "${name}"`)));
+  }
+  assert.equal(saved.proposition, null);
+  assert.throws(() => proposeOntology({ relations: [{ name: 'states', label: 'établit', source: ['Pièces'], target: ['Pièces'] }] }), /relation système/);
+  proposeOntology({ relations: [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces', 'Projets'] }], motif: 'Les conclusions contestent aussi des projets.' });
+  const pending = backend.ontology('p');
+  assert.deepEqual(pending.relations.map((relation) => relation.name), ['conteste', 'annule']);
+  assert.deepEqual(pending.proposition?.relations[0].target, ['Pièces', 'Projets']);
+  assert.equal(pending.proposition?.motif, 'Les conclusions contestent aussi des projets.');
+  backend.saveOntology('p', { relations: pending.proposition!.relations });
+  assert.equal(backend.ontology('p').proposition, null);
+  assert.deepEqual(readOntology(projectPath).relations.map((relation) => relation.name), ['conteste']);
+  proposeOntology({ relations: [] });
+  dropProposal();
+  assert.equal(readProposal(), null);
 });

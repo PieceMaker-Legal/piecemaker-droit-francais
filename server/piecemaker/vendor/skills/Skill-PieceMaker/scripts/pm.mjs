@@ -85,6 +85,10 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   okf ontologie
       relations admises entre documents (~/.piecemaker/ontologie.json, commune à tous les dossiers, réglée par l'avocat dans l'onglet Index) :
       nom, sens, types de la source et de la cible ; lecture seule
+  okf ontologie proposer --json '{"relations":[...]}' [--motif "raison"]
+      propose à l'avocat une ontologie complète (toutes les relations, modifiées ou non) ; rien ne change
+      avant sa décision : l'onglet Index › Ontologie montre chaque changement à accepter, refuser ou modifier ;
+      une nouvelle proposition remplace la précédente
   okf link <source> <relation> <target> --citation "phrase du document source"
       entre documents : une relation de l'ontologie (pm okf ontologie), entre les types qu'elle admet ;
       source et cible : chemins ; la citation doit figurer mot pour mot dans le document source
@@ -721,11 +725,20 @@ async function okf(api, positional, flags, resolved) {
       ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}${entry.programmes?.length ? ` (programme ${entry.programmes.join(', ')})` : ''}`),
     ].join('\n');
   }
+  if (action === 'ontologie' && positional[2] === 'proposer') {
+    if (!value(flags.json)) usage('okf ontologie proposer attend --json \'{"relations":[...]}\'.');
+    let proposee;
+    try { proposee = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
+    const relations = Array.isArray(proposee) ? proposee : proposee?.relations;
+    const proposition = await api.okfFn({ action: 'proposer', folder, relations, ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) });
+    return `Proposition enregistrée (${proposition.relations.length} relation(s)) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Ontologie.`;
+  }
   if (action === 'ontologie') {
-    const { relations, systeme, erreur } = await api.okfFn({ action, folder });
+    const { relations, systeme, erreur, proposition } = await api.okfFn({ action, folder });
     return [
       ...(erreur ? [`Attention : ${erreur}`] : []),
-      'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul) :',
+      ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}) : ${proposition.relations.map((entry) => entry.name).join(', ')}.`] : []),
+      'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose avec pm okf ontologie proposer) :',
       ...relations.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source.join(', ')} → ${entry.target.join(', ')}${entry.description ? ` — ${entry.description}` : ''}`),
       'Relations système :',
       ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),
