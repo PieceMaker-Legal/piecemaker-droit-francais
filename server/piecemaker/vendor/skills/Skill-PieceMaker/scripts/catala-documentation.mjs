@@ -47,11 +47,22 @@ export function catalaDocumentation(content) {
       if (code) inspect();
       fence = ''; code = false;
     } else if (marker && !fence) {
+      if (/catala/i.test(marker[2]) && !/^catala(?:-metadata)?\s*$/.test(marker[2])) errors.push({ line: index + 1, message: 'bloc ignoré par Catala : ouvrez-le exactement par ```catala ou ```catala-metadata, sans espace ni majuscule.' });
       fence = marker[1]; code = /^catala(?:-metadata)?\s*$/.test(marker[2].trim()); startLine = index + 1;
     } else if (fence && code) block.push(line);
   });
   if (code) inspect();
   return { entries, errors };
+}
+
+export function testsWithoutAssertion(content) {
+  const asserted = new Set();
+  for (const match of content.matchAll(/^\s*(?:champ d'application|scope)\s+([\p{L}\p{N}_]+)\s*:([\s\S]*?)(?=^\s*(?:#\[test\]|déclaration|declaration|champ d'application|scope)(?![\p{L}\p{N}_])|^\s*```|(?![\s\S]))/gmu)) {
+    if (/(?<![\p{L}\p{N}_])assertion(?![\p{L}\p{N}_])/u.test(match[2])) asserted.add(match[1]);
+  }
+  return [...content.matchAll(/#\[test\]\s*(?:déclaration|declaration)\s+(?:champ d'application|scope)\s+([\p{L}\p{N}_]+)/gu)]
+    .filter((match) => !asserted.has(match[1]))
+    .map((match) => ({ scope: match[1], line: content.slice(0, match.index).split('\n').length }));
 }
 
 export function okfCitedVariables(content) {

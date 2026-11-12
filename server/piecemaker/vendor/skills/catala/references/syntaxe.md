@@ -60,10 +60,12 @@ champ d'application TestUrgence:
 | Erreur de syntaxe sur `est` | Définition écrite `définition x est …` | Écrivez `définition x égal à …` |
 | Erreur de syntaxe sur une condition | `si … alors` utilisé pour une définition conditionnelle | Écrivez `sous condition … conséquence égal à …` |
 | Test ignoré ou erreur sur `#[test]` | Attribut mal placé | Mettez `#[test]` sur la ligne juste avant `déclaration champ d'application` |
-| Conflit signalé par la preuve | Deux définitions de même niveau peuvent s'appliquer ensemble | Donnez une `étiquette` à la règle générale et marquez l'autre `exception <étiquette>` |
+| Conflit signalé par la preuve | Deux définitions de même niveau peuvent s'appliquer ensemble | Donnez une `étiquette` à la règle générale et marquez l'autre `exception <étiquette>`. Justifiez cet ordre dans le `#[doc]` de l'exception et signalez-le à l'avocat |
 | « Please add parentheses » | `et` et `ou` mélangés sans parenthèses | Parenthésez : `(a ou b) et c` |
 | « Reserved builtin name » | Nom réservé (`nombre`, par exemple) | Choisissez un autre nom |
-| `[WARNING] Unused variable` | Entrée qui ne sert à aucun résultat | Utilisez-la ou retirez-la |
+| `[WARNING] Unused variable` (le typage échoue) | Entrée qui ne sert à aucun résultat, souvent une condition oubliée | Utilisez-la ou retirez-la |
+| « ambiguous date computation with no rounding mode specified » | Mois ou année ajouté à une fin de mois (31 janvier + 1 mois) | Choisissez l'arrondi d'après le texte applicable : `Date.ajout_arrondi_inférieur de début, 1 mois` (jour précédent) ou `Date.ajout_arrondi_supérieur de début, 1 mois` (jour suivant). Testez le cas de fin de mois |
+| Montant décalé d'un centime | `argent` est arrondi au centime à chaque opération | Calculez en `décimal`, puis convertissez en `argent` à la fin |
 | « Module declared as X, which does not match the file name » | Nom du module différent du nom du fichier | Nommez le module d'après le fichier : `resolution.catala_fr` → `> Module Resolution` |
 | Citation : « Pièce hors du dossier » | Lien relatif qui remonte trop haut | Comptez depuis `.piecemaker/catala/<nom>/` : `../../../<chemin de la pièce>.md` |
 | Citation : « Aucun extrait cité » | Aucune ligne `Citation :` sous le lien | Écrivez `Citation : « … »` juste sous le lien |

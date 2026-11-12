@@ -8,7 +8,7 @@ import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredent
 import { run } from './pm.mjs';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
-const TESTS = '> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d\'application JeanDupont:\n  résultat calcul champ d\'application Prime.Prime\n```\n';
+const TESTS = '> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d\'application JeanDupont:\n  résultat calcul champ d\'application Prime.Prime\n\nchamp d\'application JeanDupont:\n  assertion calcul.montant = 0 €\n```\n';
 
 function scratch() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-catala-'));
@@ -632,5 +632,36 @@ test('verifier blocks an OKF premise that no rule reads', async () => {
     assert.match(text, /Prémisse sans effet : Prime\.mention_morte cite okf:\/_premises\/exemple mais aucune règle ne la lit\./);
     assert.doesNotMatch(text, /Prime\.mention_lue/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).passed, false);
+  } finally { cleanup(); }
+});
+
+test('verifier fails a test without assertion, a typecheck warning, and a misspelled block', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const module = MODULE + '\n```catala\nchamp d\'application Prime:\n  #[doc="titre: Fixer le montant\\nquote: « Passage exact. »"]\n  définition montant égal à 10 €\n```\n';
+    const directory = program(dossier, 'prime', { 'prime.catala_fr': module, 'test_prime.catala_fr': TESTS + '\n```catala\n#[test]\ndéclaration champ d\'application SansAssertion:\n  résultat calcul champ d\'application Prime.Prime\n```\n' });
+    const { runner } = fakeRun();
+    const run = async (command, args, options) => {
+      if (args[0] === 'typecheck') return { code: 0, stdout: 'prime.catala_fr:4.10-16: [WARNING] Unused variable: statut does not contribute to computing any of scope Prime outputs.\n', stderr: '' };
+      return runner(command, args, options);
+    };
+    const deps = { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null };
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps });
+    assert.match(text, /typecheck : échec\n  prime.catala_fr:4.10-16: \[WARNING\] Unused variable: statut/);
+    const checks = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks;
+    const by = (name) => checks.find((entry) => entry.name === name);
+    assert.equal(by('typecheck').passed, false);
+    const passing = async (command, args, options) => args[0] === 'typecheck' ? { code: 0, stdout: '', stderr: '' } : run(command, args, options);
+    await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { ...deps, run: passing } });
+    const after = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks;
+    const tests = after.find((entry) => entry.name === 'tests');
+    assert.equal(tests.passed, false);
+    assert.deepEqual(tests.errors, ['test_prime.catala_fr:13 › SansAssertion : test sans assertion, il réussit toujours. Ajoutez une assertion sur le résultat attendu.']);
+    for (const opening of ['``` catala', '```Catala', '```catala-fr']) {
+      fs.writeFileSync(path.join(directory, 'prime.catala_fr'), module.replace('\n```catala\n', `\n${opening}\n`));
+      await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { ...deps, run: passing } });
+      const documentation = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation');
+      assert.deepEqual(documentation.errors, ['prime.catala_fr:8: bloc ignoré par Catala : ouvrez-le exactement par ```catala ou ```catala-metadata, sans espace ni majuscule.'], opening);
+    }
   } finally { cleanup(); }
 });

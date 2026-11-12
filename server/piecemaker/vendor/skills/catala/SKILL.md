@@ -57,10 +57,10 @@ Lisez d'abord `references/syntaxe.md` : modèle vérifié, pièges fréquents, m
 1. Créez `clerk.toml` avec `[project]` et `name = "<nom>"`.
 2. Écrivez le module : `> Module Nom` en tête, nom de fichier en minuscules (`nom.catala_fr`).
 3. Mettez les déclarations exposées aux autres fichiers dans des blocs ` ```catala-metadata `. Un module n'expose que ces blocs. Sinon les tests échouent à la compilation (« Could not resolve reference »).
-4. Mettez les définitions dans des blocs ` ```catala `. Le texte Markdown au-dessus d'un bloc est facultatif : la source et la citation de chaque règle vont dans son `#[doc]`.
+4. Mettez les définitions dans des blocs ` ```catala `. Ouvrez chaque bloc exactement par ` ```catala ` ou ` ```catala-metadata ` : Catala ignore en silence un bloc ouvert autrement (espace, majuscule, suffixe). Le texte Markdown au-dessus d'un bloc est facultatif : la source et la citation de chaque règle vont dans son `#[doc]`.
 5. Titrez chaque article cité `## Article 1218 | LEGIARTI000032041431`. Ce titre seul est requis : catleg lit ces titres pour contrôler la vigueur. Si vous ajoutez du texte, évitez les lignes commençant par `>` : Catala les réserve à ses directives. Pour rattacher une pièce ou une source écrite en Markdown à une donnée ou à une règle, écrivez dans sa section `Concerne : <identifiant>` (plusieurs identifiants séparés par des virgules). Nommez les identifiants en français, avec les accents (`mise_en_demeure`, `résolution_possible`) : le volet les affiche tels quels à l'avocat.
-6. Écrivez les tests dans `test_<module>.catala_fr` : `> Usage de Nom`, un champ d'application `#[test]` par scénario, avec `assertion`. Utilisez des faits fictifs ou ceux du dossier, jamais d'autres.
-7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala verifier` le détecte.
+6. Écrivez les tests dans `test_<module>.catala_fr` : `> Usage de Nom`, un champ d'application `#[test]` par scénario, avec au moins une `assertion` : un test sans assertion réussit toujours, `pm catala verifier` le refuse. Utilisez des faits fictifs ou ceux du dossier, jamais d'autres.
+7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala verifier` le détecte. Choisir la règle qui l'emporte est une interprétation : vous pouvez la faire, mais rendez-la visible. Justifiez ce choix dans le `#[doc]` de l'exception et signalez-le à l'avocat dans votre réponse.
 
 ## Rédiger un document
 

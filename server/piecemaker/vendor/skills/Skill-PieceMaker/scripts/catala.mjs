@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { catalaDocumentation, okfCitedVariables } from './catala-documentation.mjs';
+import { catalaDocumentation, okfCitedVariables, testsWithoutAssertion } from './catala-documentation.mjs';
 
 export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
@@ -286,7 +286,7 @@ async function verifier(context, program, flags = {}) {
     checks.push(entry);
     return entry;
   };
-  await record('documentation', 'Présence de #[doc] et quote', async () => {
+  await record('documentation', 'Présence de #[doc] et quote, ouverture des blocs', async () => {
     const errors = files.flatMap((file) => catalaDocumentation(fs.readFileSync(path.join(program.directory, file), 'utf8')).errors.map((error) => `${file}:${error.line}: ${error.message}`));
     errors.push(...taskErrors(program.directory, files).map((message) => `tache.json:1: ${message}`));
     return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
@@ -296,7 +296,7 @@ async function verifier(context, program, flags = {}) {
   const execution = async () => {
     const typed = await record('typecheck', 'clerk typecheck', async () => {
       if (!context.pack) return missing('Pack Catala absent.');
-      const { entry, result } = await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--color=never', '--catala-opts=--check-invariants', '--catala-opts=--message-format=gnu']);
+      const { entry, result } = await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--color=never', '--catala-opts=--check-invariants', '--catala-opts=--message-format=gnu'], (outcome) => outcome.code === 0 && !/\[WARNING\]/.test(`${outcome.stdout}${outcome.stderr}`));
       return entry.passed ? entry : { ...entry, errors: compilerErrors(`${result.stdout}${result.stderr}`) };
     });
     await record('format', 'catala-format', async () => {
@@ -339,7 +339,9 @@ async function verifier(context, program, flags = {}) {
       scopes = tested.scopes;
       const failed = scopes.filter((scope) => !scope.success);
       const errors = failed.flatMap((scope) => (scope.errors || []).map((error) => `${scope.file}:${error.location?.range?.start?.line ?? '?'} › ${scope.scope_name} : ${error.message}`));
-      return { ...tested.entry, message: failed.map((scope) => `${scope.file} › ${scope.scope_name}`).join(', '), ...(errors.length ? { errors: errors.slice(0, 8) } : {}) };
+      const empty = tests.flatMap((file) => testsWithoutAssertion(fs.readFileSync(path.join(program.directory, file), 'utf8')).map(({ scope, line }) => `${file}:${line} › ${scope} : test sans assertion, il réussit toujours. Ajoutez une assertion sur le résultat attendu.`));
+      errors.push(...empty);
+      return { ...tested.entry, passed: tested.entry.passed && !empty.length, message: failed.map((scope) => `${scope.file} › ${scope.scope_name}`).join(', '), ...(errors.length ? { errors: errors.slice(0, 8) } : {}) };
     });
     await record('tests-python', 'clerk run --backend=python + python --test', async () => {
       if (!typed.passed) return blocked('Compilation non validée.');
