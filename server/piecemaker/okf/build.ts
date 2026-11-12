@@ -12,7 +12,6 @@ import {
   MENTIONS,
   OKF_VERSION,
   PARTY_TYPE,
-  RELATIONS,
   REVIEW_ACTOR,
   SCAN_ACTOR,
   STATES,
@@ -24,7 +23,6 @@ import {
   migratedId,
   partyId,
   readBundle,
-  readGraphTypes,
   readTypes,
   relationsOf,
   resourceOf,
@@ -34,6 +32,7 @@ import {
   typeOf,
   writeIfChanged,
 } from './bundle.js';
+import { isSystemRelation, readOntology, ruleOf } from './ontology.js';
 import type { ReviewPremise } from './reviews.js';
 import { quoted } from './verify.js';
 
@@ -82,6 +81,8 @@ export function documentsFromSnapshot(projectPath: string, snapshot: KnowledgeSn
   return [...documents.values()].sort((left, right) => left.resource.localeCompare(right.resource));
 }
 
+const SCAN_RELATION = 'refers-to';
+
 function scanRelations(source: SourceDocument, targets: SourceDocument[], markdown: string): Relation[] {
   const byDate = new Map<string, SourceDocument[]>();
   for (const target of targets) {
@@ -122,9 +123,9 @@ function mergedRelations(existing: Relations, derived: Relations, livePremises: 
     const kept = entries.filter((entry) => name !== MENTIONS && (!DERIVED_ACTORS.includes(entry.origin) || entry.dismissed) && (name !== STATES || livePremises.has(entry.target)));
     if (kept.length) relations[name] = kept;
   }
-  const linkedDocuments = new Set(RELATIONS.flatMap((name) => relations[name] || []).map((entry) => entry.target));
+  const linkedDocuments = new Set(Object.entries(relations).filter(([name]) => !isSystemRelation(name)).flatMap(([, entries]) => entries).map((entry) => entry.target));
   for (const [name, entries] of Object.entries(derived)) {
-    const known = name === 'refers-to' ? linkedDocuments : new Set((relations[name] || []).map((entry) => entry.target));
+    const known = name === SCAN_RELATION ? linkedDocuments : new Set((relations[name] || []).map((entry) => entry.target));
     const added = entries.filter((entry) => !known.has(entry.target));
     if (added.length) relations[name] = [...(relations[name] || []), ...added];
   }
@@ -162,10 +163,12 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
   const reviewPremises = input.reviewPremises || [];
   const now = input.now || new Date().toISOString();
   const types = readTypes(projectPath);
-  const graphTypes = readGraphTypes(projectPath);
   const stored = readBundle(projectPath);
   const existing = renamedConcepts(stored, input.renamed);
-  const inGraph = documents.filter((document) => graphTypes.includes(typeOf(document.resource, types)));
+  const scanRule = ruleOf(readOntology(projectPath), SCAN_RELATION);
+  const ofTypes = (allowed: string[] = []) => documents.filter((document) => allowed.includes(typeOf(document.resource, types)));
+  const scanSources = ofTypes(scanRule?.source);
+  const scanTargets = ofTypes(scanRule?.target);
   const entries: Array<{ id: string; frontmatter: Frontmatter }> = [];
   let written = 0;
 
@@ -214,7 +217,7 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
     const id = conceptId(document.resource);
     const previous = existing.get(id);
     const derived: Relations = {
-      'refers-to': inGraph.includes(document) && markdown(document.resource) ? scanRelations(document, inGraph, markdown(document.resource) as string) : [],
+      [SCAN_RELATION]: scanSources.includes(document) && markdown(document.resource) ? scanRelations(document, scanTargets, markdown(document.resource) as string) : [],
       [MENTIONS]: document.parties.filter((party) => partyCodes.has(party.code)).map((party) => ({ target: partyId(party.code), citation: party.citation, origin: SCAN_ACTOR })),
       [STATES]: [...(statements.get(document.resource)?.values() || [])],
     };

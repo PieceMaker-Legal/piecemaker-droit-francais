@@ -6,7 +6,6 @@ import { parse, stringify } from 'yaml';
 import { DEFAULT_CLASSIFICATION } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
 export const OKF_VERSION = '0.2';
-export const RELATIONS = ['amends', 'responds-to', 'refers-to', 'supersedes'];
 export const STATES = 'states';
 export const MENTIONS = 'mentions';
 export const INVOLVES = 'involves';

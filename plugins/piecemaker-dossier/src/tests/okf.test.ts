@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { premiseFicheMarkup, premiseReviewDraft, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
 import type { OkfIndex } from '../okf.js';
 import { chronologyView } from '../views.js';
+import { ontologyTypes } from '../ontology.js';
 
 const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', relations });
 const index: OkfIndex = {
@@ -26,6 +27,18 @@ describe('index OKF', () => {
     expect(ficheLinks(index, 'Pièces/Courrier.pdf')).toEqual([{ label: 'se réfère à →', title: 'Contrat', citation: 'Nous faisons suite au contrat.' }]);
     expect(ficheLinks(index, 'Pièces/Contrat.pdf')).toEqual([{ label: '← visé par', title: 'Courrier', citation: 'Nous faisons suite au contrat.' }]);
     expect(ficheLinks(null, 'Pièces/Contrat.pdf')).toEqual([]);
+  });
+
+  it('les libellés suivent l’ontologie du dossier', () => {
+    const custom: OkfIndex = { ...index, ontologie: [{ name: 'refers-to', label: 'invoque', inverse: 'invoqué par' }] };
+    expect(ficheLinks(custom, 'Pièces/Courrier.pdf')[0].label).toBe('invoque →');
+    expect(ficheLinks(custom, 'Pièces/Contrat.pdf')[0].label).toBe('← invoqué par');
+    expect(graphElements(custom)[2].data.label).toBe('invoque');
+  });
+
+  it('l’ontologie propose les types de l’arborescence, sans les types réservés', () => {
+    const relation = { name: 'conteste', label: 'conteste', inverse: '', description: '', source: ['Archives'], target: ['Pièces'] };
+    expect(ontologyTypes({ relations: [relation], personnalisee: true, systeme: [], types: ['Pièces', 'Projets', 'Premise'] })).toEqual(['Pièces', 'Projets', 'Archives']);
   });
 
   it('le tableau affiche la colonne Liens et le rapport de vérification', () => {

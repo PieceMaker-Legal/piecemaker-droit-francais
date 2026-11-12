@@ -20,7 +20,7 @@ export function reconcileClaudeHooks(applicationRoot: string, userHome = os.home
 
 type CodexHookResult = { ok: boolean; reason?: string | null };
 type CodexHook = (repoRoot: string, userHome: string) => CodexHookResult;
-type CodexHooksModule = Record<'installCodexLegalSearchHook' | 'codexLegalSearchHookStatus' | 'installCodexSubagentCheckHook' | 'codexSubagentCheckHookStatus', CodexHook>;
+type CodexHooksModule = Record<'installCodexLegalSearchHook' | 'codexLegalSearchHookStatus' | 'installCodexSubagentCheckHook' | 'codexSubagentCheckHookStatus' | 'installCodexOntologyGuardHook' | 'codexOntologyGuardHookStatus', CodexHook>;
 
 export async function reconcileCodexHooks(applicationRoot: string, userHome = os.homedir()): Promise<{ ok: boolean; skipped?: boolean; reason?: string | null }> {
   if (!fs.existsSync(path.join(userHome, '.codex'))) return { ok: true, skipped: true };
@@ -29,6 +29,7 @@ export async function reconcileCodexHooks(applicationRoot: string, userHome = os
   for (const [install, status] of [
     [hooks.installCodexLegalSearchHook, hooks.codexLegalSearchHookStatus],
     [hooks.installCodexSubagentCheckHook, hooks.codexSubagentCheckHookStatus],
+    [hooks.installCodexOntologyGuardHook, hooks.codexOntologyGuardHookStatus],
   ]) {
     const installed = install(vendorRoot, userHome);
     if (!installed.ok) return installed;

@@ -29,7 +29,7 @@ La colonne de classement range chaque pièce dans l’arborescence. Dès que le 
 
 ## arborescence
 
-Lisez `.piecemaker/arborescence.json`. `pm dossier arborescence --dossiers JSON` la remplace : `[{nom, explication}]`, un « / » crée un sous-dossier. Sans ce fichier, la base est Projets, Pièces, Archives, Notes et recherches. Enregistrer l’arborescence ne déplace aucun fichier.
+Lisez `.piecemaker/arborescence.json`. `pm dossier arborescence --dossiers JSON` la remplace : `[{nom, explication}]`, un « / » crée un sous-dossier. Sans ce fichier, la base est Projets, Pièces, Archives, Notes et recherches. Enregistrer l’arborescence ne déplace aucun fichier. Les dossiers de premier niveau sont les types de documents : quand l’arborescence existe, la commande refuse d’en ajouter ou d’en retirer un. Seuls les sous-dossiers et les explications changent ; l’avocat règle les types dans l’onglet Index › Classement.
 
 ## sql
 

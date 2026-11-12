@@ -8,7 +8,6 @@ import {
   MENTIONS,
   OKF_VERSION,
   PARTY_TYPE,
-  RELATIONS,
   STATES,
   bundleRoot,
   conceptId,
@@ -18,7 +17,6 @@ import {
   isPartyId,
   parseConcept,
   readBundle,
-  readGraphTypes,
   readTypes,
   relationsOf,
   squash,
@@ -26,6 +24,7 @@ import {
   typeOf,
   typographic,
 } from './bundle.js';
+import { missingTypes, readOntology, relationNames, ruleOf } from './ontology.js';
 
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
@@ -60,15 +59,19 @@ function indexErrors(projectPath: string, ids: string[]): OkfError[] {
 }
 
 const ALLOWED: Record<string, string[]> = { [PREMISE_TYPE]: [INVOLVES], [PARTY_TYPE]: [] };
-const DOCUMENT_RELATIONS = [...RELATIONS, STATES, MENTIONS];
+const ONTOLOGY_FICHE = '/.piecemaker/ontologie.json';
 
 export function verifyBundle(input: { projectPath: string; resources: string[]; markdownOf: MarkdownOf }): OkfError[] {
   const { projectPath, markdownOf } = input;
   const types = readTypes(projectPath);
-  const graphTypes = readGraphTypes(projectPath);
+  const ontology = readOntology(projectPath);
+  const documentRelations = [...relationNames(ontology), STATES, MENTIONS];
   const concepts = readBundle(projectPath);
   const typeById = new Map(concepts.map((concept) => [concept.id, text(concept.frontmatter.type)]));
   const errors: OkfError[] = [];
+  if (ontology.erreur) errors.push({ fiche: ONTOLOGY_FICHE, erreur: ontology.erreur });
+  const missing = missingTypes(projectPath, ontology.relations);
+  if (missing.length) errors.push({ fiche: ONTOLOGY_FICHE, erreur: `types de l'ontologie absents de l'arborescence : ${missing.join(', ')}` });
 
   for (const concept of concepts) {
     const report = (erreur: string) => errors.push({ fiche: concept.id, erreur });
@@ -89,10 +92,11 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
         if (type && typeOf(resource, types) !== type) report(`type « ${type} » différent du dossier du document`);
       }
     }
-    const allowed = ALLOWED[reserved] || DOCUMENT_RELATIONS;
+    const allowed = ALLOWED[reserved] || documentRelations;
     const markdown = resource ? markdownOf(resource) : null;
     for (const [name, entries] of Object.entries(relationsOf(concept.frontmatter))) {
-      if (!allowed.includes(name)) report(`relation inconnue : ${name} (${allowed.join(', ')})`);
+      if (!allowed.includes(name) && entries.some((entry) => !entry.dismissed)) report(`relation hors ontologie : ${name} (relations admises : ${allowed.join(', ') || 'aucune'})`);
+      const rule = ruleOf(ontology, name);
       for (const entry of entries) {
         if (entry.dismissed) continue;
         const link = `${name} → ${entry.target || '?'}`;
@@ -100,9 +104,9 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
         if (targetType === undefined) report(`${link} : cible absente du dossier`);
         else if (name === STATES) { if (targetType !== PREMISE_TYPE) report(`${link} : la cible n'est pas une prémisse`); }
         else if (name === MENTIONS || name === INVOLVES) { if (targetType !== PARTY_TYPE) report(`${link} : la cible n'est pas une partie`); }
-        else if (!graphTypes.includes(targetType)) report(`${link} : la cible n'est pas de type ${graphTypes.join(', ')}`);
+        else if (rule && !rule.target.includes(targetType)) report(`${link} : la cible est de type « ${targetType} », l'ontologie admet ${rule.target.join(', ')}`);
         if (entry.target === concept.id) report(`${link} : lien vers soi-même`);
-        if (RELATIONS.includes(name) && !graphTypes.includes(type)) report(`${link} : la source n'est pas de type ${graphTypes.join(', ')}`);
+        if (rule && !rule.source.includes(type)) report(`${link} : la source est de type « ${type} », l'ontologie admet ${rule.source.join(', ')}`);
         if (name === INVOLVES) continue;
         if (!entry.citation) report(`${link} : citation absente`);
         else if (!quoted(markdown, entry.citation)) report(`${link} : citation introuvable dans le document`);

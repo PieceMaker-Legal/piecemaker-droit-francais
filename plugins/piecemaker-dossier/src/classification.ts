@@ -50,7 +50,7 @@ export async function editClassification(root: HTMLElement, project: string): Pr
   const layer = modal(root, `
     <form class="pmd-form" data-tree-form>
       <h2 class="pmd-title piecemaker-display">Arborescence du dossier</h2>
-      <p class="pmd-form-note">L’IA classe chaque document d’après ces explications. Le bouton « + » d’une ligne ajoute un sous-dossier. Vous pouvez aussi demander à l’assistant de modifier cette arborescence. Enregistrer ne déplace aucun fichier.</p>
+      <p class="pmd-form-note">L’IA classe chaque document d’après ces explications. Le bouton « + » d’une ligne ajoute un sous-dossier. Les dossiers de premier niveau sont les types de documents : vous seul les modifiez. L’assistant peut ajuster les sous-dossiers et les explications. Enregistrer ne déplace aucun fichier.</p>
       <div class="pmd-form" data-tree-rows>${rowsHtml()}</div>
       <button type="button" class="pmd-button" data-tree-add>+ Dossier</button>
       <div class="pmd-error" data-tree-error role="alert" hidden></div>

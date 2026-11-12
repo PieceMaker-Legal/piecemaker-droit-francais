@@ -1,6 +1,10 @@
 export type OkfRelation = { relation: string; target: string; citation: string; origin: string; value?: string };
 export type OkfFiche = { id: string; type: string; title: string; description: string; resource: string; date: string; side?: string; single?: boolean; relations: OkfRelation[] };
-export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[] };
+export type OkfRelationLabel = { name: string; label: string; inverse: string };
+export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[] };
+export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
+export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
+export type OntologyState = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[] };
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
 export type OkfReport = { erreurs: OkfError[]; contradictions: OkfContradiction[] };
@@ -12,10 +16,15 @@ export const PARTY_TYPE = 'Partie';
 export const RELATION_LABELS: Record<string, string> = { amends: 'modifie', 'responds-to': 'répond à', 'refers-to': 'se réfère à', supersedes: 'remplace', states: 'établit', mentions: 'mentionne', involves: 'concerne' };
 const INCOMING_LABELS: Record<string, string> = { amends: 'modifié par', 'responds-to': 'répondu par', 'refers-to': 'visé par', supersedes: 'remplacé par', states: 'établi par', mentions: 'mentionné par', involves: 'concerné par' };
 
-async function request<T>(path: string, payload?: unknown): Promise<T> {
+export function relationLabel(index: OkfIndex | null, name: string, incoming = false): string {
+  const entry = index?.ontologie?.find((relation) => relation.name === name);
+  return (incoming ? entry?.inverse : entry?.label) || (incoming ? INCOMING_LABELS : RELATION_LABELS)[name] || name;
+}
+
+async function request<T>(path: string, payload?: unknown, method = 'POST'): Promise<T> {
   const token = localStorage.getItem('auth-token');
   const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(payload ? { 'Content-Type': 'application/json' } : {}) };
-  const response = await fetch(`/api/piecemaker/okf${path}`, payload ? { method: 'POST', headers, body: JSON.stringify(payload) } : { headers });
+  const response = await fetch(`/api/piecemaker/okf${path}`, payload ? { method, headers, body: JSON.stringify(payload) } : { headers });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `Index OKF indisponible (${response.status}).`);
   return body as T;
@@ -26,6 +35,8 @@ export const okfApi = {
   verify: (projectId: string) => request<OkfReport>(`/verify?projectId=${encodeURIComponent(projectId)}`),
   link: (projectId: string, link: OkfLink) => request<OkfLink>('/link', { projectId, ...link }),
   unlink: (projectId: string, link: OkfLink) => request<OkfLink>('/unlink', { projectId, ...link }),
+  ontology: (projectId: string) => request<OntologyState>(`/ontologie?projectId=${encodeURIComponent(projectId)}`),
+  saveOntology: (projectId: string, relations: OntologyRelation[]) => request<OntologyState>('/ontologie', { projectId, relations }, 'PUT'),
 };
 
 export type PremiseStatement = { premise: string; title: string; citation: string; value: string };
@@ -49,10 +60,10 @@ export function ficheLinks(index: OkfIndex | null, resource: string): Array<{ la
   if (!index || !fiche) return [];
   const titleOf = (id: string) => index.fiches.find((entry) => entry.id === id)?.title || id;
   return [
-    ...fiche.relations.map((entry) => ({ label: `${RELATION_LABELS[entry.relation] || entry.relation} →`, title: linkTitle(entry, titleOf(entry.target)), citation: entry.citation })),
+    ...fiche.relations.map((entry) => ({ label: `${relationLabel(index, entry.relation)} →`, title: linkTitle(entry, titleOf(entry.target)), citation: entry.citation })),
     ...index.fiches.flatMap((other) => other.relations
       .filter((entry) => entry.target === fiche.id)
-      .map((entry) => ({ label: `← ${INCOMING_LABELS[entry.relation] || entry.relation}`, title: other.title, citation: entry.citation }))),
+      .map((entry) => ({ label: `← ${relationLabel(index, entry.relation, true)}`, title: other.title, citation: entry.citation }))),
   ];
 }
 
@@ -64,7 +75,7 @@ export function graphElements(index: OkfIndex): Array<{ data: Record<string, str
     ...fiches.map((fiche) => ({ data: { id: fiche.id, label: fiche.title, resource: fiche.resource, kind: kind(fiche), type: fiche.type } })),
     ...fiches.flatMap((fiche) => fiche.relations
       .filter((entry) => ids.has(entry.target))
-      .map((entry) => ({ data: { id: `${fiche.id}|${entry.relation}|${entry.target}`, source: fiche.id, target: entry.target, label: RELATION_LABELS[entry.relation] || entry.relation, relation: entry.relation } }))),
+      .map((entry) => ({ data: { id: `${fiche.id}|${entry.relation}|${entry.target}`, source: fiche.id, target: entry.target, label: relationLabel(index, entry.relation), relation: entry.relation } }))),
   ];
 }
 

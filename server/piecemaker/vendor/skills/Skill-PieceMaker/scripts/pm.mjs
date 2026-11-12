@@ -17,7 +17,7 @@ const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lan
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verify', 'link', 'unlink'];
+const OKF_COMMANDS = ['verify', 'ontologie', 'link', 'unlink'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single']);
@@ -82,9 +82,12 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       puis les éléments manquants du graphe : pièce sans prémisse ni lien, prémisse sans pièce,
       sans valeur ou sans partie, partie isolée, #[doc] Catala citant une prémisse absente ou une pièce
       directement, prémisse citée par aucun programme Catala ; chaque manque nomme son programme
+  okf ontologie
+      relations admises entre documents (.piecemaker/ontologie.json, réglée par l'avocat dans l'onglet Index) :
+      nom, sens, types de la source et de la cible ; lecture seule
   okf link <source> <relation> <target> --citation "phrase du document source"
-      entre documents : amends | responds-to | refers-to | supersedes ; source et cible : chemins ;
-      la citation doit figurer mot pour mot dans le document source
+      entre documents : une relation de l'ontologie (pm okf ontologie), entre les types qu'elle admet ;
+      source et cible : chemins ; la citation doit figurer mot pour mot dans le document source
   okf link <pièce> states "<titre de la prémisse>" --citation "phrase de la pièce" [--value "valeur"] [--single]
       la pièce établit une prémisse (fait, ou clause d'un contrat) ; sa fiche Premise est créée si elle manque ;
       --single : la prémisse n'a qu'une valeur, un écart entre pièces est une contradiction
@@ -716,6 +719,16 @@ async function okf(api, positional, flags, resolved) {
       ...contradictions.map((entry) => `- ${entry.titre} : ${entry.valeurs.map((item) => `${item.piece} → ${item.valeur}`).join(' ; ')}`),
       ...(manques ? [manques.length ? `Graphe : ${manques.length} élément(s) manquant(s).` : 'Graphe : aucun élément manquant.'] : []),
       ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}${entry.programmes?.length ? ` (programme ${entry.programmes.join(', ')})` : ''}`),
+    ].join('\n');
+  }
+  if (action === 'ontologie') {
+    const { relations, systeme, erreur } = await api.okfFn({ action, folder });
+    return [
+      ...(erreur ? [`Attention : ${erreur}`] : []),
+      'Relations entre documents (ontologie du dossier, modifiable par l’avocat seul) :',
+      ...relations.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source.join(', ')} → ${entry.target.join(', ')}${entry.description ? ` — ${entry.description}` : ''}`),
+      'Relations système :',
+      ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),
     ].join('\n');
   }
   const [source, relation, target] = positional.slice(2);

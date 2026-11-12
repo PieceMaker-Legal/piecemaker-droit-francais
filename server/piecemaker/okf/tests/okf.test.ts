@@ -13,6 +13,7 @@ import { graphGaps, premiseEvidence } from '../premises.js';
 import { premisesFromReviews } from '../reviews.js';
 import type { ReviewPremise } from '../reviews.js';
 import { addLink, removeLink } from '../links.js';
+import { ontologyFile, readOntology, saveOntology } from '../ontology.js';
 import { createOkfBackend } from '../index.js';
 import { contradictions, quoted, verifyBundle } from '../verify.js';
 
@@ -85,8 +86,8 @@ test('un lien ajouté est contrôlé, conservé à la reconstruction et suit un 
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Phrase absente.' }, markdownOf), /citation introuvable/);
-  assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'amends', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /seuls les types Pièces/);
-  assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'annule', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /relation inconnue/);
+  assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'amends', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /L'ontologie admet amends depuis : Pièces/);
+  assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'annule', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /relation hors ontologie/);
   addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf);
 
   const moved = 'Pièces/Contrat signé.pdf';
@@ -122,7 +123,7 @@ test('la vérification signale types, cibles, citations et documents sans fiche'
   const errors = verifyBundle({ projectPath, resources: [...resources, 'Pièces/Premiseure.pdf'], markdownOf }).map((entry) => `${entry.fiche} | ${entry.erreur}`);
   assert.deepEqual(errors, [
     '/Hors classement.pdf.md | type « Non classé » hors arborescence (Pièces, Projets)',
-    `/${LETTER}.md | relation inconnue : annule (amends, responds-to, refers-to, supersedes, states, mentions)`,
+    `/${LETTER}.md | relation hors ontologie : annule (relations admises : amends, responds-to, refers-to, supersedes, states, mentions)`,
     `/${LETTER}.md | annule → /Pièces/Absent.pdf.md : cible absente du dossier`,
     `/${LETTER}.md | refers-to → /${CONTRACT}.md : citation introuvable dans le document`,
     '/Pièces/Premiseure.pdf.md | document sans fiche : relancer l\'analyse du dossier',
@@ -193,7 +194,7 @@ test('involves relie une prémisse à une partie sans citation', () => {
 test('supersedes relie deux pièces comme amends', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
-  assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'supersedes', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /seuls les types Pièces/);
+  assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'supersedes', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /L'ontologie admet supersedes depuis : Pièces/);
   addLink(projectPath, { source: LETTER, relation: 'supersedes', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf);
   buildBundle({ projectPath, documents, markdownOf });
   assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).supersedes, [{ target: `/${CONTRACT}.md`, citation: 'Il est résilié.', origin: 'piecemaker/agent' }]);
@@ -404,4 +405,57 @@ test('contradictions normalise les dates avant de comparer', () => {
   states('Date de réception', '4 mars 2024', LETTER);
   assert.deepEqual(contradictions(projectPath).map((entry) => entry.titre), ['Date de réception']);
   assert.deepEqual(contradictions(projectPath)[0].valeurs.map((entry) => entry.valeur), ['3 mars 2024', '4 mars 2024']);
+});
+
+test('l\'ontologie par défaut reprend les quatre relations entre pièces', () => {
+  const { projectPath } = dossier();
+  const ontology = readOntology(projectPath);
+  assert.equal(ontology.personnalisee, false);
+  assert.deepEqual(ontology.relations.map((relation) => [relation.name, relation.source, relation.target]), [
+    ['amends', ['Pièces'], ['Pièces']],
+    ['responds-to', ['Pièces'], ['Pièces']],
+    ['refers-to', ['Pièces'], ['Pièces']],
+    ['supersedes', ['Pièces'], ['Pièces']],
+  ]);
+});
+
+test('l\'ontologie enregistrée refuse les noms, types et relations système invalides', () => {
+  const { projectPath } = dossier();
+  const relation = { name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'] };
+  assert.throws(() => saveOntology(projectPath, { relations: [{ ...relation, name: 'Conteste' }] }), /minuscules/);
+  assert.throws(() => saveOntology(projectPath, { relations: [{ ...relation, name: 'states' }] }), /relation système/);
+  assert.throws(() => saveOntology(projectPath, { relations: [relation, relation] }), /en double/);
+  assert.throws(() => saveOntology(projectPath, { relations: [{ ...relation, target: ['Courriers'] }] }), /types absents de l'arborescence : Courriers/);
+  assert.throws(() => saveOntology(projectPath, { relations: [{ ...relation, source: ['Premise'] }] }), /type réservé/);
+  const saved = saveOntology(projectPath, { relations: [relation] });
+  assert.deepEqual(saved.relations, [{ ...relation, inverse: 'conteste', description: '' }]);
+  assert.equal(saved.personnalisee, true);
+});
+
+test('les liens, le scan et la vérification suivent l\'ontologie du dossier', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', inverse: 'contesté par', source: ['Projets'], target: ['Pièces'] }] });
+  buildBundle({ projectPath, documents, markdownOf });
+  assert.equal(relationsOf(concept(projectPath, LETTER).frontmatter)['refers-to'], undefined);
+  assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /relation hors ontologie : « amends »\. Relations admises : conteste, states, involves/);
+  assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'conteste', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /source : .* L'ontologie admet conteste depuis : Projets/);
+  assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'conteste', target: DRAFT, citation: MARKDOWN[DRAFT] }, markdownOf), /lui-même/);
+  addLink(projectPath, { source: DRAFT, relation: 'conteste', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf);
+  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
+  assert.deepEqual(graphGaps(projectPath).map((gap) => gap.element).filter((element) => element.startsWith('/Pièces/')), [`/${LETTER}.md`]);
+
+  saveOntology(projectPath, { relations: [] });
+  const errors = verifyBundle({ projectPath, resources, markdownOf }).map((entry) => `${entry.fiche} | ${entry.erreur}`);
+  assert.deepEqual(errors, [`/${DRAFT}.md | relation hors ontologie : conteste (relations admises : states, mentions)`]);
+  removeLink(projectPath, { source: DRAFT, relation: 'conteste', target: CONTRACT });
+  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
+});
+
+test('la vérification signale une ontologie illisible ou des types sortis de l\'arborescence', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  buildBundle({ projectPath, documents, markdownOf });
+  fs.writeFileSync(ontologyFile(projectPath), '{ "relations": [ { "name": "Conteste" } ] }');
+  assert.match(verifyBundle({ projectPath, resources, markdownOf })[0].erreur, /ontologie illisible, ontologie par défaut appliquée/);
+  fs.writeFileSync(ontologyFile(projectPath), JSON.stringify({ relations: [{ name: 'conteste', label: 'conteste', source: ['Courriers'], target: ['Pièces'] }] }));
+  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf })[0], { fiche: '/.piecemaker/ontologie.json', erreur: 'types de l\'ontologie absents de l\'arborescence : Courriers' });
 });

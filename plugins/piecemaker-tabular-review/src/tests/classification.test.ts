@@ -89,6 +89,15 @@ describe('arborescence du dossier', () => {
     expect(column?.prompt).toContain('Clients : Échanges avec le client.');
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
+
+  it('interdit à l’agent de changer les types de documents, pas les sous-dossiers', async () => {
+    await saveClassification(project, [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }]);
+    const tree = (dossiers: unknown) => assistant({ action: 'arborescence', project, dossiers }, launchers());
+    await expect(tree([{ nom: 'Pièces' }, { nom: 'Projets' }, { nom: 'Factures' }])).rejects.toThrow('Ajout refusé : Factures');
+    await expect(tree([{ nom: 'Pièces' }])).rejects.toThrow('Suppression refusée : Projets');
+    await expect(tree([{ nom: 'Pièces/Contrats', explication: 'Contrats signés.' }, { nom: 'Projets' }])).resolves.toEqual({ dossiers: [{ nom: 'Pièces/Contrats', explication: 'Contrats signés.' }, { nom: 'Projets', explication: '' }] });
+    await saveClassification(project, DEFAULT_CLASSIFICATION);
+  });
 });
 
 describe('effet du classement', () => {
@@ -223,6 +232,7 @@ describe('outil tabular_review', () => {
 
   it('lit et remplace l’arborescence', async () => {
     const run = launchers();
+    fs.rmSync(path.join(project, '.piecemaker', 'arborescence.json'), { force: true });
     await assistant({ action: 'arborescence', project, dossiers: [{ nom: 'Clients', explication: 'Échanges.' }] }, run);
     expect(await assistant({ action: 'arborescence', project }, run)).toEqual({ dossiers: [{ nom: 'Clients', explication: 'Échanges.' }] });
     await saveClassification(project, DEFAULT_CLASSIFICATION);

@@ -131,6 +131,33 @@ export function installCodexLegalSearchHook(repoRoot, userHome = os.homedir()) {
   return installCodexHookGroup(userHome, codexLegalSearchGroup(repoRoot), isPieceMakerLegalSearch);
 }
 
+function isPieceMakerOntologyGuard(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return command.includes('guard-ontologie.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexOntologyGuardGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'guard-ontologie.mjs');
+  return {
+    matcher: '^(Bash|apply_patch)$',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 5,
+      statusMessage: 'Ontologie, arborescence et fiches OKF réservées à pm et à l’avocat',
+    }],
+  };
+}
+
+export function installCodexOntologyGuardHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexOntologyGuardGroup(repoRoot), isPieceMakerOntologyGuard);
+}
+
+export function codexOntologyGuardHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexOntologyGuardGroup(repoRoot), isPieceMakerOntologyGuard);
+}
+
 function isPieceMakerSubagentCheck(handler) {
   const command = typeof handler?.command === 'string' ? handler.command : '';
   return command.includes('verify-subagent.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');

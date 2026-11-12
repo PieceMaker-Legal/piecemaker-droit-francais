@@ -8,7 +8,6 @@ import {
   INVOLVES,
   MENTIONS,
   PARTY_TYPE,
-  RELATIONS,
   STATES,
   conceptFile,
   conceptId,
@@ -17,19 +16,18 @@ import {
   isPartyId,
   parseConcept,
   partyId,
-  readGraphTypes,
   relationsOf,
   serializeConcept,
   squash,
   text,
   writeIfChanged,
 } from './bundle.js';
+import type { Ontology } from './ontology.js';
+import { readOntology, relationNames, ruleOf } from './ontology.js';
 import { quoted } from './verify.js';
 
 export type LinkInput = { source?: unknown; relation?: unknown; target?: unknown; citation?: unknown; value?: unknown; single?: unknown };
 export type Link = { source: string; relation: string; target: string };
-
-const WRITABLE = [...RELATIONS, STATES, INVOLVES];
 
 function load(projectPath: string, id: string, role: string) {
   const filePath = conceptFile(projectPath, id);
@@ -49,10 +47,12 @@ function loadDocument(projectPath: string, id: string, role: string) {
   return concept;
 }
 
-function relationName(value: unknown): string {
+function relationName(value: unknown, ontology: Ontology | null): string {
   const name = text(value);
   if (name === MENTIONS) throw new TypeError(`${MENTIONS} est posé par l'analyse du dossier : qualifier la personne de partie dans l'index.`);
-  if (!WRITABLE.includes(name)) throw new TypeError(`relation inconnue : « ${name} ». Relations admises : ${WRITABLE.join(', ')}.`);
+  if (!name) throw new TypeError('relation absente.');
+  const writable = ontology ? [...relationNames(ontology), STATES, INVOLVES] : null;
+  if (writable && !writable.includes(name)) throw new TypeError(`relation hors ontologie : « ${name} ». Relations admises : ${writable.join(', ')}. Seul l'avocat modifie l'ontologie (onglet Index › Ontologie).`);
   return name;
 }
 
@@ -69,7 +69,8 @@ function save(concept: { filePath: string; frontmatter: Record<string, unknown>;
 }
 
 export function addLink(projectPath: string, input: LinkInput, markdownOf: MarkdownOf, origin = AGENT_ACTOR, now = new Date().toISOString()): Link {
-  const name = relationName(input.relation);
+  const ontology = readOntology(projectPath);
+  const name = relationName(input.relation, ontology);
   const ids = endpoints(name, input);
   const source = name === INVOLVES ? load(projectPath, ids.source, 'source') : loadDocument(projectPath, ids.source, 'source');
   const citation = squash(text(input.citation));
@@ -81,10 +82,12 @@ export function addLink(projectPath: string, input: LinkInput, markdownOf: Markd
   } else if (!quoted(markdownOf(text(source.frontmatter.resource)), citation)) {
     throw new TypeError('citation introuvable mot pour mot dans le document source.');
   }
-  if (RELATIONS.includes(name)) {
-    const graphTypes = readGraphTypes(projectPath);
-    for (const concept of [source, loadDocument(projectPath, ids.target, 'cible')]) {
-      if (!graphTypes.includes(text(concept.frontmatter.type))) throw new TypeError(`${concept.id} est de type « ${text(concept.frontmatter.type)} » : seuls les types ${graphTypes.join(', ')} entrent dans le graphe.`);
+  const rule = ruleOf(ontology, name);
+  if (rule) {
+    const target = loadDocument(projectPath, ids.target, 'cible');
+    for (const [concept, allowed, role] of [[source, rule.source, 'source'], [target, rule.target, 'cible']] as const) {
+      const type = text(concept.frontmatter.type);
+      if (!allowed.includes(type)) throw new TypeError(`${role} : ${concept.id} est de type « ${type} ». L'ontologie admet ${name} ${role === 'source' ? 'depuis' : 'vers'} : ${allowed.join(', ')}.`);
     }
   }
   if (name === STATES) {
@@ -107,7 +110,7 @@ export function addLink(projectPath: string, input: LinkInput, markdownOf: Markd
 }
 
 export function removeLink(projectPath: string, input: LinkInput): Link {
-  const name = relationName(input.relation);
+  const name = relationName(input.relation, null);
   const ids = endpoints(name, input);
   const source = name === INVOLVES ? load(projectPath, ids.source, 'source') : loadDocument(projectPath, ids.source, 'source');
   const relations = relationsOf(source.frontmatter);

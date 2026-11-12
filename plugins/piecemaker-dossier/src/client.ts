@@ -1,5 +1,6 @@
 import { openIndexAnalysis } from './index-analysis.js';
 import { editClassification } from './classification.js';
+import { editOntology } from './ontology.js';
 import { etapesApi, knowledgeApi, tabularReviewRpc } from './api.js';
 import { PREMISE_TYPE, PARTY_TYPE, premiseFicheMarkup, premiseReviewDraft, mountGraph, okfApi } from './okf.js';
 import type { OkfView } from './okf.js';
@@ -524,6 +525,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         const button = target.closest<HTMLButtonElement>('button')!;
         button.disabled = true;
         void openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); }).then((dispose) => { closeIndexAnalysis = dispose; }).catch(showError).finally(() => { button.disabled = false; });
+        return;
+      }
+      if (action === 'edit-ontology' && context.project) {
+        void editOntology(root, context.project.name, () => { okfView = { ...okfView, errors: null, contradictions: [] }; void load(); }).catch(showError);
         return;
       }
       if (action === 'edit-tree' && context.project) {

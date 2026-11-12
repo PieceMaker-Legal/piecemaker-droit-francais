@@ -1,6 +1,6 @@
 ---
 name: okf
-description: Gérer l'index OKF du dossier (.piecemaker/okf/) — fiches de documents, fiches Premise (prémisse : fait ou clause) et Partie, liens cités entre pièces (amends, responds-to, refers-to, supersedes), vérification de l'index et du graphe. Use when the user asks to read, build, complete or check the case index, the links between documents, the facts, premises, clauses or parties of the case, or the OKF index.
+description: Gérer l'index OKF du dossier (.piecemaker/okf/) — fiches de documents, fiches Premise (prémisse : fait ou clause) et Partie, liens cités entre pièces selon l'ontologie du dossier (par défaut amends, responds-to, refers-to, supersedes), vérification de l'index et du graphe. Use when the user asks to read, build, complete or check the case index, the links between documents, the facts, premises, clauses or parties of the case, or the OKF index.
 ---
 
 # Index OKF
@@ -31,7 +31,7 @@ Les prémisses viennent des colonnes de revue tabulaire marquées « Index du do
 2. Un lien qui part d'une pièce porte une citation mot pour mot de cette pièce. Seul `involves` n'a pas de citation.
 3. Le serveur refuse une citation absente de la pièce.
 
-Entre pièces, quatre relations existent : `amends`, `responds-to`, `refers-to`, `supersedes`. `supersedes` signifie qu'une version remplace une autre.
+Entre pièces, seules les relations de l'ontologie du dossier existent. Lisez-la avec `pm okf ontologie` : chaque relation y donne les types de documents source et cible admis. Par défaut : `amends`, `responds-to`, `refers-to`, `supersedes` (une version remplace une autre). L'avocat seul modifie l'ontologie (onglet Index › Ontologie). Le serveur refuse un lien hors ontologie.
 
 Une pièce établit une `Premise` par `states` (citation, valeur facultative). Le scan relie une pièce à une `Partie` par `mentions`. Une `Premise` concerne une `Partie` par `involves`, sans citation.
 
@@ -44,7 +44,7 @@ Une pièce établit une `Premise` par `states` (citation, valeur facultative). L
 ## Lire et écrire
 
 1. Lisez les fiches directement avec Read et Grep dans `.piecemaker/okf/`.
-2. N'écrivez jamais une fiche à la main. Passez par `pm okf`.
+2. N'écrivez jamais une fiche à la main. Passez par `pm okf`. Un hook refuse toute écriture directe dans `.piecemaker/okf/`, `.piecemaker/ontologie.json` et `.piecemaker/arborescence.json`.
 3. Avant la première écriture, lisez `references/okf.md` du skill `piecemaker` (`.agents/skills/Skill-PieceMaker/references/okf.md`). Cette référence décrit les sous-commandes à jour.
 4. Après toute écriture, lancez `pm okf verify`. Corrigez chaque erreur et relancez jusqu'à zéro erreur.
 5. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce sans prémisse, prémisse sans pièce, sans valeur ou sans partie, partie isolée, `#[doc]` Catala mal relié.

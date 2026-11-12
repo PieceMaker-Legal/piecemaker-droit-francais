@@ -11,6 +11,15 @@
         ]
       },
       {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/guard-ontologie.mjs\""
+          }
+        ]
+      },
+      {
         "matcher": "mcp__.*legifrance.*__Search_.*",
         "hooks": [
           {

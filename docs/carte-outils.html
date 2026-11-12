@@ -169,7 +169,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-name" x="560" y="474">pm suivi_dossiers</text><text class="t-mono" x="730" y="474">verifier | lire | ecrire</text>
         <text class="t-name" x="560" y="492">pm catala</text><text class="t-mono" x="730" y="492">verifier (tous les contrôles)</text>
         <text class="t-mono" x="730" y="510">executer | exceptions | expliquer | squelette</text>
-        <text class="t-name" x="560" y="528">pm okf</text><text class="t-mono" x="730" y="528">verify | link | unlink · prémisses, parties</text>
+        <text class="t-name" x="560" y="528">pm okf</text><text class="t-mono" x="730" y="528">verify | ontologie | link | unlink · prémisses, parties</text>
         <text class="t-note" x="560" y="550">--dossier vise un autre dossier. Lancer l'index : accord de l'avocat.</text>
 
         <text class="t-title t-skill-c" x="306" y="584">Skill docx-cli</text>
@@ -221,7 +221,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Demande</th><th>À charger</th></tr>
         <tr><td>Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement</td><td class="c-skill">piecemaker</td></tr>
-        <tr><td>Index OKF du dossier : liens entre pièces, prémisses, parties, contradictions, manques du graphe</td><td class="c-skill">okf, puis piecemaker (<code>pm okf</code>) ; écriture déléguée à <span class="c-agent">index-maker</span>, prémisses d'un programme Catala à <span class="c-agent">premise-maker</span></td></tr>
+        <tr><td>Index OKF du dossier : liens entre pièces (ontologie réglée par l'avocat), prémisses, parties, contradictions, manques du graphe</td><td class="c-skill">okf, puis piecemaker (<code>pm okf</code>) ; écriture déléguée à <span class="c-agent">index-maker</span>, prémisses d'un programme Catala à <span class="c-agent">premise-maker</span></td></tr>
         <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala ; prémisses déléguées à <span class="c-agent">premise-maker</span></td></tr>
         <tr><td>Question de droit à documenter</td><td class="c-agent">research-maker ; l'agent principal relit chaque source avant de la citer</td></tr>
         <tr><td>Lire, modifier, annoter ou créer un fichier Word <code>.docx</code></td><td class="c-skill">docx-cli</td></tr>
@@ -238,6 +238,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Hook</th><th>Moment</th><th>Outils visés</th></tr>
         <tr><td><code>protect-originals</code></td><td>avant</td><td><code>Read|Grep|Glob|Bash</code></td></tr>
+        <tr><td><code>guard-ontologie</code></td><td>avant</td><td><code>Write|Edit|MultiEdit|NotebookEdit|Bash</code> (Claude), <code>Bash|apply_patch</code> (Codex) : pas d'écriture directe de l'ontologie, de l'arborescence ni des fiches OKF ; passer par <code>pm okf link</code>, <code>pm dossier arborescence</code></td></tr>
         <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_*</code> (Claude, Codex) : recherche réservée à research-maker ; Mistral : outil <code>research_maker</code> (délégation serveur)</td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>

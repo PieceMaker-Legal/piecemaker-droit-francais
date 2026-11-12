@@ -9,16 +9,15 @@ import {
   MENTIONS,
   PARTY_TYPE,
   PREMISE_TYPE,
-  RELATIONS,
   STATES,
   isPremiseId,
   isoDateOf,
   migratedId,
   readBundle,
-  readGraphTypes,
   relationsOf,
   text,
 } from './bundle.js';
+import { graphTypesOf, readOntology, relationNames } from './ontology.js';
 
 export const OKF_SCHEME = 'okf:';
 export type PremisePiece = { resource: string; title: string; citation: string; value: string };
@@ -95,7 +94,8 @@ const programOf = (place: string) => place.split('/')[2] ?? '';
 
 export function graphGaps(projectPath: string): OkfGap[] {
   const concepts = readBundle(projectPath).filter((concept) => !concept.error);
-  const graphTypes = readGraphTypes(projectPath);
+  const ontology = readOntology(projectPath);
+  const graphTypes = graphTypesOf(projectPath, ontology);
   const premises = concepts.filter((concept) => concept.frontmatter.type === PREMISE_TYPE);
   const gaps: OkfGap[] = [];
   const sources = catalaSources(projectPath);
@@ -108,7 +108,7 @@ export function graphGaps(projectPath: string): OkfGap[] {
   const valued = new Set<string>();
   const involved = new Set<string>();
   for (const concept of concepts) {
-    for (const name of [...RELATIONS, STATES]) for (const entry of live(concept, name)) {
+    for (const name of [...relationNames(ontology), STATES]) for (const entry of live(concept, name)) {
       linked.add(concept.id).add(entry.target);
       if (name !== STATES) continue;
       stated.add(entry.target);

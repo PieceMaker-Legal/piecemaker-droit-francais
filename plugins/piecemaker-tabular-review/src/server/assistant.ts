@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import type { Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
 import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, INDEX_MODEL, INDEX_TEMPLATE_NAME, isCaseIndex, LEGACY_INDEX_NAME, reviewCategory } from '../shared.js';
-import { addClassification, readClassification, saveClassification } from './classification.js';
+import { addClassification, readClassification, saveAgentClassification } from './classification.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
 import { assertProject, assertReviewFile, UserError } from './paths.js';
@@ -212,7 +212,7 @@ async function editColumns(project: string, input: Input, launchers: AssistantLa
 async function classificationTree(project: string, input: Input) {
   const folders = input.dossiers === undefined
     ? readClassification(project)
-    : await saveClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication })) : input.dossiers);
+    : await saveAgentClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication })) : input.dossiers);
   return { dossiers: folders.map((folder) => ({ nom: folder.name, explication: folder.explanation })) };
 }
 

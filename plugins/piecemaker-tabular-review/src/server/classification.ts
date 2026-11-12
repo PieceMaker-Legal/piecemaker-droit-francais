@@ -69,3 +69,19 @@ export function addClassification(project: string, file: string): Promise<Review
     review.columns.push({ index, ...classificationColumn(folders) });
   });
 }
+
+const documentTypes = (folders: ClassificationFolder[]): string[] => [...new Set(folders.map((folder) => folder.name.split('/')[0]))];
+
+export async function saveAgentClassification(project: string, value: unknown): Promise<ClassificationFolder[]> {
+  const folders = normalizeFolders(value);
+  if (fs.existsSync(treeFile(project))) {
+    const current = documentTypes(readClassification(project));
+    const next = documentTypes(folders);
+    const added = next.filter((type) => !current.includes(type));
+    const removed = current.filter((type) => !next.includes(type));
+    if (added.length || removed.length) {
+      throw new UserError(`Les dossiers de premier niveau sont les types de documents : seul l’avocat les modifie (onglet Index › Classement). ${added.length ? `Ajout refusé : ${added.join(', ')}. ` : ''}${removed.length ? `Suppression refusée : ${removed.join(', ')}. ` : ''}Types actuels : ${current.join(', ')}. Les sous-dossiers et les explications restent modifiables.`);
+    }
+  }
+  return saveClassification(project, folders);
+}

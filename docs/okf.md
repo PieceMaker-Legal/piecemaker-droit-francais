@@ -25,7 +25,19 @@ Seules les personnes qualifiées de parties ont une fiche. Les tiers n'entrent p
 
 Le type d'une fiche de document est le dossier de premier niveau de `.piecemaker/arborescence.json`. Sans arborescence, la classification par défaut s'applique. Un document hors arborescence reçoit `Non classé` ; la vérification le signale. `Premise` et `Partie` sont réservés.
 
-Le graphe ne montre que certains types de documents : `['Pièces']` par défaut, ou `typesGraphe` dans `.piecemaker/okf.json`. Il montre aussi les prémisses et les parties.
+Le graphe ne montre que certains types de documents : ceux que relie l'ontologie (sources et cibles de ses relations). Sans ontologie : `['Pièces']` par défaut, ou `typesGraphe` dans `.piecemaker/okf.json`. Il montre aussi les prémisses et les parties.
+
+L'avocat seul fixe les types de documents. Quand l'arborescence existe, `pm dossier arborescence` refuse à l'agent d'ajouter ou de retirer un dossier de premier niveau ; il ne change que les sous-dossiers et les explications.
+
+## Ontologie
+
+`.piecemaker/ontologie.json`, un fichier par dossier : `{ "relations": [{ name, label, inverse, description, source: [types], target: [types] }] }`. Sans fichier, l'ontologie par défaut s'applique : les quatre relations ci-dessous entre documents des types du graphe. Un fichier illisible fait appliquer l'ontologie par défaut, avec un message.
+
+- L'avocat l'édite dans l'onglet Index, bouton Ontologie (`GET`/`PUT /api/piecemaker/okf/ontologie`). Les types doivent exister dans l'arborescence. `Premise` et `Partie` sont réservés ; les relations système (`states`, `mentions`, `involves`) ne se redéfinissent pas.
+- L'agent la lit avec `pm okf ontologie`. `pm okf link` refuse une relation absente de l'ontologie ou un type source ou cible non admis.
+- `verify` signale chaque lien hors ontologie, y compris un lien posé avant une modification de l'ontologie.
+- Les libellés du tableau et du graphe suivent l'ontologie.
+- Le hook `guard-ontologie` (Claude : `Write|Edit|MultiEdit|NotebookEdit|Bash` ; Codex : `Bash|apply_patch`) refuse à l'agent toute écriture directe dans `.piecemaker/ontologie.json`, `.piecemaker/arborescence.json` et `.piecemaker/okf/`.
 
 ## Relations
 
@@ -33,7 +45,7 @@ Dans le frontmatter de la fiche source : `relations: { <relation>: [{ target, ci
 
 | Relation | Source → cible | Citation | Posée par |
 | --- | --- | --- | --- |
-| `amends`, `responds-to`, `refers-to`, `supersedes` | document → document (types du graphe) | oui | scan (`refers-to`), agent, avocat |
+| relations de l'ontologie (par défaut `amends`, `responds-to`, `refers-to`, `supersedes`) | document → document (types admis par la relation) | oui | scan (`refers-to`), agent, avocat |
 | `states` | document → Premise | oui, plus `value` facultative | avocat (visionneuse), agent, revue tabulaire |
 | `mentions` | document → Partie | oui | scan seulement |
 | `involves` | Premise → Partie | non | agent |
@@ -128,7 +140,8 @@ Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activ
 - Les valeurs sont comparées comme des chaînes, sauf les dates (formats `JJ/MM/AAAA`, `JJ.MM.AAAA`, `AAAA-MM-JJ`, `J mois AAAA`) ramenées au format ISO.
 - Une prémisse créée dans la visionneuse n'est pas `single_value` ; l'agent la pose avec `--single`.
 - `pm okf verify` compare la valeur du scénario Catala (`définition … égal à`) aux valeurs des pièces de la prémisse seulement pour une date `|AAAA-MM-JJ|` ou un nombre ; les autres valeurs ne sont pas comparées.
-- Le renvoi d'une clause à une autre n'a pas de relation propre.
+- Le renvoi d'une clause à une autre n'a pas de relation propre, sauf si l'avocat en ajoute une à l'ontologie.
+- Vibe (Mistral) n'a pas le hook `guard-ontologie` : sous Vibe, seuls le serveur (`pm okf link`, `pm dossier arborescence`) et `verify` font respecter l'ontologie et les types. Le hook Bash repère les écritures par motifs (redirection, `cp`, `sed -i`, interpréteur…) : une commande détournée peut lui échapper ; `verify` signale alors le lien hors ontologie.
 
 ## Fichiers
 
@@ -140,6 +153,9 @@ Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activ
 | Vérification, contradictions | `server/piecemaker/okf/verify.ts` |
 | Pièces d'une prémisse, manques du graphe | `server/piecemaker/okf/premises.ts` |
 | Liens à la demande | `server/piecemaker/okf/links.ts` |
+| Ontologie des liens | `server/piecemaker/okf/ontology.ts` |
+| Éditeur de l'ontologie | `plugins/piecemaker-dossier/src/ontology.ts` |
+| Garde d'écriture | `server/piecemaker/vendor/piecemaker-plugin/scripts/guard-ontologie.mjs` |
 | Routes `/api/piecemaker/okf` et locale | `server/piecemaker/okf/index.ts` |
 | Commande `pm okf` | `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/pm.mjs` |
 | Tableau, graphe, appels | `plugins/piecemaker-dossier/src/okf.ts` |

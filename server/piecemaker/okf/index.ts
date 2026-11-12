@@ -7,9 +7,10 @@ import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/
 
 import type { Renamed } from './build.js';
 import { buildBundle, documentsFromSnapshot, partiesFromSnapshot } from './build.js';
-import { LAWYER_ACTOR, readBundle, readGraphTypes, readTypes, relationsOf, resourceOf, text } from './bundle.js';
+import { LAWYER_ACTOR, readBundle, readTypes, relationsOf, resourceOf, text } from './bundle.js';
 import type { LinkInput } from './links.js';
 import { addLink, removeLink } from './links.js';
+import { SYSTEM_RELATIONS, graphTypesOf, readOntology, saveOntology } from './ontology.js';
 import { graphGaps } from './premises.js';
 import { premisesFromReviews } from './reviews.js';
 import { contradictions, verifyBundle } from './verify.js';
@@ -45,11 +46,24 @@ export function createOkfBackend(options: OkfOptions) {
     return { erreurs: verifyBundle({ projectPath, resources, markdownOf: markdownOf(projectPath) }), contradictions: contradictions(projectPath), manques: graphGaps(projectPath) };
   };
 
+  const ontology = (projectId: string) => {
+    const projectPath = projectPathOf(projectId);
+    return { ...readOntology(projectPath), systeme: SYSTEM_RELATIONS, types: readTypes(projectPath) };
+  };
+
+  const saveOntologyOf = (projectId: string, value: unknown) => {
+    saveOntology(projectPathOf(projectId), value);
+    build(projectId);
+    return ontology(projectId);
+  };
+
   const read = (projectId: string) => {
     const projectPath = projectPathOf(projectId);
+    const current = readOntology(projectPath);
     return {
       types: readTypes(projectPath),
-      typesGraphe: readGraphTypes(projectPath),
+      typesGraphe: graphTypesOf(projectPath, current),
+      ontologie: [...current.relations, ...SYSTEM_RELATIONS].map(({ name, label, inverse }) => ({ name, label, inverse })),
       fiches: readBundle(projectPath).filter((concept) => !concept.error).map((concept) => ({
         id: concept.id,
         type: text(concept.frontmatter.type),
@@ -89,11 +103,13 @@ export function createOkfBackend(options: OkfOptions) {
 
   const router = express.Router();
   router.get('/okf', (request, response) => respond(() => read(String(request.query.projectId || '')), response));
+  router.get('/okf/ontologie', (request, response) => respond(() => ontology(String(request.query.projectId || '')), response));
+  router.put('/okf/ontologie', express.json(), (request, response) => respond(() => saveOntologyOf(String(request.body?.projectId || ''), request.body), response));
   router.get('/okf/verify', (request, response) => respond(() => verify(String(request.query.projectId || '')), response));
   router.post('/okf/link', express.json(), (request, response) => respond(() => link(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
   router.post('/okf/unlink', express.json(), (request, response) => respond(() => unlink(String(request.body?.projectId || ''), request.body), response));
 
-  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, link: (projectId, body) => link(projectId, body), unlink };
+  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, ontologie: ontology, link: (projectId, body) => link(projectId, body), unlink };
   const localRouter = express.Router();
   localRouter.post('/okf', express.json(), (request, response) => {
     if (!options.isLoopback(request)) {
@@ -109,5 +125,5 @@ export function createOkfBackend(options: OkfOptions) {
     }, response);
   });
 
-  return { build, verify, read, link, unlink, router, localRouter };
+  return { build, verify, read, ontology, saveOntology: saveOntologyOf, link, unlink, router, localRouter };
 }

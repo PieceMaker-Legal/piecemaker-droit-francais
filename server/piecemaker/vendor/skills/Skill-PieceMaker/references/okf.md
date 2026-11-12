@@ -43,9 +43,10 @@ relations:
 
 ## Liens entre pièces
 
-Quatre relations, de la source vers la cible : `amends`, `responds-to`, `refers-to`, `supersedes` (une version remplace une autre). Chaque lien porte une citation mot pour mot du document source. Seuls les documents des types du graphe (par défaut `Pièces`) portent ces liens.
+Les relations admises sont celles de l'ontologie du dossier (`.piecemaker/ontologie.json`), de la source vers la cible. Chaque relation fixe les types de documents source et cible. `pm okf ontologie` les affiche. Par défaut : `amends`, `responds-to`, `refers-to`, `supersedes` (une version remplace une autre), entre documents des types du graphe (par défaut `Pièces`). L'avocat seul modifie l'ontologie (onglet Index › Ontologie) ; `pm okf link` refuse une relation absente ou un type non admis. Chaque lien porte une citation mot pour mot du document source.
 
 ```bash
+pm okf ontologie
 pm okf link "Pièces/Avenant.pdf" amends "Pièces/Contrat.pdf" --citation "L'article 3 du contrat est remplacé."
 pm okf unlink "Pièces/Courrier.pdf" refers-to "Pièces/Contrat.pdf"
 ```
