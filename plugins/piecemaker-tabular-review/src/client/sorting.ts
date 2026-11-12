@@ -34,9 +34,23 @@ function columnValue(review: Review, row: ReviewRow, action: ColumnAction): stri
   return column ? actionValue(review.cells[row.id]?.[String(column.index)]) : '';
 }
 
+const folderKey = (value: string) => value.normalize('NFC').toLowerCase().split(/\s*[/\\›>]\s*/).map((segment) => segment.trim()).filter(Boolean).join('/');
+
+export function matchingFolder(tags: string[], value: string): string {
+  const depth = (tag: string) => tag.split('/').length;
+  const candidates = value.split(/\s*[,;]\s*/).flatMap((part) => {
+    const key = folderKey(part);
+    if (!key) return [];
+    const exact = tags.find((tag) => folderKey(tag) === key);
+    if (exact) return [exact];
+    const byLeaf = tags.filter((tag) => folderKey(tag).endsWith(`/${key}`));
+    return byLeaf.length === 1 ? byLeaf : [];
+  });
+  return candidates.sort((left, right) => depth(right) - depth(left))[0] ?? '';
+}
+
 export function classifiedFolder(review: Review, row: ReviewRow): string {
-  const value = columnValue(review, row, 'classify').normalize('NFC').toLowerCase();
-  return classifyColumn(review.columns)?.tags?.find((tag) => tag.normalize('NFC').toLowerCase() === value) ?? '';
+  return matchingFolder(classifyColumn(review.columns)?.tags ?? [], columnValue(review, row, 'classify'));
 }
 
 export function pieceOf(row: ReviewRow, pieces: CasePiece[]): string | undefined {

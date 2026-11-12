@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Review } from '../shared.js';
 import { classificationColumn, DEFAULT_CLASSIFICATION, REVIEW_FOLDER } from '../shared.js';
-import { classifiedFolder, newNotes, newPieces, plannedChange, targetPath } from '../client/sorting.js';
+import { classifiedFolder, matchingFolder, newNotes, newPieces, plannedChange, targetPath } from '../client/sorting.js';
 
 const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-classement-')));
 const project = path.join(home, 'Dossier Exemple');
@@ -112,6 +112,19 @@ describe('effet du classement', () => {
     expect(plannedChange(review, review.rows[0], [], pieces)).toBeNull();
     const orphan = reviewOf('Archives', 'Notes/libre.md');
     expect(plannedChange(orphan, orphan.rows[0], [], pieces)).toBeNull();
+  });
+
+  it('range dans le sous-dossier choisi, même écrit partiellement', () => {
+    const tags = ['Pièces', 'Pièces/Contrats', 'Projets'];
+    expect(matchingFolder(tags, 'Pièces/Contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(tags, 'pièces / contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(tags, 'Pièces › Contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(tags, 'Contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(tags, 'Pièces, Pièces/Contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(['Pièces/Contrats', 'Projets/Contrats'], 'Contrats')).toBe('');
+    const review = reviewOf('Contrats');
+    review.columns = [{ index: 0, ...classificationColumn([{ name: 'Pièces', explanation: '' }, { name: 'Pièces/Contrats', explanation: '' }]) }];
+    expect(targetPath(plannedChange(review, { ...review.rows[0], piece: 'Pièces/bail.pdf' }, [], pieces)!)).toBe('Pièces/Contrats/bail.pdf');
   });
 
   it('laisse en place une pièce déjà rangée dans ce dossier ou un sous-dossier', () => {

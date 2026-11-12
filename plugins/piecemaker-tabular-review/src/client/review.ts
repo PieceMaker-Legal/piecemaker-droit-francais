@@ -8,7 +8,7 @@ import { openDocumentsDrawer } from './documents-drawer.js';
 import { nextSort, sortBy, sortButton } from './ordering.js';
 import type { SortState } from './ordering.js';
 import { openQuestionsDrawer } from './questions-drawer.js';
-import { actionValue, classifiedChange, classifiedFolder, newNotes, newPieces, pieceOf, plannedChange, targetPath } from './sorting.js';
+import { actionValue, classifiedChange, classifiedFolder, matchingFolder, newNotes, newPieces, pieceOf, plannedChange, targetPath } from './sorting.js';
 import type { PlannedChange } from './sorting.js';
 import { selectMenu } from './select-menu.js';
 
@@ -51,8 +51,8 @@ function pieceStatus(row: ReviewRow): string {
 }
 
 function classificationSelect(column: ReviewColumn, cell: Cell | undefined, row: ReviewRow): string {
-  const value = actionValue(cell);
   const tags = column.tags ?? [];
+  const value = matchingFolder(tags, actionValue(cell)) || actionValue(cell);
   const options = value && !tags.includes(value) ? [...tags, value] : tags;
   return `<select class="ptr-input ptr-ghost" data-edit-summary aria-label="Dossier de classement"${row.status === 'running' ? ' disabled' : ''}><option value="">Non classé</option>${options.map((tag) => `<option value="${escapeHtml(tag)}"${tag === value ? ' selected' : ''}>${escapeHtml(tag)}</option>`).join('')}</select>`;
 }

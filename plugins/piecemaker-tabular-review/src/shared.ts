@@ -76,7 +76,7 @@ export function classificationColumn(folders: ClassificationFolder[], name = 'Cl
   const lines = folders.map((folder) => `- ${folder.name}${folder.explanation ? ` : ${folder.explanation}` : ''}`);
   return {
     name,
-    prompt: `Dans quel dossier de l’arborescence faut-il classer ce document ? Choisis un seul dossier et réponds par son nom exact.\n${lines.join('\n')}`,
+    prompt: `Dans quel dossier de l’arborescence faut-il classer ce document ? Choisis un seul dossier et réponds par son nom exact. Un nom avec « / » est un sous-dossier : choisis le sous-dossier qui convient plutôt que son dossier parent, et réponds par le chemin complet (par exemple « Pièces/Contrats »).\n${lines.join('\n')}`,
     format: 'tags',
     tags: folders.map((folder) => folder.name),
     action: 'classify',
