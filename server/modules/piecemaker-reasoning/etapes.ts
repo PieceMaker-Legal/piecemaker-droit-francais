@@ -22,7 +22,7 @@ type Json = Record<string, unknown>;
 type Document = { type: string; nom: string; chemin: string; valide?: boolean };
 type Action = { texte: string; fait: boolean; echeance?: string; suivi?: string };
 type Suite = { etape: Etape; documents?: Document[]; action?: Action; precedent?: string; remplacePar?: string };
-type Etapes = { etape?: Etape; nonJuridique?: boolean; mappingValide?: string; preparationForcee?: boolean; raisonnements?: Record<string, Suite> };
+type Etapes = { etape?: Etape; nonJuridique?: boolean; mappingValide?: string; raisonnements?: Record<string, Suite> };
 type TypeDocument = { nom: string; skill: string; modele?: string };
 type Ligne = { nom: string; texte: string; ok: boolean };
 type Etat = { lignes: Ligne[]; pret: boolean };
@@ -259,7 +259,6 @@ export function createEtapesService(deps: EtapesDependencies) {
       if (typeof body.nonJuridique === 'boolean') etapes.nonJuridique = body.nonJuridique || undefined;
       if (body.mappingValide === true) etapes.mappingValide = new Date().toISOString();
       if (body.mappingValide === false) delete etapes.mappingValide;
-      if (typeof body.preparationForcee === 'boolean') etapes.preparationForcee = body.preparationForcee || undefined;
     });
     perimer(path.resolve(root));
     return read(root);
