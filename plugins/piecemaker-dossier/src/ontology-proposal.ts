@@ -6,7 +6,7 @@ export type OntologyChange = Change<OntologyRelation>;
 
 const SHAPE: ProposalShape<OntologyRelation> = {
   key: (relation) => relation.name,
-  fields: [['label', 'Libellé'], ['inverse', 'Libellé inverse'], ['description', 'Description'], ['source', 'Source'], ['target', 'Cible']],
+  fields: [['label', 'Libellé'], ['inverse', 'Libellé inverse'], ['description', 'Description']],
   empty: (name) => ({ name, label: '', inverse: '', description: '', source: [], target: [] }),
   unchanged: 'La proposition reprend l’ontologie actuelle sans changement.',
 };

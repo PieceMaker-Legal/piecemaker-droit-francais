@@ -23,7 +23,7 @@ describe('proposition d’ontologie', () => {
   it('montre le texte retiré et ajouté, et les boutons tant qu’aucune décision n’est prise', () => {
     const markup = proposalMarkup(changes, ['acceptee', undefined, undefined], 'Préciser les libellés');
     expect(markup).toContain('<del>modifie</del> <ins>amende</ins>');
-    expect(markup).toContain('Pièces, <ins>Projets</ins>');
+    expect(markup).not.toContain('Projets');
     expect(markup).toContain('Acceptée');
     expect(markup).toContain('data-change-edit="1"');
     expect(markup).not.toContain('data-change-edit="2"');

@@ -255,7 +255,11 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-confirm-option{display:flex;align-items:flex-start;gap:8px;color:var(--pmd-muted);font-size:13px;cursor:pointer}
 .pmd-form{display:grid;gap:12px}
 .pmd-tree-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto auto;gap:8px;align-items:center}
-.pmd-ontology-head{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto auto;gap:8px;align-items:end}
+.pmd-ontology-row{gap:8px}
+.pmd-ontology-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center}
+.pmd-ontology-name{font:600 15px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace}
+.pmd-ontology-labels{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pmd-form .pmd-ontology-labels label{grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;font-size:14px}
 .pmd-ontology-change-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .pmd-proposals{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px;padding:8px 10px;border:1px solid var(--pmd-border);border-left:3px solid #c98a12;border-radius:6px;font-size:13px}
 .pmd-proposals[hidden]{display:none}
@@ -272,9 +276,6 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-ontology-change ins{color:#2f8f4e;text-decoration:underline}
 .pmd-ontology-decision{font-size:12px;color:var(--pmd-muted)}
 .pmd-ontology-row-edited{outline:2px solid #c98a12;outline-offset:2px}
-.pmd-ontology-side{display:grid;grid-template-columns:56px minmax(0,1fr);gap:8px;align-items:start;font-size:12px;color:var(--pmd-muted)}
-.pmd-ontology-types{display:flex;flex-wrap:wrap;gap:6px 14px}
-.pmd-form .pmd-ontology-types label{display:flex;gap:5px;align-items:center;color:var(--pmd-text)}
 .pmd-form-section{display:grid;gap:12px;padding-bottom:16px;border-bottom:1px solid var(--pmd-border)}
 .pmd-form-section:last-of-type{border-bottom:0;padding-bottom:0}
 .pmd-form-section h3{margin:0;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--pmd-muted)}
