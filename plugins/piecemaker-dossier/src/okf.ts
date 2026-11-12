@@ -9,7 +9,8 @@ export type OntologyState = { relations: OntologyRelation[]; personnalisee: bool
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
 export type OkfReport = { erreurs: OkfError[]; contradictions: OkfContradiction[] };
-export type OkfView = { index: OkfIndex | null; mode: 'table' | 'graph'; errors: OkfError[] | null; contradictions?: OkfContradiction[] };
+export type PendingProposals = { ontologie: number; arborescence: number };
+export type OkfView = { index: OkfIndex | null; mode: 'table' | 'graph'; errors: OkfError[] | null; contradictions?: OkfContradiction[]; proposals?: PendingProposals };
 export type OkfLink = { source: string; relation: string; target: string; citation?: string; value?: string };
 
 export const PREMISE_TYPE = 'Premise';

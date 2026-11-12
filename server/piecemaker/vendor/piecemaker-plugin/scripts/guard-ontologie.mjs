@@ -8,7 +8,7 @@ const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const KEY_REASON = 'La clé de sceau de l’ontologie (~/.piecemaker/ontologie.cle) n’est accessible qu’au serveur PieceMaker.';
 const GUARDED = [
   { pattern: /(^|[\\/])\.piecemaker[\\/]ontologie\.json$/, reason: 'L’ontologie des liens (~/.piecemaker/ontologie.json), commune à tous les dossiers, est réglée par l’avocat seul, dans l’onglet Index › Ontologie. Lisez-la avec pm okf ontologie ; proposez un changement avec pm okf ontologie proposer.' },
-  { pattern: /(^|[\\/])\.piecemaker[\\/]arborescence\.json$/, reason: 'L’arborescence (.piecemaker/arborescence.json) se modifie avec pm dossier arborescence : ses dossiers de premier niveau, les types de documents, restent réservés à l’avocat.' },
+  { pattern: /(^|[\\/])\.piecemaker[\\/]arborescence\.json$/, reason: 'L’arborescence (.piecemaker/arborescence.json) est réglée par l’avocat seul, dans l’onglet Index › Classement. Proposez un changement avec pm dossier arborescence --dossiers ; l’avocat décide.' },
   { pattern: /(^|[\\/])\.piecemaker[\\/]okf([\\/]|$)/, reason: 'Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).' },
 ];
 const SHELL_KEY = /\.piecemaker[\\/]ontologie\.cle\b|\bontologie\.cle\b/;

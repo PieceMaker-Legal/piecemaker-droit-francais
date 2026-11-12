@@ -1,6 +1,7 @@
 import { openIndexAnalysis } from './index-analysis.js';
 import { editClassification } from './classification.js';
 import { editOntology } from './ontology.js';
+import { pendingProposals } from './pending-proposals.js';
 import { etapesApi, knowledgeApi, tabularReviewRpc } from './api.js';
 import { PREMISE_TYPE, PARTY_TYPE, premiseFicheMarkup, premiseReviewDraft, mountGraph, okfApi } from './okf.js';
 import type { OkfView } from './okf.js';
@@ -9,7 +10,7 @@ import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, 
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { CUSTOM_NATURE, chronologyView, documentResource, escapeHtml, linksMarkup, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
+import { CUSTOM_NATURE, chronologyView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, ChronologySort, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -64,7 +65,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let data: ViewData | null = null;
   let closeIndexAnalysis: (() => void) | null = null;
   let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
-  let okfView: Pick<OkfView, 'mode' | 'errors' | 'contradictions'> = { mode: 'table', errors: null };
+  let okfView: Pick<OkfView, 'mode' | 'errors' | 'contradictions' | 'proposals'> = { mode: 'table', errors: null };
   const okfHandle = () => {
     const projectId = context.project?.name || '';
     return {
@@ -224,6 +225,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (sequence !== loadSequence) return;
         mappingValidated = etapes.mappingValide ?? null;
         paintScanStatus();
+      }, () => undefined);
+      void pendingProposals(projectId, context.project.path).then((proposals) => {
+        if (sequence !== loadSequence) return;
+        okfView = { ...okfView, proposals };
+        const host = root.querySelector<HTMLElement>('[data-proposals]');
+        if (host) host.outerHTML = proposalBanner(proposals);
       }, () => undefined);
       const graph = await knowledgeApi.graph(projectId);
       if (sequence !== loadSequence) return;
@@ -533,7 +540,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         return;
       }
       if (action === 'edit-tree' && context.project) {
-        void editClassification(root, context.project.path).catch(showError);
+        void editClassification(root, context.project.path, () => { void load(); }).catch(showError);
         return;
       }
       if (action === 'company-search') {

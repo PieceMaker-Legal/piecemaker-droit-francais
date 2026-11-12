@@ -47,8 +47,8 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   dossier conversion [--force] [pièce…]
       sans pièce : tout le dossier (pièces pas encore prêtes) ;
       attend 90 s au plus, puis renvoie l’avancée : relancez pour suivre
-  dossier arborescence --dossiers '[{"nom":"…","explication":"…"}]'
-      remplace .piecemaker/arborescence.json (lecture : le fichier)
+  dossier arborescence [--dossiers '[{"nom":"…","explication":"…"}]'] [--motif "raison"]
+      lit l’arborescence ; avec --dossiers, propose une arborescence que l’avocat accepte, refuse ou modifie
   dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
       crée l’index s’il manque ; sinon analyse les pièces absentes de l’index
   dossier index lire
@@ -680,8 +680,8 @@ async function dossier(api, positional, flags, resolved) {
   }
   const target = voletTarget(project, 'index');
   if (commande === 'arborescence') {
-    if (!value(flags.dossiers)) usage('dossier arborescence attend --dossiers JSON.');
-    const result = await api.tabularIndex(api.tabularFn, { action: 'arborescence', project, dossiers: parseJson(flags.dossiers, 'dossiers') });
+    const proposal = value(flags.dossiers) ? { dossiers: parseJson(flags.dossiers, 'dossiers'), ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) } : {};
+    const result = await api.tabularIndex(api.tabularFn, { action: 'arborescence', project, ...proposal });
     return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, target), target));
   }
   const action = positional[2];

@@ -96,8 +96,11 @@ const CLASSIFICATION_BASE = '/api/plugins/piecemaker-tabular-review/rpc';
 
 export const tabularReviewRpc = (method: string, path: string, body?: unknown) => request(CLASSIFICATION_BASE, path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
+export type ClassificationState = { folders: ClassificationFolder[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: { dossiers: ClassificationFolder[]; motif: string; date: string } | null };
+
 export const classificationApi = {
-  read: (project: string) => request<{ folders: ClassificationFolder[] }>(CLASSIFICATION_BASE, `/classification?project=${encodeURIComponent(project)}`),
+  read: (project: string) => request<ClassificationState>(CLASSIFICATION_BASE, `/classification?project=${encodeURIComponent(project)}`),
+  dropProposal: (project: string) => request<ClassificationState>(CLASSIFICATION_BASE, `/classification/proposition?project=${encodeURIComponent(project)}`, { method: 'DELETE' }),
   save: (project: string, folders: ClassificationFolder[]) => request(CLASSIFICATION_BASE, '/classification', { method: 'PUT', body: JSON.stringify({ project, folders }) }),
 };
 

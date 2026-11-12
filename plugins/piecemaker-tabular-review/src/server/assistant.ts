@@ -1,8 +1,8 @@
 import path from 'node:path';
 
-import type { Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
+import type { ClassificationFolder, Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
 import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, INDEX_MODEL, INDEX_TEMPLATE_NAME, isCaseIndex, LEGACY_INDEX_NAME, reviewCategory } from '../shared.js';
-import { addClassification, readClassification, saveAgentClassification } from './classification.js';
+import { addClassification, proposeClassification, readClassification, readClassificationProposal } from './classification.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
 import { assertProject, assertReviewFile, UserError } from './paths.js';
@@ -209,11 +209,15 @@ async function editColumns(project: string, input: Input, launchers: AssistantLa
   return readOut(project, file, launchers);
 }
 
-async function classificationTree(project: string, input: Input) {
-  const folders = input.dossiers === undefined
-    ? readClassification(project)
-    : await saveAgentClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication })) : input.dossiers);
-  return { dossiers: folders.map((folder) => ({ nom: folder.name, explication: folder.explanation })) };
+function classificationTree(project: string, input: Input) {
+  const out = (folders: ClassificationFolder[]) => folders.map((folder) => ({ nom: folder.name, explication: folder.explanation }));
+  const dossiers = out(readClassification(project));
+  if (input.dossiers === undefined) {
+    const proposal = readClassificationProposal(project);
+    return { dossiers, ...(proposal ? { proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date } } : {}) };
+  }
+  const proposal = proposeClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication })) : input.dossiers, input.motif);
+  return { dossiers, proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date }, message: 'Proposition enregistrée, arborescence inchangée : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Index › Classement.' };
 }
 
 function unindexedDocuments(project: string, review: ReturnType<typeof readReview>) {

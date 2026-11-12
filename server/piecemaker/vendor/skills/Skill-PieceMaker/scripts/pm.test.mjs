@@ -200,7 +200,10 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
   await assert.rejects(() => run(['tabular_review', 'relancer', '--fichier', 'Tabular Review/index.json', '--dossier', dossier], { deps }), /pm dossier index/);
   await run(['dossier', 'arborescence', '--dossiers', '[{"nom":"Contrats","explication":"Baux"}]', '--dossier', dossier], { deps });
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier, dossiers: [{ nom: 'Contrats', explication: 'Baux' }] });
-  await assert.rejects(() => run(['dossier', 'arborescence', '--dossier', dossier], { deps }), /--dossiers/);
+  await run(['dossier', 'arborescence', '--dossiers', '[{"nom":"Contrats"}]', '--motif', 'Regrouper les baux', '--dossier', dossier], { deps });
+  assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier, dossiers: [{ nom: 'Contrats' }], motif: 'Regrouper les baux' });
+  await run(['dossier', 'arborescence', '--dossier', dossier], { deps });
+  assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier });
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 

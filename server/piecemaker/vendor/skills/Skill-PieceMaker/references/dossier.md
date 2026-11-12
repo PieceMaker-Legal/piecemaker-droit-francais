@@ -3,7 +3,7 @@
 ```
 pm dossier sql "REQUÊTE"
 pm dossier conversion [--force] [pièce…]
-pm dossier arborescence --dossiers JSON
+pm dossier arborescence [--dossiers JSON] [--motif "raison"]
 pm dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
 pm dossier index lire
 pm dossier index colonnes --questions JSON
@@ -29,7 +29,7 @@ La colonne de classement range chaque pièce dans l’arborescence. Dès que le 
 
 ## arborescence
 
-Lisez `.piecemaker/arborescence.json`. `pm dossier arborescence --dossiers JSON` la remplace : `[{nom, explication}]`, un « / » crée un sous-dossier. Sans ce fichier, la base est Projets, Pièces, Archives, Notes et recherches. Enregistrer l’arborescence ne déplace aucun fichier. Les dossiers de premier niveau sont les types de documents : quand l’arborescence existe, la commande refuse d’en ajouter ou d’en retirer un. Seuls les sous-dossiers et les explications changent ; l’avocat règle les types dans l’onglet Index › Classement.
+`pm dossier arborescence` lit l’arborescence et la proposition en attente. `--dossiers JSON` propose une arborescence complète : `[{nom, explication}]`, un « / » crée un sous-dossier ; `--motif` dit pourquoi. La proposition ne change rien : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Index › Classement, puis enregistre. Une nouvelle proposition remplace la précédente. Sans arborescence, la base est Projets, Pièces, Archives, Notes et recherches. Les dossiers de premier niveau sont les types de documents. Aucun fichier n’est déplacé.
 
 ## sql
 

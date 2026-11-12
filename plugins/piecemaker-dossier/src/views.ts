@@ -3,7 +3,7 @@ import { nodePosition } from './party-codes.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import type { CompanySearchResult, ScanJob } from './api.js';
 import { ficheLinks } from './okf.js';
-import type { OkfContradiction, OkfError, OkfIndex, OkfView } from './okf.js';
+import type { OkfContradiction, OkfError, OkfIndex, OkfView, PendingProposals } from './okf.js';
 
 export type Tab = 'general' | 'chronology';
 export type BodaccScanState = {
@@ -385,7 +385,16 @@ function okfGraph(okf: OkfIndex | null): string {
   return `<div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, prémisses et parties.</div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('document', 'Pièce')}${key('premise', 'Premise')}${key('party-client', 'Partie cliente')}${key('party-adverse', 'Partie adverse')}</div><div class="pmd-okf-graph-wrap"><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div></div>`;
 }
 
-export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }, view: Pick<OkfView, 'mode' | 'errors' | 'contradictions'> = { mode: 'table', errors: null }): string {
+export function proposalBanner(proposals?: PendingProposals): string {
+  const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
+  const entries = [
+    proposals?.ontologie ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--sm" data-action="edit-ontology">Ontologie : ${plural(proposals.ontologie, 'modification')}</button>` : '',
+    proposals?.arborescence ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--sm" data-action="edit-tree">Arborescence : ${plural(proposals.arborescence, 'modification')}</button>` : '',
+  ].filter(Boolean);
+  return `<div class="pmd-proposals" data-proposals role="status"${entries.length ? '' : ' hidden'}><span>L’assistant propose des modifications à examiner.</span>${entries.join('')}</div>`;
+}
+
+export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }, view: Pick<OkfView, 'mode' | 'errors' | 'contradictions' | 'proposals'> = { mode: 'table', errors: null }): string {
   const value = (node: KnowledgeNode) => sort.column === 'date' ? dateFor(node) : sort.column === 'classification' ? chronologyFolder(node, projectPath) : node.label;
   const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
   const documents = data.graph.nodes.filter((node) => node.kind === 'document').sort((left, right) => {
@@ -399,6 +408,6 @@ export function chronologyView(data: ViewData, projectPath = '', sort: Chronolog
   const label = { document: 'Document', date: 'Date', classification: 'Classement' }[sort.column];
   return `
     <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span>${okfSwitch(view.mode)}<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="okf-verify" title="Contrôler les fiches, les types et les liens de l’index">Vérifier l’index</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</button><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-action="index-analysis">Analyse tabulaire</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
-    ${okfErrors(view.errors)}${okfContradictions(view.contradictions || [])}
+    ${proposalBanner(view.proposals)}${okfErrors(view.errors)}${okfContradictions(view.contradictions || [])}
     ${view.mode === 'graph' ? okfGraph(data.okf ?? null) : chronologyTable(documents, byId, data.graph.links, projectPath, sort, data.okf ?? null)}`;
 }

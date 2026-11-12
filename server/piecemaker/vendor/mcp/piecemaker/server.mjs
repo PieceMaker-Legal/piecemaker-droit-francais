@@ -152,7 +152,7 @@ const QUESTIONS_SCHEMA = z.array(z.object({
   supprimer: z.boolean().optional(),
 })).optional().describe('Avec modele dans preparer : ajoutées à ses questions.');
 
-const DOSSIERS_SCHEMA = z.array(z.object({ nom: z.string(), explication: z.string().optional() })).optional().describe('arborescence : remplace la liste. Un « / » crée un sous-dossier.');
+const DOSSIERS_SCHEMA = z.array(z.object({ nom: z.string(), explication: z.string().optional() })).optional().describe('arborescence : propose une liste complète ; l’avocat accepte, refuse ou modifie chaque changement. Un « / » crée un sous-dossier.');
 
 const DOSSIER_SCHEMA = z.string()
   .optional()
@@ -394,7 +394,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       + 'lancer et relancer : seulement sur accord explicite de l’avocat dans le chat ; relancer analyse les nouveaux documents Markdown. '
       + 'lire : colonnes, lignes et réponses. colonnes : ajoute (sans colonne), modifie ou supprime (colonne, supprimer). '
       + 'classement : ajoute la colonne qui classe chaque document dans l’arborescence du dossier. '
-      + 'arborescence : lit, ou remplace avec dossiers, l’arborescence ; aucun fichier n’est déplacé, l’avocat applique dans le volet. '
+      + 'arborescence : lit l’arborescence et la proposition en attente ; avec dossiers (et motif), propose une arborescence sans la changer : l’avocat décide dans l’onglet Index › Classement ; aucun fichier n’est déplacé. '
       + 'lister : id, date, libellé et nature de chaque pièce en base, par date ; ne lit pas les pièces. '
       + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',
     inputSchema: {
@@ -405,6 +405,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       libelle: z.string().optional(),
       questions: QUESTIONS_SCHEMA,
       dossiers: DOSSIERS_SCHEMA,
+      motif: z.string().optional().describe('arborescence : raison de la proposition, montrée à l’avocat.'),
       documents: z.array(z.string()).optional().describe('Chemins relatifs de documents ou de dossiers (tous leurs documents).'),
       ia: z.enum(['claude', 'codex', 'mistral']).optional(),
       modele_ia: z.string().optional(),

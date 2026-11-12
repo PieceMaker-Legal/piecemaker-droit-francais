@@ -27,7 +27,7 @@ Le type d'une fiche de document est le dossier de premier niveau de `.piecemaker
 
 Le graphe ne montre que certains types de documents : ceux que relie l'ontologie (sources et cibles de ses relations). Sans ontologie : `['Pièces']` par défaut, ou `typesGraphe` dans `.piecemaker/okf.json`. Il montre aussi les prémisses et les parties.
 
-L'avocat seul fixe les types de documents. Quand l'arborescence existe, `pm dossier arborescence` refuse à l'agent d'ajouter ou de retirer un dossier de premier niveau ; il ne change que les sous-dossiers et les explications.
+L'avocat seul fixe l'arborescence, donc les types de documents. L'agent propose une arborescence complète avec `pm dossier arborescence --dossiers JSON --motif "…"`, écrite dans `.piecemaker/arborescence.proposition.json` ; elle ne s'applique pas. L'onglet Index › Classement la montre en suivi des modifications, comme l'ontologie : l'avocat accepte, refuse ou modifie chaque changement, puis enregistre, ce qui supprime la proposition (`DELETE /classification/proposition` du plugin Tabular review pour « Tout refuser »). Un bandeau de l'onglet Index signale les propositions en attente, d'ontologie et d'arborescence.
 
 ## Ontologie
 
@@ -161,6 +161,8 @@ Sous-agents (`vendor/piecemaker-plugin/agents/`), modèle de niveau moyen, activ
 | Ontologie des liens | `server/piecemaker/okf/ontology.ts` |
 | Éditeur de l'ontologie | `plugins/piecemaker-dossier/src/ontology.ts` |
 | Proposition de l'assistant | `server/piecemaker/okf/ontology-proposal.ts`, `plugins/piecemaker-dossier/src/ontology-proposal.ts` |
+| Suivi des modifications, commun | `plugins/piecemaker-dossier/src/proposal.ts`, `plugins/piecemaker-dossier/src/pending-proposals.ts` |
+| Proposition d'arborescence | `plugins/piecemaker-tabular-review/src/server/classification.ts`, `plugins/piecemaker-dossier/src/classification.ts` |
 | Garde d'écriture | `server/piecemaker/vendor/piecemaker-plugin/scripts/guard-ontologie.mjs` |
 | Routes `/api/piecemaker/okf` et locale | `server/piecemaker/okf/index.ts` |
 | Commande `pm okf` | `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/pm.mjs` |

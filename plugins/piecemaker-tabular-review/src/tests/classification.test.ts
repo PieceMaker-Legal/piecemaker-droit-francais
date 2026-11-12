@@ -14,7 +14,7 @@ vi.stubEnv('HOME', home);
 vi.stubEnv('USERPROFILE', home);
 
 const { assistant } = await import('../server/assistant.js');
-const { addClassification, readClassification, saveClassification } = await import('../server/classification.js');
+const { addClassification, classificationLines, dropClassificationProposal, readClassification, readClassificationProposal, saveClassification } = await import('../server/classification.js');
 const { appendRows, createReview, listReviews, readReview } = await import('../server/reviews.js');
 const { deleteDraft, listDrafts } = await import('../server/drafts.js');
 
@@ -90,12 +90,26 @@ describe('arborescence du dossier', () => {
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
 
-  it('interdit à l’agent de changer les types de documents, pas les sous-dossiers', async () => {
+  it('l’agent propose l’arborescence, l’avocat seul l’applique', async () => {
     await saveClassification(project, [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }]);
-    const tree = (dossiers: unknown) => assistant({ action: 'arborescence', project, dossiers }, launchers());
-    await expect(tree([{ nom: 'Pièces' }, { nom: 'Projets' }, { nom: 'Factures' }])).rejects.toThrow('Ajout refusé : Factures');
-    await expect(tree([{ nom: 'Pièces' }])).rejects.toThrow('Suppression refusée : Projets');
-    await expect(tree([{ nom: 'Pièces/Contrats', explication: 'Contrats signés.' }, { nom: 'Projets' }])).resolves.toEqual({ dossiers: [{ nom: 'Pièces/Contrats', explication: 'Contrats signés.' }, { nom: 'Projets', explication: '' }] });
+    const tree = (dossiers: unknown, motif?: string) => assistant({ action: 'arborescence', project, dossiers, motif }, launchers());
+    const proposed = await tree([{ nom: 'Pièces/Contrats', explication: 'Contrats signés.' }, { nom: 'Factures' }], 'Isoler les contrats') as { dossiers: unknown; proposition: { dossiers: unknown; motif: string }; message: string };
+    expect(proposed.dossiers).toEqual([{ nom: 'Pièces', explication: '' }, { nom: 'Projets', explication: '' }]);
+    expect(proposed.proposition).toMatchObject({ dossiers: [{ nom: 'Pièces/Contrats', explication: 'Contrats signés.' }, { nom: 'Factures', explication: '' }], motif: 'Isoler les contrats' });
+    expect(proposed.message).toContain('l’avocat');
+    expect(readClassification(project).map((folder) => folder.name)).toEqual(['Pièces', 'Projets']);
+    expect(readClassificationProposal(project)?.dossiers).toHaveLength(2);
+    await expect(tree([{ nom: '.cache' }])).rejects.toThrow('Nom de dossier invalide');
+    await saveClassification(project, DEFAULT_CLASSIFICATION);
+    expect(readClassificationProposal(project)).toBeNull();
+  });
+
+  it('situe chaque dossier dans le fichier pour le chat', async () => {
+    await saveClassification(project, [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: 'Actes.' }]);
+    const lines = classificationLines(project, readClassification(project));
+    expect(lines.lignes).toEqual({ Pièces: { debut: 2, fin: 5 }, Projets: { debut: 6, fin: 9 } });
+    expect(lines.total).toBe(10);
+    dropClassificationProposal(project);
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
 });
@@ -243,12 +257,15 @@ describe('outil tabular_review', () => {
     await expect(assistant({ action: 'colonnes', project, fichier: 'protegee.json', questions: [{ colonne: 1, nom: 'X' }] }, { ...run, isRunning: () => true })).rejects.toThrow('Attendez');
   });
 
-  it('lit et remplace l’arborescence', async () => {
+  it('lit l’arborescence et la proposition en attente', async () => {
     const run = launchers();
     fs.rmSync(path.join(project, '.piecemaker', 'arborescence.json'), { force: true });
     await assistant({ action: 'arborescence', project, dossiers: [{ nom: 'Clients', explication: 'Échanges.' }] }, run);
-    expect(await assistant({ action: 'arborescence', project }, run)).toEqual({ dossiers: [{ nom: 'Clients', explication: 'Échanges.' }] });
+    const read = await assistant({ action: 'arborescence', project }, run) as { dossiers: unknown; proposition: { dossiers: unknown } };
+    expect(read.dossiers).toEqual(DEFAULT_CLASSIFICATION.map((folder) => ({ nom: folder.name, explication: folder.explanation })));
+    expect(read.proposition.dossiers).toEqual([{ nom: 'Clients', explication: 'Échanges.' }]);
     await saveClassification(project, DEFAULT_CLASSIFICATION);
+    expect(await assistant({ action: 'arborescence', project }, run)).not.toHaveProperty('proposition');
   });
 
   it('ajoute la colonne une seule fois', async () => {

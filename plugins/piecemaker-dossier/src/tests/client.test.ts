@@ -110,11 +110,11 @@ describe('Index : tri et classement', () => {
     rejectSave = false;
     submit();
     await vi.waitFor(() => expect(container.querySelector('.pmd-modal')).toBeNull());
-    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    const [url, init] = fetchMock.mock.calls.findLast(([, request]) => request?.method === 'PUT')!;
     expect(url).toBe('/api/plugins/piecemaker-tabular-review/rpc/classification');
     expect(init.headers).toMatchObject({ Authorization: 'Bearer test-token' });
     expect(JSON.parse(init.body as string)).toEqual({ project: '/dossier-exemple', folders: [{ name: 'Contrats/Signés', explanation: 'Les accords' }, { name: 'Courriers', explanation: 'Les échanges' }] });
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/plugins/piecemaker-tabular-review/rpc/classification?project=%2Fdossier-exemple');
+    expect(fetchMock.mock.calls.map(([address]) => address)).toContain('/api/plugins/piecemaker-tabular-review/rpc/classification?project=%2Fdossier-exemple');
     container.querySelector<HTMLButtonElement>('[data-action="edit-tree"]')!.click();
     await vi.waitFor(() => expect(container.querySelector('[data-tree-name]')).not.toBeNull());
     const calls = fetchMock.mock.calls.length;
@@ -138,7 +138,7 @@ describe('Index : tri et classement', () => {
     rows()[3].querySelector<HTMLInputElement>('[data-tree-name]')!.value = 'Résiliés';
     container.querySelector('form[data-tree-form]')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(container.querySelector('.pmd-modal')).toBeNull());
-    const init = (fetchMock.mock.calls.at(-1) as unknown as [string, RequestInit])[1];
+    const init = (fetchMock.mock.calls as unknown as Array<[string, RequestInit]>).findLast(([, request]) => request?.method === 'PUT')![1];
     expect((JSON.parse(init.body as string) as { folders: { name: string }[] }).folders.map((folder) => folder.name))
       .toEqual(['Courriers', 'Contrats', 'Contrats/Signés', 'Contrats/Résiliés']);
   });

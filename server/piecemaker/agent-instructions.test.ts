@@ -130,6 +130,15 @@ test('points the rules of an existing AGENTS.md to arborescence.json and keeps c
   assert.equal(await read(root, 'AGENTS.md'), `Ma règle sur perso.md\r\n${generalRule}\r\n${treeRule}\r\n`);
 }));
 
+test('tells the agent of an existing AGENTS.md to propose the tree, not replace it', () => withProject(async (root) => {
+  const replaceRule = '3° Arborescence: Respecte l’arborescence du dossier, enregistrée dans .piecemaker/arborescence.json : l’avocat la règle dans l’index du dossier, tu la lis dans ce fichier et tu la remplaces avec pm dossier arborescence (voir la skill piecemaker), un « / » dans un nom crée un sous-dossier. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
+  await writeFile(path.join(root, 'AGENTS.md'), `${replaceRule}\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  const treeRule = agentInstructionsTemplate().split('\n')[3];
+  assert.match(treeRule, /seul l’avocat l’accepte/);
+  assert.equal(await read(root, 'AGENTS.md'), `${treeRule}\n`);
+}));
+
 test('leaves the shared import out of an AGENTS.md moved from CLAUDE.md',() => withProject(async (root) => {
   await writeFile(path.join(root, 'CLAUDE.md'), `@${SHARED}\n\nconsignes du dossier\n`);
   assert.deepEqual(await ensureAgentInstructionFiles(root, SHARED), ['AGENTS.md']);

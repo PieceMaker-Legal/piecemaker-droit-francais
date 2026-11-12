@@ -13,6 +13,7 @@ const MAX_NAME = 200;
 const MAX_EXPLANATION = 500;
 
 const treeFile = (project: string) => path.join(project, '.piecemaker', 'arborescence.json');
+const proposalFile = (project: string) => path.join(project, '.piecemaker', 'arborescence.proposition.json');
 
 function folderName(value: unknown): string {
   const name = typeof value === 'string' ? value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '') : '';
@@ -45,6 +46,7 @@ export function readClassification(project: string): ClassificationFolder[] {
 export async function saveClassification(project: string, value: unknown): Promise<ClassificationFolder[]> {
   const folders = normalizeFolders(value);
   writeFileAtomic(treeFile(project), `${JSON.stringify(folders, null, 2)}\n`);
+  dropClassificationProposal(project);
   for (const { file } of listReviews([project], () => false)) {
     if (!classifyColumn(readReview(project, file).columns)) continue;
     await updateReview(project, file, (review) => {
@@ -70,18 +72,42 @@ export function addClassification(project: string, file: string): Promise<Review
   });
 }
 
-const documentTypes = (folders: ClassificationFolder[]): string[] => [...new Set(folders.map((folder) => folder.name.split('/')[0]))];
+export type ClassificationProposal = { dossiers: ClassificationFolder[]; motif: string; date: string };
+export type ClassificationLines = { fichier?: string; lignes: Record<string, { debut: number; fin: number }>; total: number };
 
-export async function saveAgentClassification(project: string, value: unknown): Promise<ClassificationFolder[]> {
-  const folders = normalizeFolders(value);
-  if (fs.existsSync(treeFile(project))) {
-    const current = documentTypes(readClassification(project));
-    const next = documentTypes(folders);
-    const added = next.filter((type) => !current.includes(type));
-    const removed = current.filter((type) => !next.includes(type));
-    if (added.length || removed.length) {
-      throw new UserError(`Les dossiers de premier niveau sont les types de documents : seul l’avocat les modifie (onglet Index › Classement). ${added.length ? `Ajout refusé : ${added.join(', ')}. ` : ''}${removed.length ? `Suppression refusée : ${removed.join(', ')}. ` : ''}Types actuels : ${current.join(', ')}. Les sous-dossiers et les explications restent modifiables.`);
-    }
+export function readClassificationProposal(project: string): ClassificationProposal | null {
+  try {
+    const stored = JSON.parse(fs.readFileSync(proposalFile(project), 'utf8'));
+    return { dossiers: normalizeFolders(stored.dossiers), motif: typeof stored.motif === 'string' ? stored.motif : '', date: typeof stored.date === 'string' ? stored.date : '' };
+  } catch {
+    return null;
   }
-  return saveClassification(project, folders);
+}
+
+export function proposeClassification(project: string, value: unknown, motif: unknown): ClassificationProposal {
+  const reason = typeof motif === 'string' ? motif.trim() : '';
+  if (reason.length > 1000) throw new UserError('motif : 1000 caractères au plus.');
+  const proposal = { dossiers: normalizeFolders(value), motif: reason, date: new Date().toISOString() };
+  writeFileAtomic(proposalFile(project), `${JSON.stringify(proposal, null, 2)}\n`);
+  return proposal;
+}
+
+export function dropClassificationProposal(project: string): void {
+  fs.rmSync(proposalFile(project), { force: true });
+}
+
+export function classificationLines(project: string, folders: ClassificationFolder[]): ClassificationLines {
+  if (!fs.existsSync(treeFile(project))) return { lignes: {}, total: 0 };
+  const lines = fs.readFileSync(treeFile(project), 'utf8').replace(/\n$/, '').split('\n');
+  const found: ClassificationLines['lignes'] = {};
+  for (const { name } of folders) {
+    const index = lines.findIndex((line) => line.trim().replace(/,$/, '') === `"name": ${JSON.stringify(name)}`);
+    if (index < 0) continue;
+    let start = index;
+    while (start > 0 && lines[start].trim() !== '{') start -= 1;
+    let end = index;
+    while (end < lines.length - 1 && !lines[end].trim().startsWith('}')) end += 1;
+    found[name] = { debut: start + 1, fin: end + 1 };
+  }
+  return { fichier: treeFile(project), lignes: found, total: lines.length };
 }

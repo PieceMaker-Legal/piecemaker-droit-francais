@@ -1,9 +1,10 @@
 import { modal } from './editors.js';
 import { okfApi, PARTY_TYPE, PREMISE_TYPE, type OntologyRelation, type OntologyState } from './okf.js';
+import { askChat as ask, chatAttributes as attributes, type ChatPlace } from './chat-pick.js';
 import { applyChange, ontologyChanges, proposalMarkup, type ChangeDecision } from './ontology-proposal.js';
+import { decisionOf } from './proposal.js';
 import { escapeHtml } from './views.js';
 
-const TAB = 'plugin:piecemaker-dossier';
 const ASK_NOTE = 'ontologie commune à tous les dossiers, lue par pm okf ontologie ; pour la changer, proposez avec pm okf ontologie proposer, l’avocat décide';
 
 const blank = (): OntologyRelation => ({ name: '', label: '', inverse: '', description: '', source: [], target: [] });
@@ -17,14 +18,8 @@ function typeChecks(types: string[], selected: string[], side: 'source' | 'targe
   return `<div class="pmd-ontology-types" data-ontology-${side}>${types.map((type) => `<label><input type="checkbox" value="${escapeHtml(type)}"${selected.includes(type) ? ' checked' : ''}> ${escapeHtml(type)}</label>`).join('')}</div>`;
 }
 
-type ChatPlace = { fichier?: string; debut?: number; fin?: number };
-
-const chatAttributes = (title: string, kind: string, place: ChatPlace) => ` data-chat-pick="${escapeHtml(title)}" data-chat-kind="${kind}" data-chat-note="${escapeHtml(ASK_NOTE)}"${place.fichier ? ` data-chat-file="${escapeHtml(place.fichier)}"` : ''}${place.debut ? ` data-chat-line="${place.debut}" data-chat-end="${place.fin ?? place.debut}"` : ''}`;
-
-function askChat(title: string, kind: string, place: ChatPlace): void {
-  window.dispatchEvent(new CustomEvent('piecemaker:chat-pick', { detail: { titre: title, nature: kind, note: ASK_NOTE, ...place } }));
-  window.dispatchEvent(new CustomEvent('piecemaker:panel-picked', { detail: { tab: TAB } }));
-}
+const chatAttributes = (title: string, kind: string, place: ChatPlace) => attributes(title, kind, ASK_NOTE, place);
+const askChat = (title: string, kind: string, place: ChatPlace) => ask(title, kind, ASK_NOTE, place);
 
 function relationMarkup(relation: OntologyRelation, index: number, types: string[], place: ChatPlace): string {
   return `
@@ -107,12 +102,8 @@ export async function editOntology(root: HTMLElement, projectId: string, onSaved
   };
   layer.addEventListener('click', (event) => {
     const target = event.target as HTMLElement;
-    const choice = target.closest<HTMLElement>('[data-change-accept],[data-change-refuse],[data-change-edit]');
-    if (choice) {
-      const { changeAccept, changeRefuse, changeEdit } = choice.dataset;
-      decide(Number(changeAccept ?? changeRefuse ?? changeEdit), changeAccept !== undefined ? 'acceptee' : changeRefuse !== undefined ? 'refusee' : 'modifiee');
-      return;
-    }
+    const choice = decisionOf(target);
+    if (choice) return decide(choice.index, choice.decision);
     if (target.closest('[data-proposal-drop]')) {
       void okfApi.dropProposal(projectId).then(() => { state = { ...state, proposition: null }; proposalHost.innerHTML = ''; }).catch(showError);
       return;

@@ -257,6 +257,8 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-tree-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2fr) auto auto;gap:8px;align-items:center}
 .pmd-ontology-head{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto auto;gap:8px;align-items:end}
 .pmd-ontology-change-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.pmd-proposals{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 10px;padding:8px 10px;border:1px solid var(--pmd-border);border-left:3px solid #c98a12;border-radius:6px;font-size:13px}
+.pmd-proposals[hidden]{display:none}
 .pmd-ontology-change-head h2,.pmd-ontology-change-head h3{margin:0}
 .pmd-ontology-change{border:1px solid var(--pmd-border);border-radius:6px;padding:8px 10px;display:grid;gap:6px}
 .pmd-ontology-change[data-change-kind="ajout"]{border-left:3px solid #2f8f4e}

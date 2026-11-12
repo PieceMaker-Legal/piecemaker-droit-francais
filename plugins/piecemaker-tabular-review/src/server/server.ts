@@ -6,7 +6,7 @@ import { emptyColumns } from '../shared.js';
 import { assistant } from './assistant.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, upsertDraft } from './drafts.js';
-import { addClassification, readClassification, saveClassification } from './classification.js';
+import { addClassification, classificationLines, dropClassificationProposal, readClassification, readClassificationProposal, saveClassification } from './classification.js';
 import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
 import { pickFiles } from './picker.js';
@@ -170,11 +170,21 @@ function researchRoute(method: string, pathname: string, url: URL, body: Body): 
   throw new UserError('Commande inconnue.');
 }
 
+function classificationState(project: string) {
+  const folders = readClassification(project);
+  return { folders, ...classificationLines(project, folders), proposition: readClassificationProposal(project) };
+}
+
 async function route(method: string, url: URL, body: Body): Promise<unknown> {
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
   if (pathname.startsWith('/research')) return researchRoute(method, pathname, url, body);
   if (method === 'POST' && pathname === '/assistant') return assistant(body, { isRunning, launchAnalysis: createAndLaunch, launchResearch, appendDocuments: appendPieces });
-  if (method === 'GET' && pathname === '/classification') return { folders: readClassification(assertProject(url.searchParams.get('project'))) };
+  if (method === 'GET' && pathname === '/classification') return classificationState(assertProject(url.searchParams.get('project')));
+  if (method === 'DELETE' && pathname === '/classification/proposition') {
+    const project = assertProject(url.searchParams.get('project'));
+    dropClassificationProposal(project);
+    return classificationState(project);
+  }
   if (method === 'PUT' && pathname === '/classification') return { folders: await saveClassification(assertProject(body.project), body.folders) };
   if (method === 'POST' && pathname === '/reviews/classification') {
     const { project, file } = reviewTarget(body);

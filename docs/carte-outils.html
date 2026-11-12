@@ -238,7 +238,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Hook</th><th>Moment</th><th>Outils visés</th></tr>
         <tr><td><code>protect-originals</code></td><td>avant</td><td><code>Read|Grep|Glob|Bash</code></td></tr>
-        <tr><td><code>guard-ontologie</code></td><td>avant</td><td><code>Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob</code> (Claude), <code>Bash|apply_patch</code> (Codex), chat Mistral : pas d'écriture directe de l'ontologie commune (scellée), de l'arborescence ni des fiches OKF, shell en lecture seule sur ces fichiers ; passer par <code>pm okf link</code>, <code>pm dossier arborescence</code></td></tr>
+        <tr><td><code>guard-ontologie</code></td><td>avant</td><td><code>Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob</code> (Claude), <code>Bash|apply_patch</code> (Codex), chat Mistral : pas d'écriture directe de l'ontologie commune (scellée), de l'arborescence ni des fiches OKF, shell en lecture seule sur ces fichiers ; passer par <code>pm okf link</code>, proposer avec <code>pm dossier arborescence</code></td></tr>
         <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_*</code> (Claude, Codex) : recherche réservée à research-maker ; Mistral : outil <code>research_maker</code> (délégation serveur)</td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>
@@ -255,7 +255,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td><code>pm tab afficher index</code></td><td>Ouvre l'onglet Index du volet Dossier.</td><td>non</td></tr>
         <tr><td><code>pm dossier index lancer</code></td><td>Crée l'index s'il manque et l'analyse (modèle medium par défaut). S'il existe, analyse les pièces converties qui en sont absentes.</td><td>oui</td></tr>
         <tr><td><code>pm dossier index lire|colonnes</code></td><td>Résume l'index, ou ajoute, modifie, retire une question.</td><td>non</td></tr>
-        <tr><td><code>pm dossier arborescence --dossiers JSON</code></td><td>Remplace l'arborescence de classement. La lecture passe par <code>.piecemaker/arborescence.json</code>.</td><td>non</td></tr>
+        <tr><td><code>pm dossier arborescence [--dossiers JSON] [--motif]</code></td><td>Lit l'arborescence et la proposition en attente ; avec <code>--dossiers</code>, propose une arborescence que l'avocat accepte, refuse ou modifie dans Index › Classement.</td><td>non</td></tr>
         <tr><td><code>pm dossier sql "REQUÊTE"</code></td><td>Lit ou modifie les dates et les libellés des pièces en base (requêtes d'exemple dans la skill).</td><td>non</td></tr>
         <tr><td><code>pm check</code></td><td>Bilan du dossier : anonymisation, mapping, conversion, index OKF, prémisses, programmes Catala, suivi, revues de recherche, étape. Chaque défaut donne la commande ou le sous-agent qui le corrige.</td><td>non</td></tr>
       </table></div>
