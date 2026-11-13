@@ -63,6 +63,7 @@ export async function configureCompactPackage(stageDir) {
     'server/**', 'piecemaker-plugins/**', 'desktop-bootstrap/**', 'runtime-components.json', 'python-runtime.json',
     'electron/uninstallPlan.js', 'electron-piecemaker/asar-runtime.mjs', 'electron-piecemaker/runtime-components.mjs', '**/*.node', '**/*.exe', '**/*.dll',
     'electron-piecemaker/ui-update-runtime.json',
+    'electron-piecemaker/auth/**',
     ...physicalPackages,
   ];
   manifest.build.files.push('runtime-components.json');

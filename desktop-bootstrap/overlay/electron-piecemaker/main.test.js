@@ -29,7 +29,7 @@ async function loadEntry(startupError, platform = 'win32', preparationWindow = f
     return window;
   };
   const mocks = {
-    electron: { app, BrowserWindow: { getAllWindows: () => [] }, dialog: {}, powerSaveBlocker: {}, session: {} },
+    electron: { app, BrowserWindow: { getAllWindows: () => [] }, dialog: {}, ipcMain: {}, powerSaveBlocker: {}, safeStorage: {}, session: {} },
     'node:os': { default: os },
     'node:path': { default: path },
     'node:url': { fileURLToPath, pathToFileURL },
@@ -51,6 +51,7 @@ async function loadEntry(startupError, platform = 'win32', preparationWindow = f
     } },
     './keepAwake.js': { installDesktopKeepAwake: async () => { calls.push('keep-awake'); } },
     './ui-updates/index.mjs': { installUiUpdates: async () => { calls.push('ui-updates'); } },
+    './auth/main.mjs': { installDesktopPasswords: async () => { calls.push('passwords'); } },
   };
   function mockModule(exports) {
     return new SyntheticModule(Object.keys(exports), function () {
@@ -95,7 +96,7 @@ async function loadEntry(startupError, platform = 'win32', preparationWindow = f
 }
 
 test('Windows entry finishes loading before ready, then starts updater, plugins and desktop', async () => {
-  assert.deepEqual(await loadEntry(), ['waiting-ready', 'updater', 'keep-awake', 'ui-updates', 'plugins', 'desktop']);
+  assert.deepEqual(await loadEntry(), ['waiting-ready', 'updater', 'keep-awake', 'passwords', 'ui-updates', 'plugins', 'desktop']);
 });
 
 test('startup failure is reported and quits the app without an unhandled rejection', async () => {
@@ -106,7 +107,7 @@ test('startup failure is reported and quits the app without an unhandled rejecti
 });
 
 test('macOS installs continuous UI before opening the desktop', async () => {
-  assert.deepEqual(await loadEntry(undefined, 'darwin'), ['waiting-ready', 'keep-awake', 'ui-updates', 'plugins', 'desktop']);
+  assert.deepEqual(await loadEntry(undefined, 'darwin'), ['waiting-ready', 'keep-awake', 'passwords', 'ui-updates', 'plugins', 'desktop']);
 });
 
 test('a preparation window without the desktop bridge cannot consume the automatic local launch', async () => {

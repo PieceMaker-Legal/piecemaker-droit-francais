@@ -5,6 +5,7 @@ import path from 'path';
 import type { Router } from 'express';
 
 import { getConnection, projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { desktopAuthRoutes } from '@/modules/desktop-auth/index.js';
 import { createBoardRouter, createBoardService, createReasoningLocalRouter, createReasoningRouter, createReasoningService, createSuiviLocalRouter, createSuiviRouter, createSuiviService } from '@/modules/piecemaker-reasoning/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
@@ -117,6 +118,7 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
 });
 
 const localRouter = express.Router();
+localRouter.use(desktopAuthRoutes());
 localRouter.use(createMistralTabularBridge({ ensureProxy, runInProject: (id, run) => anonymizer.runInProject(id, run) }));
 localRouter.use(knowledge.localRouter);
 localRouter.use('/reasoning', express.json(), citationReview.scope(true));
