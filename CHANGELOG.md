@@ -3,6 +3,17 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.2.1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.2.0...v2.2.1) (2026-11-13)
+
+### New Features
+
+* **desktop:** récupération locale du mot de passe par authentification système ([57485e8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/57485e8e855c77a848f125d69e5d1dba8c341d87))
+
+### Bug Fixes
+
+* **guard:** contrôler les auteurs et retirer les fichiers locaux du suivi ([8e5ec7d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/8e5ec7df223cf3042711eff4cc752ff53724e736))
+* **library:** scope catalogue and collect Codex and Mistral skills ([f2c2ecf](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/f2c2ecf58387a29c3018e515dccecd41d9b36007))
+
 ## [2.2.0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.1.0...v2.2.0) (2026-11-01)
 
 ### New Features
