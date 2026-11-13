@@ -24,9 +24,9 @@ Le MSI de construction n'est pas inclus une seconde fois.
 
 Sources techniques :
 
-- [Version officielle](https://download.documentfoundation.org/libreoffice/stable/26.8.1/).
+- [Version officielle](https://downloadarchive.documentfoundation.org/libreoffice/old/26.8.1.1/).
 - [Empreinte du MSI x64 dans le manifeste Microsoft WinGet](https://github.com/microsoft/winget-pkgs/blob/master/manifests/t/TheDocumentFoundation/LibreOffice/26.8.1.1/TheDocumentFoundation.LibreOffice.installer.yaml).
-- [Sources LibreOffice correspondantes](https://download.documentfoundation.org/libreoffice/src/26.8.1/).
+- [Sources LibreOffice correspondantes](https://downloadarchive.documentfoundation.org/libreoffice/old/26.8.1.1/src/).
 - [Image administrative Windows Installer](https://learn.microsoft.com/en-us/windows/win32/msi/administrative-installation).
 - [Licences LibreOffice](https://www.libreoffice.org/licenses/).
 

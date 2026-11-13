@@ -47,7 +47,7 @@ test('packages the complete extracted runtime with notices and without a second 
   assert.deepEqual(manifest.build.extraResources, [{ from: 'mingit', to: 'mingit' }, { from: LIBREOFFICE_DIR, to: LIBREOFFICE_DIR }]);
   await fs.access(path.join(directory, LIBREOFFICE_DIR, 'program', 'soffice.com'));
   await fs.access(path.join(directory, LIBREOFFICE_DIR, 'LICENSE.html'));
-  assert.match(await fs.readFile(path.join(directory, LIBREOFFICE_DIR, 'PIECEMAKER-SOURCES.txt'), 'utf8'), /libreoffice\/src\/26\.8\.1/);
+  assert.match(await fs.readFile(path.join(directory, LIBREOFFICE_DIR, 'PIECEMAKER-SOURCES.txt'), 'utf8'), /26\.8\.1\.1\/src\//);
   await assert.rejects(fs.access(path.join(directory, 'libreoffice.msi')));
   await assert.rejects(fs.access(path.join(directory, LIBREOFFICE_DIR, 'libreoffice.msi')));
 });
