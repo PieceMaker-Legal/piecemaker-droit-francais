@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.2.2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.2.1...v2.2.2) (2026-11-13)
+
+### Bug Fixes
+
+* **libreoffice:** télécharger la 26.8.1.1 depuis l'archive permanente ([ad112b0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ad112b0e95c2c0dc31df112d68707bc13d0a0b5c))
+
 ## [2.2.1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.2.0...v2.2.1) (2026-11-13)
 
 ### New Features
