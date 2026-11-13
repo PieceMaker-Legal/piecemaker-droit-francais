@@ -112,7 +112,7 @@ test('writes the rule, then its projection, then its justification', () => {
 test('keeps the argument readable and attaches references directly to rules and facts', () => {
   const model = reasoning(dot, [module], citations);
   const document = new JSDOM(reasoningGraph(model)).window.document;
-  assert.equal(document.querySelector('.pmc-map').dataset.layout, 'tree');
+  assert.equal(document.querySelector('.pmc-map').dataset.layout, 'columns');
   const rule = document.querySelector('[data-node="x002"]');
   const fact = document.querySelector('[data-node="x001"]');
   assert.ok(rule.querySelector('[data-part="law"] [data-kind="article"] [data-open-reference]'));
@@ -199,11 +199,10 @@ test('shares supporting nodes and preserves authored questions, research and nat
   const coverage = { scopes: [{ index: 0, name: 'AvecDemande' }, { index: 1, name: 'SansDemande' }], locations: [{ file: file.chemin, tree: [{ range: { start: { line: 15 }, end: { line: 15 } }, reached_by: [0, 1], subtree: [] }] }] };
   const model = reasoning(dot.replace('  x002 -> x003', '  x004 [label=<<table><tr><td>autre_solution</td></tr><tr><td>mise_en_demeure</td></tr><tr><td>= true</td></tr></table>>];\n  x001 -> x004 [style="solid"];\n  x002 -> x003'), [file], citations, coverage);
   const graph = new JSDOM(reasoningGraph(model)).window.document;
-  assert.equal(graph.querySelectorAll('[data-node="x001"]').length, 1);
+  assert.equal(graph.querySelectorAll('[data-node="x001"]').length, 2);
   assert.equal(graph.querySelectorAll('[data-node="x002"]').length, 1);
-  assert.equal(graph.querySelectorAll('.pmc-tree-ref [data-goto="x001"]').length, 1);
   assert.ok(graph.querySelector('[data-node="x002"]').closest('.pmc-branch').querySelector(':scope > .pmc-children [data-node="x001"]'));
-  assert.ok(graph.querySelector('[data-node="x004"]').closest('.pmc-branch').querySelector(':scope > .pmc-children .pmc-tree-ref [data-goto="x001"]'));
+  assert.ok(graph.querySelector('[data-node="x004"]').closest('.pmc-branch').querySelector(':scope > .pmc-children [data-node="x001"]'));
   assert.match(graph.querySelector('[data-node="x002"]').textContent, /Peut-on retenir cette solution/);
   assert.match(graph.querySelector('[data-node="x002"]').textContent, /Obtenir la preuve de réception/);
   const card = new JSDOM(reasoningCard(model.steps.find((step) => step.id === 'x002'), model)).window.document;
@@ -250,22 +249,21 @@ test('follows the depth of the Catala rules and separates exceptions', () => {
   assert.equal(gates.some((node) => node.dataset.op === 'all'), false);
   assert.deepEqual(gates.map((node) => node.dataset.op), ['not']);
   const conclusion = document.querySelector('[data-node="x004"]').closest('.pmc-branch');
-  assert.equal(document.querySelectorAll('.pmc-map > .pmc-branch').length, 1);
+  assert.deepEqual([...document.querySelectorAll('.pmc-map > .pmc-branch > [data-node]')].map((node) => node.dataset.node), ['x003', 'x004']);
   assert.equal(conclusion.querySelectorAll(':scope > .pmc-children > .pmc-branch').length, 2);
+  assert.equal(conclusion.querySelector(':scope > .pmc-children .pmc-tree-ref [data-goto="x003"]').textContent, 'Étape 1 · Inexécution grave');
   const exclusion = document.querySelector('.pmc-gate[data-op="not"]').closest('.pmc-branch');
   assert.equal(exclusion.querySelector('[data-node="x002"] .pmc-met').textContent, 'Écartée, à justifier');
   assert.equal(exclusion.querySelector('[data-node="x002"]').dataset.state, 'warn');
   assert.equal(document.querySelectorAll('[data-node="x001"]').length, 1);
   const qualification = document.querySelector('[data-node="x003"]');
-  assert.equal(qualification.querySelector('.pmc-box-kind').textContent, 'Condition');
+  assert.equal(qualification.querySelector('.pmc-box-kind').textContent, 'Étape 1');
   assert.match(qualification.querySelector('h3').textContent, /Inexécution grave/);
   assert.match(qualification.querySelector('.pmc-met').textContent, /Remplie/);
   assert.match(qualification.textContent, /Source de la règle à indiquer/);
   assert.ok(qualification.closest('.pmc-branch').querySelector(':scope > .pmc-children [data-node="x001"]'));
   assert.match(qualification.closest('.pmc-branch').querySelector('[data-node="x001"]').textContent, /Pièce à rattacher/);
   assert.ok(document.querySelector('i[hidden][data-from="x003"][data-to="x004"]'));
-  const order = [...document.querySelectorAll('[data-node]')].map((node) => node.dataset.node);
-  assert.ok(order.indexOf('x004') < order.indexOf('x003'));
   const card = new JSDOM(reasoningText(model)).window.document.querySelector('[data-card="x004"]');
   assert.match(card.querySelector('[data-part="rule"]').textContent, /Non\s*Force majeure/);
   assert.match(card.querySelector('[data-part="projection"]').textContent, /Les conditions sont remplies/);
@@ -321,7 +319,7 @@ test('uses the native doc and its quote in the qualification card without mixing
   const fact = document.querySelector('[data-node="x001"]');
   assert.match(card.querySelector('[data-part="law"] q').textContent, /trois séances/);
   assert.match(card.querySelector('.pmc-calculation').textContent, /séances constatées ≥ 3/);
-  assert.equal(document.querySelector('.pmc-gate[data-op="leaf"]').textContent, 'séances constatées ≥ 3');
+  assert.equal(document.querySelector('.pmc-gate[data-op="leaf"] p').textContent, 'séances constatées ≥ 3');
   assert.equal(fact.querySelector('.pmc-value').textContent, '4');
   assert.match(fact.querySelector('[data-part="evidence"] [data-quote]').dataset.quote, /quatre séances/);
   assert.equal(card.querySelector('[data-part="evidence"]'), null);

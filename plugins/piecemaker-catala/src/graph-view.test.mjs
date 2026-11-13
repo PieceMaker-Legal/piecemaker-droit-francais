@@ -200,7 +200,7 @@ test('shows a native JSON graph when the scenario has no DOT and keeps its prove
   } finally { view.close(); }
 });
 
-test('lays the graph out as a tree: conclusion first, children nested, a shared step shown once then referenced', async () => {
+test('lays the graph out in columns: steps on the left, a shared fact repeated under each step', async () => {
   const shared = `digraph G {
   x001 [label=<<table><tr><td>inexécution</td><td>true</td></tr></table>>, URL="https://catala.local/test_demo.catala_fr#L9", style="filled"];
   x002 [label=<<table><tr><td>sanction_possible</td></tr><tr><td>inexécution</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L9", style="filled"];
@@ -213,28 +213,24 @@ test('lays the graph out as a tree: conclusion first, children nested, a shared 
   try {
     view.click(view.container.querySelector('[role="tab"][data-mode="graph"]'));
     const map = view.container.querySelector('.pmc-map');
-    assert.equal(map.dataset.layout, 'tree');
+    assert.equal(map.dataset.layout, 'columns');
     assert.equal(map.querySelectorAll('svg.pmc-wires path').length, map.querySelectorAll('.pmc-children > .pmc-branch').length);
     assert.match(map.querySelector('svg.pmc-wires path').getAttribute('d'), /^M\S+ \S+C/);
     const roots = [...map.querySelectorAll(':scope > .pmc-branch')];
     assert.equal(roots.length, 2);
-    const conclusion = roots[0].querySelector(':scope > [data-node]');
+    const conclusion = roots[1].querySelector(':scope > [data-node]');
     assert.equal(conclusion.dataset.kind, 'answer');
     assert.equal(conclusion.querySelector('.pmc-box-kind').textContent, 'Objectif');
-    assert.equal(map.querySelector('[data-node]'), conclusion);
-    const child = roots[0].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]');
+    const child = roots[1].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]');
     assert.ok(child);
     assert.equal(child.dataset.kind, 'fact');
-    assert.equal(map.querySelectorAll('[data-node="x001"]').length, 1);
-    const reference = roots[1].querySelector(':scope > .pmc-children .pmc-tree-ref');
-    assert.ok(reference);
-    assert.equal(reference.querySelector('[data-goto]').dataset.goto, 'x001');
-    assert.match(reference.textContent, /Déjà détaillé dans le graphe/);
-    assert.equal(roots[1].querySelector(':scope > [data-node]').dataset.state, 'ko');
-    assert.equal(conclusion.dataset.state, 'ok');
+    assert.equal(map.querySelectorAll('[data-node="x001"]').length, 2);
+    assert.ok(roots[0].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]'));
+    assert.equal(roots[0].querySelector(':scope > [data-node]').dataset.state, 'ok');
+    assert.equal(conclusion.dataset.state, 'ko');
     assert.deepEqual([...map.querySelectorAll('i[hidden]')].map((edge) => `${edge.dataset.from}>${edge.dataset.to}`).sort(), ['x001>x002', 'x001>x003']);
-    view.click(reference.querySelector('[data-goto]'));
-    assert.equal(map.querySelector('.is-selected').dataset.node, 'x001');
+    view.click(child);
+    assert.deepEqual([...map.querySelectorAll('.is-selected')].map((node) => node.dataset.node), ['x001', 'x001']);
   } finally { view.close(); }
 });
 
