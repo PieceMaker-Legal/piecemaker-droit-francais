@@ -31,7 +31,7 @@ export function createLibraryRouter(store: ReturnType<typeof createLibraryStore>
     try {
       const globalProviders = globalProviderIndex(userHome);
       const workspacePath = typeof req.query.workspacePath === 'string' ? req.query.workspacePath : undefined;
-      const entries = store.list(workspacePath);
+      const entries = store.list(workspacePath, true);
       const shadows = workspacePath ? shadowingPersonalSkills(store, entries, userHome) : new Map<string, string>();
       res.json({ entries: entries.map(({ sources, ...entry }) => ({ ...entry, globalProviders: globalProviders(sources), ...(shadows.has(entry.id) ? { shadowedBy: shadows.get(entry.id) } : {}) })) });
     }

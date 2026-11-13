@@ -95,3 +95,24 @@ test('provider skill scans import Grok user skills from disk', async (t) => {
   await scanAndPersistLibraryProviderSkills(store, undefined, reader, userHome);
   assert.deepEqual(store.list().map((entry) => entry.name), ['Relire Grok']);
 });
+
+test('les skills généraux Codex et Mistral rejoignent le pool sans dupliquer leurs liens communs', async (t) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pm-library-provider-pool-')));
+  const home = path.join(root, 'home');
+  const workspace = path.join(root, 'workspace');
+  fs.mkdirSync(workspace, { recursive: true });
+  const store = createLibraryStore(path.join(root, 'backend'), { userHome: home });
+  t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  for (const [provider, name] of [['.codex', 'codex-general'], ['.vibe', 'mistral-general'], ['.agents', 'shared']] as const) {
+    const directory = path.join(home, provider, 'skills', name);
+    fs.mkdirSync(directory, { recursive: true });
+    fs.writeFileSync(path.join(directory, 'SKILL.md'), `---\nname: ${name}\ndescription: Exemple.\n---\nInstructions ${name}.`);
+  }
+  fs.symlinkSync(path.join(home, '.agents/skills/shared'), path.join(home, '.vibe/skills/shared'));
+  await scanAndPersistLibraryProviderSkills(store, undefined, { async listProviderSkills() { return []; } }, home);
+  const listed = store.list(workspace, true);
+  assert.deepEqual(listed.map((item) => item.name), ['codex-general', 'mistral-general', 'shared']);
+  assert.ok(listed.every((item) => item.origin === 'personnel' && item.enabled));
+  assert.ok(fs.existsSync(path.join(workspace, '.claude/skills/codex-general/SKILL.md')));
+  assert.ok(fs.existsSync(path.join(workspace, '.agents/skills/mistral-general/SKILL.md')));
+});

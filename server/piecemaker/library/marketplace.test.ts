@@ -37,6 +37,38 @@ test('installed Claude plugins import skills, agents and MCP into a collection',
   assert.equal(listed.filter((entry) => !entry.collectionId).length, 0);
 });
 
+test('les plugins Codex en cache rejoignent le pool avec leur portée générale ou dossier', (t) => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'pm-library-codex-')));
+  const home = path.join(root, 'home');
+  const workspace = path.join(root, 'workspace');
+  const other = path.join(root, 'other');
+  const store = createLibraryStore(path.join(root, 'backend'), { userHome: home });
+  t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
+  const writeConfig = (directory: string, name: string) => {
+    fs.mkdirSync(path.join(directory, '.codex'), { recursive: true });
+    fs.writeFileSync(path.join(directory, '.codex/config.toml'), `[plugins."${name}@example"]\nenabled = true\n`);
+  };
+  writeConfig(home, 'general');
+  writeConfig(workspace, 'local');
+  writeConfig(other, 'foreign');
+  for (const [name, version] of [['general', '1.0.0'], ['local', '1.9.0'], ['local', '1.10.0'], ['foreign', '1.0.0'], ['unused', '1.0.0']]) {
+    const plugin = path.join(home, '.codex/plugins/cache/example', name, version);
+    fs.mkdirSync(path.join(plugin, '.codex-plugin'), { recursive: true });
+    fs.mkdirSync(path.join(plugin, 'skills', name), { recursive: true });
+    fs.writeFileSync(path.join(plugin, '.codex-plugin/plugin.json'), JSON.stringify({ name }));
+    fs.writeFileSync(path.join(plugin, 'skills', name, 'SKILL.md'), `---\nname: ${name}\ndescription: Exemple.\n---\nVersion ${version}.`);
+  }
+  const errors: Array<{ source: string; message: string }> = [];
+  scanInstalledLibraryCollections(store, home, errors, [workspace, other]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(store.listCollections(workspace, true).map((item) => item.name), ['general', 'local']);
+  assert.deepEqual(store.listCollections(other, true).map((item) => item.name), ['foreign', 'general']);
+  assert.deepEqual(store.listCollections(undefined, true).map((item) => item.name), ['general']);
+  const local = store.list(workspace, true).find((item) => item.name === 'local')!;
+  assert.match(store.document(local.id).content, /Version 1\.10\.0/);
+  assert.equal(store.listCollections().length, 3);
+});
+
 async function served(router: express.Router, run: (call: (method: string, url: string, body?: unknown) => Promise<any>) => Promise<void>) {
   const app = express();
   app.use(express.json());
@@ -106,23 +138,27 @@ test('a Claude plugin is switched natively per dossier and globally without one 
 test('the catalogue names the providers that load an entry everywhere', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-library-global-'));
   const userHome = path.join(root, 'home');
-  const store = createLibraryStore(path.join(root, '.piecemaker'));
+  const store = createLibraryStore(path.join(root, '.piecemaker'), { userHome });
   t.after(() => { store.close(); fs.rmSync(root, { recursive: true, force: true }); });
   const skill = path.join(userHome, '.claude', 'skills', 'review', 'SKILL.md');
   fs.mkdirSync(path.dirname(skill), { recursive: true });
   fs.writeFileSync(skill, '---\nname: review\ndescription: Relire.\n---\nInstructions.');
   fs.writeFileSync(path.join(userHome, '.claude.json'), JSON.stringify({ mcpServers: { registre: { type: 'http', url: 'https://example.test/mcp' } } }));
   store.importFile(skill, 'skill');
+  const mistralSkill = path.join(userHome, '.vibe/skills/mistral/SKILL.md');
+  fs.mkdirSync(path.dirname(mistralSkill), { recursive: true });
+  fs.writeFileSync(mistralSkill, '---\nname: mistral\ndescription: Exemple.\n---\nInstructions Mistral.');
+  store.importFile(mistralSkill, 'skill');
   store.createEntry('skill', 'Local', '');
   store.importConnector({ name: 'registre', description: '', config: { transport: 'http', url: 'https://example.test/mcp' }, source: `${path.join(userHome, '.claude.json')}#registre` });
 
   await served(createLibraryRouter(store, userHome), async (call) => {
     const { entries } = await call('GET', '/catalog');
     const providers = Object.fromEntries(entries.map((entry: { name: string; globalProviders: string[] }) => [entry.name, entry.globalProviders]));
-    assert.deepEqual(providers, { Local: [], registre: ['Claude'], review: ['Claude'] });
+    assert.deepEqual(providers, { Local: [], mistral: ['Mistral'], registre: ['Claude'], review: ['Claude'] });
     fs.rmSync(path.dirname(skill), { recursive: true });
     const after = await call('GET', '/catalog');
-    assert.deepEqual(after.entries.find((entry: { name: string }) => entry.name === 'review').globalProviders, []);
+    assert.equal(after.entries.some((entry: { name: string }) => entry.name === 'review'), false);
   });
 });
 

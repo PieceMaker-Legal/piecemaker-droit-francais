@@ -20,10 +20,12 @@ Comme tous les plugins PieceMaker : compilé et installé par la chaîne commune
 - Au démarrage et à chaque « Actualiser », la Bibliothèque recopie dans son catalogue les skills, agents et MCP trouvés sur l’ordinateur, **sans jamais déplacer, modifier ni supprimer les originaux** :
   - skills personnels (`~/.claude/skills`, `~/.claude/skills/synced`, `~/.claude/commands`, `~/.agents/skills`, `~/.codex/skills`, `~/.cursor/skills`, `~/.config/opencode/skills`, `~/.vibe/skills`, `~/.grok/skills`) ;
   - skills de projet de chaque dossier connu de PieceMaker, hors copies posées par la Bibliothèque (celles du manifeste `.piecemaker/library.json`) ;
-  - agents, MCP et plugins Claude installés.
+  - agents, MCP et plugins Claude et Codex installés.
 - Un fichier illisible n’interrompt pas la collecte : il est listé dans l’interface après « Actualiser ».
 - Un skill supprimé de la Bibliothèque n’est plus réimporté ; son original reste en place.
 - Un élément modifié dans la Bibliothèque garde sa version modifiée ; il n’est plus remplacé par l’original.
+- La liste affiche les skills généraux et ceux du dossier ouvert. Les skills présents uniquement dans un autre dossier sont masqués. Sans dossier ouvert, la liste montre le niveau général.
+- Les configurations Codex générale et des dossiers connus indiquent quels plugins en cache collecter. Les composants restent regroupés dans Plugins. Les skills de `~/.codex/skills`, `~/.vibe/skills` et `~/.agents/skills` rejoignent aussi le pool général.
 
 ## Données et activation
 

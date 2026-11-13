@@ -39,10 +39,10 @@ export async function listLibraryProviderSkills(
   return { providers: results };
 }
 
-function importSkillFile(store: LibraryStore, sourcePath: string, errors?: LibraryScanError[]) {
-  try { store.importFile(sourcePath, 'skill'); }
+function importSkillFile(store: LibraryStore, sourcePath: string, errors?: LibraryScanError[], workspace = '') {
+  try { store.importFile(sourcePath, 'skill', true, [workspace]); }
   catch {
-    try { store.importFile(sourcePath, 'skill', false); }
+    try { store.importFile(sourcePath, 'skill', false, [workspace]); }
     catch (error) { recordScanError(errors, sourcePath, error); }
   }
 }
@@ -77,8 +77,9 @@ export async function scanAndPersistLibraryProviderSkills(
     }
   }
   if (userHome) {
-    for (const directory of [path.join(userHome, '.grok', 'skills'), path.join(userHome, '.claude', 'skills', 'synced')]) {
-      try { importLibraryDirectory(store, directory, 'skill', false, errors); }
+    for (const relative of ['.agents/skills', '.codex/skills', '.vibe/skills', '.grok/skills', '.claude/skills/synced']) {
+      const directory = path.join(userHome, relative);
+      try { importLibraryDirectory(store, directory, 'skill', true, errors, ['']); }
       catch (error) { recordScanError(errors, directory, error); }
     }
     importPersonalClaudeCommands(store, path.join(userHome, '.claude', 'commands'), errors);
@@ -115,7 +116,7 @@ export async function scanAndPersistLibraryProjectSkills(
         try { source = fs.realpathSync(skill.sourcePath); }
         catch (error) { recordScanError(errors, skill.sourcePath, error); continue; }
         if (owned.some((root) => source === root || source.startsWith(root + path.sep))) continue;
-        importSkillFile(store, skill.sourcePath, errors);
+        importSkillFile(store, skill.sourcePath, errors, real);
       }
     }
   }
