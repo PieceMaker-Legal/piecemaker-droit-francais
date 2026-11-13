@@ -30,6 +30,38 @@ function fixture(t: { after: (fn: () => void) => void }) {
 
 const entry = (store: ReturnType<typeof createLibraryStore>, workspace: string, id: string) => store.list(workspace).find((item) => item.id === id)!;
 
+test('le catalogue du dossier masque les autres projets, y compris un worktree imbriqué et les sources liées', async (t) => {
+  const { root, home, workspace, store } = fixture(t);
+  const other = path.join(workspace, '.claude/worktrees/other');
+  fs.mkdirSync(other, { recursive: true });
+  const general = writeSkill(path.join(home, '.codex/skills/general'), 'general');
+  const local = writeSkill(path.join(workspace, '.vibe/skills/local'), 'local');
+  const foreign = writeSkill(path.join(other, '.agents/skills/foreign'), 'foreign');
+  const linked = writeSkill(path.join(root, 'shared/linked'), 'linked');
+  fs.mkdirSync(path.join(other, '.vibe/skills'), { recursive: true });
+  fs.symlinkSync(path.dirname(linked), path.join(other, '.vibe/skills/linked'));
+  const legacy = writeSkill(path.join(root, 'old-project/.claude/skills/legacy'), 'legacy');
+  store.importFile(general, 'skill', true, ['']);
+  store.importFile(legacy, 'skill');
+  store.importFile(writeSkill(path.join(workspace, '.claude/worktrees/unregistered/.agents/skills/hidden'), 'hidden'), 'skill');
+  const reader = {
+    async listProviderSkills(provider: string, options?: { workspacePath?: string }) {
+      if (provider !== 'mistral') return [];
+      const files = options?.workspacePath === fs.realpathSync(workspace) ? [local] : [foreign, path.join(other, '.vibe/skills/linked/SKILL.md')];
+      return files.map((sourcePath) => ({ provider: 'mistral' as const, name: '', description: '', command: '', scope: 'project' as const, sourcePath }));
+    },
+  };
+  await scanAndPersistLibraryProjectSkills(store, [workspace, other], reader);
+  const names = (project?: string) => store.list(project, true).filter((item) => item.kind === 'skill').map((item) => item.name).sort();
+  assert.deepEqual(names(workspace), ['general', 'local']);
+  assert.deepEqual(names(other), ['foreign', 'general', 'linked']);
+  assert.deepEqual(names(), ['general']);
+  fs.unlinkSync(path.join(other, '.vibe/skills/linked'));
+  assert.deepEqual(names(other), ['foreign', 'general']);
+  fs.unlinkSync(local);
+  assert.deepEqual(names(workspace), ['general']);
+});
+
 test('un skill de la bibliothèque seule reste désactivé dans un nouveau dossier', (t) => {
   const { root, workspace, store } = fixture(t);
   const id = store.importFile(writeSkill(path.join(root, 'catalogue/relecture'), 'relecture'), 'skill')!;

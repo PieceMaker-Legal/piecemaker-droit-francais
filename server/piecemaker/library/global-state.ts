@@ -8,6 +8,7 @@ const GLOBAL_DIRECTORIES = [
   ['.claude/agents', 'Claude'],
   ['.codex/skills', 'Codex'],
   ['.codex/agents', 'Codex'],
+  ['.vibe/skills', 'Mistral'],
   ['.agents/skills', 'Codex'],
   ['.cursor/skills', 'Cursor'],
   ['.cursor/agents', 'Cursor'],

@@ -70,6 +70,7 @@ type SkillState = {
   agents: boolean;
   claudeOrigins: string[];
   enabled: boolean;
+  visible: boolean;
 };
 
 function coverageVariant(state: SkillState): InstallVariant | null {
@@ -146,6 +147,10 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
       source TEXT PRIMARY KEY, entry_id TEXT NOT NULL REFERENCES entries(id), source_hash TEXT
     );
     CREATE TABLE IF NOT EXISTS deleted_origins (source TEXT PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS origin_scopes (
+      source TEXT NOT NULL REFERENCES origins(source) ON DELETE CASCADE,
+      workspace TEXT NOT NULL, source_path TEXT NOT NULL, PRIMARY KEY(source, workspace, source_path)
+    );
     CREATE TABLE IF NOT EXISTS activation (
       workspace TEXT NOT NULL, entry_id TEXT NOT NULL REFERENCES entries(id),
       PRIMARY KEY(workspace, entry_id)
@@ -230,16 +235,29 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
     const origins = new Map<string, string[]>();
     const rows = db.prepare("SELECT o.entry_id AS entryId, o.source FROM origins o JOIN entries e ON e.id = o.entry_id WHERE e.kind = 'skill'").all() as Array<{ entryId: string; source: string }>;
     for (const row of rows) origins.set(row.entryId, [...(origins.get(row.entryId) ?? []), row.source]);
+    const scopes = new Map<string, string[]>();
+    const scopedEntries = new Set<string>();
+    const scopedOrigins = db.prepare('SELECT o.entry_id AS entryId, s.source_path AS source, s.workspace FROM origin_scopes s JOIN origins o ON o.source = s.source').all() as Array<{ entryId: string; source: string; workspace: string }>;
+    for (const row of scopedOrigins) {
+      scopedEntries.add(row.entryId);
+      if (fs.existsSync(row.source)) scopes.set(row.entryId, [...(scopes.get(row.entryId) ?? []), row.workspace]);
+    }
+    const packaged = new Set((db.prepare('SELECT DISTINCT entry_id AS id FROM collection_entries').all() as Array<{ id: string }>).map((row) => row.id));
     const installed = new Set(selected ? activeEntries(selected) : []);
     const off = new Set((db.prepare('SELECT entry_id AS entryId FROM deactivation WHERE workspace = ?').all(selected) as Array<{ entryId: string }>).map((row) => row.entryId));
-    const prefix = `${selected}${path.sep}`;
+    const projectRoots = ['.agents/skills', '.claude/skills', '.claude/commands', '.codex/skills', '.vibe/skills', '.cursor/skills', '.opencode/skills', '.grok/skills']
+      .map((directory) => path.join(selected, directory) + path.sep);
     const claudeLocal = path.join(selected, '.claude', 'skills') + path.sep;
     return (db.prepare("SELECT id, name FROM entries WHERE kind = 'skill' ORDER BY name COLLATE NOCASE").all() as Array<{ id: string; name: string }>).map(({ id, name }) => {
       const sources = origins.get(id) ?? [];
-      const kinds = sources.map(classify);
+      const kinds = sources.map((source) => fs.existsSync(source) ? classify(source) : { personal: false, claude: false, agents: false });
       const personal = kinds.some((kind) => kind.personal);
-      const local = Boolean(selected) && sources.some((source) => source.startsWith(prefix));
+      const declared = scopes.get(id) ?? [];
+      const local = Boolean(selected) && (scopedEntries.has(id) ? !packaged.has(id) && declared.includes(selected) : sources.some((source) => projectRoots.some((root) => source.startsWith(root)) && fs.existsSync(source)));
       const native = personal || local;
+      const projectSource = (source: string) => /[/\\]\.(?:agents|claude|codex|cursor|vibe|opencode|grok)[/\\](?:skills|commands)[/\\]/.test(source);
+      const visible = personal || local || declared.includes('') || (Boolean(selected) && declared.includes(selected)) || installed.has(id)
+        || (!scopedEntries.has(id) && (!sources.length || sources.some((source) => !projectSource(source) && fs.existsSync(source))));
       return {
         id,
         name,
@@ -251,6 +269,7 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
         agents: kinds.some((kind) => kind.agents),
         claudeOrigins: sources.filter((source, index) => kinds[index].claude || (Boolean(selected) && source.startsWith(claudeLocal))),
         enabled: Boolean(selected) && (native ? !off.has(id) : installed.has(id)),
+        visible,
       };
     });
   }
@@ -293,7 +312,7 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
     try { return workspace(workspacePath); } catch { return null; }
   }
 
-  function list(workspacePath?: string) {
+  function list(workspacePath?: string, onlyRelevant = false) {
     const selected = workspacePath ? workspace(workspacePath) : '';
     if (selected) reconcile(selected);
     const skills = new Map(skillStates(selected).map((state) => [state.id, state]));
@@ -307,7 +326,7 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
         const state = skills.get(entry.id);
         if (!state) return { ...base, origin: null };
         return { ...base, enabled: state.enabled, origin: state.personal ? 'personnel' : state.local ? 'dossier' : 'bibliothèque' };
-      });
+      }).filter((entry) => !onlyRelevant || entry.kind !== 'skill' || skills.get(entry.id)?.visible);
   }
 
   function persistImportedEntry(source: string, kind: StoredLibraryEntry['kind'], name: string, description: string, content: string, assets: Record<string, string>, id: string) {
@@ -335,7 +354,7 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
     return id;
   }
 
-  function importFile(source: string, kind: 'skill' | 'agent', includeAssets = true) {
+  function importFile(source: string, kind: 'skill' | 'agent', includeAssets = true, workspaces?: string[]) {
     const resolved = fs.realpathSync(source);
     const content = decodeUtf8File(fs.readFileSync(resolved));
     const parsed = parseFrontMatter(content);
@@ -364,7 +383,11 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
     }
     if (kind === 'skill' && includeAssets) collect(path.dirname(resolved));
     const id = createHash('sha256').update(`${kind}\0${content}\0${JSON.stringify(Object.fromEntries(Object.entries(assets).sort(([left], [right]) => left.localeCompare(right))))}`).digest('hex');
-    return persistImportedEntry(resolved, kind, name, description, content, assets, id);
+    const imported = persistImportedEntry(resolved, kind, name, description, content, assets, id);
+    if (imported && workspaces) {
+      for (const selected of workspaces) db.prepare('INSERT OR IGNORE INTO origin_scopes VALUES (?, ?, ?)').run(resolved, selected, path.resolve(source));
+    }
+    return imported;
   }
 
   function importContent(source: string, kind: 'skill' | 'agent', content: string) {
@@ -475,9 +498,10 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
       .all(id) as LibraryCollectionEntry[];
   }
 
-  function listCollections(workspacePath?: string) {
+  function listCollections(workspacePath?: string, onlyRelevant = false) {
     const selected = workspacePath ? workspace(workspacePath) : '';
     if (selected) reconcile(selected);
+    const visible = onlyRelevant ? new Set(list(workspacePath, true).map((entry) => entry.id)) : null;
     return db.prepare(`SELECT c.id, c.name, c.description, c.source,
       COUNT(ce.entry_id) AS entryCount,
       SUM(CASE WHEN a.entry_id IS NOT NULL THEN 1 ELSE 0 END) AS enabledCount
@@ -495,7 +519,7 @@ export function createLibraryStore(home: string, { userHome = os.homedir() }: { 
           partial: collection.enabledCount > 0 && collection.enabledCount < collection.entryCount,
           componentCount: collection.entryCount,
         };
-      });
+      }).filter((collection) => !visible || !collection.componentCount || collectionEntries(collection.id).some((entry) => visible.has(entry.entryId)));
   }
 
   function collectionSource(id: string): string | null {

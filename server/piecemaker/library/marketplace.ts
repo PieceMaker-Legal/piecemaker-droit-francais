@@ -8,6 +8,7 @@ import { providerSkillsService } from '@/modules/providers/index.js';
 
 import type { createLibraryStore } from './store.js';
 import { runClaudeCommand } from './claude-cli.js';
+import { installedCodexPlugins } from './codex-plugins.js';
 import { normalizeProviderConnector, setWorkspaceClaudePlugin, workspaceClaudePlugins } from './connector-installation.js';
 import { importLibraryDirectory } from './migrate.js';
 import { scanAndPersistLibraryProviderAgents } from './provider-agents.js';
@@ -116,29 +117,37 @@ function setNativeClaudePlugin(userHome: string, id: string, enabled: boolean) {
   fs.renameSync(temporary, settingsFilename);
 }
 
-export function scanInstalledLibraryCollections(store: ReturnType<typeof createLibraryStore>, userHome: string, errors?: LibraryScanError[]) {
+export function scanInstalledLibraryCollections(store: ReturnType<typeof createLibraryStore>, userHome: string, errors?: LibraryScanError[], projects: string[] = []) {
   const filename = path.join(userHome, '.claude/plugins/installed_plugins.json');
   let registry: Record<string, unknown> = {};
   try { if (fs.existsSync(filename)) registry = JSON.parse(fs.readFileSync(filename, 'utf8')).plugins || {}; }
-  catch (error) { recordScanError(errors, filename, error); return; }
-  const pluginsDirectory = path.join(userHome, '.claude', 'plugins');
-  if (!fs.existsSync(pluginsDirectory) || fs.lstatSync(pluginsDirectory).isSymbolicLink()) return;
-  const pluginsRoot = fs.realpathSync(pluginsDirectory);
-  for (const [id, installs] of Object.entries(registry)) {
+  catch (error) { recordScanError(errors, filename, error); }
+  const collections = Object.entries(registry).map(([id, installs]) => ({ id, installs, provider: 'claude' }));
+  for (const plugin of installedCodexPlugins(userHome, projects, errors)) {
+    collections.push({ id: plugin.id, installs: [plugin], provider: 'codex' });
+  }
+  for (const { id, installs, provider } of collections) {
     let scanSource = id;
     try {
       if (!Array.isArray(installs)) continue;
-      const install = installs.find((entry) => entry && typeof entry.installPath === 'string') as { installPath: string } | undefined;
+      const install = installs.find((entry) => entry && typeof entry.installPath === 'string') as { installPath: string; workspaces?: string[] } | undefined;
       if (!install || !fs.existsSync(install.installPath)) continue;
       scanSource = install.installPath;
+      const pluginsDirectory = path.join(userHome, `.${provider}`, 'plugins');
+      if (!fs.existsSync(pluginsDirectory) || fs.lstatSync(pluginsDirectory).isSymbolicLink()) continue;
+      const pluginsRoot = fs.realpathSync(pluginsDirectory);
       const installRoot = fs.realpathSync(install.installPath);
       if (!installRoot.startsWith(`${pluginsRoot}${path.sep}`)) continue;
+      const workspaces = install.workspaces || installs.flatMap((entry) => {
+        if (entry?.scope === 'user' || entry?.scope === 'managed') return [''];
+        return typeof entry?.projectPath === 'string' && fs.existsSync(entry.projectPath) ? [fs.realpathSync(entry.projectPath)] : [];
+      });
       let manifest: { name?: string; displayName?: string; description?: string } = {};
-      const manifestPath = path.join(installRoot, '.claude-plugin', 'plugin.json');
+      const manifestPath = path.join(installRoot, `.${provider}-plugin`, 'plugin.json');
       try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8')); } catch {}
       const imported: Array<{ source: string; id: string; linked: boolean; rootPath?: string }> = [
-        ...importLibraryDirectory(store, path.join(installRoot, 'skills'), 'skill', false, errors),
-        ...importLibraryDirectory(store, path.join(installRoot, 'agents'), 'agent', false, errors),
+        ...importLibraryDirectory(store, path.join(installRoot, 'skills'), 'skill', false, errors, workspaces),
+        ...importLibraryDirectory(store, path.join(installRoot, 'agents'), 'agent', false, errors, workspaces),
       ];
       const commandsDirectory = path.join(installRoot, 'commands');
       if (fs.existsSync(commandsDirectory) && !fs.lstatSync(commandsDirectory).isSymbolicLink()) {
@@ -146,7 +155,7 @@ export function scanInstalledLibraryCollections(store: ReturnType<typeof createL
           if (!command.isFile() || !command.name.toLowerCase().endsWith('.md')) continue;
           const source = path.join(commandsDirectory, command.name);
           try {
-            const entryId = store.importFile(source, 'skill', false);
+            const entryId = store.importFile(source, 'skill', false, workspaces);
             if (entryId) imported.push({ source, id: entryId, linked: false });
           } catch (error) { recordScanError(errors, source, error); }
         }
@@ -199,7 +208,7 @@ export async function scanLibrarySources(store: ReturnType<typeof createLibraryS
   catch (error) { recordScanError(errors, 'agents', error); }
   try { scanAndPersistLibraryProviderConnectors(store, userHome, errors); }
   catch (error) { recordScanError(errors, 'connecteurs', error); }
-  try { scanInstalledLibraryCollections(store, userHome, errors); }
+  try { scanInstalledLibraryCollections(store, userHome, errors, listProjectPaths()); }
   catch (error) { recordScanError(errors, 'plugins', error); }
   return errors;
 }
@@ -215,9 +224,9 @@ export function createLibraryMarketplaceRouter(store: ReturnType<typeof createLi
     const filename = path.join(userHome, '.claude/plugins/installed_plugins.json');
     return fs.existsSync(filename) ? JSON.parse(fs.readFileSync(filename, 'utf8')).plugins || {} : {};
   };
-  const importInstalledCollections = () => scanInstalledLibraryCollections(store, userHome);
+  const importInstalledCollections = () => scanInstalledLibraryCollections(store, userHome, undefined, listProjectPaths());
   const describeCollections = (workspacePath?: string) => {
-    const collections = store.listCollections(workspacePath);
+    const collections = store.listCollections(workspacePath, true);
     const registry = installed();
     const everywhere = userClaudePlugins(userHome);
     const here = workspacePath ? workspaceClaudePlugins(fs.realpathSync(workspacePath)) : {};

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { recordScanError, type LibraryScanError } from './scan-errors.js';
 import type { createLibraryStore } from './store.js';
 
-export function importLibraryDirectory(store: ReturnType<typeof createLibraryStore>, directory: string, kind: 'skill' | 'agent', followLinks = true, errors?: LibraryScanError[]) {
+export function importLibraryDirectory(store: ReturnType<typeof createLibraryStore>, directory: string, kind: 'skill' | 'agent', followLinks = true, errors?: LibraryScanError[], workspaces?: string[]) {
   if (!fs.existsSync(directory)) return [];
   if (!followLinks && fs.lstatSync(directory).isSymbolicLink()) return [];
   const imported: Array<{ source: string; id: string; linked: boolean }> = [];
@@ -15,7 +15,7 @@ export function importLibraryDirectory(store: ReturnType<typeof createLibrarySto
       const file = kind === 'skill' ? path.join(source, 'SKILL.md') : source;
       if (!fs.existsSync(file) || !fs.statSync(file).isFile() || (kind === 'agent' && !file.endsWith('.md'))) continue;
       if (!followLinks && (item.isSymbolicLink() || fs.lstatSync(file).isSymbolicLink())) continue;
-      const id = store.importFile(file, kind);
+      const id = store.importFile(file, kind, true, workspaces);
       if (id) imported.push({ source, id, linked: item.isSymbolicLink() });
     } catch (error) { recordScanError(errors, source, error); }
   }
