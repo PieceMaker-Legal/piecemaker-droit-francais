@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { RemoteAccessSettingsTab, type RemoteStatus } from '@/piecemaker/remote/RemoteAccessSettingsTab';
 
@@ -24,6 +24,21 @@ const ready: RemoteStatus = {
 beforeEach(() => {
   pmGet.mockReset();
   pmPost.mockReset();
+});
+
+afterEach(() => { vi.unstubAllGlobals(); });
+
+it('ouvre la réinitialisation système seulement dans l’application de bureau', async () => {
+  pmGet.mockResolvedValue(ready);
+  const openReset = vi.fn();
+  const { unmount } = render(<RemoteAccessSettingsTab />);
+  await screen.findByRole('button', { name: 'remote.publish' });
+  expect(screen.queryByRole('button', { name: 'Réinitialiser le mot de passe PieceMaker' })).toBeNull();
+  unmount();
+  vi.stubGlobal('piecemakerPasswords', { openReset });
+  render(<RemoteAccessSettingsTab />);
+  fireEvent.click(screen.getByRole('button', { name: 'Réinitialiser le mot de passe PieceMaker' }));
+  expect(openReset).toHaveBeenCalledOnce();
 });
 
 it('propose l’installation quand Tailscale est absent', async () => {

@@ -209,6 +209,10 @@ async function embedDesktopOverlay(stageDir) {
   const to = path.join(stageDir, OVERLAY_DIR);
   await fs.rm(to, { recursive: true, force: true });
   await fs.cp(from, to, { recursive: true });
+  if (process.platform === 'darwin') {
+    const target = `${process.arch === 'arm64' ? 'arm64' : 'x86_64'}-apple-macos13.0`;
+    await run('xcrun', ['swiftc', '-target', target, path.join(from, 'auth/verify-macos.swift'), '-o', path.join(to, 'auth/PieceMaker')]);
+  }
   ui.detail("Surcouche d'ouverture automatique embarquée.");
 }
 

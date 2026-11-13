@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, powerSaveBlocker, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, powerSaveBlocker, safeStorage, session } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -13,6 +13,7 @@ import { installUiUpdates } from './ui-updates/index.mjs';
 import { addEmbeddedGit } from './embedded-git.js';
 import { addEmbeddedNode } from './embedded-node.js';
 import { startCatalaPack } from './catala-pack.mjs';
+import { installDesktopPasswords } from './auth/main.mjs';
 
 process.env.ELECTRON_FORCE_OWN_SERVER = '1';
 addEmbeddedGit();
@@ -62,6 +63,7 @@ async function startApplication() {
       return window;
     },
   });
+  await installDesktopPasswords({ app, dialog, ipcMain, session, safeStorage, BrowserWindow, applicationRoot: runtime.applicationRoot });
   try {
     await installUiUpdates({ app, session, LocalServerController, applicationRoot: runtime.applicationRoot });
   } catch (error) {

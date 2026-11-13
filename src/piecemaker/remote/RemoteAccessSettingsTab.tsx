@@ -36,6 +36,7 @@ function StateLine({ ok, children }: { ok: boolean; children: string }) {
 
 export function RemoteAccessSettingsTab() {
   const { t } = useTranslation('settings');
+  const passwords = (window as Window & { piecemakerPasswords?: { openReset: () => void } }).piecemakerPasswords;
   const [status, setStatus] = useState<RemoteStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -85,6 +86,7 @@ export function RemoteAccessSettingsTab() {
           <h3 className="text-lg font-medium text-foreground">{t('remote.title')}</h3>
         </div>
         <p className="text-sm text-muted-foreground">{t('remote.hint')}</p>
+        {passwords ? <button type="button" className={buttonClass} onClick={() => passwords.openReset()}>Réinitialiser le mot de passe PieceMaker</button> : null}
       </div>
 
       <div className="space-y-3 rounded-lg border border-border/60 px-4 py-3">
