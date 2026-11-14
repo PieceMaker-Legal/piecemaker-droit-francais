@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName, shell } from '../views.js';
+import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName, scanStatusMarkup, shell } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -156,6 +156,12 @@ describe('mapping dialog header', () => {
     expect(html).toContain('data-save-mapping');
   });
 
+  it('offers to rerun the anonymization next to the save button', () => {
+    const html = mappingView({ graph: snapshot });
+
+    expect(html).toMatch(/data-save-mapping>Enregistrer<\/button><button [^>]*data-action="scan">Relancer l’anonymisation</);
+  });
+
   it('lists every GLiNER writing, not only node.aliases', () => {
     const html = mappingView({
       graph: {
@@ -207,6 +213,17 @@ describe('empty parties state', () => {
 });
 
 describe('scan status badge', () => {
+  it('shows a shield when the case is anonymized and a crossed-out shield otherwise', () => {
+    const anonymized = scanStatusMarkup(3, null, true);
+    const plain = scanStatusMarkup(0, null, false);
+
+    expect(anonymized).toContain('data-anonymized="true"');
+    expect(anonymized).toContain('m9 12 2 2 4-4');
+    expect(anonymized).not.toContain('m2 2 20 20');
+    expect(plain).toContain('aria-label="Dossier non anonymisé — afficher le mapping" title="Dossier non anonymisé — afficher le mapping"');
+    expect(plain).toContain('m2 2 20 20');
+  });
+
   const runningJob = (percent: number) => ({
     id: 'job-1',
     projectId: 'project-1',
@@ -215,12 +232,13 @@ describe('scan status badge', () => {
     error: null,
   });
 
-  it('shows the mapping count when no scan is running', () => {
-    const html = shell('general', 12);
+  it('shows a single shield next to the models icon when no scan is running', () => {
+    const html = shell('general', 12, null, true);
 
-    expect(html).toContain('12 anonymisé(s)');
-    expect(html).toContain('class="pmd-status-icon" data-action="mapping" aria-label="Ouvrir le mapping"');
-    expect(html).toContain('class="pmd-status-label" data-action="mapping"');
+    expect(html).toContain('class="pmd-status-icon" data-action="mapping" data-anonymized="true" aria-label="Dossier anonymisé — afficher le mapping"');
+    expect(html).toMatch(/data-action="local-models"[\s\S]*class="pmd-scan-status"/);
+    expect(html).not.toContain('anonymisé(s)');
+    expect(html).not.toContain('data-action="scan"');
     expect(html).not.toContain('role="progressbar"');
     expect(html).toContain('data-tab="general"');
     expect(html).toContain('data-tab="chronology"');
@@ -233,7 +251,6 @@ describe('scan status badge', () => {
     expect(html).toContain('>42 %<');
     expect(html).toContain('aria-valuenow="42"');
     expect(html).toContain('width:42.4%');
-    expect(html).toContain('data-action="scan" disabled');
   });
 
   it('keeps a single percentage for markitdown and gliner', () => {

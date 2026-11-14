@@ -133,6 +133,7 @@ function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot, state?: BodaccS
 }
 
 const shieldCheckIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>';
+const shieldOffIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 20 20"></path><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"></path><path d="M9.31 3.65a12.25 12.25 0 0 0 1.93-1.37 1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.78 9.78 0 0 1-.08 1.26"></path></svg>';
 const scanSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><circle cx="12" cy="12" r="3"></circle><path d="m16 16-1.9-1.9"></path></svg>';
 const tiersProfileIcon = '<svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 21a8 8 0 0 0-16 0"></path><circle cx="10" cy="7" r="4"></circle><path d="M22 21a8 8 0 0 0-5-7.7"></path></svg>';
 
@@ -155,9 +156,8 @@ export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null, s
   const scanning = Boolean(job && job.state === 'running');
   const ready = scanned || mappingCount > 0;
   const pending = ready && !scanning && !mappingValidated;
-  return `<button type="button" class="pmd-status-icon" data-action="mapping" aria-label="${pending ? 'Mapping à valider' : 'Ouvrir le mapping'}" ${pending ? 'title="Mapping à valider"' : ''}>${shieldCheckIcon}${pending ? '<span class="pmd-mapping-pill">À valider</span>' : ''}</button>
-        ${scanning && job ? scanProgress(job) : `<button type="button" class="pmd-status-label" data-action="mapping">${mappingCount} anonymisé(s)</button>`}
-        <button class="pmd-scan-button piecemaker-button piecemaker-button--black piecemaker-button--xs" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : ready ? 'Relancer' : 'Lancer'}</span></button>`;
+  const label = `${scanned ? 'Dossier anonymisé' : 'Dossier non anonymisé'} — ${pending ? 'mapping à valider' : 'afficher le mapping'}`;
+  return `<button type="button" class="pmd-status-icon" data-action="mapping" data-anonymized="${scanned}" aria-label="${label}" title="${label}">${scanned ? shieldCheckIcon : shieldOffIcon}${pending ? '<span class="pmd-mapping-pill">À valider</span>' : ''}</button>`;
 }
 
 export function scanProgress(job: ScanJob): string {
@@ -180,10 +180,11 @@ export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null,
         ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
         <button class="pmd-button pmd-agents-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
-      <div class="pmd-scan-status" data-ready="${scanned || mappingCount > 0}" data-scanning="${scanning}">
-        ${scanStatusMarkup(mappingCount, job, scanned)}
+      <div class="pmd-models">
+        ${scanning && job ? scanProgress(job) : ''}
+        <button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--sm" data-action="local-models" title="Système de pseudonymisation" aria-label="Voir l’installation du système de pseudonymisation">${cpuIcon}</button>
+        <div class="pmd-scan-status" data-ready="${scanned || mappingCount > 0}" data-scanning="${scanning}">${scanStatusMarkup(mappingCount, job, scanned)}</div>
       </div>
-      <button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--sm" data-action="local-models" title="Système de pseudonymisation" aria-label="Voir l’installation du système de pseudonymisation">${cpuIcon}</button>
     </div>
     <div data-error></div>
     <div class="pmd-workspace"><main class="pmd-content" data-content></main></div>`;
@@ -274,7 +275,7 @@ export function mappingView(data: ViewData, mappingValidated: string | null = nu
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
     const variants = nodeVariants(node, data.graph.mappings);
     return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Nom principal" value="${escapeHtml(node.label)}" required>${aliasEditorMarkup(variants)}<div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
-  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-save-mapping>Enregistrer</button>${mappingValidated ? `<span class="pmd-mapping-validated">✓ Validé le ${escapeHtml(new Date(mappingValidated).toLocaleDateString('fr-FR'))}</span>` : '<button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-validate-mapping>✓ Valider le mapping</button>'}</div></div>`;
+  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-save-mapping>Enregistrer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan">Relancer l’anonymisation</button>${mappingValidated ? `<span class="pmd-mapping-validated">✓ Validé le ${escapeHtml(new Date(mappingValidated).toLocaleDateString('fr-FR'))}</span>` : '<button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-validate-mapping>✓ Valider le mapping</button>'}</div></div>`;
 }
 
 export const CUSTOM_NATURE = '__piecemaker_custom_nature__';
