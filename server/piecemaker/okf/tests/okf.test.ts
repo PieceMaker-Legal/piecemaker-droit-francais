@@ -52,6 +52,8 @@ const resources = Object.keys(MARKDOWN);
 const PERSON_ID = `/_parties/${PERSON}.md`;
 const RESILIATION_ID = '/_premises/montant-de-la-facture.md';
 
+const AT = '2026-01-01T00:00:00.000Z';
+
 test('datesIn reconnaît les dates françaises écrites et chiffrées', () => {
   assert.deepEqual(datesIn('le 1er août 2020 puis le 12/03/2021').map((entry) => entry.date), ['2020-08-01', '2021-03-12']);
 });
@@ -90,7 +92,7 @@ test('un lien ajouté est contrôlé, conservé à la reconstruction et suit un 
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Phrase absente.' }, markdownOf), /citation introuvable/);
   assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'amends', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /L'ontologie admet amends depuis : Pièces/);
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'annule', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /relation hors ontologie/);
-  addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf);
+  addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf, undefined, AT);
 
   const moved = 'Pièces/Contrat signé.pdf';
   fs.renameSync(path.join(projectPath, CONTRACT), path.join(projectPath, moved));
@@ -98,7 +100,7 @@ test('un lien ajouté est contrôlé, conservé à la reconstruction et suit un 
   const renamedMarkdown = (resource: string) => resource === moved ? MARKDOWN[CONTRACT] : markdownOf(resource);
   buildBundle({ projectPath, documents: renamedDocuments, markdownOf: renamedMarkdown, renamed: { previous: CONTRACT, current: moved } });
 
-  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).amends, [{ target: `/${moved}.md`, citation: 'Il est résilié.', origin: 'piecemaker/agent' }]);
+  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).amends, [{ target: `/${moved}.md`, citation: 'Il est résilié.', origin: 'piecemaker/agent', at: AT }]);
   assert.equal(fs.existsSync(conceptFile(projectPath, `/${CONTRACT}.md`)), false);
   assert.deepEqual(verifyBundle({ projectPath, resources: [moved, LETTER, DRAFT], markdownOf: renamedMarkdown }), []);
 });
@@ -158,14 +160,14 @@ test('une prémisse liée à une pièce crée sa fiche, garde la valeur et survi
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Phrase absente.' }, markdownOf), /citation introuvable/);
   assert.equal(fs.existsSync(conceptFile(projectPath, RESILIATION_ID)), false);
 
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '  1 200   euros ', single: true }, markdownOf);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '  1 200   euros ', single: true }, markdownOf, undefined, AT);
   const premise = parseConcept(fs.readFileSync(conceptFile(projectPath, RESILIATION_ID), 'utf8'));
   assert.equal(premise.frontmatter.type, 'Premise');
   assert.equal(premise.frontmatter.title, 'Montant de la facture');
   assert.equal(premise.frontmatter.single_value, true);
 
   buildBundle({ projectPath, documents, markdownOf, now: '2026-02-02T00:00:00.000Z' });
-  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: RESILIATION_ID, citation: 'Nous contestons la facture.', origin: 'piecemaker/agent', value: '1 200 euros' }]);
+  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: RESILIATION_ID, citation: 'Nous contestons la facture.', origin: 'piecemaker/agent', at: AT, value: '1 200 euros' }]);
   assert.match(parseConcept(fs.readFileSync(conceptFile(projectPath, RESILIATION_ID), 'utf8')).body, /Valeur : 1 200 euros\n\n> Nous contestons la facture\./);
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 
@@ -184,12 +186,12 @@ test('mentions ne peut pas être posé à la main', () => {
 test('involves relie une prémisse à une partie sans citation', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf, parties: [{ code: PERSON, side: 'client' }] });
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf, undefined, AT);
   assert.throws(() => addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: 'INCONNU_01' }, markdownOf), /n'est pas une partie du dossier/);
 
-  addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf);
+  addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf, undefined, AT);
   buildBundle({ projectPath, documents, markdownOf, parties: [{ code: PERSON, side: 'client' }] });
-  assert.deepEqual(relationsOf(parseConcept(fs.readFileSync(conceptFile(projectPath, RESILIATION_ID), 'utf8')).frontmatter).involves, [{ target: PERSON_ID, citation: '', origin: 'piecemaker/agent' }]);
+  assert.deepEqual(relationsOf(parseConcept(fs.readFileSync(conceptFile(projectPath, RESILIATION_ID), 'utf8')).frontmatter).involves, [{ target: PERSON_ID, citation: '', origin: 'piecemaker/agent', at: AT }]);
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
@@ -197,9 +199,9 @@ test('supersedes relie deux pièces comme amends', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
   assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'supersedes', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /L'ontologie admet supersedes depuis : Pièces/);
-  addLink(projectPath, { source: LETTER, relation: 'supersedes', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf);
+  addLink(projectPath, { source: LETTER, relation: 'supersedes', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf, undefined, AT);
   buildBundle({ projectPath, documents, markdownOf });
-  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).supersedes, [{ target: `/${CONTRACT}.md`, citation: 'Il est résilié.', origin: 'piecemaker/agent' }]);
+  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).supersedes, [{ target: `/${CONTRACT}.md`, citation: 'Il est résilié.', origin: 'piecemaker/agent', at: AT }]);
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
@@ -231,12 +233,12 @@ test('une colonne de revue devient une prémisse liée à la pièce citée, un l
 test('contradictions signale une prémisse à valeur unique écrite avec deux valeurs distinctes', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
-  addLink(projectPath, { source: CONTRACT, relation: 'states', target: 'Prix du contrat', citation: MARKDOWN[CONTRACT], value: '5 000 euros', single: true }, markdownOf);
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Prix du contrat', citation: 'Nous faisons suite au contrat de prestation du 12 mars 2021.', value: '4 000 euros' }, markdownOf);
-  addLink(projectPath, { source: CONTRACT, relation: 'states', target: 'Date du contrat', citation: MARKDOWN[CONTRACT], value: '12 mars 2021', single: true }, markdownOf);
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Date du contrat', citation: 'Nous faisons suite au contrat de prestation du 12 mars 2021.', value: '12 MARS 2021' }, markdownOf);
-  addLink(projectPath, { source: CONTRACT, relation: 'states', target: 'Objet de la lettre', citation: MARKDOWN[CONTRACT], value: 'prestation' }, markdownOf);
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Objet de la lettre', citation: 'Nous contestons la facture.', value: 'facture' }, markdownOf);
+  addLink(projectPath, { source: CONTRACT, relation: 'states', target: 'Prix du contrat', citation: MARKDOWN[CONTRACT], value: '5 000 euros', single: true }, markdownOf, undefined, AT);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Prix du contrat', citation: 'Nous faisons suite au contrat de prestation du 12 mars 2021.', value: '4 000 euros' }, markdownOf, undefined, AT);
+  addLink(projectPath, { source: CONTRACT, relation: 'states', target: 'Date du contrat', citation: MARKDOWN[CONTRACT], value: '12 mars 2021', single: true }, markdownOf, undefined, AT);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Date du contrat', citation: 'Nous faisons suite au contrat de prestation du 12 mars 2021.', value: '12 MARS 2021' }, markdownOf, undefined, AT);
+  addLink(projectPath, { source: CONTRACT, relation: 'states', target: 'Objet de la lettre', citation: MARKDOWN[CONTRACT], value: 'prestation' }, markdownOf, undefined, AT);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Objet de la lettre', citation: 'Nous contestons la facture.', value: 'facture' }, markdownOf, undefined, AT);
 
   assert.deepEqual(contradictions(projectPath), [{
     premise: '/_premises/prix-du-contrat.md',
@@ -295,7 +297,7 @@ test('premisesFromReviews lit les colonnes de prémisse des revues JSON du dossi
 test('un index antérieur sous /_faits/ est migré vers /_premises/', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf, undefined, AT);
   const legacy = '/_faits/montant-de-la-facture.md';
   const letterFile = conceptFile(projectPath, `/${LETTER}.md`);
   fs.writeFileSync(letterFile, fs.readFileSync(letterFile, 'utf8').replace(RESILIATION_ID, legacy));
@@ -313,7 +315,7 @@ test('un index antérieur sous /_faits/ est migré vers /_premises/', () => {
 test('premiseEvidence donne les pièces citées d’une prémisse', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros' }, markdownOf);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros' }, markdownOf, undefined, AT);
   assert.deepEqual(premiseEvidence(projectPath, `okf:${RESILIATION_ID}`), { id: RESILIATION_ID, title: 'Montant de la facture', pieces: [{ resource: LETTER, title: 'Courrier.pdf', citation: 'Nous contestons la facture.', origin: 'piecemaker/agent', value: '1 200 euros' }] });
   assert.equal(premiseEvidence(projectPath, 'okf:/_faits/montant-de-la-facture.md')?.id, RESILIATION_ID);
   assert.equal(premiseEvidence(projectPath, 'okf:/_premises/inconnue.md'), null);
@@ -324,7 +326,7 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   const parties: SourceParty[] = [{ code: PERSON, side: 'client' }, { code: COMPANY, side: 'adversaire' }];
   const build = () => buildBundle({ projectPath, documents: documents.map((document) => ({ ...document, parties: document.parties.filter((party) => party.code === PERSON) })), markdownOf, parties });
   build();
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', single: true }, markdownOf);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', single: true }, markdownOf, undefined, AT);
   build();
   const gaps = graphGaps(projectPath).map((gap) => `${gap.element} | ${gap.manque}`);
   assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse à valeur unique sans valeur`));
@@ -332,8 +334,8 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   assert.ok(gaps.includes(`/_parties/${COMPANY}.md | partie sans mention dans une pièce ni prémisse qui la concerne`));
   assert.equal(gaps.some((gap) => gap.startsWith(`/${LETTER}.md`)), false);
 
-  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros', single: true }, markdownOf);
-  addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros', single: true }, markdownOf, undefined, AT);
+  addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf, undefined, AT);
   assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element === RESILIATION_ID), []);
 });
 
@@ -425,7 +427,7 @@ test('les liens, le scan et la vérification suivent l\'ontologie globale', () =
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /relation hors ontologie : « amends »\. Relations admises : conteste, states, involves/);
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'conteste', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /source : .* L'ontologie admet conteste depuis : Projets/);
   assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'conteste', target: DRAFT, citation: MARKDOWN[DRAFT] }, markdownOf), /lui-même/);
-  addLink(projectPath, { source: DRAFT, relation: 'conteste', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf);
+  addLink(projectPath, { source: DRAFT, relation: 'conteste', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf, undefined, AT);
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
   assert.deepEqual(graphGaps(projectPath).map((gap) => gap.element).filter((element) => element.startsWith('/Pièces/')), [`/${LETTER}.md`]);
 

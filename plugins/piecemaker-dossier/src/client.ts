@@ -431,6 +431,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       graph?.select(id);
       card.focus({ preventScroll: true });
       card.querySelector('[data-detail-close]')?.addEventListener('click', closeDetail);
+      card.querySelectorAll<HTMLElement>('[data-open-file]').forEach((button) => button.addEventListener('click', () => api.openFileInEditor(button.dataset.openFile || '')));
       card.querySelectorAll<HTMLElement>('[data-open-fiche]').forEach((button) => button.addEventListener('click', () => showFiche(button.dataset.openFiche || '')));
       card.querySelector('[data-edit-fiche]')?.addEventListener('click', () => {
         if (!data) return;
@@ -452,6 +453,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
           .catch(showError);
       });
     };
+    wrap.querySelector('[data-okf-center]')?.addEventListener('click', () => graph?.center());
     wrap.addEventListener('keydown', (event) => { if (event.key === 'Escape' && wrap.querySelector('[data-okf-detail]')) closeDetail(); });
     void mountGraph(graphHost, data.okf, (fiche) => showFiche(fiche.id)).then((mounted) => {
       if (!graphHost.isConnected) return mounted.destroy();

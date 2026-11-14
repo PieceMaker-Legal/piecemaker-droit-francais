@@ -96,9 +96,10 @@ export function createOkfBackend(options: OkfOptions) {
           icon: documentIcon(nature, current.documentTypes || DEFAULT_DOCUMENT_TYPES),
           side: text(concept.frontmatter.side),
           single: concept.frontmatter.single_value === true,
+          generated: { by: text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.by), at: text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.at) },
           relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
             .filter((entry) => !entry.dismissed)
-            .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin, value: entry.value || '' }))),
+            .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin, at: entry.at || '', value: entry.value || '' }))),
         };
       }),
     };

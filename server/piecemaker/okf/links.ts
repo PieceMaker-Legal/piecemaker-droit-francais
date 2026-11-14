@@ -103,7 +103,7 @@ export function addLink(projectPath: string, input: LinkInput, markdownOf: Markd
   }
 
   const relations = relationsOf(source.frontmatter);
-  relations[name] = [...(relations[name] || []).filter((entry) => entry.target !== ids.target), { target: ids.target, citation, origin, ...(value ? { value } : {}) }]
+  relations[name] = [...(relations[name] || []).filter((entry) => entry.target !== ids.target), { target: ids.target, citation, origin, at: now, ...(value ? { value } : {}) }]
     .sort((left, right) => left.target.localeCompare(right.target));
   save(source, relations);
   return { source: source.id, relation: name, target: ids.target };

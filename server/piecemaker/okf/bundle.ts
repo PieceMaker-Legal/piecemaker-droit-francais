@@ -24,7 +24,7 @@ export const DEFAULT_GRAPH_TYPES = ['Pièces'];
 const RESERVED = new Set(['index.md', 'log.md']);
 
 export type Frontmatter = Record<string, unknown>;
-export type Relation = { target: string; citation: string; origin: string; value?: string; dismissed?: boolean };
+export type Relation = { target: string; citation: string; origin: string; value?: string; at?: string; dismissed?: boolean };
 export type Relations = Record<string, Relation[]>;
 export type Concept = { id: string; frontmatter: Frontmatter; body: string; error?: string };
 
@@ -69,7 +69,7 @@ export function relationsOf(frontmatter: Frontmatter): Relations {
   for (const [name, entries] of Object.entries(source as Record<string, unknown>)) {
     relations[name] = (Array.isArray(entries) ? entries : []).map((entry) => {
       const value = (entry && typeof entry === 'object' ? entry : { target: entry }) as Record<string, unknown>;
-      return { target: text(value.target), citation: text(value.citation), origin: text(value.origin), ...(text(value.value) ? { value: text(value.value) } : {}), ...(value.dismissed === true ? { dismissed: true } : {}) };
+      return { target: text(value.target), citation: text(value.citation), origin: text(value.origin), ...(text(value.value) ? { value: text(value.value) } : {}), ...(text(value.at) ? { at: text(value.at) } : {}), ...(value.dismissed === true ? { dismissed: true } : {}) };
     });
   }
   return relations;

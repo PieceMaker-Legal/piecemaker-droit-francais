@@ -109,8 +109,8 @@ describe('prémisses de l’index OKF', () => {
 
   it('premiseEstablishers donne les pièces, valeurs et citations d’une prémisse', () => {
     expect(premiseEstablishers(premiseIndex, '/_premises/Prix.md')).toEqual([
-      { piece: 'Contrat', resource: 'Pièces/Contrat.pdf', value: '1 000 €', citation: 'Le prix est de 1 000 euros.' },
-      { piece: 'Courrier', resource: 'Pièces/Courrier.pdf', value: '1 200 €', citation: 'Le prix convenu est de 1 200 euros.' },
+      { piece: 'Contrat', resource: 'Pièces/Contrat.pdf', value: '1 000 €', citation: 'Le prix est de 1 000 euros.', origin: 'piecemaker/gliner', at: undefined },
+      { piece: 'Courrier', resource: 'Pièces/Courrier.pdf', value: '1 200 €', citation: 'Le prix convenu est de 1 200 euros.', origin: 'piecemaker/gliner', at: undefined },
     ]);
     expect(premiseEstablishers(premiseIndex, '/_premises/Inconnu.md')).toEqual([]);
   });
@@ -122,9 +122,17 @@ describe('prémisses de l’index OKF', () => {
     expect(html).toContain('data-open-fiche="/Pièces/Contrat.pdf.md"');
     expect(html).toContain('data-chat-file="Pièces/Contrat.pdf"');
     expect(html).toContain('« Le prix est de 1 000 euros. »');
-    expect(html).toContain('<strong>Courrier</strong>');
+    expect(html).toContain('data-open-fiche="/Pièces/Courrier.pdf.md">Courrier</button>');
+    expect(html).toContain('data-open-file="Pièces/Courrier.pdf"');
     expect(html).not.toContain('Les sources divergent');
     expect(ficheCardMarkup({ ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, single: true })) }, '/_premises/Prix.md')).toContain('Les sources divergent');
+  });
+
+  it('la carte signe la fiche et chaque lien', () => {
+    const signed: OkfIndex = { ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, generated: { by: 'piecemaker/agent', at: '2026-03-02T10:00:00.000Z' }, relations: entry.relations.map((link) => ({ ...link, origin: 'piecemaker/avocat', at: '2026-03-03T09:00:00.000Z' })) })) };
+    const html = ficheCardMarkup(signed, '/_premises/Prix.md');
+    expect(html).toContain('Créée par l’agent le 02/03/2026');
+    expect(html).toContain('Lien posé par l’avocat le 03/03/2026');
   });
 
   it('la carte échappe le titre et signale une prémisse sans pièce', () => {

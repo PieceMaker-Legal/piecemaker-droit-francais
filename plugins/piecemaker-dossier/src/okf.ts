@@ -1,8 +1,8 @@
 import { iconSvg } from './document-types.js';
 import type { DocumentType } from './document-types.js';
 
-export type OkfRelation = { relation: string; target: string; citation: string; origin: string; value?: string };
-export type OkfFiche = { id: string; type: string; title: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; relations: OkfRelation[] };
+export type OkfRelation = { relation: string; target: string; citation: string; origin: string; at?: string; value?: string };
+export type OkfFiche = { id: string; type: string; title: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; generated?: { by: string; at: string }; relations: OkfRelation[] };
 export type OkfRelationLabel = { name: string; label: string; inverse: string };
 export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[]; documentTypes?: DocumentType[] };
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
@@ -87,10 +87,10 @@ export function graphElements(index: OkfIndex): Array<{ data: Record<string, str
   ];
 }
 
-export function premiseEstablishers(index: OkfIndex, premiseId: string): Array<{ piece: string; resource: string; value: string; citation: string }> {
+export function premiseEstablishers(index: OkfIndex, premiseId: string): Array<{ piece: string; resource: string; value: string; citation: string; origin: string; at?: string }> {
   return index.fiches.flatMap((fiche) => fiche.relations
     .filter((entry) => entry.relation === 'states' && entry.target === premiseId)
-    .map((entry) => ({ piece: fiche.title, resource: fiche.resource, value: entry.value || '', citation: entry.citation })));
+    .map((entry) => ({ piece: fiche.title, resource: fiche.resource, value: entry.value || '', citation: entry.citation, origin: entry.origin, at: entry.at })));
 }
 
 export function premiseParties(index: OkfIndex, premiseId: string): OkfFiche[] {
@@ -136,7 +136,7 @@ export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: n
   }
 }
 
-export type OkfGraph = { destroy: () => void; select: (id: string | null) => void };
+export type OkfGraph = { center: () => void; destroy: () => void; select: (id: string | null) => void };
 
 export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen: (fiche: OkfFiche) => void): Promise<OkfGraph> {
   const { default: cytoscape } = await import('cytoscape');
@@ -159,16 +159,19 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen
   const elements = graphElements(index).map((element) => {
     if (element.data.source) return element;
     const label = element.data.label;
-    const width = Math.max(96, Math.min(300, (measure?.measureText(label).width || label.length * 7) + 54));
+    const width = Math.max(96, Math.min(200, (measure?.measureText(label).width || label.length * 7) + 54));
     const svg = iconSvg(element.data.icon, text);
     return { data: { ...element.data, width, image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` } };
   });
   const graph = cytoscape({
     container,
     elements,
-    layout: { name: 'cose', animate: false, randomize: true, padding: 48, nodeDimensionsIncludeLabels: true, nodeRepulsion: () => 400000, nodeOverlap: 60, idealEdgeLength: () => 220, edgeElasticity: () => 80, gravity: 0.15, componentSpacing: 160, numIter: 2500 },
+    autoungrabify: true,
+    minZoom: 0.1,
+    maxZoom: 1.5,
+    layout: { name: 'cose', animate: false, randomize: true, padding: 24, nodeDimensionsIncludeLabels: true, nodeRepulsion: () => 90000, nodeOverlap: 20, idealEdgeLength: () => 90, edgeElasticity: () => 120, gravity: 0.8, componentSpacing: 50, numIter: 2500 },
     style: [
-      { selector: 'node', style: { label: 'data(label)', shape: 'round-rectangle', 'corner-radius': '18px', width: 'data(width)', height: 36, 'background-color': surface, 'border-width': 1, 'border-color': border, color: text, 'font-family': fontFamily, 'font-size': 12, 'font-weight': 500, 'text-valign': 'center', 'text-halign': 'center', 'text-margin-x': 12, 'text-wrap': 'ellipsis', 'text-max-width': '240px', 'background-image': 'data(image)', 'background-width': 17, 'background-height': 17, 'background-position-x': '13px', 'background-position-y': '50%', 'background-fit': 'none', 'transition-property': 'opacity, border-width', 'transition-duration': 120 } },
+      { selector: 'node', style: { label: 'data(label)', shape: 'round-rectangle', 'corner-radius': '18px', width: 'data(width)', height: 36, 'background-color': surface, 'border-width': 1, 'border-color': border, color: text, 'font-family': fontFamily, 'font-size': 12, 'font-weight': 500, 'text-valign': 'center', 'text-halign': 'center', 'text-margin-x': 12, 'text-wrap': 'ellipsis', 'text-max-width': '150px', 'background-image': 'data(image)', 'background-width': 17, 'background-height': 17, 'background-position-x': '13px', 'background-position-y': '50%', 'background-fit': 'none', 'transition-property': 'opacity, border-width', 'transition-duration': 120 } },
       { selector: 'edge', style: { width: 1, 'line-color': border, 'target-arrow-color': muted, 'target-arrow-shape': 'none', 'arrow-scale': 0.7, 'curve-style': 'bezier', 'line-style': 'solid', label: '', color: muted, 'font-family': fontFamily, 'font-size': 10, 'text-rotation': 'autorotate', 'text-background-color': surface, 'text-background-opacity': 0.95, 'text-background-padding': '4px', 'text-background-shape': 'roundrectangle', 'transition-property': 'opacity, width', 'transition-duration': 120 } },
       { selector: 'node[kind = "premise"]', style: { 'border-color': color('--pmd-premise', '#d6cbef'), 'border-width': 2 } },
       { selector: 'node[kind = "party-client"]', style: { 'border-color': color('--pmd-client', '#a8d5b5'), 'border-width': 2 } },
@@ -199,25 +202,26 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen
   graph.on('tap', (event) => {
     if (event.target === graph) focusOn(null);
   });
-  const spread = (pinned?: string) => {
-    const nodes = graph.nodes();
-    const boxes = nodes.map((node) => ({ x: node.position('x'), y: node.position('y'), w: node.outerWidth(), h: node.outerHeight() }));
-    const pinnedAt = nodes.toArray().findIndex((node) => node.id() === pinned);
-    const anchor = pinnedAt >= 0 ? { ...boxes[pinnedAt] } : null;
-    spreadBoxes(boxes, 28);
-    const shift = anchor ? { x: anchor.x - boxes[pinnedAt].x, y: anchor.y - boxes[pinnedAt].y } : { x: 0, y: 0 };
-    nodes.forEach((node, at) => { node.position({ x: boxes[at].x + shift.x, y: boxes[at].y + shift.y }); });
-  };
-  spread();
-  graph.fit(undefined, 40);
-  graph.on('free', 'node', (event) => spread(String(event.target.id())));
-  const resize = new ResizeObserver(() => graph.resize());
+  const nodes = graph.nodes();
+  const extent = nodes.boundingBox();
+  const area = 2 * nodes.reduce((sum, node) => sum + node.outerWidth() * node.outerHeight(), 0);
+  const width = Math.sqrt(area * (container.clientWidth && container.clientHeight ? container.clientWidth / container.clientHeight : 4 / 3));
+  const boxes = nodes.map((node) => ({ x: (node.position('x') - extent.x1) * width / (extent.w || 1), y: (node.position('y') - extent.y1) * (area / width) / (extent.h || 1), w: node.outerWidth(), h: node.outerHeight() }));
+  spreadBoxes(boxes, 10);
+  nodes.forEach((node, at) => { node.position({ x: boxes[at].x, y: boxes[at].y }); });
+  let focus: cytoscape.Collection | null = null;
+  const fitView = () => { graph.resize(); graph.fit(focus ?? undefined, focus ? 40 : 24); };
+  const center = () => { focus = null; fitView(); };
+  center();
+  const resize = new ResizeObserver(fitView);
   resize.observe(container);
   const select = (id: string | null) => {
     graph.nodes(':selected').unselect();
     const node = id ? graph.getElementById(id) : null;
     if (node?.nonempty()) node.select();
     focusOn(node?.nonempty() ? node : null);
+    focus = node?.nonempty() ? node.closedNeighborhood() : null;
+    fitView();
   };
-  return { destroy: () => { resize.disconnect(); graph.destroy(); }, select };
+  return { center, destroy: () => { resize.disconnect(); graph.destroy(); }, select };
 }
