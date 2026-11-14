@@ -1,0 +1,9 @@
+{
+  "name": "piecemaker-playbooks",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "tsx --test src/tests/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "piecemaker-playbooks",
+  "displayName": "Playbooks",
+  "version": "1.0.0",
+  "description": "Guides de négociation, revues contractuelles et propositions Word en suivi des modifications.",
+  "icon": "icon.svg",
+  "type": "module",
+  "slot": "tab",
+  "entry": "dist/index.js",
+  "server": "launcher.mjs",
+  "permissions": [],
+  "piecemakerSources": {
+    "index": "src/client/index.tsx",
+    "server": "src/server/server.ts"
+  }
+}
