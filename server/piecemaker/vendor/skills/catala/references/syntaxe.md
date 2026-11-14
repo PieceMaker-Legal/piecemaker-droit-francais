@@ -1,6 +1,6 @@
 # Syntaxe Catala en français — modèle vérifié
 
-Ce modèle passe typecheck, format, tests Clerk et Python, et preuve avec Catala 1.3. Partez de lui plutôt que de mémoire. Le site catala-lang.org peut être inaccessible depuis l'agent : ne comptez pas sur lui.
+Ce modèle passe typecheck, format, tests Clerk et Python, et preuve avec Catala 1.3. Partez de lui plutôt que de mémoire. Le format complet d'un fichier (titres, extraits, sources) est dans `format.md`. Le site catala-lang.org peut être inaccessible depuis l'agent : ne comptez pas sur lui.
 
 ## Module : `resolution.catala_fr`
 
@@ -60,7 +60,7 @@ champ d'application TestUrgence:
 | Erreur de syntaxe sur `est` | Définition écrite `définition x est …` | Écrivez `définition x égal à …` |
 | Erreur de syntaxe sur une condition | `si … alors` utilisé pour une définition conditionnelle | Écrivez `sous condition … conséquence égal à …` |
 | Test ignoré ou erreur sur `#[test]` | Attribut mal placé | Mettez `#[test]` sur la ligne juste avant `déclaration champ d'application` |
-| Conflit signalé par la preuve | Deux définitions de même niveau peuvent s'appliquer ensemble | Donnez une `étiquette` à la règle générale et marquez l'autre `exception <étiquette>`. Justifiez cet ordre dans le `#[doc]` de l'exception et signalez-le à l'avocat |
+| Conflit signalé par la preuve | Deux définitions de même niveau peuvent s'appliquer ensemble | Donnez une `étiquette` à la règle générale et marquez l'autre `exception <étiquette>`. Justifiez cet ordre en commentaire `#` au-dessus de l'exception et signalez-le à l'avocat |
 | « Please add parentheses » | `et` et `ou` mélangés sans parenthèses | Parenthésez : `(a ou b) et c` |
 | « Reserved builtin name » | Nom réservé (`nombre`, par exemple) | Choisissez un autre nom |
 | `[WARNING] Unused variable` (le typage échoue) | Entrée qui ne sert à aucun résultat, souvent une condition oubliée | Utilisez-la ou retirez-la |

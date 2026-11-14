@@ -52,15 +52,15 @@ Le volet classe chaque scénario de test sous le raisonnement dont il appelle le
 
 ## Écrire le programme
 
-Lisez d'abord `references/syntaxe.md` : modèle vérifié, pièges fréquents, mots-clés et bibliothèque standard. Partez de ce modèle, pas de mémoire.
+Lisez d'abord `references/format.md` : modèle complet d'un fichier conforme au livre Catala. Lisez ensuite `references/syntaxe.md` : pièges fréquents, mots-clés et bibliothèque standard. Partez de ces modèles, pas de mémoire.
 
 1. Créez `clerk.toml` avec `[project]` et `name = "<nom>"`.
 2. Écrivez le module : `> Module Nom` en tête, nom de fichier en minuscules (`nom.catala_fr`).
 3. Mettez les déclarations exposées aux autres fichiers dans des blocs ` ```catala-metadata `. Un module n'expose que ces blocs. Sinon les tests échouent à la compilation (« Could not resolve reference »).
-4. Mettez les définitions dans des blocs ` ```catala `. Ouvrez chaque bloc exactement par ` ```catala ` ou ` ```catala-metadata ` : Catala ignore en silence un bloc ouvert autrement (espace, majuscule, suffixe). Le texte Markdown au-dessus d'un bloc est facultatif : la source et la citation de chaque règle vont dans son `#[doc]`.
-5. Titrez chaque article cité `## Article 1218 | LEGIARTI000032041431`. Ce titre seul est requis : catleg lit ces titres pour contrôler la vigueur. Si vous ajoutez du texte, évitez les lignes commençant par `>` : Catala les réserve à ses directives. Pour rattacher une pièce ou une source écrite en Markdown à une donnée ou à une règle, écrivez dans sa section `Concerne : <identifiant>` (plusieurs identifiants séparés par des virgules). Nommez les identifiants en français, avec les accents (`mise_en_demeure`, `résolution_possible`) : le volet les affiche tels quels à l'avocat.
+4. Mettez les définitions dans des blocs ` ```catala `. Ouvrez chaque bloc exactement par ` ```catala ` ou ` ```catala-metadata ` : Catala ignore en silence un bloc ouvert autrement (espace, majuscule, suffixe). Placez chaque bloc juste sous l'article qui le fonde.
+5. Titrez chaque article cité `## Article 1218 | LEGIARTI000032041431` : catleg lit ces titres pour contrôler la vigueur. Sous le titre, copiez l'extrait exact du texte entre « ». Évitez les lignes commençant par `>` : Catala les réserve à ses directives. Nommez les identifiants en français, avec les accents (`mise_en_demeure`, `résolution_possible`) : le volet les affiche tels quels à l'avocat.
 6. Écrivez les tests dans `test_<module>.catala_fr` : `> Usage de Nom`, un champ d'application `#[test]` par scénario, avec au moins une `assertion` : un test sans assertion réussit toujours, `pm catala verifier` le refuse. Utilisez des faits fictifs ou ceux du dossier, jamais d'autres.
-7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala verifier` le détecte. Choisir la règle qui l'emporte est une interprétation : vous pouvez la faire, mais rendez-la visible. Justifiez ce choix dans le `#[doc]` de l'exception et signalez-le à l'avocat dans votre réponse.
+7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala verifier` le détecte. Choisir la règle qui l'emporte est une interprétation : vous pouvez la faire, mais rendez-la visible. Justifiez ce choix en commentaire `#` au-dessus de l'exception et signalez-le à l'avocat dans votre réponse.
 
 ## Rédiger un document
 
@@ -70,21 +70,20 @@ Le programme ne contient pas l'acte. Le bouton « Rédiger » du volet ouvre un 
 
 Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destiné au graphe. Séparez les faits, leur qualification, les conditions et les exceptions. Une valeur de scénario ne prouve aucun fait.
 
-## Documentation obligatoire du raisonnement
+## Sources et citations
 
-1. Ajoutez un attribut natif `#[doc="…"]` à chaque définition et règle exécutable, y compris dans les scénarios.
-2. Dans chaque `#[doc]`, indiquez `titre: …`, `source: URL ou chemin` et une balise `quote: « passage exact »` non vide. Rédigez le titre selon « Style des titres ».
-3. Pour une règle, citez son fondement juridique.
-   Pour une donnée factuelle ou une clause, citez la prémisse de l’index OKF : `source: okf:/_premises/<titre normalisé>.md`, sans `quote`. La prémisse porte les pièces et leurs citations. Ne citez jamais une pièce directement.
-   Si la prémisse manque, nommez-la quand même dans le `#[doc]`, avec `question: …`. `premise-maker` la cherche ensuite dans les pièces (skill `okf`).
-4. Pour une qualification ou un calcul, citez le fondement de l’opération et gardez les dépendances vers les faits distincts.
-5. Conservez les titres juridiques avec identifiant. Utilisez les inclusions natives de PDF seulement comme annexes documentaires.
-6. Lancez `pm catala verifier`, puis `pm okf verify`. Corrigez chaque erreur `#[doc] manquant`, `quote manquante ou vide dans #[doc]` et `titre manquant dans #[doc]`, et chaque manque du graphe.
-7. Si une source ou citation manque, signalez le manque et recherchez-la. N’inventez aucun passage pour satisfaire le contrôle.
+Suivez `references/format.md`.
 
-`doc` est un attribut natif Catala. `titre`, `source` et `quote` sont des conventions PieceMaker dans son texte, pas des attributs natifs spécialisés.
-Le graphe et le contrôle des citations lisent cette annotation. Un `#[doc]` précis prime sur les sources du texte voisin.
-Une citation Markdown extérieure ne remplace pas la balise `quote` obligatoire. Les anciens liens restent lisibles pour compatibilité.
+1. Rattachez chaque règle à son texte par sa position : titre de l'article, extrait exact entre « », puis le bloc ` ```catala `. N'écrivez ni `Concerne :` ni citation en double.
+2. Titrez chaque définition et chaque entrée par `## texte court` sur la ligne au-dessus, selon « Style des titres ».
+3. Déclarez chaque fait du dossier comme une `entrée` avec `#[piecemaker.source = "okf:/_premises/<titre normalisé>.md"]`. La prémisse porte les pièces et leurs citations.
+   Si la prémisse manque, nommez-la quand même et ajoutez `#[piecemaker.question = "…"]`. `premise-maker` la cherche ensuite dans les pièces (skill `okf`).
+4. Pour citer une pièce directement, écrivez `#[piecemaker.source = "<chemin de la pièce>"]` et `#[piecemaker.citation = "extrait exact"]`.
+5. Pour une qualification ou un calcul, placez la règle sous le texte qui fonde l'opération et gardez les dépendances vers les faits distincts.
+6. Écrivez les justifications et le raisonnement en commentaires `#`.
+7. N'écrivez pas `#[doc]` : le titre `##` en est la forme courte et documente seulement le rôle de l'élément.
+8. Lancez `pm catala verifier`, puis `pm okf verify`. Corrigez chaque erreur et chaque manque du graphe.
+9. Si une source ou citation manque, signalez le manque et recherchez-la. N'inventez aucun passage pour satisfaire le contrôle.
 
 ## Style des titres
 
@@ -140,7 +139,7 @@ Le bilan distingue réussite, échec, contrôle bloqué et contrôle indisponibl
 
 ## Limites à dire à l'avocat
 
-- Catleg vérifie les articles des titres Markdown et les identifiants cités dans le fichier (`source:` des `#[doc]`), avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient de `--au`, sinon de `date_vigueur` dans `tache.json` : `today` ou AAAA-MM-JJ. Sans date, `verifier` et `catleg` s'arrêtent sur une erreur. En contentieux, inscrivez dans `tache.json` la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure), tirée des pièces ou donnée par l’avocat. Demandez-la seulement si les pièces ne la donnent pas, et inscrivez-la dans `date_vigueur`. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
+- Catleg vérifie les articles des titres Markdown et les identifiants cités dans le fichier, avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient de `--au`, sinon de `date_vigueur` dans `tache.json` : `today` ou AAAA-MM-JJ. Sans date, `verifier` et `catleg` s'arrêtent sur une erreur. En contentieux, inscrivez dans `tache.json` la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure), tirée des pièces ou donnée par l’avocat. Demandez-la seulement si les pièces ne la donnent pas, et inscrivez-la dans `date_vigueur`. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
 - Catala 1.3 peut omettre des obligations pour des définitions globales. La preuve valide seulement les obligations produites. Une preuve sans obligation échoue.
 - Une preuve porte sur le programme. Elle ne prouve ni les faits, ni la fidélité du programme au texte.
 - Le programme ne lit pas les pièces. Le lien entre les entrées du programme et les pièces passe par une table des sources que l'avocat construit (qualification, lien officiel, pièce).

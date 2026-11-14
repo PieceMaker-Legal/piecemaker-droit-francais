@@ -13,70 +13,66 @@
 11. Pour examiner une autre exécution sans entrée, lancez `pm catala expliquer --fichier F --scope S`.
 12. Si la preuve signale un conflit, contrôlez la hiérarchie avec `pm catala exceptions`.
 
-## Annotation obligatoire et citation
+## Titre, source et citation
 
-Chaque définition ou règle doit porter son propre `#[doc]`. Chaque `#[doc]` doit contenir un `titre` et une balise `quote` non vide, sauf si sa `source` est une prémisse `okf:`.
-Le vérificateur produit une erreur localisée pour chacun de ces manques. Cette obligation couvre aussi les définitions des scénarios.
+Suivez le modèle de `format.md`. Chaque définition et chaque entrée porte un titre `## texte court` sur la ligne au-dessus : il nomme la case du graphe. Rédigez-le selon « Style des titres » de `SKILL.md`.
+
+Une règle tient sa source de sa position : elle se place juste sous le titre de son article et l'extrait exact entre « ».
 
 ````catala
 champ d'application Exemple:
-  #[doc="titre: Vérifier la condition juridique\nsource: https://example.org/texte-fictif\nquote: « La condition requise est définie par ce texte fictif. »"]
+  ## Vérifier la condition juridique
   définition condition_juridique égal à donnée_observée
 ````
 
-`#[doc]` appartient à Catala. Le contenu `titre: …`, `source: …` et `quote: « … »` suit la convention PieceMaker. Rédigez `titre` selon « Style des titres » de `SKILL.md`.
-Écrivez le lien après `source:` sans crochets Markdown dans l’attribut : le formateur du pack refuse certains liens avec crochets.
-Pour un fondement réel, indiquez le lien officiel et le passage exact. Pour un fait ou une clause, indiquez la prémisse : `source: okf:/_premises/<titre normalisé>.md`. N’indiquez pas la pièce : le graphe affiche les pièces de la prémisse.
-Dans le scénario du dossier, la définition du fait porte la valeur attendue, la prémisse et la question posée aux pièces. `pm okf verify` compare cette valeur aux valeurs des pièces de la prémisse (date ou nombre).
+Un fait est une `entrée` qui cite sa prémisse OKF. N'indiquez pas la pièce : le graphe affiche les pièces de la prémisse. Si la prémisse manque, ajoutez la question posée aux pièces.
 
 ````catala
-  #[doc="titre: Date de réception de la mise en demeure\nsource: okf:/_premises/date-de-reception-de-la-mise-en-demeure.md\nquestion: À quelle date le débiteur a-t-il reçu la mise en demeure ?"]
-  définition date_réception égal à |2026-03-02|
+  ## Date de réception de la mise en demeure
+  #[piecemaker.source = "okf:/_premises/date-de-reception-de-la-mise-en-demeure.md"]
+  #[piecemaker.question = "À quelle date le débiteur a-t-il reçu la mise en demeure ?"]
+  entrée date_réception contenu date
 ````
+
+Dans le scénario du dossier, fixez la valeur du fait établie par les pièces : `-- date_réception: |2026-03-02|`. `pm okf verify` compare cette valeur aux valeurs des pièces de la prémisse (date ou nombre).
 
 Une règle lit chaque fait. Ne déclarez jamais un fait que rien ne lit : `verifier` bloque une prémisse sans effet.
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées.
 
-La même annotation alimente le contrôle des citations et le graphe. Le graphe la rattache à la définition par sa position native.
-Une annotation ne doit pas déborder sur la définition suivante. Les sources voisines et `Concerne` restent des solutions de compatibilité.
-Une inclusion PDF native peut compléter le document ; elle ne remplace pas la source et `quote` dans `#[doc]`.
+Le graphe rattache le titre et les attributs à la définition ou à l'entrée qui les suit. N'écrivez pas `#[doc]`.
 
-Vous pouvez placer une définition sous le texte ou la décision qui la fonde ; ce texte est facultatif. Un même champ peut être défini par plusieurs blocs, répartis sous les différentes sources. Gardez les étiquettes et exceptions dans Catala.
+Placez chaque définition sous le texte ou la décision qui la fonde. Un même champ peut être défini par plusieurs blocs, répartis sous les différentes sources. Gardez les étiquettes et exceptions dans Catala.
 
 Dans un scénario, définissez les faits comme des données intermédiaires sous les sections de leurs pièces, puis passez ces données au champ métier. La trace conserve ainsi leur origine. Une déclaration de champ donne seulement son contexte ; elle ne prouve pas l’origine factuelle de sa valeur.
 
 Le graphe est un arbre lu de gauche à droite : la conclusion, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
 La couleur donne l’état de chaque case : vert pour validé, orange pour à établir ou à justifier, rouge pour non rempli.
 
-Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque définition garde son `#[doc]`. Le graphe affiche la source d’une condition seulement si elle diffère de celle de la règle. Le graphe signale une règle sans source et un fait sans pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans la vue Raisonnement. Réservez `Concerne` aux liens transversaux que cette structure ne fournit pas.
+Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque définition garde son titre `##`. Le graphe affiche la source d’une condition seulement si elle diffère de celle de la règle. Le graphe signale une règle sans source et un fait sans pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans la vue Raisonnement.
 
-Pour expliquer un nœud, ajoutez une section Markdown dans le fichier Catala. Les champs suivants restent du texte pour Catala :
+Écrivez la justification d'un nœud en commentaire `#` au-dessus de sa définition. Pour suivre la collecte d'un fait, ajoutez une section Markdown dans le fichier Catala. Les champs suivants restent du texte pour Catala :
 
 ```markdown
 ## Réception de la demande
 
 Concerne : demande_reçue
 Question : La demande a-t-elle été reçue ?
-Justification : La réception doit être distinguée de l’envoi.
 À rechercher : Obtenir un justificatif de réception.
 Démarche : 2026-11-08 | demande de pièce | vérifier la réception | réponse attendue
-
-[Pièce 1, envoi](../../../pieces/envoi-fictif.md)
-Citation : « Extrait fictif établissant seulement l’envoi. »
 ```
 
-`Concerne` rattache les sources et ces explications à un identifiant. Employez des identifiants distincts pour des notions distinctes dans un programme.
+`Concerne` rattache ces notes à un identifiant ; il ne sert jamais à rattacher une source ou une citation. Employez des identifiants distincts pour des notions distinctes dans un programme.
 
 L’objectif et la conclusion finale sont la même case du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. Cette ligne titre la conclusion finale. N’en inventez pas : sans objectif annoncé, la conclusion garde son titre. Quand `tache.json` décrit le raisonnement, son `objectif` remplace cette ligne.
 
-Quand un message contient ``[Carte « titre »](chemin:12 "lignes 12 à 15") — `identifiant` = Vrai, scénario Test``, l’avocat vise cette case du graphe. Le lien donne le fichier Catala, relatif au dossier, et les lignes de la définition avec son `#[doc]`. La suite donne l’identifiant Catala, sa valeur dans le scénario affiché et le nom de ce scénario.
+Quand un message contient ``[Carte « titre »](chemin:12 "lignes 12 à 15") — `identifiant` = Vrai, scénario Test``, l’avocat vise cette case du graphe. Le lien donne le fichier Catala, relatif au dossier, et les lignes de la définition avec son titre `##`. La suite donne l’identifiant Catala, sa valeur dans le scénario affiché et le nom de ce scénario.
 
 1. Lisez seulement ces lignes du fichier.
 2. Si le contenu de ces lignes ne correspond pas, retrouvez la définition avec `grep -n` sur l’identifiant.
 3. Lisez le reste du fichier seulement si la question porte sur d’autres règles.
-4. Si le lien ne donne aucun fichier, retrouvez la définition par l’identifiant, par le `titre` de son `#[doc]`, ou par la ligne `Objectif`.
+4. Si le lien ne donne aucun fichier, retrouvez la définition par l’identifiant, par son titre `##`, ou par la ligne `Objectif`.
 
-`Question` formule la question juridique ; elle sert de titre seulement si le `#[doc]` n’en donne pas. `Justification` explique la qualification. `À rechercher` crée un point ouvert relié au nœud.
+`Question` formule la question juridique ; elle sert de titre seulement si la définition n’a pas de titre `##`. `À rechercher` crée un point ouvert relié au nœud.
 
 Répétez `Démarche` pour conserver les démarches effectuées et leurs résultats. N’inventez aucune démarche ni aucun résultat. Actualisez `À rechercher` lorsque la collecte progresse.
 
