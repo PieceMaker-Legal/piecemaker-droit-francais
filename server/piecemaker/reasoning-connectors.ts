@@ -76,7 +76,8 @@ export function createReasoningConnectors(): ReasoningConnectors {
       return resolver ? resolver.resolve(cwd, id) : undefined;
     },
     match(text, excerpt) {
-      if (verifyQuoteAgainstSource(text, excerpt).verified) return excerpt;
+      const located = verifyQuoteAgainstSource(text, excerpt);
+      if (located.verified) return located.start_char === undefined ? excerpt : located.source_excerpt;
       const nearest = nearestPassage(text, excerpt);
       return nearest && words(nearest) === words(excerpt) ? nearest : null;
     },

@@ -657,6 +657,7 @@ async function catleg(context, program, flags) {
     const inspect = 'import json,sys; from catleg.parse_catala_markdown import parse_catala_file; from pathlib import Path; f=Path(sys.argv[2]); articles=parse_catala_file(f.open(), file_path=f); print("PIECEMAKER_ARTICLES="+json.dumps([{"id":a.id.upper(),"archive":a.is_archive} for a in articles]),flush=True); from catleg.catleg import main; sys.argv[0]="catleg"; main() if articles else None';
     const result = await context.run(python, ['-I', '-c', inspect, 'check-expiry', file], { cwd: program.directory, env: { ...context.env, ...credentials } });
     const output = `${result.stdout}${result.stderr}`;
+    if (/No module named '?catleg/.test(output)) throw new Error(`catleg absent du Python partagé (${python}) : mettez à jour l'app PieceMaker.`);
     const marker = /^PIECEMAKER_ARTICLES=(.+)$/m.exec(output);
     let articles = [];
     try { articles = JSON.parse(marker?.[1] ?? '[]'); } catch {}

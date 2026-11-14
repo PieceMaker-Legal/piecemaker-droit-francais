@@ -8,6 +8,7 @@ import type { ReasoningConnectors } from '@/modules/piecemaker-reasoning/index.j
 
 import { createCatalaCitation } from './catala-citation.js';
 import { createCitationStore } from './harness/citation-store.js';
+import { createReasoningConnectors } from './reasoning-connectors.js';
 
 test('opens declared Catala references in the citation reader without inventing quote verification', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'catala-citations-'));
@@ -220,4 +221,13 @@ test('a quotation with a stray dot or space is corrected and verified, a differe
     assert.equal(different.results[0].status, 'failed');
     assert.equal((different.results[0] as { correction?: unknown }).correction, undefined);
   } finally { await rm(home, { recursive: true, force: true }); }
+});
+
+test('the connector returns the official wording when only spaces or punctuation differ', () => {
+  const { match } = createReasoningConnectors();
+  const text = 'Le salarié perçoit une prime, sauf faute grave.';
+  assert.equal(match(text, 'Le salarié perçoit une prime, sauf faute grave.'), 'Le salarié perçoit une prime, sauf faute grave.');
+  assert.equal(match(text, 'Le salarié  perçoit une prime, sauf faute grave. '), 'Le salarié perçoit une prime, sauf faute grave.');
+  assert.equal(match(text, 'Le salarié perçoit une prime sauf faute grave'), 'Le salarié perçoit une prime, sauf faute grave');
+  assert.equal(match(text, 'Le salarié perçoit une indemnité, sauf faute grave.'), null);
 });

@@ -303,6 +303,14 @@ test('catleg checks only identifiers cited in an article title, not in a doc att
   } finally { cleanup(); }
 });
 
+test('catleg names the missing module when the shared Python lacks catleg', async () => {
+  const { dossier, deps, cleanup } = catlegScenario({ 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' });
+  try {
+    const run = async () => ({ code: 1, stdout: '', stderr: "ModuleNotFoundError: No module named 'catleg'\n" });
+    await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-03-04' }, deps: { ...deps, run } }), /catleg absent du Python partagé/);
+  } finally { cleanup(); }
+});
+
 test('catleg takes the reference date from --au, then tache.json, and accepts today', async () => {
   const task = { tache: 'Acte', type: 'litigation', raisonnements: [], date_vigueur: '2024-01-15' };
   const files = { 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' };
