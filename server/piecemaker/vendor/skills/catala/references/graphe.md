@@ -3,8 +3,8 @@
 1. Formulez la question juridique avant de coder sa réponse.
 2. Décomposez la réponse en qualifications, conditions et exceptions nommées. Gardez les liens dans les expressions Catala.
 3. Une entrée est un fait typé (date, montant, durée, texte d’une clause), jamais une question. La règle le qualifie.
-4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque donnée à sa prémisse OKF ; la prémisse porte les pièces et leurs citations.
-5. Établissez chaque fait par les pièces. Un fait que les pièces ne prouvent pas est écarté, faute de preuve, au détriment de la partie qui le supporte (art. 1353 C. civ.). Ne le laissez pas inconnu.
+4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque fait à sa pièce : `Prouvé contenu <Pièce>` (`format.md`, « Faits prouvés par une pièce »).
+5. Établissez chaque fait par les pièces. Un fait que les pièces ne prouvent pas vaut `NonProuvé` : il est écarté, faute de preuve, au détriment de la partie qui le supporte (art. 1353 C. civ.). Ne le laissez pas inconnu.
 6. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée, sourcée par le texte ou la jurisprudence, pas une entrée.
 7. Écrivez un scénario `#[test]` du dossier, avec les faits établis. Ajoutez un scénario seulement quand un fait contesté change l’issue.
 8. Ajoutez des assertions aux résultats attendus. Un test réussi peut confirmer une conclusion négative.
@@ -25,16 +25,15 @@ champ d'application Exemple:
   définition condition_juridique égal à donnée_observée
 ````
 
-Un fait est une `entrée` qui cite sa prémisse OKF. N'indiquez pas la pièce : le graphe affiche les pièces de la prémisse. Si la prémisse manque, ajoutez la question posée aux pièces.
+Un fait est une `entrée` de type `Fait`. Sa preuve est un cas de l'énumération `Pièce`, dont l'attribut `#[pm.preuve]` porte la source (prémisse OKF ou pièce), la citation et l'auteur du lien. Le graphe affiche cette pièce sous le fait. Si la prémisse manque, écrivez `goal` : ce qu'elle doit établir.
 
 ````catala
-  ## Date de réception de la mise en demeure
-  #[piecemaker.source = "okf:/_premises/date-de-reception-de-la-mise-en-demeure.md"]
-  #[piecemaker.question = "À quelle date le débiteur a-t-il reçu la mise en demeure ?"]
-  entrée date_réception contenu date
+  ## Mise en demeure reçue
+  #[pm.preuve = "source: okf:/_premises/mise-en-demeure-recue.md | goal: établir la réception de la mise en demeure | by: agent"]
+  -- MiseEnDemeure
 ````
 
-Dans le scénario du dossier, fixez la valeur du fait établie par les pièces : `-- date_réception: |2026-03-02|`. `pm okf verify` compare cette valeur aux valeurs des pièces de la prémisse (date ou nombre).
+Dans le scénario du dossier, fixez la preuve établie par les pièces : `-- mise_en_demeure: Resolution.Fait.Prouvé contenu Resolution.Pièce.MiseEnDemeure`. Un fait chiffré porte aussi sa valeur (`FaitMontant`, `format.md`) ; `pm okf verify` compare cette valeur aux valeurs des pièces de la prémisse (date ou nombre).
 
 Une règle lit chaque fait. Ne déclarez jamais un fait que rien ne lit : `verifier` bloque une prémisse sans effet.
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées.

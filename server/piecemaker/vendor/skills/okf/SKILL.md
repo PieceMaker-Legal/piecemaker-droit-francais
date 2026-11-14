@@ -37,9 +37,9 @@ Une pièce établit une `Premise` par `states` (citation, valeur facultative). L
 
 ## Chaîne de justification
 
-1. Une condition Catala se justifie par une `Premise` : son entrée porte `#[piecemaker.source = "okf:/_premises/<titre normalisé>.md"]`.
+1. Une condition Catala n'est remplie que par un fait `Prouvé contenu <Pièce>`. Le cas de l'énumération `Pièce` porte `#[pm.preuve = "source: okf:/_premises/<titre normalisé>.md | by: agent"]` (skill `catala`, `references/format.md`).
 2. Une `Premise` se justifie par des pièces citées.
-3. Préférez la prémisse. Une pièce citée directement porte `#[piecemaker.source = "<chemin>"]` et `#[piecemaker.citation = "extrait exact"]`.
+3. Préférez la prémisse. Une pièce citée directement porte `#[pm.preuve = "source: <chemin> | citation: extrait exact | by: agent"]`.
 
 ## Lire et écrire
 

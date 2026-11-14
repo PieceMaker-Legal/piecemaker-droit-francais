@@ -1,13 +1,13 @@
 ---
 name: catala
-description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — fiche de syntaxe vérifiée, typecheck, format, tests clerk, tests Python, squelette de test, trace d'exécution, arbre des exceptions, preuve d'absence de conflit entre exceptions, explication d’une exécution, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
+description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — pages du livre Catala, faits prouvés par une pièce, typecheck, format, tests clerk, tests Python, squelette de test, trace d'exécution, arbre des exceptions, preuve d'absence de conflit entre exceptions, explication d’une exécution, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
 ---
 
 # Catala
 
 > **Délégation.** Agent principal : lisez les pièces, puis écrivez vous-même le programme avec ce skill. Confiez ensuite ses prémisses à `premise-maker`, avec le nom du programme et, pour chacune : le chemin `okf:`, la question, le type et l’unité, la valeur attendue, les pièces repérées et le passage Catala qui lit le fait. `premise-maker` confirme, corrige ou déclare le fait absent ; un fait absent est écarté faute de preuve. Une source manque → `research-maker`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
 
-Catala code une règle juridique en programme exécutable. Le pack Catala est installé par l'app de bureau PieceMaker. Lancez chaque outil par `pm catala`, jamais par un chemin direct.
+Catala code une règle juridique en programme exécutable. Le pack Catala est installé par l'app de bureau PieceMaker. Lancez chaque outil par `pm catala`, jamais par un chemin direct. `pm catala verifier` contrôle documentation, typage, format, prémisses, tests, preuve, vigueur et citations : ce skill ne répète pas ses règles, suivez ses messages.
 
 ## Classement
 
@@ -41,110 +41,79 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 }
 ```
 
-- `tache` nomme l'acte, comme l'avocat le nomme.
-- `type` vaut `contentieux`, `contrat` ou `autre`.
-- `date_vigueur` est la date à laquelle le droit s'apprécie : `today` ou AAAA-MM-JJ. Catleg la lit. Sans elle ni `--au`, `verifier` s'arrête aussitôt sur une erreur.
-- `champ` est le nom exact du champ d'application qui porte la conclusion du raisonnement.
-- `objectif` reprend l'objectif annoncé par l'avocat. N'en inventez pas : demandez-le s'il manque.
-- `rang` situe le raisonnement dans l'acte : `À titre principal`, `À titre subsidiaire`, ou la clause (`Clause 5 — Confidentialité`).
+- `tache` nomme l'acte comme l'avocat. `type` : `contentieux`, `contrat` ou `autre`.
+- `date_vigueur` : date à laquelle le droit s'apprécie (`today` ou AAAA-MM-JJ), tirée des pièces (conclusion du contrat, fait générateur, acte), sinon demandée à l'avocat. Catleg la lit.
+- `champ` : nom exact du champ qui porte la conclusion. `objectif` : celui annoncé par l'avocat ; demandez-le s'il manque. `rang` : `À titre principal`, `À titre subsidiaire` ou la clause.
 
-Le volet classe chaque scénario de test sous le raisonnement dont il appelle le champ. Écrivez au moins un scénario par raisonnement. `pm catala verifier` signale un `tache.json` illisible, un type inconnu, un champ absent du programme et un objectif manquant.
+## Démarche
 
-## Écrire le programme
+1. Lisez les pièces et les textes. Formulez la question juridique.
+2. Écrivez `tache.json`, puis `clerk.toml` (`[project]`, `name = "<nom>"`).
+3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article titré, son extrait exact, puis son bloc ` ```catala `.
+4. Déclarez les pièces et les faits prouvés (règle ci-dessous). Confiez les prémisses à `premise-maker`.
+5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier ou des faits fictifs.
+6. Lancez `pm catala verifier --programme <nom>` jusqu'à « vérifié », puis `pm okf verify`. Suivez chaque message.
 
-Lisez d'abord `references/format.md` : modèle complet d'un fichier conforme au livre Catala. Lisez ensuite `references/syntaxe.md` : pièges fréquents, mots-clés et bibliothèque standard. Partez de ces modèles, pas de mémoire.
+## Où chercher
 
-1. Créez `clerk.toml` avec `[project]` et `name = "<nom>"`.
-2. Écrivez le module : `> Module Nom` en tête, nom de fichier en minuscules (`nom.catala_fr`).
-3. Mettez les déclarations exposées aux autres fichiers dans des blocs ` ```catala-metadata `. Un module n'expose que ces blocs. Sinon les tests échouent à la compilation (« Could not resolve reference »).
-4. Mettez les définitions dans des blocs ` ```catala `. Ouvrez chaque bloc exactement par ` ```catala ` ou ` ```catala-metadata ` : Catala ignore en silence un bloc ouvert autrement (espace, majuscule, suffixe). Placez chaque bloc juste sous l'article qui le fonde.
-5. Titrez chaque article cité `## Article 1218 | LEGIARTI000032041431` : catleg lit ces titres pour contrôler la vigueur. Sous le titre, copiez l'extrait exact du texte entre « ». Évitez les lignes commençant par `>` : Catala les réserve à ses directives. Nommez les identifiants en français, avec les accents (`mise_en_demeure`, `résolution_possible`) : le volet les affiche tels quels à l'avocat.
-6. Écrivez les tests dans `test_<module>.catala_fr` : `> Usage de Nom`, un champ d'application `#[test]` par scénario, avec au moins une `assertion` : un test sans assertion réussit toujours, `pm catala verifier` le refuse. Utilisez des faits fictifs ou ceux du dossier, jamais d'autres.
-7. Codez une exception avec `étiquette` et `exception`. Deux exceptions qui peuvent s'appliquer ensemble sont un conflit : `pm catala verifier` le détecte. Choisir la règle qui l'emporte est une interprétation : vous pouvez la faire, mais rendez-la visible. Justifiez ce choix en commentaire `#` au-dessus de l'exception et signalez-le à l'avocat dans votre réponse.
+Lisez la page avant d'écrire, pas de mémoire : le site catala-lang.org peut vous être inaccessible.
 
-## Rédiger un document
+| Besoin ou erreur | Lire |
+|---|---|
+| Fichier complet, faits prouvés, attribut `pm.preuve` | `references/format.md` |
+| Erreur dont le message ne donne pas la correction | `references/pieges.md` |
+| Graphe, titres, carte visée par l'avocat | `references/graphe.md` |
+| Titres, extraits, blocs, mots réservés | `references/livre/5-1-literate-programming.md` |
+| Types, dates, durées, argent, énumérations, listes | `references/livre/5-2-types.md` |
+| Entrée, résultat, `condition`, états, sous-champs | `references/livre/5-3-scopes-toplevel.md` |
+| Définition conditionnelle, `étiquette`, `exception`, arrondi des dates | `references/livre/5-4-definitions-exceptions.md` |
+| `selon … sous forme`, `soit … dans`, conditionnelles, listes | `references/livre/5-5-expressions.md` |
+| `> Module`, `> Usage de`, `catala-metadata` | `references/livre/5-6-modules.md` |
+| Fonction de la bibliothèque standard (`Date`, `Argent`, `Liste`…) | `references/livre/5-7-standard-library.md` |
+| `#[test]`, `##`, attributs | `references/livre/5-8-1-attributes.md` |
+| `condition` ou `règle`, conversions, arrondi d'un montant, pas de texte | `references/livre/4-2-catala-specific.md` |
+| Écrire un test, assertions | `references/livre/3-3-0-test-ci.md` |
+| Programme complet commenté | `references/livre/tutoriel_fin_2_1.catala_fr` à `tutoriel_fin_2_4.catala_fr` |
 
-Le programme ne contient pas l'acte. Le bouton « Rédiger » du volet ouvre un nouveau chat avec le raisonnement du scénario et le style choisi dans `style-redaction-cabinet`. Rédigez alors le document avec ce skill, hors du dossier `.piecemaker/catala/`.
+## Modéliser
 
-## Construire le graphe du raisonnement
-
-Lisez `references/graphe.md` avant d'écrire ou reprendre un raisonnement destiné au graphe. Séparez les faits, leur qualification, les conditions et les exceptions. Une valeur de scénario ne prouve aucun fait.
-
-## Sources et citations
-
-Suivez `references/format.md`.
-
-1. Rattachez chaque règle à son texte par sa position : titre de l'article, extrait exact entre « », puis le bloc ` ```catala `. N'écrivez ni `Concerne :` ni citation en double.
-2. Titrez chaque définition et chaque entrée par `## texte court` sur la ligne au-dessus, selon « Style des titres ».
-3. Déclarez chaque fait du dossier comme une `entrée` avec `#[piecemaker.source = "okf:/_premises/<titre normalisé>.md"]`. La prémisse porte les pièces et leurs citations.
-   Si la prémisse manque, nommez-la quand même et ajoutez `#[piecemaker.question = "…"]`. `premise-maker` la cherche ensuite dans les pièces (skill `okf`).
-4. Pour citer une pièce directement, écrivez `#[piecemaker.source = "<chemin de la pièce>"]` et `#[piecemaker.citation = "extrait exact"]`.
-5. Pour une qualification ou un calcul, placez la règle sous le texte qui fonde l'opération et gardez les dépendances vers les faits distincts.
-6. Écrivez les justifications et le raisonnement en commentaires `#`.
-7. N'écrivez pas `#[doc]` : le titre `##` en est la forme courte et documente seulement le rôle de l'élément.
-8. Lancez `pm catala verifier`, puis `pm okf verify`. Corrigez chaque erreur et chaque manque du graphe.
-9. Si une source ou citation manque, signalez le manque et recherchez-la. N'inventez aucun passage pour satisfaire le contrôle.
+- Séparez faits, qualifications, conditions et exceptions. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée et sourcée, pas une entrée.
+- **Faits prouvés.** Un fait du dossier est une `entrée` de type `Fait` : `Prouvé contenu Pièce` ou `NonProuvé`. Chaque pièce est un cas de l'énumération `Pièce`, avec un seul attribut `#[pm.preuve = "source: … | citation: … | by: agent"]` (`goal` remplace `citation` pour une prémisse encore absente). Une condition n'est remplie que si une pièce est citée : `fait sous forme Prouvé`.
+- `by: human` : l'avocat a posé le lien ou doit le vérifier lui-même. N'écrivez `human` que dans ces cas.
+- Codez une exception avec `étiquette` et `exception`. Choisir la règle qui l'emporte est une interprétation : justifiez-la en commentaire `#` au-dessus de l'exception et signalez-la à l'avocat.
+- Pour une date de fin de mois ou un montant, choisissez l'arrondi d'après le texte et testez le cas limite.
+- Écrivez les justifications en commentaires `#`. Nommez les identifiants en français, avec les accents. N'inventez aucun extrait, aucune pièce, aucun fait. Si une source manque, signalez-la et recherchez-la.
 
 ## Style des titres
 
-Le titre nomme la case du graphe. L’avocat le lit sans le code. Aucun contrôle ne vérifie ce style : relisez chaque titre.
+Le titre `##` nomme la case du graphe. L’avocat le lit sans le code. Aucun contrôle ne vérifie ce style : relisez chaque titre.
 
 | Case | Forme | Exemples | À éviter |
 |---|---|---|---|
-| Règle, condition, qualification, calcul | Verbe d’action à l’infinitif, puis son objet | `Vérifier le montant demandé`, `Calculer l’indemnité` | `Montant`, `Le montant est-il dû ?` |
-| Fait ou clause (sa `source` est une prémisse `okf:`) | Nom, puis participe passé qui constate | `Montant demandé`, `Contrat conclu` | `Contrat`, `Vérifier le contrat` |
+| Règle, condition, qualification, calcul | Verbe à l’infinitif, puis son objet | `Vérifier le montant demandé`, `Calculer l’indemnité` | `Montant`, `Le montant est-il dû ?` |
+| Fait, clause ou pièce | Nom, puis participe passé qui constate | `Montant demandé`, `Contrat conclu` | `Contrat`, `Vérifier le contrat` |
 
-- Écrivez dans la langue du programme. En anglais : `Check the amount claimed`, `Amount claimed`.
-- Écrivez 2 à 7 mots. N’écrivez ni phrase, ni question, ni point final, ni identifiant (`montant_demandé`), ni numéro d’article.
-- Reprenez les mêmes mots dans la condition et dans le fait qui la valide : `Vérifier le montant demandé`, `Montant demandé`.
-- N’annoncez pas le résultat dans le titre d’une règle : la couleur de la case le donne.
+- Écrivez 2 à 7 mots, dans la langue du programme. Ni phrase, ni question, ni point final, ni identifiant, ni numéro d’article.
+- Reprenez les mêmes mots dans la condition et dans le fait qui la valide. N’annoncez pas le résultat dans le titre d’une règle.
 
 ## Commandes
 
-Contrôler, une seule commande :
+- `pm catala verifier --programme <nom>` formate les fichiers puis lance tous les contrôles. Relisez un fichier « reformaté » avant de le modifier. Corrigez d'abord la compilation : elle bloque les autres contrôles.
+- `pm catala executer --scope <Scenario> [--fichier F]` : trace d'un test qui échoue. Filtrez le journal avec `grep "≔.*<identifiant>" .piecemaker/catala/<nom>/resultats/execution.log`.
+- `pm catala exceptions --scope <Champ> --variable <v>` : arbre des exceptions, pour un conflit signalé par la preuve (lisez `resultats/preuve.log`).
+- `pm catala expliquer --scope <Scenario> [--fichier F]` : graphe d'un autre scénario sans entrées.
+- `pm catala squelette --scope <Champ>` : test aux entrées par défaut, à compléter.
 
-- `pm catala verifier --programme <nom>` met les fichiers au format officiel, puis lance tous les contrôles : typage avec invariants, tests Clerk/Python, lecture de chaque prémisse `okf:` par une règle, preuve de chaque champ métier, Catleg, citations PieceMaker et graphe du scénario réussi. Le volet se met à jour après la commande.
-- Lancez `pm catala verifier` seul. Les commandes séparées (`catleg`, `preuve`, `formater`) servent seulement à isoler un contrôle déjà signalé par `verifier`.
-- La commande réécrit les fichiers : relisez un fichier signalé « reformatés » avant de le modifier.
-- Sous un contrôle en échec, le bilan donne une ligne par erreur (`fichier:ligne.colonne: [ERROR] message`) ou par test faux (`fichier:ligne › Scenario : message`). Tant que la compilation échoue, les contrôles qui en dépendent sont bloqués : corrigez d'abord la compilation.
-- Un `[WARNING]` de preuve est un échec : lisez le contre-exemple dans `resultats/preuve.log`.
-- Corrigez et relancez jusqu'à « vérifié ».
-
-Comprendre un échec :
-
-- `pm catala executer --scope <Scenario> [--fichier F]` exécute un champ sans entrées et affiche sa trace : valeur de chaque variable et règle appliquée. Utilisez-la pour un test qui échoue.
-- Pour la valeur d'une seule variable, filtrez ensuite le journal complet : `grep "≔.*<identifiant>" .piecemaker/catala/<nom>/resultats/execution.log`. Chaque ligne `≔` donne une variable et sa valeur.
-- `pm catala exceptions --scope <Champ> --variable <v> [--fichier F]` affiche l'arbre des exceptions d'une variable. Utilisez-la pour un conflit signalé par la preuve.
-- `pm catala expliquer --scope <Scenario> [--fichier F]` produit le graphe d'un autre scénario. Voir « Expliquer une exécution ».
-
-Écrire :
-
-- `pm catala squelette --scope <Champ> [--fichier F]` génère un test dont les entrées ont leur valeur par défaut. Copiez-le dans `test_<module>.catala_fr`, puis fixez les faits et ajoutez les assertions.
-
-Hors parcours : `pm catala lister` (programmes et dernier bilan), `pm catala env` (pack, Python) et `pm catala exec <outil> -- <arguments>` (outil du pack, pour un éditeur).
-
-## Expliquer une exécution
-
-Choisissez un champ sans entrées : ses données doivent être fixées dans le scénario. Indiquez `--fichier` quand le programme contient plusieurs fichiers.
-
-La vérification produit déjà le graphe. Utilisez `expliquer` pour choisir un autre scénario. Le volet présente chaque règle avec son fondement, sa valeur Vrai ou Faux dans le scénario et les faits qui la justifient, en graphe et en fil écrit, des faits à la conclusion. Aucun Graphviz n’est nécessaire.
-
-L’explication concerne cette exécution seulement. Elle ne remplace ni les tests, ni la preuve du programme, ni la justification des faits.
-
-N'ouvrez pas les fichiers JSON de `resultats/` : ils servent au volet. Lisez le bilan de la commande, ou filtrez un journal `.log` avec `grep`.
-
-Les résultats vont dans `.piecemaker/catala/<nom>/resultats/` : `verification.json`, `tests.json`, `preuve.json`, `catleg.json`, `citations.json`, `explication.json`, `explication.dot` et un journal par contrôle.
-
-Le bilan distingue réussite, échec, contrôle bloqué et contrôle indisponible. Catleg et les citations tournent en parallèle ; les commandes qui utilisent `_build` restent séquentielles. Le contrôle des citations réutilise PieceMaker, le MCP Légifrance et les identifiants PISTE existants. Il vérifie les extraits déclarés, sans ajouter de raisonnement juridique.
+N'ouvrez pas les JSON de `resultats/` : ils servent au volet. Le bouton « Rédiger » du volet ouvre un chat de rédaction (skill `style-redaction-cabinet`), hors de `.piecemaker/catala/`.
 
 ## Limites à dire à l'avocat
 
-- Catleg vérifie les articles des titres Markdown et les identifiants cités dans le fichier, avec les identifiants PISTE existants. Zéro article contrôlé ne vaut jamais validation. La date de vigueur vient de `--au`, sinon de `date_vigueur` dans `tache.json` : `today` ou AAAA-MM-JJ. Sans date, `verifier` et `catleg` s'arrêtent sur une erreur. En contentieux, inscrivez dans `tache.json` la date à laquelle le droit s’apprécie (conclusion du contrat, fait générateur, acte de procédure), tirée des pièces ou donnée par l’avocat. Demandez-la seulement si les pièces ne la donnent pas, et inscrivez-la dans `date_vigueur`. Catleg compare la période officielle de chaque article à cette date, y compris pour un article abrogé depuis. Ce contrôle ne prouve pas l’applicabilité juridique ni les dispositions transitoires.
-- Catala 1.3 peut omettre des obligations pour des définitions globales. La preuve valide seulement les obligations produites. Une preuve sans obligation échoue.
-- Une preuve porte sur le programme. Elle ne prouve ni les faits, ni la fidélité du programme au texte.
-- Le programme ne lit pas les pièces. Le lien entre les entrées du programme et les pièces passe par une table des sources que l'avocat construit (qualification, lien officiel, pièce).
-- Si le contrôle `format` échoue avec « Failed idempotence check », le formateur bute sur la construction : gardez la forme écrite et signalez-le.
+- Catleg contrôle la vigueur à `date_vigueur` (ou `--au`). Zéro article contrôlé ne vaut pas validation. Ce contrôle ne prouve ni l'applicabilité ni les dispositions transitoires.
+- La preuve porte sur le programme : ni sur les faits, ni sur sa fidélité au texte. Catala 1.3 peut omettre des obligations pour des définitions globales.
+- L'explication concerne une exécution. Elle ne remplace ni les tests, ni la preuve, ni la justification des faits.
 
-Répondez à l'avocat sans code : la règle codée, les scénarios testés, le résultat des contrôles et ces limites.
+Répondez sans code : la règle codée, les scénarios testés, le résultat des contrôles et ces limites. Citez les articles lus (identifiant Légifrance) et les pièces lues, jamais votre mémoire ni vos fichiers.
 
-Citez dans la réponse les articles lus (identifiant Légifrance) et les pièces lues. Ne citez jamais votre mémoire ni les fichiers que vous avez écrits (programme, résultats) comme source juridique.
+## Sources
+
+Les pages de `references/livre/` sont copiées sans modification du *livre Catala*, © 2025 l'équipe Catala (auteur principal Denis Merigoux, avec Romain Primet, Louis Gesbert, Vincent Botbol et les contributeurs du livre), sous licence CC BY 4.0 : https://github.com/CatalaLang/catala-book, https://book.catala-lang.org. Dépôt, commit et liste des fichiers : `references/livre/SOURCE.md`.

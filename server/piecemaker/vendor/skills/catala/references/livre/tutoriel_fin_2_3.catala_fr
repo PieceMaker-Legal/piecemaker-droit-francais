@@ -1,0 +1,219 @@
+```catala
+déclaration structure Personne:
+  donnée revenu contenu argent
+  donnée nombre_enfants contenu entier
+
+déclaration champ d'application CalculImpôtRevenu:
+  entrée date_courante contenu date
+  entrée personne contenu Personne
+  entrée territoires_outre_mer contenu booléen
+  interne taux_imposition contenu décimal
+  résultat impôt_revenu contenu argent
+```
+
+## Article 1
+
+L'impôt sur le revenu pour un personne est défini comme un pourcentage fixe du
+revenu de la personne sur une année.
+
+```catala
+champ d'application CalculImpôtRevenu:
+  définition impôt_revenu égal à
+    personne.revenu * taux_imposition
+```
+
+## Article 2
+
+Le pourcentage fixe mentionné à l'article 1 est égal à 20 %.
+
+```catala
+champ d'application CalculImpôtRevenu:
+  étiquette article_2
+  définition taux_imposition
+  sous condition date_courante < |2000-01-01|
+  conséquence égal à
+    20%
+
+  étiquette article_2
+  définition taux_imposition
+  sous condition date_courante >= |2000-01-01|
+  conséquence égal à
+    21%
+```
+
+## Article 3
+
+Si la personne a la charge de 2 enfants ou plus, alors le pourcentage fixe
+mentionné à l'article 1 est égal à 15 %.
+
+```catala
+champ d'application CalculImpôtRevenu:
+  étiquette article_3 exception article_2
+  définition taux_imposition
+  sous condition personne.nombre_enfants >= 2
+  conséquence égal à
+    15%
+```
+
+## Article 4
+
+Les personnes gagnant moins de 10 000 € sont exonérés de l'impôt sur le revenu mentionné
+à l'article 1.
+
+```catala
+champ d'application CalculImpôtRevenu:
+  étiquette article_4 exception article_3
+  définition taux_imposition
+  sous condition personne.revenu <= 10 000 €
+  conséquence égal à
+    0%
+```
+
+## Article 5
+
+Les personnes gagnant plus de 100 000 € sont soumis à un taux d'imposition de
+30%, quel que soit leur nombre d'enfants.
+
+```catala
+champ d'application CalculImpôtRevenu:
+  étiquette article_5 exception article_3
+  définition taux_imposition
+  sous condition personne.revenu > 100 000 €
+  conséquence égal à
+    30%
+```
+
+## Article 6
+
+Dans les territoires d'outre-mer, le taux d'imposition pour les personnes gagnant
+plus de 100 000 € spécifié à l'article 5 est réduit à 25 %.
+
+```catala
+champ d'application CalculImpôtRevenu:
+  étiquette article_6 exception article_5
+  définition taux_imposition
+  sous condition personne.revenu > 100 000 € et territoires_outre_mer
+  conséquence égal à
+    25%
+```
+
+## Article 7
+
+Lorsque plusieurs personnes vivent ensemble, ils sont collectivement soumis à
+l'impôt sur le foyer. L'impôt sur le foyer dû est de 10 000 € par personne du foyer,
+et la moitié de ce montant par enfant.
+
+```catala
+déclaration champ d'application CalculImpôtFoyer:
+  entrée personnes contenu liste de Personne
+
+  résultat impôt_foyer contenu argent
+
+déclaration champ d'application CalculImpôtFoyerIndividuel:
+  entrée personne contenu Personne
+  entrée territoires_outre_mer contenu booléen
+  entrée date_courante contenu date
+
+  calcul_impôt_revenu champ d'application CalculImpôtRevenu
+
+  résultat impôt_foyer contenu argent
+```
+
+```catala
+# champ d'application CalculImpôtFoyerIndividuel:
+#   # Cette définition est désactivée car remplacée par celle de l'article 8.
+#   définition impôt_foyer égal à
+#     10 000 € * (1,0 + décimal de personne.nombre_enfants / 2,0)
+
+# La définition de l'impôt sur le foyer pour l'ensemble du foyer ci-dessous est incorrecte et
+# sera refactorisée dans la prochaine section.
+champ d'application CalculImpôtFoyer:
+  définition impôt_foyer égal à
+    soit nombre_personnes égal à nombre de personnes dans
+    soit nombre_enfants égal à
+      Entier.somme de
+        transforme chaque personne parmi personnes en
+          personne.nombre_enfants
+    dans
+    10 000 €
+    * (
+      décimal de nombre_personnes
+      + décimal de nombre_enfants / 2,0
+    )
+```
+
+## Article 8
+
+Le montant de l'impôt sur le revenu payé par chaque personne peut être déduit de la
+part de l'impôt sur le foyer due par cet personne.
+
+```catala
+champ d'application CalculImpôtFoyerIndividuel:
+  définition calcul_impôt_revenu.personne égal à
+    personne
+  définition calcul_impôt_revenu.territoires_outre_mer égal à
+    territoires_outre_mer
+  définition calcul_impôt_revenu.date_courante égal à
+    date_courante
+
+  définition impôt_foyer égal à
+    soit impôt égal à
+      10 000 € * (1,0 + personne.nombre_enfants / 2)
+    dans
+    soit déduction égal à calcul_impôt_revenu.impôt_revenu dans
+    # N'oubliez pas de plafonner la déduction !
+    si déduction > impôt alors 0 € sinon impôt - déduction
+```
+
+## Test
+
+```catala
+déclaration champ d'application Test:
+  résultat calcul contenu CalculImpôtRevenu
+
+champ d'application Test:
+  définition calcul égal à
+    résultat de CalculImpôtRevenu avec {
+      -- personne:
+        Personne {
+          -- revenu: 20 000 €
+          -- nombre_enfants: 0
+        }
+      -- territoires_outre_mer: faux
+      -- date_courante: |1999-01-01|
+    }
+
+déclaration champ d'application TestFoyer:
+  résultat calcul contenu CalculImpôtFoyer
+
+champ d'application TestFoyer:
+  définition calcul égal à
+    résultat de CalculImpôtFoyer avec {
+      -- personnes:
+        [
+          Personne {
+            -- revenu: 15 000 €
+            -- nombre_enfants: 0
+          };
+          Personne {
+            -- revenu: 80 000 €
+            -- nombre_enfants: 2
+          }
+        ]
+    }
+
+déclaration champ d'application TestFoyerIndividuel:
+  résultat calcul contenu CalculImpôtFoyerIndividuel
+
+champ d'application TestFoyerIndividuel:
+  définition calcul égal à
+    résultat de CalculImpôtFoyerIndividuel avec {
+      -- personne:
+        Personne {
+          -- revenu: 15 000 €
+          -- nombre_enfants: 0
+        }
+      -- date_courante: |1999-01-01|
+      -- territoires_outre_mer: faux
+    }
+```
