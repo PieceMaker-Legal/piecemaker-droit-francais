@@ -181,10 +181,10 @@ test('keeps a literal percent sequence when that file exists', async () => {
   assert.deepEqual(vi.mocked(api.readFileBlob).mock.calls[0], ['project-1', filePath]);
 });
 
-test('tracked insertions are Word blue without highlight; deletions are red strikethrough', () => {
+test('tracked insertions are muted blue without highlight; deletions are muted red strikethrough', () => {
   const css = readFileSync('src/piecemaker/docx/docxDocumentViewer.css', 'utf8');
-  assert.match(css, /--docx-revision-ins:\s*#0000ff/);
-  assert.match(css, /--docx-revision-del:\s*#ff0000/);
+  assert.match(css, /--docx-revision-ins:\s*#496b93/);
+  assert.match(css, /--docx-revision-del:\s*#a45b5b/);
   assert.match(css, /\.docx-insertion[\s\S]*color:\s*var\(--docx-revision-ins\)/);
   assert.match(css, /\.docx-insertion[\s\S]*background-color:\s*transparent/);
   assert.match(css, /\.docx-insertion[\s\S]*text-decoration:\s*underline/);

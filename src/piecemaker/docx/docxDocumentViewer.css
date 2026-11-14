@@ -150,8 +150,8 @@
 }
 
 .piecemaker-docx-viewer {
-  --docx-revision-ins: #0000ff;
-  --docx-revision-del: #ff0000;
+  --docx-revision-ins: #496b93;
+  --docx-revision-del: #a45b5b;
 }
 
 .piecemaker-docx-viewer .paged-editor__pages span.docx-insertion,
@@ -198,7 +198,7 @@
 
 .piecemaker-docx-viewer .ep-revision-cell.ep-revision-ins {
   box-shadow: inset 0 3px 0 var(--docx-revision-ins) !important;
-  background-color: rgb(0 0 255 / 0.05) !important;
+  background-color: color-mix(in srgb, var(--docx-revision-ins) 5%, transparent) !important;
 }
 
 .piecemaker-docx-viewer .docx-revision-shortcut-hint {
