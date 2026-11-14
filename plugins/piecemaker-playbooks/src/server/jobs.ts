@@ -119,6 +119,8 @@ export class PlaybookJobs {
       if (current.status !== 'running' || current.attempt !== attempt) return;
       const message = error instanceof PlaybookError ? error.message : signal.aborted
         ? 'Traitement interrompu. Vous pouvez le reprendre.'
+        : settings.provider === 'claude' && error instanceof Error && /Failed to authenticate.*(?:time limit|cannot be renewed|expired)/i.test(error.message)
+        ? 'La connexion Claude a expiré. Reconnectez votre compte Claude, puis reprenez ce traitement.'
         : 'La session IA n’a pas abouti. Vérifiez votre connexion et votre compte, puis reprenez le traitement.';
       store.writeRun({ ...current, status: signal.aborted ? 'interrupted' : 'failed', stage: 'failed', error: message });
     }

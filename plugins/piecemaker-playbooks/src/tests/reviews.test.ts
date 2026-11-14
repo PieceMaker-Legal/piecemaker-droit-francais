@@ -41,6 +41,20 @@ test('un guide importé répare ses références puis exige une validation humai
   assert.equal(store.get(validated.id).sourceHash, imported.sourceHash);
 });
 
+test('un échec de connexion Claude indique la reconnexion sans exposer les autres erreurs internes', async (context) => {
+  for (const [failure, expected] of [
+    ['Session claude en erreur : Failed to authenticate: this login reached its time limit and cannot be renewed.', 'La connexion Claude a expiré. Reconnectez votre compte Claude, puis reprenez ce traitement.'],
+    ['Détail interne du fournisseur', 'La session IA n’a pas abouti. Vérifiez votre connexion et votre compte, puis reprenez le traitement.'],
+  ]) {
+    const { store } = await fixture(context);
+    const jobs = new PlaybookJobs(async () => { throw new Error(failure); });
+    const run = await jobs.start(store, 'import', 'contrat.docx', settings, null, 'strict');
+    await completed(store, run.id);
+    assert.equal(store.run(run.id).status, 'failed');
+    assert.equal(store.run(run.id).error, expected);
+  }
+});
+
 test('une revue conserve ses règles et ses octets, signale les omissions et refuse les extraits inventés', async (context) => {
   const { store, bytes, project } = await fixture(context);
   const book = store.save({ name: 'Politique exemple', validated: true, rules: [RULE, { ...RULE, id: 'payment', name: 'Paiement' }] });
