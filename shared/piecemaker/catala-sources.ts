@@ -1,6 +1,6 @@
 import { catalaDocumentation } from '../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
 
-export function sourceContext(source: string, files: Array<{ nom: string; chemin: string; contenu?: string }>, wholeDocument = false): { text: string; references: Array<{ label: string; target: string; kind: string; origin: string; quote: string }> } {
+export function sourceContext(source: string, files: Array<{ nom: string; chemin: string; contenu?: string }>, wholeDocument = false): { text: string; references: Array<{ label: string; target: string; kind: string; origin: string; quote: string; question?: string }> } {
   let location: URL;
   try { location = new URL(source); } catch { return { text: '', references: [] }; }
   let filename = '';
@@ -9,10 +9,17 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
   const file = matches.length === 1 ? matches[0] : undefined;
   const line = Number(location.hash.match(/^#L(\d+)/)?.[1]);
   if (!file?.contenu || (!line && !wholeDocument)) return { text: '', references: [] };
-  const documentation = catalaDocumentation(file.contenu).entries.filter((entry) => entry.hasDoc);
+  const documentation = catalaDocumentation(file.contenu).entries.filter((entry) => entry.hasDoc || entry.source);
   const annotated = documentation.find((entry) => entry.startLine <= line && line <= entry.endLine);
-  const documentContext = (text: string) => sourceContext('https://catala.local/doc.md', [{ nom: 'doc.md', chemin: file.chemin, contenu: text }], true);
-  if (!wholeDocument && annotated) return documentContext(annotated.doc);
+  const root = file.chemin.replaceAll('\\', '/').split('/.piecemaker/');
+  const fromRoot = (target: string) => root.length > 1 ? '../'.repeat(root.at(-1)!.split('/').length) + target : target;
+  const entryContext = (entry: typeof documentation[number]) => {
+    const context = sourceContext('https://catala.local/doc.md', [{ nom: 'doc.md', chemin: file.chemin, contenu: entry.doc }], true);
+    const premise = /^okf:/i.test(entry.source);
+    const attributed = entry.source ? [{ label: entry.source, target: premise ? entry.source : fromRoot(entry.source), kind: premise ? 'premise' : 'piece', origin: file.chemin, quote: entry.citation, ...(entry.question ? { question: entry.question } : {}) }] : [];
+    return { text: [context.text, entry.citation].filter(Boolean).join('\n\n'), references: [...context.references, ...attributed] };
+  };
+  if (!wholeDocument && annotated) return entryContext(annotated);
   const lines = file.contenu.split(/\r?\n/);
   const sections = [{ level: 0, lines: [] as string[] }];
   let catala = false;
@@ -59,7 +66,7 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
     const quoted = (at: number) => {
       const following = rows.slice(at + 1);
       while (following[0] === '') following.shift();
-      const literal = /^(?:Citation|quote)\s*:\s*«\s*([\s\S]*?)\s*»(?:\n|$)/i.exec(following.join('\n'))?.[1];
+      const literal = /^(?:(?:Citation|quote)\s*:\s*)?«\s*([\s\S]*?)\s*»(?:\n|$)/i.exec(following.join('\n'))?.[1];
       const quote: string[] = [];
       for (const line of following) { if (!/^>\s?/.test(line)) break; quote.push(line.replace(/^>\s?/, '')); }
       return literal ?? quote.join('\n');
@@ -70,6 +77,6 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
     if (!candidates.length) return { ...entry, origin: file.chemin, quote: '' };
     return { ...entry, origin: file.chemin, quote: candidates.map(quoted).find(Boolean) ?? '' };
   });
-  const native = wholeDocument ? documentation.flatMap((entry) => documentContext(entry.doc).references) : [];
-  return { text: [text, ...(wholeDocument ? documentation.map((entry) => entry.doc) : [])].filter(Boolean).join('\n\n'), references: [...extracted, ...native].filter((entry, index, all) => all.findIndex((other) => other.target === entry.target && other.label === entry.label && other.quote === entry.quote) === index) };
+  const native = wholeDocument ? documentation.map(entryContext) : [];
+  return { text: [text, ...native.map((context) => context.text)].filter(Boolean).join('\n\n'), references: [...extracted, ...native.flatMap((context) => context.references)].filter((entry, index, all) => all.findIndex((other) => other.target === entry.target && other.label === entry.label && other.quote === entry.quote) === index) };
 }

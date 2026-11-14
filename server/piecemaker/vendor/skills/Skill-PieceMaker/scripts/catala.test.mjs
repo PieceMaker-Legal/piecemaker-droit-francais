@@ -547,39 +547,35 @@ test('exceptions, executer and squelette call Catala with the expected arguments
   } finally { cleanup(); }
 });
 
-test('verifier requires doc, a nonempty quote and a title, in any language', async () => {
+test('verifier requires a title on each input and a citation on each cited document', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime');
     const { runner } = fakeRun();
     const cases = [
-      ['', '#[doc] manquant'],
-      ['#[doc="Source : référence fictive."]\n', 'quote manquante'],
-      ['#[doc="quote: «   »"]\n', 'quote manquante'],
-      ['#[doc="Sans citation"]\n#[doc="quote: « Passage exact. »"]\n', 'quote manquante'],
-      ['#[doc="Source : référence fictive.\\nquote: « Passage exact. »"]\n', 'titre manquant'],
-      ['#[doc="titre: Amount claimed\\nsource: ../../../pieces/contrat-fictif.md\\nquote: « Passage exact. »"]\n', null],
-      ['#[doc="titre: Vérifier le montant de la prime\\nsource: https://example.org/texte-fictif\\nquote: « Passage exact. »"]\n', null],
-      ['#[doc="titre: Montant de la prime\\nsource: okf:/_premises/montant-de-la-prime.md"]\n', null],
-      ['#[doc="source: okf:/_premises/montant-de-la-prime.md"]\n', 'titre manquant'],
+      ['', 'titre manquant pour cette entrée'],
+      ['## Montant demandé\n', null],
+      ['#[piecemaker.source = "okf:/_premises/montant-de-la-prime.md"]\n', null],
+      ['#[piecemaker.question = "Quel montant Jean Dupont a-t-il demandé ?"]\n', null],
+      ['## Montant demandé\n#[piecemaker.source = "pieces/contrat-fictif.md"]\n', 'citation] manquante'],
+      ['## Montant demandé\n#[piecemaker.source = "pieces/contrat-fictif.md"]\n#[piecemaker.citation = "  "]\n', 'citation] manquante'],
+      ['## Montant demandé\n#[piecemaker.source = "pieces/contrat-fictif.md"]\n#[piecemaker.citation = "La prime est de \\"10 €\\"."]\n', null],
     ];
     for (const [annotation, message] of cases) {
-      fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\nCitation : « Une citation extérieure ne suffit pas. »\n\n```catala\nchamp d\'application Prime:\n' + annotation + 'définition montant égal à 10 €\n```\n');
+      fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n' + annotation + '  entrée demande contenu argent\n  résultat montant contenu argent\n```\n\n```catala\nchamp d\'application Prime:\n  définition montant égal à demande\n```\n');
       const output = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
       const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'));
       const check = report.checks.find((entry) => entry.name === 'documentation');
-      assert.equal(check.passed, !message);
+      assert.equal(check.passed, !message, annotation);
       if (message) {
         assert.equal(report.passed, false);
         assert.ok(check.errors.some((error) => error.includes('prime.catala_fr:') && error.includes(message)));
         assert.ok(output.includes(message));
       }
     }
-    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n#[doc="titre: Fixer le montant\\nquote: « Passage exact. »"]\ndéfinition montant égal à 10 €\ndéfinition autre égal à 20 €\ndéclaration taux contenu décimal égal à 0.1\n```\n');
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n# Le montant suit l\'article fictif.\ndéfinition montant égal à 10 €\n```\n');
     await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
-    const check = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation');
-    assert.equal(check.errors.length, 2);
-    assert.match(check.errors[0], /doc.*manquant/);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation').errors, []);
     const verify = async (task) => {
       fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
       await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
@@ -595,9 +591,10 @@ test('verifier requires doc, a nonempty quote and a title, in any language', asy
 const PREMISE_SOURCE = [
   '```catala-metadata',
   "déclaration champ d'application Prime:",
-  '  #[doc = "source: okf:/_premises/exemple"]',
+  '  #[piecemaker.source = "okf:/_premises/exemple"]',
   '  entrée mention_lue contenu booléen',
-  '  #[doc = "source: okf:/_premises/exemple"]',
+  '  ## Mention morte',
+  '  #[piecemaker.source = "okf:/_premises/exemple"]',
   '  entrée mention_morte contenu booléen',
   '  résultat possible contenu booléen',
   '```',

@@ -25,7 +25,6 @@ export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[
 export type OkfGap = { element: string; manque: string; programmes?: string[] };
 
 const SKIPPED_FOLDERS = new Set(['resultats', '_build', 'node_modules']);
-const LEGAL_SOURCE = /^(?:https?:|(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT|JORFTEXT|JORFARTI)\d+$|[0-9a-f]{24}$)/i;
 
 export const isOkfSource = (source: string): boolean => source.toLowerCase().startsWith(OKF_SCHEME);
 export const premiseIdOf = (source: string): string => migratedId(`/${source.slice(OKF_SCHEME.length).replace(/^\/+/, '')}`);
@@ -60,11 +59,8 @@ function catalaSources(projectPath: string): Array<{ place: string; source: stri
     const content = fs.readFileSync(filePath, 'utf8');
     const lines = content.split('\n');
     return catalaDocumentation(content).entries
-      .filter((entry: { hasDoc: boolean }) => entry.hasDoc)
-      .flatMap((entry: { startLine: number; endLine: number; doc: string }) => {
-        const expression = lines.slice(entry.startLine - 1, entry.endLine).join('\n').match(/(?:égal à|equals)[ \t]+([^\n]+)/)?.[1].trim() ?? '';
-        return [...entry.doc.matchAll(/^\s*source\s*:\s*(\S+)\s*$/gim)].map((match) => ({ place: `${place}:${entry.startLine}`, source: match[1], expression }));
-      });
+      .filter((entry) => isOkfSource(entry.source))
+      .map((entry) => ({ place: `${place}:${entry.startLine}`, source: entry.source, expression: lines.slice(entry.startLine - 1, entry.endLine).join('\n').match(/(?:égal à|equals)[ \t]+([^\n]+)/)?.[1].trim() ?? '' }));
   });
 }
 
@@ -136,11 +132,9 @@ export function graphGaps(projectPath: string): OkfGap[] {
       const evidence = evidenceOf(concepts, id);
       const expected = expectedValue(expression);
       const values = evidence?.pieces.map((piece) => piece.value).filter(Boolean) ?? [];
-      if (!evidence) report(place, `#[doc] cite une prémisse absente de l'index : ${id}`, [programOf(place)]);
-      else if (!evidence.pieces.length) report(place, `#[doc] cite une prémisse sans pièce citée : ${id}`, [programOf(place)]);
-      else if (expected && values.length && !values.some((value) => matchesExpected(expected, value))) report(place, `#[doc] valeur du scénario (${expression}) différente de la prémisse (${values.join(' ; ')}) : ${id}`, [programOf(place)]);
-    } else if (!LEGAL_SOURCE.test(source) && !/^[a-z][\w+.-]*:/i.test(source)) {
-      report(place, `#[doc] cite une pièce directement (${source}) : citer une prémisse, source: ${OKF_SCHEME}/_premises/<titre>.md`, [programOf(place)]);
+      if (!evidence) report(place, `#[piecemaker.source] cite une prémisse absente de l'index : ${id}`, [programOf(place)]);
+      else if (!evidence.pieces.length) report(place, `#[piecemaker.source] cite une prémisse sans pièce citée : ${id}`, [programOf(place)]);
+      else if (expected && values.length && !values.some((value) => matchesExpected(expected, value))) report(place, `#[piecemaker.source] valeur du scénario (${expression}) différente de la prémisse (${values.join(' ; ')}) : ${id}`, [programOf(place)]);
     }
   }
   if (sources.length) {

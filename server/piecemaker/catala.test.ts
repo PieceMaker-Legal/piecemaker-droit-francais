@@ -159,7 +159,7 @@ test('notifie les clients existants seulement depuis la boucle locale pour un do
 test('local citation transport validates access and the reader reuses current stored verification', async () => {
   const directory = program('citations');
   const file = path.join(directory, 'prime.catala_fr');
-  fs.writeFileSync(file, '## Article fictif | LEGIARTI000000000001\nCitation : « Passage exact. »\n');
+  fs.writeFileSync(file, '## Article fictif | LEGIARTI000000000001\n« Passage exact. »\n');
   const post = (endpoint: string, body: unknown, loopback = 'yes') => fetch(`${base}/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-test-loopback': loopback }, body: JSON.stringify(body) });
   assert.equal((await post('catala-citations', { cwd: dossier, programme: 'citations' }, 'no')).status, 403);
   assert.equal((await post('catala-citations', { cwd: '/inconnu', programme: 'citations' })).status, 400);

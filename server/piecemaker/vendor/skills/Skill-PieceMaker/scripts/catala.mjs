@@ -286,7 +286,7 @@ async function verifier(context, program, flags = {}) {
     checks.push(entry);
     return entry;
   };
-  await record('documentation', 'Présence de #[doc] et quote, ouverture des blocs', async () => {
+  await record('documentation', 'Titres des entrées, citations des pièces, ouverture des blocs', async () => {
     const errors = files.flatMap((file) => catalaDocumentation(fs.readFileSync(path.join(program.directory, file), 'utf8')).errors.map((error) => `${file}:${error.line}: ${error.message}`));
     errors.push(...taskErrors(program.directory, files).map((message) => `tache.json:1: ${message}`));
     return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };

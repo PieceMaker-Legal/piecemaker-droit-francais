@@ -27,7 +27,7 @@ const module = {
 ## Article 1226 du code civil
 
 [Article 1226](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032041472)
-Citation : « Le créancier peut, à ses risques et périls, résoudre le contrat par voie de notification. »
+« Le créancier peut, à ses risques et périls, résoudre le contrat par voie de notification. »
 
 \`\`\`catala-metadata
 déclaration champ d'application RésolutionUnilatérale:
@@ -292,14 +292,20 @@ test('preserves a conditional dependency without claiming that a dashed link pro
   assert.equal(graph.querySelectorAll('[data-kind="exception"][data-node]').length, 0);
 });
 
-test('uses the native doc and its quote in the qualification card without mixing nearby sources', () => {
+test('reads the article extract and the piece attributes in the qualification card without mixing nearby sources', () => {
   const content = [
-    '# Autre article | LEGIARTI000000000009',
+    '## Autre article | LEGIARTI000000000009',
+    '« Passage d\'un autre article fictif. »',
+    '',
+    '## Article 1 | LEGIARTI000000000001',
+    '« La participation doit atteindre trois séances. »',
+    '',
     '```catala',
     "champ d'application Attribution:",
-    '  #[doc="source: ../../../pieces/presence-fictive.md\\nquote: « Jean Dupont a participé à quatre séances. »"]',
+    '  ## Séances constatées',
+    '  #[piecemaker.source = "pieces/presence-fictive.md"]',
+    '  #[piecemaker.citation = "Jean Dupont a participé à quatre séances."]',
     '  définition séances_constatées égal à 4',
-    '  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001\\nquote: « La participation doit atteindre trois séances. »"]',
     '  définition participation_suffisante égal à séances_constatées >= 3',
     '  définition prime_due égal à participation_suffisante',
     '```',
@@ -307,9 +313,9 @@ test('uses the native doc and its quote in the qualification card without mixing
     '[Article 1 du règlement fictif](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001)',
   ].join('\n');
   const model = reasoning(`digraph G {
-    x001 [label=<<table><tr><td>séances_constatées</td><td>4</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L5"];
-    x002 [label=<<table><tr><td>participation_suffisante</td></tr><tr><td>séances_constatées &gt;= 3</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L7"];
-    x003 [label=<<table><tr><td>prime_due</td></tr><tr><td>participation_suffisante</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L8"];
+    x001 [label=<<table><tr><td>séances_constatées</td><td>4</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L12"];
+    x002 [label=<<table><tr><td>participation_suffisante</td></tr><tr><td>séances_constatées &gt;= 3</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L13"];
+    x003 [label=<<table><tr><td>prime_due</td></tr><tr><td>participation_suffisante</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L14"];
     x001 -> x002 [style="solid"];
     x002 -> x003 [style="solid"];
   }`, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }]);
@@ -353,8 +359,8 @@ test('names the final conclusion by the declared objective, then shows each cite
   assert.doesNotMatch(undeclared.body.textContent, /Objectif à déclarer/);
 });
 
-test('titles each box with the titre of its #[doc] and flags a title without a past participle', () => {
-  const file = { ...module, contenu: module.contenu.replace('  définition résolution_possible', '  #[doc="titre: Résolution du contrat notifiée\\nquote: « résoudre le contrat par voie de notification »"]\n  définition résolution_possible') };
+test('titles each box with its ## heading and flags a title without a past participle', () => {
+  const file = { ...module, contenu: module.contenu.replace('  définition résolution_possible', '  ## Résolution du contrat notifiée\n  définition résolution_possible') };
   const document = new JSDOM(reasoningGraph(reasoning(dot, [file], citations))).window.document;
   assert.equal(document.querySelector('[data-node="x002"] [data-part="law"] h3'), null);
   assert.equal(document.querySelector('[data-node="x002"] h3').textContent, 'Résolution du contrat notifiée');

@@ -54,7 +54,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   for (const step of model.steps) if (step.issue || (step.kind === 'fact' && !step.sources.some((source) => source.kind === 'piece')) || step.notes.recherche || step.sources.some((source) => source.status === 'failed') || step.parents.some((id) => incomplete.has(id))) incomplete.add(step.id);
   const links: Array<{ from: string; to: string }> = [];
   const warn = (text: string) => `<p class="pmc-warn">${escape(text)}</p>`;
-  const docTitle = (step: Step) => step.origins.find((origin) => origin.selected && origin.role === 'definition' && origin.title)?.title ?? '';
+  const docTitle = (step: Step) => (['definition', 'declaration'] as const).map((role) => step.origins.find((origin) => origin.selected && origin.role === role && origin.title)?.title).find(Boolean) ?? '';
   const named = (step: Step) => docTitle(step) || step.notes.question || step.title;
   const identity = (source: Source) => `${source.target}\n${source.quote}`;
   const documents = (sources: Source[], missing: string, part: string) => sources.length ? `<ul class="pmc-docs" data-part="${part}">${sources.map((source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}${source.quote ? `<q>${escape(source.quote)}</q>` : '<span class="pmc-warn">Citation exacte à indiquer</span>'}${source.status === 'failed' ? '<span class="pmc-warn">Citation non retrouvée dans le document</span>' : ''}</li>`).join('')}</ul>` : missing ? warn(missing) : '';

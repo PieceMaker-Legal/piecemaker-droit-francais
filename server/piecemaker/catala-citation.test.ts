@@ -19,7 +19,7 @@ test('opens declared Catala references in the citation reader without inventing 
       match: (text: string, quote: string) => text.includes(quote) ? quote : null,
     };
     const { cite } = createCatalaCitation(connectors, store);
-    const content = '## Article | LEGIARTI000000000001\nCitation : « Texte officiel fictif. »\nCitation : « Texte différent. »';
+    const content = '## Article | LEGIARTI000000000001\n« Texte officiel fictif. »\n« Texte différent. »';
     for (const [quote, verified] of [['Texte officiel fictif.', true], ['Texte différent.', false], ['', false]] as const) {
       const token = await cite('/dossier-fictif', 'LEGIARTI000000000001', quote, content);
       const saved = await store.read(token);
@@ -33,7 +33,7 @@ test('opens declared Catala references in the citation reader without inventing 
     await assert.rejects(() => cite('/dossier-fictif', 'LEGIARTI000000000002', '', content), /Source absente/);
     await assert.rejects(() => cite('/dossier-fictif', 'LEGIARTI000000000001', 'Citation injectée', content), /Citation absente/);
     assert.equal(queries, 3);
-    const annotated = '```catala\n#[doc=' + JSON.stringify('source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001\nquote: « Texte "officiel" fictif. »') + ']\ndéfinition possible égal à vrai\n```';
+    const annotated = '## Article | LEGIARTI000000000001\n« Texte "officiel" fictif. »\n\n```catala\ndéfinition possible égal à vrai\n```';
     const nativeReport = await createCatalaCitation(connectors, store).verify('/dossier-fictif', [{ nom: 'demo.catala_fr', chemin: '/dossier-fictif/demo.catala_fr', contenu: annotated }]);
     assert.equal(nativeReport.passed, true);
     assert.equal(nativeReport.results.length, 1);
@@ -50,15 +50,15 @@ test('checks all declared quotations, retains missing and failed citations and s
       match: (text, quote) => text.includes(quote) ? quote : null,
     }, store);
     const origin = path.join(home, '.piecemaker/catala/prime/prime.catala_fr');
-    const content = '## Article fictif | LEGIARTI000000000001\nCitation : « Passage exact. »\n\n```catala\ndéfinition montant égal à 1\n```\n\n## Autre règle\n[Article cité](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001)\nCitation : « Passage différent. »\n\n```catala\ndéfinition montant égal à 2\n```\n\n## Pièces\n[Pièce fictive](../../../pieces/attestation.md)\nCitation : « Passage exact. »\n\n[Pièce sans extrait](../../../pieces/contrat.md)\n\n[Pièce interdite](../../../../secret.md)\n';
+    const content = '## Article fictif | LEGIARTI000000000001\n« Passage exact. »\n\n```catala\ndéfinition montant égal à 1\n```\n\n## Autre règle | LEGIARTI000000000001\n« Passage différent. »\n\n```catala\ndéfinition montant égal à 2\n```\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  ## Attestation\n  #[piecemaker.source = "pieces/attestation.md"]\n  #[piecemaker.citation = "Passage exact."]\n  entrée attestation contenu booléen\n  ## Contrat\n  #[piecemaker.source = "pieces/contrat.md"]\n  entrée contrat contenu booléen\n  ## Secret\n  #[piecemaker.source = "../secret.md"]\n  #[piecemaker.citation = "Passage exact."]\n  entrée secret contenu booléen\n```\n';
     const result = await service.verify(home, [{ nom: 'prime.catala_fr', chemin: origin, contenu: content }]);
     assert.equal(result.passed, false);
     assert.equal(result.status, 'failed');
     assert.equal(result.results.length, 5);
     assert.equal(result.results.filter((entry) => entry.status === 'passed').length, 2);
     assert.equal(result.results.find((entry) => entry.quote === 'Passage différent.')?.status, 'failed');
-    assert.match(result.results.find((entry) => entry.label === 'Pièce sans extrait')!.message, /Aucun extrait/);
-    assert.match(result.results.find((entry) => entry.label === 'Pièce interdite')!.message, /hors du dossier/);
+    assert.match(result.results.find((entry) => entry.label === 'pieces/contrat.md')!.message, /Aucun extrait/);
+    assert.match(result.results.find((entry) => entry.label === '../secret.md')!.message, /hors du dossier/);
     for (const entry of result.results) if ('token' in entry) assert.equal((await store.read(entry.token))?.citation.verified, entry.verified);
     const empty = await service.verify(home, [{ nom: 'vide.catala_fr', chemin: origin, contenu: 'Aucune source.' }]);
     assert.equal(empty.status, 'missing');
@@ -97,8 +97,8 @@ test('develops an OKF premise into its cited pieces and fails without evidence',
       match: (text, quote) => text.includes(quote) ? quote : null,
     }, createCitationStore(home));
     const origin = path.join(home, '.piecemaker/catala/prime/prime.catala_fr');
-    const doc = (title: string, source: string) => '#[doc=' + JSON.stringify(`titre: ${title}\nsource: ${source}`) + ']';
-    const content = ['```catala', doc('Prix', 'okf:/_premises/prix.md'), 'définition a égal à vrai', doc('Délai', 'okf:/_premises/delai.md'), 'définition b égal à vrai', doc('Absente', 'okf:/_premises/absente.md'), 'définition c égal à vrai', '```'].join('\n');
+    const premise = (title: string, source: string) => `## ${title}\n#[piecemaker.source = "${source}"]`;
+    const content = ['```catala', premise('Prix', 'okf:/_premises/prix.md'), 'définition a égal à vrai', premise('Délai', 'okf:/_premises/delai.md'), 'définition b égal à vrai', premise('Absente', 'okf:/_premises/absente.md'), 'définition c égal à vrai', premise('À établir', 'okf:/_premises/a-etablir.md'), '#[piecemaker.question = "Jean Dupont a-t-il reçu la lettre ?"]', 'définition d égal à vrai', '```'].join('\n');
     const report = await service.verify(home, [{ nom: 'prime.catala_fr', chemin: origin, contenu: content }]);
     const result = (target: string) => report.results.find((entry) => entry.target === target) as { status: string; title?: string; pieces?: Array<{ target: string; quote: string; verified: boolean }> };
     assert.equal(report.passed, false);
@@ -108,5 +108,7 @@ test('develops an OKF premise into its cited pieces and fails without evidence',
     assert.deepEqual(read, [path.join(home, 'Pièces/Contrat.pdf')]);
     assert.equal(result('okf:/_premises/delai.md').status, 'missing');
     assert.equal(result('okf:/_premises/absente.md').status, 'failed');
+    assert.equal(result('okf:/_premises/a-etablir.md').status, 'missing');
+    assert.match((result('okf:/_premises/a-etablir.md') as { message?: string }).message ?? '', /Prémisse à établir : Jean Dupont a-t-il reçu la lettre \?/);
   } finally { await rm(home, { recursive: true, force: true }); }
 });

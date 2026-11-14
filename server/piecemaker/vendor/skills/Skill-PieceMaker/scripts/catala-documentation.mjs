@@ -9,34 +9,34 @@ export function catalaDocumentation(content) {
   let block = [];
   const inspect = () => {
     const text = block.join('\n');
-    const tokens = /#\[\s*doc\s*=\s*"((?:\\[\s\S]|[^"\\])*)"\s*\]|#\[(?:"(?:\\[\s\S]|[^"\\])*"|[^\]])*\]|"(?:\\[\s\S]|[^"\\])*"|#[^\n]*|(?<![\p{L}\p{N}_])(?:(?:déclaration|declaration)\s+(?:champ d'application|scope|structure|énumération|enumeration)|définition|definition|règle|rule|déclaration|declaration|champ d'application|scope|assertion|entrée|input|résultat|output|interne|internal|contexte|context|étiquette|label|exception)(?![\p{L}\p{N}_])/gu;
+    const tokens = /#\[\s*doc\s*=\s*"((?:\\[\s\S]|[^"\\])*)"\s*\]|#\[\s*piecemaker\.(source|citation|question)\s*=\s*"((?:\\[\s\S]|[^"\\])*)"\s*\]|##[ \t]+([^\n]*)|#\[(?:"(?:\\[\s\S]|[^"\\])*"|[^\]])*\]|"(?:\\[\s\S]|[^"\\])*"|#[^\n]*|(?<![\p{L}\p{N}_])(?:(?:déclaration|declaration)\s+(?:champ d'application|scope|structure|énumération|enumeration)|définition|definition|règle|rule|déclaration|declaration|champ d'application|scope|assertion|entrée|input|résultat|output|interne|internal|contexte|context|étiquette|label|exception)(?![\p{L}\p{N}_])/gu;
     let pending = [];
+    let meta = {};
     let pendingLine = 0;
     let previous;
     const lineAt = (offset) => startLine + text.slice(0, offset).split('\n').length;
-    const matches = [...text.matchAll(tokens)];
-    for (const [index, token] of matches.entries()) {
-      if (token[1] !== undefined) {
+    for (const token of text.matchAll(tokens)) {
+      if (token[1] !== undefined || token[2] || token[4] !== undefined) {
         if (previous) previous.endLine = lineAt(token.index) - 1;
         previous = undefined;
         pendingLine ||= lineAt(token.index);
-        const doc = decode(token[1]);
-        if (!/^\s*source\s*:\s*okf:/im.test(doc) && ![...doc.matchAll(/^\s*quote\s*:\s*«([\s\S]*?)»/gim)].some((match) => match[1].trim())) errors.push({ line: lineAt(token.index), message: 'quote manquante ou vide dans #[doc]. Format attendu : quote: « passage exact », ou source: okf:/_premises/<titre>.md pour un fait.' });
-        pending.push(doc);
+        if (token[1] !== undefined) pending.push(decode(token[1]));
+        else if (token[2]) meta[token[2]] = decode(token[3]);
+        else meta.title = token[4].trim();
         continue;
       }
       if (/^[#"]/.test(token[0]) || /^(?:étiquette|label|exception)$/.test(token[0])) continue;
       if (previous) previous.endLine = lineAt(token.index) - 1;
       const line = lineAt(token.index);
-      const definition = /^(?:définition|definition|règle|rule)$/.test(token[0]) || /^(?:déclaration|declaration)$/.test(token[0]) && /(?:égal à|equals)/.test(text.slice(token.index, matches[index + 1]?.index));
       const doc = pending.join('\n');
-      const entry = { startLine: pendingLine || line, endLine: startLine + block.length, doc, hasDoc: pending.length > 0 };
+      const title = meta.title ?? (/^\s*(?:titre|source|quote)\s*:/im.test(doc) ? doc.match(/^\s*titre\s*:\s*(.+?)\s*$/im)?.[1] : doc.trim()) ?? '';
+      const entry = { startLine: pendingLine || line, endLine: startLine + block.length, doc, hasDoc: pending.length > 0, title, source: meta.source ?? '', citation: meta.citation ?? '', question: meta.question ?? '' };
       entries.push(entry);
       previous = entry;
-      if (definition && !entry.hasDoc) errors.push({ line, message: '#[doc] manquant pour cette définition ou règle.' });
-      const title = doc.match(/^\s*titre\s*:\s*(.+?)\s*$/im)?.[1];
-      if (definition && entry.hasDoc && !title) errors.push({ line: entry.startLine, message: 'titre manquant dans #[doc]. Exemples : titre: Vérifier le montant demandé (règle, condition) ou titre: Contrat conclu (fait).' });
+      if (/^(?:entrée|input)$/.test(token[0]) && !meta.title && !meta.source && !meta.question) errors.push({ line, message: 'titre manquant pour cette entrée. Écrivez ## texte court au-dessus, ou #[piecemaker.source = "okf:/_premises/<fiche>.md"] pour un fait du dossier.' });
+      if (entry.source && !/^okf:/i.test(entry.source) && !entry.citation.trim()) errors.push({ line: entry.startLine, message: `#[piecemaker.citation] manquante pour la pièce ${entry.source}. Une pièce citée directement porte #[piecemaker.citation = "extrait exact"].` });
       pending = [];
+      meta = {};
       pendingLine = 0;
     }
     block = [];
@@ -68,10 +68,10 @@ export function testsWithoutAssertion(content) {
 export function okfCitedVariables(content) {
   const found = [];
   let scope = '';
-  const pattern = /champ d'application\s+([\p{L}\p{N}_]+)\s*:|#\[\s*doc\s*=\s*"((?:\\[\s\S]|[^"\\])*)"\s*\]\s*(?:(?:étiquette|label|exception)\s+[\p{L}\p{N}_]+\s+)?(?:(?:déclaration|declaration|entrée|input|résultat|output|interne|internal|contexte|context|définition|definition|règle|rule)\s+)?([\p{L}\p{N}_]+)/gu;
+  const pattern = /champ d'application\s+([\p{L}\p{N}_]+)\s*:|#\[\s*piecemaker\.source\s*=\s*"((?:\\[\s\S]|[^"\\])*)"\s*\](?:\s*(?:#\[(?:"(?:\\[\s\S]|[^"\\])*"|[^\]])*\]|##[^\n]*))*\s*(?:(?:étiquette|label|exception)\s+[\p{L}\p{N}_]+\s+)?(?:(?:déclaration|declaration|entrée|input|résultat|output|interne|internal|contexte|context|définition|definition|règle|rule)\s+)?([\p{L}\p{N}_]+)/gu;
   for (const match of content.matchAll(pattern)) {
     if (match[1]) { scope = match[1]; continue; }
-    const source = decode(match[2]).match(/^\s*source\s*:\s*(okf:\S+)/im)?.[1];
+    const source = decode(match[2]).match(/^\s*(okf:\S+)/i)?.[1];
     if (source && scope) found.push({ scope, variable: match[3], source, line: content.slice(0, match.index).split('\n').length });
   }
   return found;

@@ -329,16 +329,15 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   build();
   const program = path.join(projectPath, '.piecemaker', 'catala', 'demo');
   fs.mkdirSync(program, { recursive: true });
-  const doc = (title: string, source: string) => `#[doc=${JSON.stringify(`titre: ${title}\nsource: ${source}`)}]`;
-  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Prémisse absente', 'okf:/_premises/inconnue.md'), 'définition a égal à vrai', doc('Pièce directe', 'Pièces/Contrat.pdf'), 'définition b égal à vrai', '```', ''].join('\n'));
+  const doc = (title: string, source: string) => `## ${title}\n#[piecemaker.source = ${JSON.stringify(source)}]`;
+  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Prémisse absente', 'okf:/_premises/inconnue.md'), 'définition a égal à vrai', '```', ''].join('\n'));
 
   const gaps = graphGaps(projectPath).map((gap) => `${gap.element} | ${gap.manque}`);
   assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse à valeur unique sans valeur`));
   assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse sans partie concernée (involves)`));
   assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse citée par aucun programme Catala`));
   assert.ok(gaps.includes(`/_parties/${COMPANY}.md | partie sans mention dans une pièce ni prémisse qui la concerne`));
-  assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| #\[doc\] cite une prémisse absente de l'index : \/_premises\/inconnue\.md/.test(gap)));
-  assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| #\[doc\] cite une pièce directement \(Pièces\/Contrat\.pdf\)/.test(gap)));
+  assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| #\[piecemaker\.source\] cite une prémisse absente de l'index : \/_premises\/inconnue\.md/.test(gap)));
   assert.equal(gaps.some((gap) => gap.startsWith(`/${LETTER}.md`)), false);
   assert.deepEqual([...new Set(graphGaps(projectPath).filter((gap) => gap.element.includes('demo.catala_fr')).flatMap((gap) => gap.programmes ?? []))], ['demo']);
   assert.equal(graphGaps(projectPath).find((gap) => gap.element === RESILIATION_ID)?.programmes, undefined);
@@ -351,7 +350,7 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à 1 200 €', '```', ''].join('\n'));
   assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element.includes('catala')), []);
   fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à 1 500 €', '```', ''].join('\n'));
-  assert.ok(graphGaps(projectPath).some((gap) => gap.manque === `#[doc] valeur du scénario (1 500 €) différente de la prémisse (1 200 euros) : ${RESILIATION_ID}` && gap.programmes?.[0] === 'demo'));
+  assert.ok(graphGaps(projectPath).some((gap) => gap.manque === `#[piecemaker.source] valeur du scénario (1 500 €) différente de la prémisse (1 200 euros) : ${RESILIATION_ID}` && gap.programmes?.[0] === 'demo'));
 });
 
 function backendOf(projectPath: string, markdownOf: (resource: string) => string | null) {

@@ -287,8 +287,8 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
       return citedSources({ ...entry, label }, citations);
     });
   };
-  const documentation = new Map(files.map((file) => [file.chemin, catalaDocumentation(file.contenu ?? '').entries.filter((entry) => entry.hasDoc)]));
-  const docTitle = (file: string, line: number) => documentation.get(file)?.find((entry) => entry.startLine <= line && line <= entry.endLine)?.doc.match(/^\s*titre\s*:\s*(.+?)\s*$/im)?.[1] ?? '';
+  const documentation = new Map(files.map((file) => [file.chemin, catalaDocumentation(file.contenu ?? '').entries.filter((entry) => entry.hasDoc || entry.title || entry.source)]));
+  const docTitle = (file: string, line: number) => documentation.get(file)?.find((entry) => entry.startLine <= line && line <= entry.endLine)?.title ?? '';
   const enrich = (entry: NativeOrigin): Origin => {
     const source = `${new URL(`file:///${entry.file.replaceAll('\\', '/').replace(/^\/+/, '')}`).href}#L${entry.line}`;
     const content = files.find((file) => file.chemin === entry.file)?.contenu?.split(/\r?\n/) ?? [];

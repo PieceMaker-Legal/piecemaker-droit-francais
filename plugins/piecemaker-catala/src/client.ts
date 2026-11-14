@@ -73,9 +73,8 @@ export function mount(container: HTMLElement, api: Host) {
   const shown = () => data?.programmes.find((entry) => entry.nom === chosen) ?? data?.programmes[0];
   const plainGap = (message: string) => {
     const [, file = '', line = '', text = message] = message.match(/^(.*?):(\d+):\s*(.*)$/) ?? [];
-    const meaning = /quote/i.test(text) ? 'Citation manquante : le passage exact de la source n’est pas cité.'
-      : /titre/i.test(text) ? 'Titre manquant : cette règle n’a pas de nom lisible.'
-      : /#\[doc\]/.test(text) ? 'Source manquante : cette règle ne cite ni texte ni pièce.'
+    const meaning = /piecemaker\.citation/.test(text) ? 'Citation manquante : le passage exact de la pièce n’est pas cité.'
+      : /titre manquant/i.test(text) ? 'Titre manquant : cette entrée n’a ni titre, ni source, ni question.'
       : text;
     return { meaning, place: file ? `${file}, ligne ${line}` : '' };
   };

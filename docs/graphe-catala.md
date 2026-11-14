@@ -35,7 +35,7 @@ Le volet exploite les positions et titres du pack Catala 1.3.0 pour relier les �
 | Trace d’exécution en JSON | Les événements portent valeurs, positions, titres, appels de champs et définitions sélectionnées. | La trace enrichit les origines du DOT. Si le DOT échoue, la trace et les dépendances natives fournissent le graphe. |
 | Définitions réparties sous plusieurs sources | Une règle générale et ses exceptions peuvent définir la même variable sous des textes distincts. | Une formule globale ne permet pas cette précision. |
 
-Les titres et positions sont natifs. Les mentions `Source :`, `Citation :` et `Concerne :` restent des conventions PieceMaker. Les attributs expérimentaux `#[source = "…"]` et `#[citation = "…"]` ont produit des avertissements « Unrecognised attribute » dans le pack testé.
+Les titres et positions sont natifs. L’extrait entre « » sous le titre d’un article et les attributs `#[piecemaker.source]`, `#[piecemaker.citation]` et `#[piecemaker.question]` sont des conventions PieceMaker. Les attributs préfixés `piecemaker.` passent le typage du pack 1.3.0 sans avertissement ; des attributs sans préfixe comme `#[source = "…"]` produisent « Unrecognised attribute ».
 
 Deux commandes natives permettent d’obtenir les informations structurées :
 
@@ -63,10 +63,10 @@ Catala prévoit des mécanismes documentaires pour les fondements et documents. 
 | Mécanisme natif | Fonction | Limite |
 |---|---|---|
 | Titre avec identifiant | Conserve notamment les identifiants `LEGIARTI`, `JORFARTI` et `CETATEXT`. Le rendu HTML français génère le lien officiel reconnu. | Ne valide ni la référence ni son applicabilité. |
-| `#[doc="…"]` | Attache du texte documentaire à une déclaration ou définition. Une citation peut figurer dans le bloc Catala. | Aucun schéma source, citation ou pièce n’est imposé. Le volet lit la source et la balise `quote` de cette annotation, avec priorité sur les sources voisines. |
+| `## texte court` (forme courte de `#[doc="…"]`) | Attache un titre à une déclaration, une entrée ou une définition. | Le graphe en fait le titre de la case. Il ne porte ni source ni citation. |
 | `#[description="…"]`, `#[label="…"]` | Documente certains éléments du programme. | Ne constitue pas un contrôle des fondements. |
 | `> Inclusion: annexe-fictive.pdf` | Reconnaît un PDF documentaire ; le rendu LaTeX prévoit son inclusion. | Le typage ne vérifie pas l’existence du PDF ni son lien probatoire. Le graphe ne lit pas encore cette directive comme une pièce rattachée. |
-| Attributs d’extension | Le compilateur permet à un plugin d’enregistrer ses propres attributs. | PieceMaker impose désormais `#[doc]` sur chaque définition ou règle et `quote` dans chaque annotation. Aucun attribut natif `source` ou `citation` n’a été trouvé. |
+| Attributs d’extension | Le compilateur accepte les attributs préfixés d’un espace de noms. | PieceMaker lit `#[piecemaker.source]`, `#[piecemaker.citation]` et `#[piecemaker.question]`. Aucun attribut natif `source` ou `citation` n’existe. |
 
 Vérification : lecture du commit embarqué `e86fc2f5af14af40d80bfba655ef1d8cd6dee93c` et comparaison avec `master` au commit `9f2be04`. Les mécanismes examinés sont présents dans les deux versions.
 
@@ -76,26 +76,26 @@ Le code prévoit aussi une sélection de page pour le PDF. L’essai `@ p. 2` é
 
 Références : [structure documentaire](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/surface/ast.mli#L282), [attributs et extensions](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/desugared/name_resolution.ml#L221), [rendu des annexes PDF](https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/literate/latex.ml#L262).
 
-## Obligation de rédaction et balise quote
+## Obligation de rédaction
 
-Chaque définition ou règle exécutable doit porter un attribut natif `#[doc]`, y compris dans les scénarios.
-Chaque annotation `#[doc]` doit contenir une balise `quote: « passage exact »` non vide.
-Sur une définition ou une règle, elle contient aussi `titre: …`. Le skill `catala` fixe le style : un verbe à l’infinitif en tête pour une règle ou une condition (`titre: Vérifier le montant demandé`), un participe passé pour un fait (`titre: Montant demandé`), dans la langue du programme. Aucun contrôle ne vérifie ce style. Le graphe affiche ce titre ; sans lui, il affiche la `Question` ou le nom de la variable. Le manque est signalé par `pm catala verifier`, pas dans le graphe.
-La référence s’écrit `source: URL ou chemin` dans la même annotation. Ces deux balises sont des conventions PieceMaker.
+Le format est décrit dans `server/piecemaker/vendor/skills/catala/references/format.md`.
+
+- Un article s’écrit `## Article N | LEGIARTI…`, une décision `## … | JURITEXT…` ou `CETATEXT…`. L’extrait exact suit le titre, entre « ». Le bloc ` ```catala ` placé dessous est rattaché à ce texte par sa position.
+- Une entrée porte un titre `## texte court`, ou `#[piecemaker.source = "okf:/_premises/<fiche>.md"]` pour un fait du dossier.
+- Une prémisse encore absente porte aussi `#[piecemaker.question = "…"]`. Le contrôle des citations la classe « à établir » et non en échec.
+- Une pièce citée directement porte `#[piecemaker.source = "<chemin depuis la racine du dossier>"]` et `#[piecemaker.citation = "extrait exact"]`.
+- Les justifications s’écrivent en commentaires `#`.
 
 `pm catala verifier` produit des erreurs distinctes, avec fichier et ligne :
 
-- `#[doc] manquant pour cette définition ou règle.`
-- `quote manquante ou vide dans #[doc].`
-- `titre manquant dans #[doc].`
+- `titre manquant pour cette entrée.` : une `entrée` sans `##`, sans source ni question.
+- `#[piecemaker.citation] manquante pour la pièce …` : une pièce citée sans extrait.
 
-Une citation placée seulement dans le Markdown extérieur ne satisfait pas cette obligation. Les contrôles de calcul restent exécutés pour permettre le diagnostic.
+Une définition sans titre n’est pas une erreur ; le graphe affiche alors la question ou le nom de la variable. Le style des titres est fixé par le skill `catala` ; aucun contrôle ne le vérifie.
 Le volet affiche les erreurs de documentation. Le bilan ne peut pas être réussi si ces erreurs restent présentes.
 
-Le même lecteur alimente les cartes du graphe et le contrôle des citations. Une annotation précise prime sur le contexte documentaire voisin.
-Les anciennes sources Markdown restent lisibles. La règle de présence de `doc` et `quote` ne valide ni le passage cité ni sa pertinence.
-
-Le formateur du pack refuse certains liens Markdown avec crochets dans les attributs. La forme `source: URL ou chemin`, sans crochets, passe le formatage.
+Le même lecteur alimente les cartes du graphe et le contrôle des citations. Les attributs d’une entrée ou d’une définition priment sur le contexte documentaire voisin.
+Le graphe lit encore l’ancien format (`#[doc="titre: …"]`, `Concerne :`, `Citation :`) ; le vérifieur exige le nouveau. La présence d’une citation ne valide ni le passage cité ni sa pertinence.
 
 Implantation commune : `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs`.
 Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecemaker/catala-sources.ts` exploite ses positions.
@@ -151,7 +151,7 @@ Une entrée booléenne ne suffit pas à rédiger un fait. Le graphe utilise la d
 
 Les règles, calculs, conditions et exceptions restent du code Catala. Les explications et démarches restent du Markdown dans les mêmes fichiers.
 
-Une section `Concerne : identifiant` rattache ses pièces et explications au nœud correspondant. Les champs facultatifs sont :
+Les justifications s’écrivent en commentaires `#` dans le code. Pour les anciens programmes, le graphe lit encore une section `Concerne : identifiant`, qui rattache ses pièces et explications au nœud correspondant, avec ces champs facultatifs :
 
 | Champ | Rôle dans PieceMaker |
 |---|---|
@@ -163,7 +163,7 @@ Une section `Concerne : identifiant` rattache ses pièces et explications au nœ
 
 Ces champs ne sont pas des instructions Catala. Ils ne changent pas le résultat du programme. Ils ne prouvent pas davantage l’exactitude des explications.
 
-Les mentions `Source :`, `Citation :` et `Concerne :` sont des conventions PieceMaker. Catala permet de joindre les textes au code, sans imposer ces conventions.
+L’extrait sous l’article et les attributs `piecemaker.` sont des conventions PieceMaker. Catala permet de joindre les textes au code, sans imposer ces conventions.
 
 La provenance complète demande un élément, une source, une citation exacte et une justification du lien. Le contrôle de citation vérifie le passage ; il ne valide pas cette justification.
 

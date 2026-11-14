@@ -14,7 +14,8 @@ déclaration énumération Lecture:
   -- VoteInitialVersailles
   -- VoteAprèsDépart
 
-#[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Une condition inconnue reste inconnue ; un obstacle confirmé suffit à écarter la conclusion. »"]
+# Une condition inconnue reste inconnue ; un obstacle confirmé suffit à écarter la conclusion.
+## Cumuler deux appréciations
 déclaration cumul
   contenu Appréciation
   dépend de premier contenu Appréciation, second contenu Appréciation
@@ -28,7 +29,7 @@ déclaration cumul
       -- Confirmé : Inconnu
       -- Inconnu : Inconnu
 
-#[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Une condition inconnue reste inconnue ; un obstacle confirmé suffit à écarter la conclusion. »"]
+## Qualifier un fait établi
 déclaration qualifier
   contenu Appréciation
   dépend de fait contenu booléen
@@ -36,17 +37,30 @@ déclaration qualifier
     si fait alors Confirmé sinon Réfuté
 ```
 
-## Interface du dossier
+# Interface du dossier
 
 ```catala
 déclaration champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042338833\nquote: « les personnes intéressées ne peuvent prendre part ni aux délibérations ni au vote sur l'élément ou l'engagement concerné. »"]
+  # À rechercher : le procès-verbal du conseil du 15 mars 2022. Ne pas confondre conseil et assemblée.
+  ## Non-participation du dirigeant au conseil
+  #[piecemaker.source = "okf:/_premises/non-participation-au-conseil.md"]
+  #[piecemaker.question = "Le dirigeant s’est-il abstenu lors de la délibération du conseil ?"]
   entrée non_participation_au_conseil contenu Appréciation
-  #[doc="source: https://www.legifrance.gouv.fr/juri/id/JURITEXT000024821010\nquote: « l'engagement qui y était souscrit par la société à son profit, en cas de cessation de ces fonctions, était d'une ampleur susceptible de porter une atteinte majeure à son équilibre financier »"]
+  # À rechercher : les comptes et l’effet de l’engagement sur l’équilibre financier.
+  ## Absence d’effet dissuasif
+  #[piecemaker.source = "okf:/_premises/absence-effet-dissuasif.md"]
+  #[piecemaker.question = "L’indemnité respecte-t-elle la libre révocabilité au regard de la situation financière ?"]
   entrée absence_effet_dissuasif contenu Appréciation
-  #[doc="source: https://www.courdecassation.fr/decision/683fd4c49fc9cbe0b56b0f7d\nquote: « le versement de cette indemnité n'est pas soumis à un autre vote individuel ex post que celui de l'assemblée générale suivant la conclusion de ce contrat. »"]
+  # À rechercher : la résolution individuelle et son objet exact. La politique ex ante ne suffit pas.
+  ## Vote individuel ex post initial
+  #[piecemaker.source = "okf:/_premises/vote-ex-post-initial.md"]
+  #[piecemaker.question = "Un vote individuel ex post initial est-il établi ?"]
   entrée vote_ex_post_initial contenu Appréciation
+  ## Lecture du vote retenue
+  #[piecemaker.question = "Quelle lecture du vote ex post retenir ?"]
   entrée lecture_du_vote contenu Lecture
+  ## Date d’examen
+  #[piecemaker.question = "À quelle date le dossier est-il examiné ?"]
   entrée date_examen contenu date
   interne société_cotée contenu booléen
   interne mandat_de_directeur_général contenu booléen
@@ -82,293 +96,112 @@ déclaration champ d'application AnalyseIndemnité:
   résultat borne_prudente_prescription contenu date
 ```
 
-## Donnée du dossier — société cotée
+# Données du dossier
 
 ```catala
 champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/01_extrait_kbis_et_identification_emetteur.md\nquote: « Les actions ordinaires de Société Exemple SA sont admises, depuis le 15 juin 2015 et sans interruption pendant les exercices 2022 et 2023, aux négociations sur le marché réglementé Euronext Paris. »"]
+  ## Société cotée
+  #[piecemaker.source = "pieces/01_extrait_kbis_et_identification_emetteur.md"]
+  #[piecemaker.citation = "Les actions ordinaires de Société Exemple SA sont admises, depuis le 15 juin 2015 et sans interruption pendant les exercices 2022 et 2023, aux négociations sur le marché réglementé Euronext Paris."]
   définition société_cotée égal à vrai
-```
-
-## Donnée du dossier — mandat de directeur général
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/01_extrait_kbis_et_identification_emetteur.md\nquote: « Jean Dupont exerce uniquement un mandat de directeur général, sans contrat de travail avec la société. »"]
+  ## Mandat de directeur général
+  #[piecemaker.source = "pieces/01_extrait_kbis_et_identification_emetteur.md"]
+  #[piecemaker.citation = "Jean Dupont exerce uniquement un mandat de directeur général, sans contrat de travail avec la société."]
   définition mandat_de_directeur_général égal à vrai
-```
-
-## Donnée du dossier — engagement décidé
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ. »"]
+  ## Engagement décidé
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ."]
   définition engagement_décidé égal à vrai
-```
-
-## Donnée du dossier — politique approuvée
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « Elle approuve notamment le principe et les modalités de l'indemnité de départ décrite au paragraphe 4 de l'annexe. »"]
+  ## Politique approuvée
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "Elle approuve notamment le principe et les modalités de l'indemnité de départ décrite au paragraphe 4 de l'annexe."]
   définition politique_approuvée égal à vrai
-```
-
-## Donnée du dossier — révocation décidée
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/03_lettre_revocation_decembre_2022.md\nquote: « a décidé de mettre fin à vos fonctions de directeur général avec effet le 19 décembre 2022 »"]
+  ## Révocation décidée
+  #[piecemaker.source = "pieces/03_lettre_revocation_decembre_2022.md"]
+  #[piecemaker.citation = "a décidé de mettre fin à vos fonctions de directeur général avec effet le 19 décembre 2022"]
   définition révocation_décidée égal à vrai
-```
-
-## Donnée du dossier — faute grave ou lourde
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/03_lettre_revocation_decembre_2022.md\nquote: « Le conseil ne retient à votre encontre aucune faute grave ou lourde. »"]
+  ## Faute grave ou lourde écartée
+  #[piecemaker.source = "pieces/03_lettre_revocation_decembre_2022.md"]
+  #[piecemaker.citation = "Le conseil ne retient à votre encontre aucune faute grave ou lourde."]
   définition faute_grave_ou_lourde égal à faux
-```
-
-## Donnée du dossier — marge constatée
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/03_lettre_revocation_decembre_2022.md\nquote: « la moyenne de la marge opérationnelle des exercices 2020 et 2021 s'établit à 8,6 % »"]
+  ## Marge constatée
+  #[piecemaker.source = "pieces/03_lettre_revocation_decembre_2022.md"]
+  #[piecemaker.citation = "la moyenne de la marge opérationnelle des exercices 2020 et 2021 s'établit à 8,6 %"]
   définition marge_constatée égal à 8,6
-```
-
-## Donnée du dossier — seuil de performance
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « la moyenne de la marge opérationnelle du groupe au titre des exercices 2020 et 2021 doit être au moins égale à 8 % »"]
+  ## Seuil de performance
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "la moyenne de la marge opérationnelle du groupe au titre des exercices 2020 et 2021 doit être au moins égale à 8 %"]
   définition seuil_de_performance égal à 8,0
-```
-
-## Donnée du dossier — rémunération mensuelle
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts »"]
+  ## Rémunération mensuelle
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts"]
   définition rémunération_mensuelle égal à 20 000 €
-```
-
-## Donnée du dossier — mois contractuels
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts. »"]
+  ## Mois contractuels
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts."]
   définition mois_contractuels égal à 24
-```
-
-## Donnée du dossier — montant stipulé
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « Son montant est fixé à 480 000 euros bruts. »"]
+  ## Montant stipulé
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "Son montant est fixé à 480 000 euros bruts."]
   définition montant_stipulé égal à 480 000 €
-```
-
-## Donnée du dossier — montant réclamé
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/04_demande_paiement_dirigeant.md\nquote: « Je vous mets en demeure de verser la somme de 480 000 euros bruts. »"]
+  ## Montant réclamé
+  #[piecemaker.source = "pieces/04_demande_paiement_dirigeant.md"]
+  #[piecemaker.citation = "Je vous mets en demeure de verser la somme de 480 000 euros bruts."]
   définition montant_réclamé égal à 480 000 €
-```
-
-## Donnée du dossier — capital social
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/01_extrait_kbis_et_identification_emetteur.md\nquote: « Capital social : 40 000 000 euros »"]
+  ## Capital social
+  #[piecemaker.source = "pieces/01_extrait_kbis_et_identification_emetteur.md"]
+  #[piecemaker.citation = "Capital social : 40 000 000 euros"]
   définition capital_social égal à 40 000 000 €
-```
-
-## Donnée du dossier — date engagement
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ. »"]
+  ## Date de l'engagement
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ."]
   définition date_engagement égal à |2022-03-15|
-```
-
-## Donnée du dossier — date cessation
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/03_lettre_revocation_decembre_2022.md\nquote: « avec effet le 19 décembre 2022 à l'issue de la réunion. »"]
+  ## Date de cessation
+  #[piecemaker.source = "pieces/03_lettre_revocation_decembre_2022.md"]
+  #[piecemaker.citation = "avec effet le 19 décembre 2022 à l'issue de la réunion."]
   définition date_cessation égal à |2022-12-19|
-```
-
-## Donnée du dossier — vote ex post 2023
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/06_ag_2023_refus_approbation_ex_post.md\nquote: « La quinzième résolution n'est pas adoptée. »"]
+  ## Vote ex post de 2023 refusé
+  #[piecemaker.source = "pieces/06_ag_2023_refus_approbation_ex_post.md"]
+  #[piecemaker.citation = "La quinzième résolution n'est pas adoptée."]
   définition vote_ex_post_2023 égal à faux
-```
-
-## Donnée du dossier — indemnité impayée
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/06_ag_2023_refus_approbation_ex_post.md\nquote: « Le rapport présenté à l'assemblée précise que l'indemnité n'a pas été versée. »"]
+  ## Indemnité impayée
+  #[piecemaker.source = "pieces/06_ag_2023_refus_approbation_ex_post.md"]
+  #[piecemaker.citation = "Le rapport présenté à l'assemblée précise que l'indemnité n'a pas été versée."]
   définition indemnité_impayée égal à vrai
 ```
 
-## Article L. 22-10-8 du code de commerce | LEGIARTI000042338833
+# Code de commerce
 
-Citation : « Dans les sociétés dont les actions sont admises aux négociations sur un marché réglementé »
+## Article L. 22-10-8 | LEGIARTI000042338833
 
-Concerne : régime_codé_applicable
-Question : Le régime de la SA cotée et la version de 2022 sont-ils applicables ?
+« Dans les sociétés dont les actions sont admises aux négociations sur un marché réglementé »
 
 ```catala
 champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042338833\nquote: « Dans les sociétés dont les actions sont admises aux négociations sur un marché réglementé »"]
+  # Le régime de la SA cotée et la version de 2022 s’appliquent à un engagement pris entre 2021 et octobre 2025.
+  ## Régime de la société cotée applicable
   définition régime_codé_applicable égal à société_cotée et mandat_de_directeur_général et date_engagement >= |2021-01-01| et date_engagement < |2025-10-01|
 ```
 
-## L’engagement est-il décidé et conforme à la politique approuvée ?
+## Article L. 22-10-8 | LEGIARTI000042338833
 
-Concerne : engagement_approuvé
-Question : L’engagement est-il décidé et conforme à la politique approuvée ?
+« ne peut être pris par la société s'il n'est pas conforme à la politique de rémunération approuvée »
 
 ```catala
 champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042338833\nquote: « ne peut être pris par la société s'il n'est pas conforme à la politique de rémunération approuvée »"]
+  ## Engagement décidé et conforme à la politique approuvée
   définition engagement_approuvé égal à qualifier de (engagement_décidé et politique_approuvée)
 ```
 
-## Article 1103 du code civil | LEGIARTI000032040777
+## Article L. 22-10-34 | LEGIARTI000042338905
 
-Citation : « Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »
-
-Concerne : engagement_opposable
-Question : L’engagement peut-il être opposé à la société ?
+« ne peuvent être versés qu'après approbation par une assemblée générale des éléments de rémunération de la personne concernée »
 
 ```catala
 champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032040777\nquote: « Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »"]
-  définition engagement_opposable égal à cumul de engagement_approuvé, (cumul de non_participation_au_conseil, absence_effet_dissuasif)
-```
-
-## La moyenne de 8,6 % atteint-elle le seuil de 8 % ?
-
-Concerne : performance_satisfaite
-Question : La moyenne de 8,6 % atteint-elle le seuil de 8 % ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « la moyenne de la marge opérationnelle du groupe au titre des exercices 2020 et 2021 doit être au moins égale à 8 % »"]
-  définition performance_satisfaite égal à marge_constatée >= seuil_de_performance
-```
-
-## Quel est le montant contractuel calculé ?
-
-Concerne : montant_contractuel
-Question : Quel est le montant contractuel calculé ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts. »"]
-  définition montant_contractuel égal à rémunération_mensuelle * mois_contractuels
-```
-
-## Le calcul et la demande correspondent-ils au montant stipulé ?
-
-Concerne : montant_cohérent
-Question : Le calcul et la demande correspondent-ils au montant stipulé ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « Son montant est fixé à 480 000 euros bruts. »"]
-  définition montant_cohérent égal à montant_contractuel = montant_stipulé et montant_réclamé = montant_stipulé
-```
-
-## Les conditions de la clause sont-elles remplies ?
-
-Concerne : conditions_contractuelles
-Question : Les conditions de la clause sont-elles remplies ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « En cas de révocation de Jean Dupont de ses fonctions de directeur général par le conseil d'administration, autre qu'une révocation motivée par une faute grave ou lourde »"]
-  étiquette conditions_principales
-  définition conditions_contractuelles égal à qualifier de (révocation_décidée et performance_satisfaite et montant_cohérent)
-```
-
-## Exception contractuelle — faute grave ou lourde
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « autre qu'une révocation motivée par une faute grave ou lourde »"]
-  exception conditions_principales
-  définition conditions_contractuelles
-  sous condition faute_grave_ou_lourde
-  conséquence égal à
-    Réfuté
-```
-
-## À quelle date le délai contractuel de paiement expire-t-il ?
-
-Concerne : échéance_contractuelle
-Question : À quelle date le délai contractuel de paiement expire-t-il ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/02_ag_2022_approbation_indemnite.md\nquote: « L'indemnité est payable dans les trente jours suivant la cessation effective des fonctions. »"]
-  définition échéance_contractuelle égal à date_cessation + 30 jour
-```
-
-## Le délai contractuel est-il écoulé à la date d’examen ?
-
-Concerne : délai_contractuel_écoulé
-Question : Le délai contractuel est-il écoulé à la date d’examen ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032040777\nquote: « Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »"]
-  définition délai_contractuel_écoulé égal à qualifier de (date_examen >= échéance_contractuelle)
-```
-
-## Article 2224 du code civil | LEGIARTI000019017112
-
-Citation : « Les actions personnelles ou mobilières se prescrivent par cinq ans à compter du jour où le titulaire d'un droit a connu ou aurait dû connaître les faits lui permettant de l'exercer. »
-
-Concerne : borne_prudente_prescription
-Question : Quelle est la première borne de cinq ans calculée par prudence ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000019017112\nquote: « Les actions personnelles ou mobilières se prescrivent par cinq ans à compter du jour où le titulaire d'un droit a connu ou aurait dû connaître les faits lui permettant de l'exercer. »"]
-  définition borne_prudente_prescription égal à échéance_contractuelle + 5 an
-```
-
-## La date d’examen précède-t-elle même la borne prudente ?
-
-Concerne : prescription_sur_borne_prudente
-Question : La date d’examen précède-t-elle même la borne prudente ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000019017112\nquote: « Les actions personnelles ou mobilières se prescrivent par cinq ans à compter du jour où le titulaire d'un droit a connu ou aurait dû connaître les faits lui permettant de l'exercer. »"]
-  définition prescription_sur_borne_prudente égal à si date_examen < borne_prudente_prescription alors Confirmé sinon Inconnu
-```
-
-## Article L. 22-10-34 du code de commerce | LEGIARTI000042338905
-
-Citation : « ne peuvent être versés qu'après approbation par une assemblée générale des éléments de rémunération de la personne concernée »
-
-Concerne : condition_du_vote
-Question : Quelle conséquence résulte de la lecture du vote retenue ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000042338905\nquote: « ne peuvent être versés qu'après approbation par une assemblée générale des éléments de rémunération de la personne concernée »"]
-  #[doc="source: https://www.courdecassation.fr/decision/683fd4c49fc9cbe0b56b0f7d\nquote: « le versement de cette indemnité n'est pas soumis à un autre vote individuel ex post que celui de l'assemblée générale suivant la conclusion de ce contrat. »"]
+  # La lecture du vote retenue fixe la conséquence ; la CA de Versailles ne requiert que le vote suivant la conclusion du contrat.
+  # Le vote de politique ex ante et le vote individuel ex post sont distincts. Le procès-verbal de 2022 ne suffit pas à établir le second.
+  ## Condition du vote ex post appréciée
   définition condition_du_vote égal à
     selon lecture_du_vote sous forme
     -- NonTranchée : Inconnu
@@ -380,69 +213,86 @@ champ d'application AnalyseIndemnité:
 ### Discussion — CA Versailles, 3 juin 2025, RG 23/06335
 
 [CA Versailles, 3 juin 2025, RG 23/06335](https://www.courdecassation.fr/decision/683fd4c49fc9cbe0b56b0f7d)
-Citation : « le versement de cette indemnité n'est pas soumis à un autre vote individuel ex post que celui de l'assemblée générale suivant la conclusion de ce contrat. »
+« le versement de cette indemnité n'est pas soumis à un autre vote individuel ex post que celui de l'assemblée générale suivant la conclusion de ce contrat. »
 
-Le vote de politique ex ante et le vote individuel ex post sont distincts. Le procès-verbal de 2022 ne suffit pas à établir le second.
+# Jurisprudence
 
-### Discussion — effet dissuasif
+## Cass. com., 15 novembre 2011, n° 09-10.893 | JURITEXT000024821010
 
-[Cass. com., 15 novembre 2011, pourvoi 09-10.893](https://www.legifrance.gouv.fr/juri/id/JURITEXT000024821010)
-Citation : « l'engagement qui y était souscrit par la société à son profit, en cas de cessation de ces fonctions, était d'une ampleur susceptible de porter une atteinte majeure à son équilibre financier »
+« l'engagement qui y était souscrit par la société à son profit, en cas de cessation de ces fonctions, était d'une ampleur susceptible de porter une atteinte majeure à son équilibre financier »
 
 La situation financière du corpus est insuffisamment documentée. Aucun seuil de 1,2 % n’est utilisé comme preuve.
 
-## Les autres conditions du paiement sont-elles réunies ?
-
-Concerne : socle_contractuel
-Question : Les autres conditions du paiement sont-elles réunies ?
+# Clause d’indemnité de départ
 
 ```catala
 champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032040777\nquote: « Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »"]
-  définition socle_contractuel égal à cumul de engagement_opposable, (cumul de conditions_contractuelles, (cumul de délai_contractuel_écoulé, prescription_sur_borne_prudente))
-```
-
-## Le paiement de l’indemnité peut-il être retenu ?
-
-Concerne : paiement_de_l_indemnité
-Question : Le paiement de l’indemnité peut-il être retenu ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000032040777\nquote: « Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »"]
-  définition paiement_de_l_indemnité égal à si régime_codé_applicable alors (cumul de socle_contractuel, (cumul de condition_du_vote, (qualifier de indemnité_impayée))) sinon Inconnu
-```
-
-## Quel rapport descriptif existe entre indemnité et capital ?
-
-Concerne : rapport_sur_capital
-Question : Quel rapport descriptif existe entre indemnité et capital ?
-
-```catala
-champ d'application AnalyseIndemnité:
-  #[doc="source: ../../../pieces/01_extrait_kbis_et_identification_emetteur.md\nquote: « Capital social : 40 000 000 euros »"]
+  ## Performance atteinte
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "la moyenne de la marge opérationnelle du groupe au titre des exercices 2020 et 2021 doit être au moins égale à 8 %"]
+  définition performance_satisfaite égal à marge_constatée >= seuil_de_performance
+  ## Montant contractuel calculé
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts."]
+  définition montant_contractuel égal à rémunération_mensuelle * mois_contractuels
+  ## Montant calculé et réclamé conforme
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "Son montant est fixé à 480 000 euros bruts."]
+  définition montant_cohérent égal à montant_contractuel = montant_stipulé et montant_réclamé = montant_stipulé
+  ## Conditions de la clause réunies
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "En cas de révocation de Jean Dupont de ses fonctions de directeur général par le conseil d'administration, autre qu'une révocation motivée par une faute grave ou lourde"]
+  étiquette conditions_principales
+  définition conditions_contractuelles égal à qualifier de (révocation_décidée et performance_satisfaite et montant_cohérent)
+  # La faute grave ou lourde écarte les conditions principales de la clause.
+  ## Conditions écartées pour faute grave
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "autre qu'une révocation motivée par une faute grave ou lourde"]
+  exception conditions_principales
+  définition conditions_contractuelles
+  sous condition faute_grave_ou_lourde
+  conséquence égal à
+    Réfuté
+  ## Échéance contractuelle calculée
+  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
+  #[piecemaker.citation = "L'indemnité est payable dans les trente jours suivant la cessation effective des fonctions."]
+  définition échéance_contractuelle égal à date_cessation + 30 jour
+  ## Rapport entre indemnité et capital calculé
+  #[piecemaker.source = "pieces/01_extrait_kbis_et_identification_emetteur.md"]
+  #[piecemaker.citation = "Capital social : 40 000 000 euros"]
   définition rapport_sur_capital égal à montant_contractuel / capital_social
 ```
 
-## Points à établir
+# Code civil
 
-### Délibération du conseil
+## Article 1103 | LEGIARTI000032040777
 
-Concerne : non_participation_au_conseil
-Question : Le dirigeant s’est-il abstenu lors de la délibération du conseil ?
-À rechercher : Obtenir le procès-verbal du conseil du 15 mars 2022. Ne pas confondre conseil et assemblée.
+« Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »
 
-### Effet dissuasif
+```catala
+champ d'application AnalyseIndemnité:
+  ## Engagement opposable à la société
+  définition engagement_opposable égal à cumul de engagement_approuvé, (cumul de non_participation_au_conseil, absence_effet_dissuasif)
+  ## Délai contractuel écoulé
+  définition délai_contractuel_écoulé égal à qualifier de (date_examen >= échéance_contractuelle)
+  ## Autres conditions du paiement réunies
+  définition socle_contractuel égal à cumul de engagement_opposable, (cumul de conditions_contractuelles, (cumul de délai_contractuel_écoulé, prescription_sur_borne_prudente))
+  ## Paiement de l’indemnité retenu
+  définition paiement_de_l_indemnité égal à si régime_codé_applicable alors (cumul de socle_contractuel, (cumul de condition_du_vote, (qualifier de indemnité_impayée))) sinon Inconnu
+```
 
-Concerne : absence_effet_dissuasif
-Question : L’indemnité respecte-t-elle la libre révocabilité au regard de la situation financière ?
-À rechercher : Produire les comptes et examiner l’effet de l’engagement sur l’équilibre financier.
+## Article 2224 | LEGIARTI000019017112
 
-### Vote individuel initial
+« Les actions personnelles ou mobilières se prescrivent par cinq ans à compter du jour où le titulaire d'un droit a connu ou aurait dû connaître les faits lui permettant de l'exercer. »
 
-Concerne : vote_ex_post_initial
-Question : Un vote individuel ex post initial est-il établi ?
-À rechercher : Produire la résolution individuelle et son objet exact. La politique ex ante ne suffit pas.
+```catala
+champ d'application AnalyseIndemnité:
+  # Borne calculée par prudence à partir de l’échéance contractuelle.
+  ## Borne prudente de prescription calculée
+  définition borne_prudente_prescription égal à échéance_contractuelle + 5 an
+  ## Prescription écartée sur la borne prudente
+  définition prescription_sur_borne_prudente égal à si date_examen < borne_prudente_prescription alors Confirmé sinon Inconnu
+```
 
 # Scénario — DossierEnÉtat
 
@@ -451,7 +301,8 @@ Question : Un vote individuel ex post initial est-il établi ?
 déclaration champ d'application DossierEnÉtat:
   résultat calcul contenu AnalyseIndemnité
 champ d'application DossierEnÉtat:
-  #[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Les scénarios font varier des hypothèses ; leurs valeurs ne constituent pas des preuves nouvelles. »"]
+  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
       -- non_participation_au_conseil: Inconnu
@@ -473,7 +324,8 @@ champ d'application DossierEnÉtat:
 déclaration champ d'application ThèseContractuelleFavorable:
   résultat calcul contenu AnalyseIndemnité
 champ d'application ThèseContractuelleFavorable:
-  #[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Les scénarios font varier des hypothèses ; leurs valeurs ne constituent pas des preuves nouvelles. »"]
+  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
       -- non_participation_au_conseil: Confirmé
@@ -495,7 +347,8 @@ champ d'application ThèseContractuelleFavorable:
 déclaration champ d'application VersaillesSansPreuveDuVoteInitial:
   résultat calcul contenu AnalyseIndemnité
 champ d'application VersaillesSansPreuveDuVoteInitial:
-  #[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Les scénarios font varier des hypothèses ; leurs valeurs ne constituent pas des preuves nouvelles. »"]
+  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
       -- non_participation_au_conseil: Confirmé
@@ -517,7 +370,8 @@ champ d'application VersaillesSansPreuveDuVoteInitial:
 déclaration champ d'application VersaillesAvecVoteInitialProuvé:
   résultat calcul contenu AnalyseIndemnité
 champ d'application VersaillesAvecVoteInitialProuvé:
-  #[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Les scénarios font varier des hypothèses ; leurs valeurs ne constituent pas des preuves nouvelles. »"]
+  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
       -- non_participation_au_conseil: Confirmé
@@ -539,7 +393,8 @@ champ d'application VersaillesAvecVoteInitialProuvé:
 déclaration champ d'application VoteAprèsDépartRefusé:
   résultat calcul contenu AnalyseIndemnité
 champ d'application VoteAprèsDépartRefusé:
-  #[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Les scénarios font varier des hypothèses ; leurs valeurs ne constituent pas des preuves nouvelles. »"]
+  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
       -- non_participation_au_conseil: Confirmé
@@ -561,7 +416,8 @@ champ d'application VoteAprèsDépartRefusé:
 déclaration champ d'application EffetDissuasifRetenu:
   résultat calcul contenu AnalyseIndemnité
 champ d'application EffetDissuasifRetenu:
-  #[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Les scénarios font varier des hypothèses ; leurs valeurs ne constituent pas des preuves nouvelles. »"]
+  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
       -- non_participation_au_conseil: Confirmé
@@ -583,7 +439,8 @@ champ d'application EffetDissuasifRetenu:
 déclaration champ d'application ParticipationAuConseilRetenue:
   résultat calcul contenu AnalyseIndemnité
 champ d'application ParticipationAuConseilRetenue:
-  #[doc="source: ../../../PROJECTION-CATALA.md\nquote: « Les scénarios font varier des hypothèses ; leurs valeurs ne constituent pas des preuves nouvelles. »"]
+  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
       -- non_participation_au_conseil: Réfuté

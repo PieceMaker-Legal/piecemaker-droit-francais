@@ -22,7 +22,7 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
     return { token, title: info.title, verified, status: !quote ? 'missing' : verified ? 'passed' : 'failed', message: !quote ? 'Aucun extrait cité.' : verified ? 'Citation retrouvée dans la source.' : 'Citation non retrouvée dans la source.' };
   };
   const entries = (files: Array<{ nom: string; chemin: string; contenu: string }>) => files.flatMap((file) => {
-    const found = new Map<string, { target: string; quote: string; origin: string; label: string; kind: string }>();
+    const found = new Map<string, { target: string; quote: string; origin: string; label: string; kind: string; question?: string }>();
     const contexts = [sourceContext(`https://catala.local/${encodeURIComponent(path.basename(file.nom))}`, [file], true), ...file.contenu.split('\n').map((_, index) => sourceContext(`https://catala.local/${encodeURIComponent(path.basename(file.nom))}#L${index + 1}`, [file]))];
     for (const context of contexts) for (const ref of context.references) if (['article', 'piece', 'jurisprudence', 'premise'].includes(ref.kind)) found.set(JSON.stringify([ref.target || ref.label, ref.quote]), ref);
     return [...found.values()];
@@ -39,7 +39,7 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
           if (!ref.target) { results.push({ ...ref, verified: false, status: 'missing', message: 'Lien de source absent.' }); continue; }
           if (ref.kind === 'premise') {
             const evidence = premiseEvidence(cwd, ref.target);
-            if (!evidence) { results.push({ ...ref, verified: false, status: 'failed', message: 'Prémisse absente de l’index du dossier.' }); continue; }
+            if (!evidence) { results.push({ ...ref, verified: false, status: ref.question ? 'missing' : 'failed', message: ref.question ? `Prémisse à établir : ${ref.question}` : 'Prémisse absente de l’index du dossier.' }); continue; }
             const pieces = [];
             for (const piece of evidence.pieces) {
               const id = path.join(cwd, piece.resource);

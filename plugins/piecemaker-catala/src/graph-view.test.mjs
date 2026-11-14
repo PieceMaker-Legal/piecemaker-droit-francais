@@ -61,7 +61,7 @@ test('the panel reloads after verification notifications for its project and sto
 
 
 test('shows each rule with its legal basis and documentation errors', async () => {
-  const view = await open([program({ verification: { passed: false, checks: [{ name: 'documentation', passed: false, errors: ['demo.catala_fr:9: #[doc] manquant', 'demo.catala_fr:12: quote manquante dans #[doc]'] }] } })]);
+  const view = await open([program({ verification: { passed: false, checks: [{ name: 'documentation', passed: false, errors: ['demo.catala_fr:9: titre manquant pour cette entrée.', 'demo.catala_fr:12: #[piecemaker.citation] manquante pour la pièce pieces/contrat-fictif.md.'] }] } })]);
   try {
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
     view.click(view.container.querySelector('[role=tab][data-mode=written]'));
@@ -69,16 +69,16 @@ test('shows each rule with its legal basis and documentation errors', async () =
     assert.equal(view.container.querySelector('.pmc-alerts .pmc-bubble').textContent, '2');
     view.click(view.container.querySelector('[data-alerts]'));
     const alerts = view.container.querySelector('.pmc-alert-list').textContent;
-    assert.match(alerts, /Source manquante.*demo\.catala_fr, ligne 9/);
+    assert.match(alerts, /Titre manquant.*demo\.catala_fr, ligne 9/);
     assert.match(alerts, /Citation manquante.*demo\.catala_fr, ligne 12/);
-    assert.doesNotMatch(alerts, /#\[doc\]|quote/);
+    assert.doesNotMatch(alerts, /piecemaker\.|#\[/);
     const asked = [];
     const listen = (event) => asked.push(event.detail);
     window.addEventListener('piecemaker:catala-card-pick', listen);
     view.click(view.container.querySelector('[data-fix]'));
     window.removeEventListener('piecemaker:catala-card-pick', listen);
     assert.equal(asked[0].titre, 'Corriger 2 erreurs');
-    assert.match(asked[0].demande, /Source manquante.*\(demo\.catala_fr, ligne 9\)/);
+    assert.match(asked[0].demande, /Titre manquant.*\(demo\.catala_fr, ligne 9\)/);
     assert.equal(view.container.querySelector('.pmc-alert-list'), null);
     const written = view.container.querySelector('.pmc-written');
     assert.equal(written.hidden, false);
