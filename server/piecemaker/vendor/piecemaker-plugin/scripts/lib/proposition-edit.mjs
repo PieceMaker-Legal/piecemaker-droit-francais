@@ -14,7 +14,7 @@ const KINDS = {
     label: 'l’arborescence',
     place: 'Index › Classement',
     list: (value) => (Array.isArray(value) ? value : value?.dossiers),
-    stored: (proposal) => proposal?.dossiers,
+    stored: (proposal) => (Array.isArray(proposal?.dossiers) ? proposal.dossiers : undefined),
     key: (entry) => String(entry?.name ?? entry?.nom ?? ''),
     comparable: (entry) => JSON.stringify([String(entry?.name ?? entry?.nom ?? '').trim(), String(entry?.explanation ?? entry?.explication ?? '').trim()]),
   },
@@ -23,7 +23,11 @@ const KINDS = {
     label: 'l’ontologie',
     place: 'Index › Ontologie',
     list: (value) => (Array.isArray(value) ? value : value?.relations),
-    stored: (proposal) => proposal?.relations,
+    stored: (proposal, current) => (proposal?.relations || proposal?.documentTypes ? {
+      relations: proposal.relations ?? current?.relations,
+      ...(proposal.documentTypes ?? current?.documentTypes ? { documentTypes: proposal.documentTypes ?? current.documentTypes } : {}),
+      ...(current?.sceau ? { sceau: current.sceau } : {}),
+    } : undefined),
     key: (entry) => String(entry?.name ?? ''),
     comparable: (entry) => JSON.stringify(entry),
   },
@@ -107,12 +111,9 @@ export function editOf(payload) {
 
 function bases(kind, file) {
   const current = readText(file);
-  const stored = KINDS[kind].stored(readJson(file.replace(/\.json$/, '.proposition.json')));
+  const stored = KINDS[kind].stored(readJson(file.replace(/\.json$/, '.proposition.json')), readJson(file));
   const list = [];
-  if (Array.isArray(stored)) {
-    const seal = kind === 'ontologie' ? readJson(file)?.sceau : undefined;
-    list.push({ origin: 'proposition', text: serialized(kind === 'ontologie' ? { relations: stored, ...(seal ? { sceau: seal } : {}) } : stored) });
-  }
+  if (stored) list.push({ origin: 'proposition', text: serialized(stored) });
   if (current !== null) list.push({ origin: 'actuel', text: current });
   return list;
 }
@@ -134,6 +135,8 @@ function edited(edit) {
 
 function changes(kind, before, after) {
   const { key, comparable } = KINDS[kind];
+  if (!Array.isArray(before)) before = [];
+  if (!Array.isArray(after)) return 'aucun changement';
   const old = new Map(before.map((entry) => [key(entry), comparable(entry)]));
   const next = new Map(after.map((entry) => [key(entry), comparable(entry)]));
   const parts = [
@@ -158,8 +161,8 @@ function pmArguments(kind, value, file, cwd) {
     const project = path.dirname(path.dirname(file));
     return { cwd: project, args: ['dossier', 'arborescence', '--dossier', project, '--dossiers', JSON.stringify(dossiers), ...(typeof value?.motif === 'string' ? ['--motif', value.motif] : [])] };
   }
-  const relations = KINDS.ontologie.list(value);
-  return { cwd, args: ['okf', 'ontologie', 'proposer', '--dossier', cwd, '--json', JSON.stringify({ relations }), ...(typeof value?.motif === 'string' ? ['--motif', value.motif] : [])] };
+  const { sceau, ...proposed } = Array.isArray(value) ? { relations: value } : value;
+  return { cwd, args: ['okf', 'ontologie', 'proposer', '--dossier', cwd, '--json', JSON.stringify(proposed)] };
 }
 
 export async function proposalMessage(payload, run = runPm) {
@@ -179,10 +182,11 @@ export async function proposalMessage(payload, run = runPm) {
   const answer = await run(args, cwd);
   if (!answer.ok) return refused(/ECONNREFUSED/.test(answer.output) ? 'PieceMaker n’est pas lancé, la proposition ne peut pas être vérifiée ; demandez à l’avocat de lancer PieceMaker' : answer.output.split('\n').filter(Boolean).pop() || 'pm a échoué');
   const notice = answer.output.split('\n').filter((line) => PANEL_NOTICE.test(line)).pop();
-  const current = list(readJson(file));
+  const current = readJson(file);
+  const summary = kind === 'arborescence' ? changes(kind, list(current), list(value)) : `relations — ${changes(kind, current?.relations, list(value))} ; types de documents — ${changes(kind, current?.documentTypes, value.documentTypes ?? current?.documentTypes)}`;
   return [
     `Modification enregistrée comme proposition dans ${name.replace(/\.json$/, '.proposition.json')}. ${name} ne change pas, c’est normal : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet ${place}.`,
-    `Par rapport à ${label} actuelle : ${changes(kind, Array.isArray(current) ? current : [], list(value))}.`,
+    `Par rapport à ${label} actuelle : ${summary}.`,
     result.pending && result.origin === 'actuel' ? 'La proposition en attente ne contenait pas le texte remplacé : la nouvelle proposition part du fichier actuel et remplace l’ancienne.' : `Pour la compléter, modifiez encore ${name} : chaque modification s’ajoute à la proposition en attente.`,
     ...(notice ? [notice] : []),
   ].join('\n');

@@ -407,12 +407,12 @@ test('okf verify, link et unlink passent par okfFn', async () => {
   assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return { erreurs: [], contradictions: [], manques: [manque] }; } } }), 'Index OKF : aucune erreur.\nGraphe : 1 élément(s) manquant(s).\n- /_premises/date-de-signature.md : prémisse sans pièce citée (programme bail)');
   assert.deepEqual(calls.pop(), { action: 'verify', folder });
   const ontologie = { relations: [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'], description: 'Un acte conteste une pièce.' }], systeme: [{ name: 'states', label: 'établit', source: 'document', target: 'Premise' }] };
-  assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return ontologie; } } }), 'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nTypes principaux du dossier : . Classement : pm dossier arborescence.\nIcônes disponibles : .\nTypes de documents (pm okf types --json pour remplacer la liste) :\nRelations système :\n- states (établit) : document → Premise');
+  assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return ontologie; } } }), 'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nTypes principaux du dossier : . Classement : pm dossier arborescence.\nIcônes disponibles : .\nTypes de documents (pm okf types --json pour proposer la liste complète) :\nRelations système :\n- states (établit) : document → Premise');
   assert.deepEqual(calls.pop(), { action: 'ontologie', folder });
   const relations = [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'] }];
   assert.equal(await run(['okf', 'ontologie', 'proposer', '--json', JSON.stringify({ relations }), '--motif', 'Les conclusions contestent des pièces.'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return { relations, motif: input.motif, date: '2026-11-12T09:00:00.000Z' }; } } }), 'Proposition enregistrée (1 relation(s)) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Ontologie.');
-  assert.deepEqual(calls.pop(), { action: 'proposer', folder, relations, motif: 'Les conclusions contestent des pièces.' });
-  assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async () => ({ ...ontologie, proposition: { relations, date: '2026-11-12T09:00:00.000Z' } }) } }), 'Proposition en attente de l’avocat (2026-11-12T09:00:00.000Z) : conteste.\nRelations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nTypes principaux du dossier : . Classement : pm dossier arborescence.\nIcônes disponibles : .\nTypes de documents (pm okf types --json pour remplacer la liste) :\nRelations système :\n- states (établit) : document → Premise');
+  assert.deepEqual(calls.pop(), { action: 'proposer', folder, ontologie: { relations, motif: 'Les conclusions contestent des pièces.' } });
+  assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async () => ({ ...ontologie, proposition: { relations, date: '2026-11-12T09:00:00.000Z' } }) } }), 'Proposition en attente de l’avocat (2026-11-12T09:00:00.000Z) : conteste.\nRelations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nTypes principaux du dossier : . Classement : pm dossier arborescence.\nIcônes disponibles : .\nTypes de documents (pm okf types --json pour proposer la liste complète) :\nRelations système :\n- states (établit) : document → Premise');
   await assert.rejects(run(['okf', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
@@ -451,15 +451,15 @@ test('sessionDossier suit la session plutôt que le répertoire courant', async 
 });
 
 
-test('okf types enregistre la liste complète puis lance la vérification', async () => {
+test('okf types propose la liste complète à l’avocat', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-types-'));
   const calls = [];
   const documentTypes = [{ name: 'contrat', icon: 'pen' }];
   const result = await run(['okf', 'types', '--json', JSON.stringify(documentTypes)], { cwd: dossier, deps: {
-    okfFn: async (input) => { calls.push(input); return input.action === 'verify' ? { erreurs: [], manques: [] } : {}; },
+    okfFn: async (input) => { calls.push(input); return { documentTypes, motif: '', date: '' }; },
   } });
-  assert.deepEqual(calls, [{ action: 'types', folder: path.resolve(dossier), documentTypes }, { action: 'verify', folder: path.resolve(dossier) }]);
-  assert.match(result, /Types de documents enregistrés/);
-  assert.match(result, /aucune erreur/);
+  assert.deepEqual(calls, [{ action: 'proposer', folder: path.resolve(dossier), ontologie: { documentTypes } }]);
+  assert.match(result, /Proposition enregistrée \(1 type\(s\) de documents\)/);
+  assert.equal(await run(['okf', 'types', '--json', '[]'], { cwd: dossier, deps: { okfFn: async () => ({ motif: '', date: '' }) } }), 'Aucun changement par rapport à l’ontologie actuelle : aucune proposition en attente.');
   fs.rmSync(dossier, { recursive: true, force: true });
 });

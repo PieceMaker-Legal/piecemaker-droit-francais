@@ -25,6 +25,7 @@ import {
   typographic,
 } from './bundle.js';
 import { readOntology, relationNames, ruleOf } from './ontology.js';
+import { storedOntologyErrors } from './ontology-proposal.js';
 
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
@@ -70,6 +71,7 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
   const typeById = new Map(concepts.map((concept) => [concept.id, text(concept.frontmatter.type)]));
   const errors: OkfError[] = [];
   if (ontology.erreur) errors.push({ fiche: ONTOLOGY_FICHE, erreur: ontology.erreur });
+  errors.push(...storedOntologyErrors());
 
   for (const concept of concepts) {
     const report = (erreur: string) => errors.push({ fiche: concept.id, erreur });

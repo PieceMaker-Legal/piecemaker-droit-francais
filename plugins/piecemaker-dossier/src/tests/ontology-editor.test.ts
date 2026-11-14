@@ -46,6 +46,21 @@ describe('éditeur d’ontologie', () => {
       ['conteste', ['Pièces'], ['Pièces']],
     ]);
   });
+  it('montre les types proposés par l’assistant et applique ceux acceptés', async () => {
+    vi.mocked(okfApi.ontology).mockResolvedValue({ ...state, documentTypes: [{ name: 'contrat', icon: 'pen' }, { name: 'courrier', icon: 'mail' }], proposition: { documentTypes: [{ name: 'contrat', icon: 'scroll' }, { name: 'facture', icon: 'file' }], motif: 'Factures reçues', date: '' } });
+    const typesSave = vi.spyOn(okfApi, 'saveTypes').mockResolvedValue(state);
+    await editOntology(root, 'dossier-exemple', () => {}, '', 'types');
+    expect(root.querySelector('[data-ontology-proposal]')).toBeNull();
+    expect(root.querySelectorAll('[data-types-proposal] .pmd-ontology-change')).toHaveLength(3);
+    expect(root.textContent).toContain('Factures reçues');
+    const click = (selector: string) => root.querySelector<HTMLElement>(selector)!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    click('[data-change-accept="0"]');
+    click('[data-change-accept="1"]');
+    click('[data-change-refuse="2"]');
+    click('[data-settings-save]');
+    await vi.waitFor(() => expect(typesSave).toHaveBeenCalledWith('dossier-exemple', [{ name: 'contrat', icon: 'scroll' }, { name: 'courrier', icon: 'mail' }, { name: 'facture', icon: 'file' }]));
+  });
+
   it('garde les saisies entre onglets et enregistre classement et icônes ensemble', async () => {
     vi.mocked(okfApi.ontology).mockResolvedValue({ ...state, documentTypes: [{ name: 'contrat', icon: 'pen' }, { name: 'courrier', icon: 'mail' }] });
     vi.spyOn(classificationApi, 'read').mockResolvedValue({ folders: [{ name: 'Documents', explanation: 'Documents du dossier', type: 'Pièces' }] });

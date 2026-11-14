@@ -156,3 +156,19 @@ test('garde le refus simple pour le shell et la clé', async () => {
   assert.equal(await hookDecision({ tool_name: 'Write', tool_input: { file_path: 'notes.md', content: 'x' }, cwd }, run), null);
   assert.equal(calls.length, 0);
 });
+
+test('propose les types de documents en gardant les relations en attente', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-home '));
+  fs.mkdirSync(path.join(home, '.piecemaker'));
+  const relation = { name: 'amends', label: 'modifie', inverse: 'modifié par', description: '', source: ['Pièces'], target: ['Pièces'] };
+  const file = path.join(home, '.piecemaker', 'ontologie.json');
+  fs.writeFileSync(file, `${JSON.stringify({ relations: [relation], documentTypes: [{ name: 'Contrat', icon: 'pen' }], sceau: 'abc' }, null, 2)}\n`);
+  fs.writeFileSync(path.join(home, '.piecemaker', 'ontologie.proposition.json'), JSON.stringify({ relations: [{ ...relation, label: 'amende' }], motif: '', date: '' }));
+  const { calls, run } = recorder({ ok: true, output: '{}' });
+  const reason = (await (await load()).hookDecision({ tool_name: 'Edit', tool_input: { file_path: file, old_string: '"icon": "pen"', new_string: '"icon": "scroll"' }, cwd: '/tmp/Dossier Exemple' }, run)).hookSpecificOutput.permissionDecisionReason;
+  assert.match(reason, /relations — modification : amends ; types de documents — modification : Contrat/);
+  const sent = JSON.parse(calls[0].args[6]);
+  assert.equal(sent.relations[0].label, 'amende');
+  assert.deepEqual(sent.documentTypes, [{ name: 'Contrat', icon: 'scroll' }]);
+  assert.equal(sent.sceau, undefined);
+});

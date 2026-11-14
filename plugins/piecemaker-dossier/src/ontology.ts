@@ -45,8 +45,8 @@ export function readOntologyRows(list: HTMLElement): OntologyRelation[] {
 
 async function editRelations(root: HTMLElement, projectId: string, onSaved: () => void, inline = false): Promise<() => Promise<void>> {
   let state = await okfApi.ontology(projectId);
-  const proposed = state.proposition?.relations ?? [];
-  const changes = state.proposition ? ontologyChanges(state.relations, proposed) : [];
+  const proposed = state.proposition?.relations;
+  const changes = proposed ? ontologyChanges(state.relations, proposed) : [];
   const decisions: Array<ChangeDecision | undefined> = changes.map(() => undefined);
   let relations = state.relations;
   const fileShown = Boolean(state.fichier && state.total);
@@ -56,7 +56,7 @@ async function editRelations(root: HTMLElement, projectId: string, onSaved: () =
   };
   const wholePlace = (): ChatPlace => (fileShown ? { fichier: state.fichier, debut: 1, fin: state.total } : {});
   const rowsHtml = () => relations.map((relation, index) => relationMarkup(relation, index, placeOf(relation.name))).join('');
-  const proposalHtml = () => (state.proposition ? proposalMarkup(changes, decisions, state.proposition.motif) : '');
+  const proposalHtml = () => (state.proposition?.relations ? proposalMarkup(changes, decisions, state.proposition.motif) : '');
   const system = state.systeme.map((relation) => `<li><strong>${escapeHtml(relation.label)}</strong> <code>${escapeHtml(relation.name)}</code> : ${escapeHtml(relation.source)} → ${escapeHtml(relation.target)}. ${escapeHtml(relation.description)}</li>`).join('');
   const layer = modal(root, `
     <form class="pmd-form" data-ontology-form${chatAttributes('Ontologie des liens', 'Ontologie', wholePlace())}>
@@ -97,7 +97,7 @@ async function editRelations(root: HTMLElement, projectId: string, onSaved: () =
     const choice = decisionOf(target);
     if (choice) return decide(choice.index, choice.decision);
     if (target.closest('[data-proposal-drop]')) {
-      void okfApi.dropProposal(projectId).then(() => { state = { ...state, proposition: null }; proposalHost.innerHTML = ''; }).catch(showError);
+      void okfApi.dropProposal(projectId, 'relations').then(() => { state = { ...state, proposition: null }; proposalHost.innerHTML = ''; }).catch(showError);
       return;
     }
     if (target.closest('[data-ontology-ask-all]')) return askChat('Ontologie des liens', 'Ontologie', wholePlace());

@@ -14,7 +14,7 @@ import type { ReviewPremise } from '../reviews.js';
 import { addLink, removeLink } from '../links.js';
 import { graphTypesOf, ontologyFile, readOntology, saveOntology } from '../ontology.js';
 import { createOkfBackend } from '../index.js';
-import { dropProposal, proposeOntology, readProposal } from '../ontology-proposal.js';
+import { proposalFile, proposeOntology, readProposal, storedOntologyErrors } from '../ontology-proposal.js';
 import { contradictions, quoted, verifyBundle } from '../verify.js';
 
 const CONTRACT = 'Pièces/Contrat.pdf';
@@ -442,6 +442,7 @@ test('l\'ontologie globale est commune aux dossiers et ne s\'applique qu\'aux ty
   fs.writeFileSync(ontologyFile(), '{ "relations": [ { "name": "Conteste" } ] }');
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf })[0].fiche, '~/.piecemaker/ontologie.json');
   assert.match(verifyBundle({ projectPath, resources, markdownOf })[0].erreur, /ontologie illisible, ontologie par défaut appliquée/);
+  assert.ok(verifyBundle({ projectPath, resources, markdownOf }).some((entry) => entry.erreur === 'relation Conteste : clé « label » absente.'));
   const other = dossier().projectPath;
   saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', source: ['Courriers', 'Projets'], target: ['Pièces'] }] });
   fs.writeFileSync(path.join(other, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Courriers', explanation: '' }, { name: 'Pièces', explanation: '' }]));
@@ -483,17 +484,25 @@ test('l\'assistant propose une ontologie que seul l\'enregistrement de l\'avocat
     assert.ok(lines.slice(debut - 1, fin).some((line) => line.includes(`"name": "${name}"`)));
   }
   assert.equal(saved.proposition, null);
-  assert.throws(() => proposeOntology({ relations: [{ name: 'states', label: 'établit', source: ['Pièces'], target: ['Pièces'] }] }), /relation système/);
-  proposeOntology({ relations: [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces', 'Projets'] }], motif: 'Les conclusions contestent aussi des projets.' });
+  assert.throws(() => proposeOntology(projectPath, { relations: [{ name: 'states', label: 'établit', inverse: '', description: '', source: ['Pièces'], target: ['Pièces'] }] }), /relation système/);
+  assert.throws(() => proposeOntology(projectPath, { relations: [{ name: 'conteste', lable: 'conteste', source: ['Projets'], target: ['Pièces'] }] }), (error: Error) => /clé « label » absente/.test(error.message) && /clé « lable » inconnue/.test(error.message) && /clé « inverse » absente/.test(error.message));
+  assert.throws(() => proposeOntology(projectPath, { documentTypes: [{ name: 'Contrat', icon: 'inconnue' }, { name: 'contrat', icon: 'pen' }] }), /type Contrat : icône inconnue/);
+  assert.throws(() => proposeOntology(projectPath, { documentTypes: [{ name: 'Contrat', icon: 'pen' }, { name: 'contrat', icon: 'pen' }] }), /en double/);
+  proposeOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', inverse: 'contesté par', description: '', source: ['Projets'], target: ['Pièces', 'Projets'] }], motif: 'Les conclusions contestent aussi des projets.' });
   const pending = backend.ontology('p');
   assert.deepEqual(pending.relations.map((relation) => relation.name), ['conteste', 'annule']);
-  assert.deepEqual(pending.proposition?.relations[0].target, ['Pièces', 'Projets']);
+  assert.deepEqual(pending.proposition?.relations?.[0].target, ['Pièces', 'Projets']);
   assert.equal(pending.proposition?.motif, 'Les conclusions contestent aussi des projets.');
+  proposeOntology(projectPath, { documentTypes: [{ name: 'Contrat', icon: 'pen' }] });
+  assert.deepEqual(readProposal()?.documentTypes, [{ name: 'Contrat', icon: 'pen' }]);
+  assert.equal(readProposal()?.relations?.length, 1);
   backend.saveOntology('p', { relations: pending.proposition!.relations });
-  assert.equal(backend.ontology('p').proposition, null);
+  assert.equal(backend.ontology('p').proposition?.relations, undefined);
+  assert.deepEqual(backend.ontology('p').proposition?.documentTypes, [{ name: 'Contrat', icon: 'pen' }]);
   assert.deepEqual(readOntology(projectPath).relations.map((relation) => relation.name), ['conteste']);
-  proposeOntology({ relations: [] });
-  dropProposal();
+  fs.writeFileSync(proposalFile(), JSON.stringify({ documentTypes: [{ name: 'Contrat' }], date: '' }));
+  assert.deepEqual(storedOntologyErrors(), [{ fiche: '~/.piecemaker/ontologie.proposition.json', erreur: 'type Contrat : clé « icon » absente.' }]);
+  proposeOntology(projectPath, { relations: readOntology(projectPath).relations, documentTypes: readOntology(projectPath).documentTypes });
   assert.equal(readProposal(), null);
 });
 

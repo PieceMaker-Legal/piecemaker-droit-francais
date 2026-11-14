@@ -43,7 +43,7 @@ relations:
 
 ## Liens entre pièces
 
-Les relations admises sont celles de l'ontologie, commune à tous les dossiers (`~/.piecemaker/ontologie.json`), de la source vers la cible. Chaque relation fixe les types de documents source et cible. `pm okf ontologie` les affiche. Par défaut : `amends`, `responds-to`, `refers-to`, `supersedes` (une version remplace une autre), entre documents des types du graphe (par défaut `Pièces`). L'avocat seul modifie l'ontologie (onglet Index › Ontologie). Pour suggérer un changement, modifiez `~/.piecemaker/ontologie.json` avec l'outil Edit ou Write (Codex : apply_patch), jamais par le shell : le hook `guard-ontologie` refuse l'écriture, fusionne la modification dans la proposition en attente (`ontologie.proposition.json`) et vous répond ce qui a changé. `pm okf ontologie proposer --json '{"relations":[…]}' --motif "…"` propose aussi l'ontologie complète. L'avocat accepte, refuse ou modifie chaque changement ; `pm okf link` refuse une relation absente ou un type non admis. Chaque lien porte une citation mot pour mot du document source.
+Les relations admises sont celles de l'ontologie, commune à tous les dossiers (`~/.piecemaker/ontologie.json`), de la source vers la cible. Chaque relation fixe les types de documents source et cible. `pm okf ontologie` les affiche. Par défaut : `amends`, `responds-to`, `refers-to`, `supersedes` (une version remplace une autre), entre documents des types du graphe (par défaut `Pièces`). L'avocat seul modifie l'ontologie (onglet Index › Ontologie). Pour suggérer un changement, modifiez `~/.piecemaker/ontologie.json` avec l'outil Edit ou Write (Codex : apply_patch), jamais par le shell : le hook `guard-ontologie` refuse l'écriture, fusionne la modification dans la proposition en attente (`ontologie.proposition.json`) et vous répond ce qui a changé. `pm okf ontologie proposer --json '{"relations":[…],"motif":"…"}'` propose aussi une liste complète. Chaque relation porte toutes ses clés : `name`, `label`, `inverse`, `description`, `source`, `target`. Une clé absente ou inconnue est refusée. L'avocat accepte, refuse ou modifie chaque changement ; `pm okf link` refuse une relation absente ou un type non admis. Chaque lien porte une citation mot pour mot du document source.
 
 ```bash
 pm okf ontologie
@@ -56,8 +56,8 @@ Ajoute un lien seulement si tu as lu la phrase qui le fonde. Un lien du scan ret
 ## Types de documents et icônes
 
 1. Lire `pm okf ontologie` : types principaux, natures et icônes disponibles.
-2. Modifier le catalogue commun avec `pm okf types --json '[{"name":"contrat","icon":"pen"}]'`. Fournir toute la liste, y compris les types conservés.
-3. La commande valide la liste, conserve les relations et lance `pm okf verify`. Corriger les erreurs signalées.
+2. Proposer le catalogue commun avec `pm okf types --json '[{"name":"contrat","icon":"pen"}]'`, ou en éditant `ontologie.json` (clé `documentTypes`). Fournir toute la liste, y compris les types conservés. Chaque type porte `name` et `icon`, sans autre clé.
+3. La commande valide la liste et l'enregistre comme proposition. L'avocat accepte, refuse ou modifie chaque changement. Corriger les erreurs signalées, puis lancer `pm okf verify`.
 
 Cette commande applique directement les natures et leurs icônes. Les relations et l’arborescence restent des propositions soumises à l’avocat.
 Le champ facultatif `type` d’un dossier fixe son type principal. Les sous-dossiers héritent du parent. Sans champ `type`, le nom du dossier de premier niveau reste le type principal.

@@ -55,14 +55,11 @@ export function createOkfBackend(options: OkfOptions) {
     return { ...current, documentTypes: current.documentTypes || DEFAULT_DOCUMENT_TYPES, icones: Object.keys(DOCUMENT_ICONS), systeme: SYSTEM_RELATIONS, types: readTypes(projectPath), fichier: ontologyFile(), ...lines, proposition: readProposal() };
   };
 
-  const propose = (projectId: string, value: unknown) => {
-    projectPathOf(projectId);
-    return proposeOntology(value);
-  };
+  const propose = (projectId: string, body: { ontologie?: unknown }) => proposeOntology(projectPathOf(projectId), body.ontologie);
 
   const saveOntologyOf = (projectId: string, value: unknown) => {
     saveOntology(projectPathOf(projectId), value);
-    dropProposal();
+    dropProposal('relations');
     build(projectId);
     return ontology(projectId);
   };
@@ -71,6 +68,7 @@ export function createOkfBackend(options: OkfOptions) {
     const projectPath = projectPathOf(projectId);
     if (value.documentTypes === undefined) throw new TypeError('documentTypes : liste obligatoire.');
     saveOntology(projectPath, { relations: readOntology(projectPath).relations, documentTypes: value.documentTypes });
+    dropProposal('documentTypes');
     return ontology(projectId);
   };
 
@@ -131,14 +129,14 @@ export function createOkfBackend(options: OkfOptions) {
   router.get('/okf', (request, response) => respond(() => read(String(request.query.projectId || '')), response));
   router.get('/okf/ontologie', (request, response) => respond(() => ontology(String(request.query.projectId || '')), response));
   router.put('/okf/ontologie', express.json(), (request, response) => respond(() => saveOntologyOf(String(request.body?.projectId || ''), request.body), response));
-  router.delete('/okf/ontologie/proposition', (request, response) => respond(() => { projectPathOf(String(request.query.projectId || '')); dropProposal(); return ontology(String(request.query.projectId || '')); }, response));
+  router.delete('/okf/ontologie/proposition', (request, response) => respond(() => { projectPathOf(String(request.query.projectId || '')); dropProposal(request.query.partie === 'documentTypes' ? 'documentTypes' : request.query.partie === 'relations' ? 'relations' : undefined); return ontology(String(request.query.projectId || '')); }, response));
   router.put('/okf/types', express.json(), (request, response) => respond(() => saveTypes(String(request.body?.projectId || ''), request.body), response));
   router.get('/okf/verify', (request, response) => respond(() => verify(String(request.query.projectId || '')), response));
   router.post('/okf/rebuild', express.json(), (request, response) => respond(() => build(String(request.body?.projectId || '')), response));
   router.post('/okf/link', express.json(), (request, response) => respond(() => link(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
   router.post('/okf/unlink', express.json(), (request, response) => respond(() => unlink(String(request.body?.projectId || ''), request.body), response));
 
-  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, ontologie: ontology, proposer: propose, types: (projectId, body) => saveTypes(projectId, body as { documentTypes?: unknown }), link: (projectId, body) => link(projectId, body), unlink };
+  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, ontologie: ontology, proposer: (projectId, body) => propose(projectId, body as { ontologie?: unknown }), link: (projectId, body) => link(projectId, body), unlink };
   const localRouter = express.Router();
   localRouter.post('/okf', express.json(), (request, response) => {
     if (!options.isLoopback(request)) {

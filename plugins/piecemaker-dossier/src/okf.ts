@@ -7,7 +7,7 @@ export type OkfRelationLabel = { name: string; label: string; inverse: string };
 export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[]; documentTypes?: DocumentType[] };
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
 export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
-export type OntologyProposal = { relations: OntologyRelation[]; motif: string; date: string };
+export type OntologyProposal = { relations?: OntologyRelation[]; documentTypes?: DocumentType[]; motif: string; date: string };
 export type OntologyState = { relations: OntologyRelation[]; documentTypes?: DocumentType[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: OntologyProposal | null };
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
@@ -44,7 +44,7 @@ export const okfApi = {
   ontology: (projectId: string) => request<OntologyState>(`/ontologie?projectId=${encodeURIComponent(projectId)}`),
   saveOntology: (projectId: string, relations: OntologyRelation[]) => request<OntologyState>('/ontologie', { projectId, relations }, 'PUT'),
   saveTypes: (projectId: string, documentTypes: DocumentType[]) => request<OntologyState>('/types', { projectId, documentTypes }, 'PUT'),
-  dropProposal: (projectId: string) => request<OntologyState>(`/ontologie/proposition?projectId=${encodeURIComponent(projectId)}`, undefined, 'DELETE'),
+  dropProposal: (projectId: string, partie: 'relations' | 'documentTypes') => request<OntologyState>(`/ontologie/proposition?projectId=${encodeURIComponent(projectId)}&partie=${partie}`, undefined, 'DELETE'),
 };
 
 export type PremiseStatement = { premise: string; title: string; citation: string; value: string };

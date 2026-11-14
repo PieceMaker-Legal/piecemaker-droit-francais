@@ -84,18 +84,52 @@ export function normalizeOntology(value: unknown): OntologyRelation[] {
   });
 }
 
-function normalizeDocumentTypes(value: unknown): DocumentType[] {
+export function normalizeDocumentTypes(value: unknown): DocumentType[] {
   if (!Array.isArray(value) || value.length > 100) throw new TypeError('types : donner une liste de 100 types au plus.');
   const seen = new Set<string>();
-  return value.map((entry) => {
+  return value.map((entry, index) => {
     const name = text(entry?.name).normalize('NFC');
     const icon = text(entry?.icon);
-    if (!name || name.length > 120 || RESERVED_TYPES.includes(name)) throw new TypeError('type : nom obligatoire, non réservé, 120 caractères au plus.');
-    if (seen.has(name.toLocaleLowerCase('fr'))) throw new TypeError(`type « ${name} » en double.`);
-    if (!Object.hasOwn(DOCUMENT_ICONS, icon)) throw new TypeError(`icône inconnue : ${icon}.`);
+    const where = `type ${name || index + 1}`;
+    if (!name || name.length > 120 || RESERVED_TYPES.includes(name)) throw new TypeError(`${where} : nom obligatoire, non réservé (${RESERVED_TYPES.join(', ')}), 120 caractères au plus.`);
+    if (seen.has(name.toLocaleLowerCase('fr'))) throw new TypeError(`${where} : nom en double.`);
+    if (!Object.hasOwn(DOCUMENT_ICONS, icon)) throw new TypeError(`${where} : icône inconnue « ${icon} » (icônes : ${Object.keys(DOCUMENT_ICONS).join(', ')}).`);
     seen.add(name.toLocaleLowerCase('fr'));
     return { name, icon };
   });
+}
+
+const RELATION_KEYS = ['name', 'label', 'inverse', 'description', 'source', 'target'];
+const TYPE_KEYS = ['name', 'icon'];
+const TOP_KEYS = ['relations', 'documentTypes', 'motif', 'sceau', 'date'];
+const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const failure = (check: () => unknown): string[] => { try { check(); return []; } catch (error) { return [error instanceof Error ? error.message : String(error)]; } };
+
+function keyErrors(entry: unknown, keys: string[], where: string): string[] {
+  if (!isObject(entry)) return [`${where} : donner un objet { ${keys.join(', ')} }.`];
+  return [
+    ...keys.filter((key) => !Object.hasOwn(entry, key)).map((key) => `${where} : clé « ${key} » absente.`),
+    ...Object.keys(entry).filter((key) => !keys.includes(key)).map((key) => `${where} : clé « ${key} » inconnue (clés admises : ${keys.join(', ')}).`),
+  ];
+}
+
+function listErrors(list: unknown, keys: string[], label: string, normalize: (entries: unknown[]) => unknown): string[] {
+  if (!Array.isArray(list)) return [`${label} : donner une liste.`];
+  const errors = list.flatMap((entry, index) => {
+    const missing = keyErrors(entry, keys, `${label} ${text(isObject(entry) ? entry.name : '') || index + 1}`);
+    return missing.length ? missing : failure(() => normalize([entry]));
+  });
+  return errors.length ? errors : failure(() => normalize(list));
+}
+
+export function ontologyErrors(value: unknown): string[] {
+  if (!isObject(value)) return ['ontologie : donner un objet { "relations": [...], "documentTypes": [...] }.'];
+  const errors = Object.keys(value).filter((key) => !TOP_KEYS.includes(key)).map((key) => `ontologie : clé « ${key} » inconnue (clés admises : ${TOP_KEYS.join(', ')}).`);
+  if (value.relations === undefined && value.documentTypes === undefined) errors.push('ontologie : clé « relations » ou « documentTypes » absente.');
+  if (value.relations !== undefined) errors.push(...listErrors(value.relations, RELATION_KEYS, 'relation', (relations) => normalizeOntology({ relations })));
+  if (value.documentTypes !== undefined) errors.push(...listErrors(value.documentTypes, TYPE_KEYS, 'type', normalizeDocumentTypes));
+  if (value.motif !== undefined && (typeof value.motif !== 'string' || value.motif.length > 1000)) errors.push('motif : texte de 1000 caractères au plus.');
+  return [...new Set(errors)];
 }
 
 export function readOntology(projectPath: string): Ontology {
