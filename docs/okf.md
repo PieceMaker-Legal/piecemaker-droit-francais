@@ -137,7 +137,7 @@ Le catalogue commun est stocké dans le champ `documentTypes: [{ name, icon }]` 
 
 L’agent lit les types principaux, natures et icônes avec `pm okf ontologie`. Il remplace directement le catalogue avec `pm okf types --json '[{"name":"contrat","icon":"pen"}]'`. La liste doit être complète. Le serveur valide les noms, doublons et icônes. La commande lance ensuite `pm okf verify`. Les relations et l’arborescence gardent leur circuit de propositions.
 
-Le graphe affiche des pastilles avec titre et icône, sur fond uni. Les traits sont fins ; les mentions et parties utilisent des pointillés. Le survol révèle les libellés proches. Les documents reprennent le titre de la revue : `Titre`, `Intitulé`, `Titre du document`, puis `Événement`. À défaut : champ `title` ou `titre` du document, puis nom du fichier sans extension. La lecture reflète les dernières réponses sans réécrire les fiches.
+Le graphe affiche des pastilles avec titre et icône, sur fond uni. Les traits sont fins ; les mentions et parties utilisent des pointillés. Le survol révèle les libellés proches. Les documents reprennent le titre de la revue : `Titre`, `Intitulé`, `Titre du document`, puis `Événement`. À défaut : nom du fichier sans extension. La nature vient du document, sinon des colonnes `Nature`, `Type de document`, `Type de pièce` ou `Type`. La lecture reflète les dernières réponses sans réécrire les fiches.
 
 Routes ajoutées : `PUT /api/piecemaker/okf/types`, `POST /api/piecemaker/okf/rebuild`. Catalogue et sélecteur : `plugins/piecemaker-dossier/src/document-types.ts` et `document-types-editor.ts`.
 

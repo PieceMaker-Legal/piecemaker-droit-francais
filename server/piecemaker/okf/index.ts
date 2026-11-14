@@ -84,21 +84,25 @@ export function createOkfBackend(options: OkfOptions) {
       types: readTypes(projectPath),
       typesGraphe: graphTypesOf(projectPath, current),
       ontologie: [...current.relations, ...SYSTEM_RELATIONS].map(({ name, label, inverse }) => ({ name, label, inverse })),
-      fiches: readBundle(projectPath).filter((concept) => !concept.error).map((concept) => ({
-        id: concept.id,
-        type: text(concept.frontmatter.type),
-        title: metadata.get(text(concept.frontmatter.resource))?.title || text(nodes.get(text(concept.frontmatter.resource))?.data.title) || text(nodes.get(text(concept.frontmatter.resource))?.data.titre) || text(concept.frontmatter.title),
-        description: text(concept.frontmatter.description),
-        resource: text(concept.frontmatter.resource),
-        date: text(concept.frontmatter.date),
-        nature: text(nodes.get(text(concept.frontmatter.resource))?.data.nature) || metadata.get(text(concept.frontmatter.resource))?.nature || text(concept.frontmatter.nature),
-        icon: documentIcon(text(nodes.get(text(concept.frontmatter.resource))?.data.nature) || metadata.get(text(concept.frontmatter.resource))?.nature || text(concept.frontmatter.nature), current.documentTypes || DEFAULT_DOCUMENT_TYPES),
-        side: text(concept.frontmatter.side),
-        single: concept.frontmatter.single_value === true,
-        relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
-          .filter((entry) => !entry.dismissed)
-          .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin, value: entry.value || '' }))),
-      })),
+      fiches: readBundle(projectPath).filter((concept) => !concept.error).map((concept) => {
+        const resource = text(concept.frontmatter.resource);
+        const nature = text(nodes.get(resource)?.data.nature) || metadata.get(resource)?.nature || text(concept.frontmatter.nature);
+        return {
+          id: concept.id,
+          type: text(concept.frontmatter.type),
+          title: metadata.get(resource)?.title || text(concept.frontmatter.title),
+          description: text(concept.frontmatter.description),
+          resource,
+          date: text(concept.frontmatter.date),
+          nature,
+          icon: documentIcon(nature, current.documentTypes || DEFAULT_DOCUMENT_TYPES),
+          side: text(concept.frontmatter.side),
+          single: concept.frontmatter.single_value === true,
+          relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
+            .filter((entry) => !entry.dismissed)
+            .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin, value: entry.value || '' }))),
+        };
+      }),
     };
   };
 

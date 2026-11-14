@@ -31,7 +31,7 @@ export function documentMetadataFromReviews(projectPath: string): Map<string, { 
     if (review.category === 'recherche-juridique') continue;
     const named = (names: string[]) => names.map((name) => review.columns.find((column) => text(column?.name).trim().toLocaleLowerCase('fr').normalize('NFC') === name)).find(Boolean);
     const titleColumn = named(['titre', 'intitulé', 'titre du document', 'événement']);
-    const natureColumn = named(['nature', 'type de document', 'type']);
+    const natureColumn = named(['nature', 'type de document', 'type de pièce', 'type']);
     for (const row of review.rows) {
       const title = titleColumn && text(review.cells?.[row.id]?.[titleColumn.index]?.summary);
       const nature = natureColumn && text(review.cells?.[row.id]?.[natureColumn.index]?.summary);

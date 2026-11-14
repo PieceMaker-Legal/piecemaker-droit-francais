@@ -1,4 +1,4 @@
-import { DEFAULT_DOCUMENT_TYPES, documentIcon, iconSvg } from './document-types.js';
+import { iconSvg } from './document-types.js';
 import type { DocumentType } from './document-types.js';
 
 export type OkfRelation = { relation: string; target: string; citation: string; origin: string; value?: string };
@@ -80,7 +80,7 @@ export function graphElements(index: OkfIndex): Array<{ data: Record<string, str
   const ids = new Set(fiches.map((fiche) => fiche.id));
   const kind = (fiche: OkfFiche) => fiche.type === PREMISE_TYPE ? 'premise' : fiche.type === PARTY_TYPE ? `party-${fiche.side === 'adversaire' ? 'adverse' : fiche.side || 'tiers'}` : 'document';
   return [
-    ...fiches.map((fiche) => ({ data: { id: fiche.id, label: fiche.title.replace(/\.(?:pdf|docx?|xlsx?|png|jpe?g|txt|md)$/i, ''), resource: fiche.resource, kind: kind(fiche), type: fiche.type, icon: fiche.type === PREMISE_TYPE ? 'diamond' : fiche.type === PARTY_TYPE ? 'users' : fiche.icon || documentIcon(fiche.nature || '', index.documentTypes || DEFAULT_DOCUMENT_TYPES) } })),
+    ...fiches.map((fiche) => ({ data: { id: fiche.id, label: fiche.title.replace(/\.(?:pdf|docx?|xlsx?|png|jpe?g|txt|md)$/i, ''), resource: fiche.resource, kind: kind(fiche), type: fiche.type, icon: fiche.type === PREMISE_TYPE ? 'diamond' : fiche.type === PARTY_TYPE ? 'users' : fiche.icon || 'file' } })),
     ...fiches.flatMap((fiche) => fiche.relations
       .filter((entry) => ids.has(entry.target))
       .map((entry) => ({ data: { id: `${fiche.id}|${entry.relation}|${entry.target}`, source: fiche.id, target: entry.target, label: relationLabel(index, entry.relation), relation: entry.relation } }))),

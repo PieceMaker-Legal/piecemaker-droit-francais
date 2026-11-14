@@ -505,7 +505,7 @@ test('le titre descriptif de la revue et sa nature arrivent dans le graphe sans 
   fs.mkdirSync(directory);
   fs.writeFileSync(path.join(directory, 'index.json'), JSON.stringify({
     category: 'documents', updatedAt: '2026-01-01',
-    columns: [{ index: 0, name: 'Titre' }, { index: 1, name: 'Nature' }],
+    columns: [{ index: 0, name: 'Titre' }, { index: 1, name: 'Type de pièce' }],
     rows: [{ id: 'r1', piece: CONTRACT, documents: [] }],
     cells: { r1: { 0: { summary: 'Convention de prestation' }, 1: { summary: 'contrat' } } },
   }));

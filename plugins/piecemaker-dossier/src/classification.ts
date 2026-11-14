@@ -130,7 +130,7 @@ export async function editClassification(root: HTMLElement, project: string, onS
     const choice = decisionOf(target);
     if (choice) return decide(choice.index, choice.decision);
     if (target.closest('[data-proposal-drop]')) {
-      void classificationApi.dropProposal(project).then(() => { state = { ...state, proposition: null }; proposalHost.innerHTML = ''; onSaved(); }).catch(showError);
+      void classificationApi.dropProposal(project).then(() => { state = { ...state, proposition: null }; proposalHost.innerHTML = ''; if (!inline) onSaved(); }).catch(showError);
       return;
     }
     if (target.closest('[data-tree-ask-all]')) return askChat('Arborescence du dossier', 'Arborescence', ASK_NOTE, wholePlace());

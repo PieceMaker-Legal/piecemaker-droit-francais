@@ -78,7 +78,7 @@ export function documentsFromSnapshot(projectPath: string, snapshot: KnowledgeSn
       if (citation.fromNodeId !== node.id || !citation.toNodeId.startsWith('entity:') || !citation.texte || !partyCodes.has(code) || parties.has(code)) continue;
       parties.set(code, { code, citation: squash(citation.texte) });
     }
-    documents.set(resource, { resource, title: metadata.get(resource)?.title || text(node.data.title) || text(node.data.titre) || node.label, nature: text(node.data.nature) || metadata.get(resource)?.nature || '', date: text(node.date), parties: [...parties.values()] });
+    documents.set(resource, { resource, title: metadata.get(resource)?.title || node.label, nature: text(node.data.nature) || metadata.get(resource)?.nature || '', date: text(node.date), parties: [...parties.values()] });
   }
   return [...documents.values()].sort((left, right) => left.resource.localeCompare(right.resource));
 }
