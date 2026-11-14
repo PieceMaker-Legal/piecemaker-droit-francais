@@ -18,6 +18,7 @@ import { clearDocxCitationHighlight, highlightCitationInDocx } from '@/piecemake
 import { api, authenticatedFetch } from '@/shared/api';
 import { DocxSaveContext } from '@/piecemaker/docx/pendingSaves';
 import { useTheme } from '@/shared/context/ThemeContext';
+import { DocxReviewPanel } from '@/modules/docx-review';
 import type { CodeEditorFile } from '@/shared/types';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -594,6 +595,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
       {commentQuestions.notice && <p role="alert" className="border-b border-border px-3 py-1.5 text-xs text-destructive">{commentQuestions.notice}</p>}
       {loaded ? (
+        <div className="flex min-h-0 flex-1">
         <DocxEditor
           ref={editorRef}
           documentBuffer={loaded.buffer}
@@ -624,6 +626,9 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           )}
           style={{ flex: 1, minHeight: 0 }}
         />
+        {projectId && <DocxReviewPanel key={`${projectId}:${loaded.filePath}`} projectId={projectId} path={loaded.filePath} beforeChange={flush} onChanged={() => load()}
+          onView={(edit) => { const id = edit.ins_w_id ?? edit.del_w_id; if (id) editorRef.current?.getEditorRef()?.scrollToChangeId(Number(id)); }} />}
+        </div>
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{error ? file.path : 'Chargement…'}</div>
       )}

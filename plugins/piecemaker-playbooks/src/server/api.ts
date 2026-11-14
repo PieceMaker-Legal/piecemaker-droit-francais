@@ -1,5 +1,7 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { DocxDocumentConflictError, DocxReviewError, readDocxReview, runDocxReview } from '../../../../server/modules/piecemaker-docx/index.js';
 import type { AiSettings } from '../shared.js';
 import { PlaybookError, record, text } from '../domain/model.js';
 import { assertModel, assertProvider } from '../../../piecemaker-tabular-review/src/server/runtime.js';
@@ -100,12 +102,33 @@ export function createHandler(options: {
           if (hash(bytes) !== run.outputHash) throw new PlaybookError('La copie Word a été modifiée hors de PieceMaker. Relancez une revue sur sa nouvelle version.', 409);
           result = { buffer: bytes.toString('base64'), hash: run.outputHash };
         } else if (method === 'PUT' && parts[2] === 'document') result = await saveReviewedDocument(store, key, body);
+        else if (parts[2] === 'edits' && method === 'GET') result = await readDocxReview(project, store.runFile(key, 'document-revu.docx'));
+        else if (parts[2] === 'edits' && method === 'POST') {
+          const run = store.run(key);
+          const file = store.runFile(key, 'document-revu.docx');
+          if (run.status !== 'completed' || !run.outputHash) throw new PlaybookError('Copie Word indisponible.');
+          if (run.outputHash !== body.expectedHash) throw new PlaybookError('Le document a changé. Rechargez la copie Word.', 409);
+          const finding = body.findingId ? run.findings.find((entry) => entry.id === body.findingId) : null;
+          if (body.findingId && (!finding || finding.applied || !finding.verified || !finding.suggestedText)) throw new PlaybookError('Proposition indisponible.', 409);
+          const find = finding?.status === 'missing_required' ? finding.insertAfter : finding?.quote;
+          if (finding && !find) throw new PlaybookError('Passage vérifié manquant.');
+          const review = await runDocxReview(project, path.relative(project, file), {
+            action: finding ? 'edit' : text(body.action, 20), edit_id: body.edit_id ? text(body.edit_id, 100) : undefined,
+            expected_sha256: run.outputHash, author: 'PieceMaker · Playbook',
+            edits: finding ? [{ find, replace: finding.status === 'missing_required' ? `${find}\n${finding.suggestedText}` : finding.suggestedText,
+              context_before: '', context_after: '', reason: finding.analysis }] : undefined,
+          });
+          run.outputHash = review.sha256;
+          if (finding) finding.applied = true;
+          store.writeRun(run);
+          result = { review, run, buffer: fs.readFileSync(file).toString('base64') };
+        }
         else throw new PlaybookError('Opération inconnue.', 404);
       } else throw new PlaybookError('Opération inconnue.', 404);
       send(status, result);
     } catch (error) {
-      send(error instanceof PlaybookError ? error.status : 500,
-        { error: error instanceof PlaybookError ? error.message : 'L’opération Playbooks a échoué. Vérifiez le dossier et réessayez.' });
+      send(error instanceof PlaybookError || error instanceof DocxReviewError ? error.status : error instanceof DocxDocumentConflictError ? 409 : 500,
+        { error: error instanceof PlaybookError || error instanceof DocxReviewError || error instanceof DocxDocumentConflictError ? error.message : 'L’opération Playbooks a échoué. Vérifiez le dossier et réessayez.' });
     }
   };
 }

@@ -14,6 +14,7 @@ const docxSave = vi.hoisted(() => vi.fn<() => Promise<ArrayBuffer>>());
 vi.mock('@/shared/api', () => ({
   api: { readFileBlob: vi.fn() },
   authenticatedFetch: vi.fn(),
+  docxReviewRequest: vi.fn(async () => ({ versions: [], annotations: [] })),
 }));
 
 

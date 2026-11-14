@@ -5,7 +5,22 @@ import {
 } from '@/shared/authToken';
 import { IS_PLATFORM } from '@/shared/utils';
 import { readVoiceConfig, voiceConfigHeaders } from '@/shared/voiceConfig';
-import type { MistralSdkAuthStatus } from '@/shared/types';
+import type { DocxReview, MistralSdkAuthStatus } from '@/shared/types';
+
+export async function docxReviewRequest(projectId: string, path: string, body?: Record<string, unknown>): Promise<DocxReview> {
+  const response = await authenticatedFetch(`/api/piecemaker/docx-review?${new URLSearchParams({ projectId, path })}`, body ? {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  } : undefined);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Opération Word impossible.');
+  return result;
+}
+
+export async function docxReviewSnapshot(projectId: string, path: string, id: string): Promise<ArrayBuffer> {
+  const response = await authenticatedFetch(`/api/piecemaker/docx-review/snapshot?${new URLSearchParams({ projectId, path, id })}`);
+  if (!response.ok) throw new Error('Version Word indisponible.');
+  return response.arrayBuffer();
+}
 
 async function mistralSdkResponse<T>(response: Response): Promise<T> {
   const payload = await response.json();

@@ -53,6 +53,13 @@ pm tab afficher fichier FICHIER
 
 ## 1. The contract is `--help` — start there
 
+### PieceMaker — édition du document
+
+Lis chaque document/version une fois par réponse. Réutilise ensuite le résultat ou recherche le passage avec `docx find`.
+Modifie directement les documents ordinaires. Duplique d’abord un modèle avant de le remplir.
+Limite chaque substitution aux mots ou caractères concernés et utilise un contexte qui désigne un emplacement unique.
+Si une clause numérotée change de place, est ajoutée ou supprimée, vérifie les numéros suivants et les renvois du document.
+
 The help text is authoritative and versioned with the binary. This skill is thin
 on purpose and defers to it:
 

@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
 import fr from '@eigenpal/docx-editor-i18n/fr';
-import type { Finding, Run } from '../shared.js';
-import { decodeBuffer, encodeBuffer, proposeFinding } from './word.js';
+import { EditCardUI } from '../../../../src/modules/docx-review/EditCardUI.js';
+import type { DocxReview } from '../../../../shared/piecemaker/docx-review.js';
+import type { Run } from '../shared.js';
+import { decodeBuffer, encodeBuffer } from './word.js';
 
 export type Rpc = <T>(method: string, path: string, body?: unknown) => Promise<T>;
 
@@ -13,6 +15,7 @@ export function WordReview({ run, rpc, onRun, onError, onDirty }: { run: Run; rp
   const [buffer, setBuffer] = useState<ArrayBuffer | null>(null);
   const [busy, setBusy] = useState(false);
   const [changed, setChanged] = useState(false);
+  const [review, setReview] = useState<DocxReview | null>(null);
   const editVersion = useRef(0);
 
   useEffect(() => { onDirty(changed); return () => onDirty(false); }, [changed, onDirty]);
@@ -26,6 +29,8 @@ export function WordReview({ run, rpc, onRun, onError, onDirty }: { run: Run; rp
         style.id = 'piecemaker-playbooks-eigenpal-style'; style.textContent = styles.css;
         if (!style.isConnected) window.document.head.append(style);
         hash.current = document.hash; dirty.current = false; setChanged(false); setBuffer(decodeBuffer(document.buffer));
+        void rpc<DocxReview>('GET', `/runs/${run.id}/edits`).then((value) => { if (live) setReview(value); })
+          .catch(() => { if (live) onError('Les propositions Word sont indisponibles.'); });
       }).catch((error) => { if (live) onError(error instanceof Error ? error.message : 'Impossible d’ouvrir Word.'); });
     const beforeUnload = (event: BeforeUnloadEvent) => { if (dirty.current) { event.preventDefault(); event.returnValue = ''; } };
     window.addEventListener('beforeunload', beforeUnload);
@@ -46,15 +51,13 @@ export function WordReview({ run, rpc, onRun, onError, onDirty }: { run: Run; rp
     finally { setBusy(false); }
   };
 
-  const apply = async (finding: Finding) => {
+  const updateEdits = async (body: { findingId?: string; action?: 'accept' | 'reject'; edit_id?: string }) => {
     if (!editor.current || busy) return;
     setBusy(true);
     try {
       if (dirty.current) throw new Error('Enregistrez vos modifications Word avant d’appliquer une proposition.');
-      proposeFinding(editor.current, finding);
-      dirty.current = true; setChanged(true);
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      await persist(finding.id);
+      const result = await rpc<{ review: DocxReview; run: Run; buffer: string }>('POST', `/runs/${run.id}/edits`, { ...body, expectedHash: hash.current });
+      hash.current = result.review.sha256; setReview(result.review); setBuffer(decodeBuffer(result.buffer)); onRun(result.run);
     } catch (error) {
       onError(error instanceof Error ? error.message : 'Proposition impossible.');
     } finally { setBusy(false); }
@@ -68,6 +71,10 @@ export function WordReview({ run, rpc, onRun, onError, onDirty }: { run: Run; rp
       onError={(error) => onError(error.message)} /></div> : <p role="status">Chargement du document Word…</p>}
     <div className="actions">{run.findings.filter((finding) => finding.suggestedText).map((finding) =>
       <button type="button" key={finding.id} disabled={busy || !buffer || finding.applied || !finding.verified || changed}
-        onClick={() => void apply(finding)}>{finding.applied ? 'Proposée dans Word' : 'Proposer dans Word'} : {finding.ruleName}</button>)}</div>
+        onClick={() => void updateEdits({ findingId: finding.id })}>{finding.applied ? 'Proposée dans Word' : 'Proposer dans Word'} : {finding.ruleName}</button>)}</div>
+    <div className="grid">{review?.annotations.map((edit, index) => <EditCardUI key={edit.edit_id} originalText={edit.deleted_text} replacementText={edit.inserted_text}
+      reason={edit.reason} changeNumber={index + 1} status={edit.status} actionsDisabled={busy || changed}
+      onAccept={() => void updateEdits({ action: 'accept', edit_id: edit.edit_id })} onReject={() => void updateEdits({ action: 'reject', edit_id: edit.edit_id })}
+      onView={() => { const id = edit.ins_w_id ?? edit.del_w_id; if (id) editor.current?.getEditorRef()?.scrollToChangeId(Number(id)); }} />)}</div>
   </section>;
 }

@@ -65,7 +65,7 @@ test('Eigenpal applique une proposition dans la copie Word, conserve une vraie r
   });
   const propose = page.getByRole('button', { name: 'Proposer dans Word : Responsabilité', exact: true });
   assert.equal(await propose.isEnabled(), true, JSON.stringify(await page.locator('[role="alert"]').allTextContents()));
-  const saved = page.waitForResponse((response) => response.request().method() === 'PUT' && response.url().includes('/document'));
+  const saved = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/edits'));
   await propose.click();
   assert.equal((await saved).status(), 200);
   await page.getByRole('button', { name: 'Proposée dans Word : Responsabilité', exact: true }).waitFor();
@@ -73,7 +73,6 @@ test('Eigenpal applique une proposition dans la copie Word, conserve une vraie r
   const xml = await (await JSZip.loadAsync(bytes)).file('word/document.xml')!.async('string');
   assert.match(xml, /<w:ins\b/);
   assert.match(xml, /<w:del\b/);
-  assert.ok(xml.includes(CONTRACT));
   assert.equal((await readDocx(bytes)).map((source) => source.text).join('\n'), REPLACEMENT);
   assert.deepEqual(fs.readFileSync(path.join(project, 'contrat.docx')), original);
   assert.equal(store.run(run.id).findings[0].applied, true);
@@ -81,5 +80,14 @@ test('Eigenpal applique une proposition dans la copie Word, conserve une vraie r
   await page.getByRole('button', { name: /Revue · contrat.docx/ }).click();
   await page.locator('.docx-editor').waitFor();
   assert.equal(await page.getByRole('button', { name: 'Proposée dans Word : Responsabilité', exact: true }).isDisabled(), true);
+  await page.getByText('La clause ne respecte pas le plafond choisi.', { exact: true }).last().waitFor();
+  const rejected = page.waitForResponse((response) => response.request().method() === 'POST' && response.url().includes('/edits'));
+  await page.getByRole('button', { name: 'Refuser', exact: true }).click();
+  assert.equal((await rejected).status(), 200);
+  await page.getByRole('button', { name: 'Refusée', exact: true }).waitFor();
+  assert.equal((await readDocx(fs.readFileSync(store.runFile(run.id, 'document-revu.docx')))).map((source) => source.text).join('\n'), CONTRACT);
+  const finalZip = await JSZip.loadAsync(fs.readFileSync(store.runFile(run.id, 'document-revu.docx')));
+  assert.doesNotMatch(await finalZip.file('word/document.xml')!.async('string'), /<w:(ins|del)\b/);
+  assert.equal(finalZip.file('word/comments.xml'), null);
   assert.deepEqual(errors, []);
 });
