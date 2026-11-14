@@ -133,3 +133,91 @@ test('develops an OKF premise into its cited pieces and fails without evidence',
     assert.equal(report.status, 'failed');
   } finally { await rm(home, { recursive: true, force: true }); }
 });
+
+const appealsConnectors = (details: string[] | undefined, text = 'Extrait exact.', requested: string[] = []): Pick<ReasoningConnectors, 'source' | 'match'> => ({
+  source: async (_cwd, id) => { requested.push(id); return { kind: 'decision', title: 'Cour fictive, 12 mars 2026', text, ...(details ? { history: { statut: 'remise en cause' as const, details } } : {}) }; },
+  match: (found: string, quote: string) => found.includes(quote) ? quote : null,
+});
+const APPEAL = 'Recours JURITEXT000000000009 du 2026-05-06 (Cour de cassation)';
+
+test('a decision with an appeal carries a mention without the identifier and a valid citation', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-appeal-'));
+  try {
+    const store = createCitationStore(home);
+    const withAppeal = createCatalaCitation(appealsConnectors([APPEAL, 'Autre ligne']), store);
+    const contenu = '## Décision fictive | JURITEXT000000000001\n« Extrait exact. »';
+    const report = await withAppeal.verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu }]);
+    const result = report.results[0] as { status: string; mention?: string; recours?: unknown[]; target: string };
+    assert.equal(report.passed, true);
+    assert.equal(result.status, 'passed');
+    assert.equal(result.mention, 'Non rendue en dernier ressort, voir Cour de cassation, 2026-05-06');
+    assert.doesNotMatch(result.mention!, /JURITEXT/);
+    assert.deepEqual(result.recours, [{ id: 'JURITEXT000000000009', date: '2026-05-06', juridiction: 'Cour de cassation' }]);
+    const without = await createCatalaCitation(appealsConnectors(['Autre ligne']), store).verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu }]);
+    assert.equal(without.passed, true);
+    assert.ok(!('mention' in without.results[0]) && !('recours' in without.results[0]));
+    const none = await createCatalaCitation(appealsConnectors(undefined), store).verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu }]);
+    assert.ok(!('mention' in none.results[0]));
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
+test('cite opens an appeal only through a parent decision of the program that lists it', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-appeal-'));
+  try {
+    const store = createCitationStore(home);
+    const requested: string[] = [];
+    const { cite } = createCatalaCitation({
+      source: async (cwd, id) => { requested.push(id); return id === 'JURITEXT000000000001' ? { kind: 'decision', title: 'Cour d’appel fictive', text: 'Extrait exact.', history: { statut: 'remise en cause', details: [APPEAL] } } : { kind: 'decision', title: 'Cour de cassation fictive', text: 'Arrêt fictif.' }; },
+      match: (text, quote) => text.includes(quote) ? quote : null,
+    }, store);
+    const content = '## Décision fictive | JURITEXT000000000001\n« Extrait exact. »';
+    const token = await cite('/dossier-fictif', 'JURITEXT000000000009', '', content, 'JURITEXT000000000001');
+    const saved = await store.read(token);
+    assert.equal(saved?.title, 'Cour de cassation fictive');
+    assert.equal(saved?.citation.decision_id, 'JURITEXT000000000009');
+    await assert.rejects(() => cite('/dossier-fictif', 'JURITEXT000000000009', '', content), /Source absente/);
+    await assert.rejects(() => cite('/dossier-fictif', 'JURITEXT000000000009', '', content, 'JURITEXT000000000002'), /Source absente/);
+    await assert.rejects(() => cite('/dossier-fictif', 'JURITEXT000000000008', '', content, 'JURITEXT000000000001'), /Source absente/);
+    assert.equal(requested.filter((id) => id === 'JURITEXT000000000002').length, 0);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
+test('accepts a JORFARTI article as a citation source', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-jorf-'));
+  try {
+    const store = createCitationStore(home);
+    const service = createCatalaCitation({ source: async () => ({ kind: 'texte', title: 'Article fictif', text: 'Extrait exact.' }), match: (text, quote) => text.includes(quote) ? quote : null }, store);
+    const content = '## Article fictif | JORFARTI000000000001\n« Extrait exact. »';
+    const token = await service.cite('/dossier-fictif', 'JORFARTI000000000001', 'Extrait exact.', content);
+    assert.equal((await store.read(token))?.citation.verified, true);
+    const url = 'https://www.legifrance.gouv.fr/jorf/article_jo/JORFARTI000000000001';
+    const report = await service.verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu: `## Article fictif\n[Article](${url})\nCitation : « Extrait exact. »` }]);
+    assert.equal(report.passed, true);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
+test('a quotation with a stray dot or space is corrected and verified, a different word fails', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-correction-'));
+  try {
+    const store = createCitationStore(home);
+    const service = createCatalaCitation({
+      source: async () => ({ kind: 'texte', title: 'Article fictif', text: 'Le salarié perçoit une prime.' }),
+      match: (text, quote) => { const found = 'Le salarié perçoit une prime'; return quote.replace(/\s+/g, ' ').replace(/\.$/, '') === found && text.includes(found) ? found : null; },
+    }, store);
+    const run = (quote: string) => service.verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu: `## Article fictif | LEGIARTI000000000001\n« ${quote} »` }]);
+    for (const quote of ['Le salarié perçoit une prime.', 'Le salarié  perçoit une prime']) {
+      const report = await run(quote);
+      const result = report.results[0] as { status: string; verified: boolean; correction?: { avant: string; apres: string } };
+      assert.equal(report.passed, true);
+      assert.equal(result.status, 'passed');
+      assert.equal(result.verified, true);
+      assert.deepEqual(result.correction, { avant: quote, apres: 'Le salarié perçoit une prime' });
+    }
+    const exact = (await run('Le salarié perçoit une prime')).results[0] as { correction?: unknown };
+    assert.equal(exact.correction, undefined);
+    const different = await run('Le salarié perçoit une indemnité');
+    assert.equal(different.passed, false);
+    assert.equal(different.results[0].status, 'failed');
+    assert.equal((different.results[0] as { correction?: unknown }).correction, undefined);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});

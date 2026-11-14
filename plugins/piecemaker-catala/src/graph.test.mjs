@@ -372,3 +372,17 @@ test('titles each box with its ## heading and flags a title without a past parti
   assert.equal(untitled.querySelectorAll('[data-warning="participle"]').length, 0);
   assert.equal(untitled.querySelector('[data-node="x002"] h3').textContent, 'Résolution possible');
 });
+
+test('shows an appeal under a decision with a button that opens it through its parent decision', () => {
+  const appealed = citations.map((citation) => citation.target.endsWith('LEGIARTI000032041472') ? { ...citation, recours: [{ id: 'JURITEXT000000000009', date: '2026-05-06', juridiction: 'Cour de cassation' }] } : citation);
+  const card = (list) => { const model = reasoning(dot, [module], list); return new JSDOM(reasoningCard(model.steps.find((step) => step.id === 'x002'), model)).window.document; };
+  const document = card(appealed);
+  const item = [...document.querySelectorAll('.pmc-sources li')].find((entry) => /Non rendue en dernier ressort/.test(entry.textContent));
+  assert.match(item.textContent, /Non rendue en dernier ressort, voir Cour de cassation, 2026-05-06/);
+  const button = item.querySelector('button[data-open-reference][data-id="JURITEXT000000000009"]');
+  assert.equal(button.getAttribute('data-parent'), 'LEGIARTI000032041472');
+  assert.equal(button.textContent, 'Cour de cassation, 2026-05-06');
+  const plain = card(citations);
+  assert.doesNotMatch(plain.body.textContent, /Non rendue en dernier ressort/);
+  assert.equal(plain.querySelectorAll('[data-parent]').length, 0);
+});

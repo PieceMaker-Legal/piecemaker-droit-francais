@@ -149,16 +149,16 @@ export function mount(container: HTMLElement, api: Host) {
     const documentationErrors = program.verification?.checks.find((check) => check.name === 'documentation')?.errors ?? [];
     panel.innerHTML = `${warning}${explanationPart(program, recalc, documentationErrors)}`;
     const view = panel.querySelector<HTMLElement>('.pmc-view');
-    if (view) stopGraph = mountExplanation(view, (target, origin, quote, id) => {
-      let legalId = id && (/^(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) || /^[0-9a-f]{24}$/i.test(id)) ? id : undefined;
+    if (view) stopGraph = mountExplanation(view, (target, origin, quote, id, parent) => {
+      let legalId = id && (/^(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) || /^[0-9a-f]{24}$/i.test(id)) ? id : undefined;
       try {
         const url = new URL(target);
-        if (!legalId && url.protocol === 'https:' && /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname)) legalId = url.pathname.match(/\/(LEGIARTI\d+|JURITEXT\d+|CETATEXT\d+|CONSTEXT\d+)(?:\/|$)/)?.[1];
+        if (!legalId && url.protocol === 'https:' && /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname)) legalId = url.pathname.match(/\/(LEGIARTI\d+|JORFARTI\d+|JURITEXT\d+|CETATEXT\d+|CONSTEXT\d+)(?:\/|$)/)?.[1];
         if (!legalId && url.protocol === 'https:' && url.hostname === 'www.courdecassation.fr') legalId = url.pathname.match(/^\/decision\/([a-f\d]{24})(?:\/|$)/i)?.[1];
       } catch {}
       if (legalId && context.project) {
         const projectPath = context.project.path;
-        void citeCatala(projectPath, program.nom, origin, legalId, quote).then(({ token }) => {
+        void citeCatala(projectPath, program.nom, origin, legalId, quote, parent).then(({ token }) => {
           if (!stopped && context.project?.path === projectPath) window.dispatchEvent(new CustomEvent('piecemaker:open-in-editor', { detail: { path: `piecemaker://citation/${token}/${encodeURIComponent(legalId!)}` } }));
         }).catch((failure) => { if (!stopped) { error = failure instanceof Error ? failure.message : String(failure); paint(); } });
         return;

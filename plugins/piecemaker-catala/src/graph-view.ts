@@ -1,4 +1,4 @@
-export function mountExplanation(view: HTMLElement, openReference: (target: string, origin: string, quote: string, id: string) => void) {
+export function mountExplanation(view: HTMLElement, openReference: (target: string, origin: string, quote: string, id: string, parent: string) => void) {
   const nodes = [...view.querySelectorAll<HTMLElement>('[data-node]')];
   const canvas = view.querySelector<HTMLElement>('.pmc-map');
   const edges = [...view.querySelectorAll<HTMLElement>('[data-from][data-to]')];
@@ -59,7 +59,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       return;
     }
     const reference = target.closest<HTMLElement>('[data-open-reference]');
-    if (reference) { event.preventDefault(); openReference(reference.dataset.target ?? '', reference.dataset.origin ?? '', reference.dataset.quote ?? '', reference.dataset.id ?? ''); return; }
+    if (reference) { event.preventDefault(); openReference(reference.dataset.target ?? '', reference.dataset.origin ?? '', reference.dataset.quote ?? '', reference.dataset.id ?? '', reference.dataset.parent ?? ''); return; }
     const link = target.closest<HTMLElement>('[data-goto]');
     if (link) {
       event.preventDefault();

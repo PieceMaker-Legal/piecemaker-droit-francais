@@ -90,14 +90,14 @@ export function createCatalaRouter(scriptPath: string, deps: CatalaDeps = {}, se
   });
   router.post('/citation', express.json(), async (request, response) => {
     try {
-      const { projectPath, programme, fichier, source, citation } = request.body ?? {};
-      if (![projectPath, programme, fichier, source, citation].every((value) => typeof value === 'string') || !projectPath || !service) throw new Error('Référence Catala incomplète.');
+      const { projectPath, programme, fichier, source, citation, parent } = request.body ?? {};
+      if (![projectPath, programme, fichier, source, citation].every((value) => typeof value === 'string') || !projectPath || !service || (parent !== undefined && typeof parent !== 'string')) throw new Error('Référence Catala incomplète.');
       const data = await snapshot(projectPath);
       const program = data.programmes.find((entry) => entry.nom === programme);
       const file = program?.fichiers.find((entry) => entry.chemin === fichier);
       if (!file) throw new Error('Fichier absent du programme Catala.');
       const saved = program?.citations?.results.find((entry: { origin: string; id?: string; quote: string; token?: string }) => entry.origin === fichier && entry.id === source && entry.quote === citation && entry.token);
-      response.json({ token: saved?.token ?? await service.cite(projectPath, source, citation, file.contenu) });
+      response.json({ token: saved?.token ?? await service.cite(projectPath, source, citation, file.contenu, parent) });
     } catch (error) { fail(response, error); }
   });
   router.post('/verify', express.json(), (request, response) => {

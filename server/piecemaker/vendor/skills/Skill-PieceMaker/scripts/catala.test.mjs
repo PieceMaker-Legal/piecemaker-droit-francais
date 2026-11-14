@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, runCatala, selectProgram, sharedPython, toolCommand } from './catala.mjs';
+import { catalaDocumentation } from './catala-documentation.mjs';
 import { run } from './pm.mjs';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
@@ -286,8 +287,8 @@ function catlegScenario(files, task) {
   return { ...context, directory, deps, report };
 }
 
-test('catleg checks an identifier cited only in a doc attribute', async () => {
-  const { dossier, deps, report, cleanup } = catlegScenario({ 'prime.catala_fr': '#[doc.source = "LEGIARTI000000000001"]\n' });
+test('catleg checks only identifiers cited in an article title, not in a doc attribute', async () => {
+  const { dossier, deps, report, directory, cleanup } = catlegScenario({ 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' });
   try {
     const text = await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-03-04' }, deps });
     assert.match(text, /1 article\(s\) contrôlé/);
@@ -296,6 +297,9 @@ test('catleg checks an identifier cited only in a doc attribute', async () => {
     assert.doesNotMatch(JSON.stringify(report()), /non reconnus/);
     await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2019-12-31' }, deps });
     assert.equal(report().passed, false);
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '#[doc.source = "LEGIARTI000000000001"]\n');
+    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-03-04' }, deps }), /sans article cité/);
+    assert.deepEqual(report().fichiers[0].articles, []);
   } finally { cleanup(); }
 });
 
@@ -378,7 +382,7 @@ test('catleg counts native parser results, rejects empty checks and uses the use
     assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2021-06-01' }, deps }), /donnée par --au/);
     assert.deepEqual(report().dates_reference, ['2021-06-01']);
     stdout = 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":true}]\n';
-    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2021-06-01' }, deps: { ...deps, run: async (command, args, options) => args.includes('lf') ? runner(command, args, options) : { code: 1, stdout, stderr: 'expired' } } });
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2021-06-01' }, deps: { ...deps, run: async (command, args, options) => args.includes('lf') ? runner(command, args, options) : args.includes('diff') ? { code: 0, stdout: '', stderr: '' } : { code: 1, stdout, stderr: 'expired' } } });
     assert.equal(report().passed, true);
     assert.deepEqual(report().fichiers[0].articles, ['LEGIARTI000000000001']);
     fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '## Article fictif\n');
@@ -587,16 +591,17 @@ test('verifier requires a title, a legal anchor and a complete task', async () =
       [FACTS.replace('## Montant demandé', '## Montant ?'), 'prime.catala_fr:5: titre « Montant ? » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
       [FACTS.replace('## Montant demandé', '## montant_demande de Jean'), 'prime.catala_fr:5: titre « montant_demande de Jean » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
       [FACTS.replace('  ## Montant demandé\n', '  ## Montant demandé\n  #[doc="source: okf:/_premises/montant-demande.md"]\n'), 'prime.catala_fr:6: #[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section.'],
-      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1'), "prime.catala_fr:16: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
-      [FACTS.replace('« Passage exact. »\n\n', ''), "prime.catala_fr:14: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
+      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1'), "prime.catala_fr:16: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
+      [FACTS.replace('« Passage exact. »\n\n', ''), ["prime.catala_fr:10: LEGIARTI000000000001 cité sans section propre : écrivez ## Article N | LEGIARTI000000000001 suivi de l'extrait entre « ».", "prime.catala_fr:14: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."]],
       [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Décision fictive | JURITEXT000000000001'), null],
-      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1 | LEGIARTI000000000001\n\n« Passage exact. »\n\n### Montant'), null],
+      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1 | LEGIARTI000000000001\n\n« Passage exact. »\n\n### Montant'), "prime.catala_fr:20: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
     ];
     for (const [content, message] of cases) {
       fs.writeFileSync(path.join(directory, 'prime.catala_fr'), content);
       const { output, errors } = await documentation();
-      assert.deepEqual(errors, message ? [message] : [], message ?? 'valide');
-      if (message) assert.ok(output.includes(message));
+      const expected = message ? [message].flat() : [];
+      assert.deepEqual(errors, expected);
+      for (const item of expected) assert.ok(output.includes(item));
     }
     fs.writeFileSync(path.join(directory, 'prime.catala_fr'), FACTS);
     const verify = async (task) => {
@@ -663,5 +668,138 @@ test('the indemnity fixture passes documentation and each rule rejects its fault
     assert.match(await errors(source.replace('## Société cotée', '## société_cotée')), /titre « société_cotée » : écrivez 2 à 7 mots/);
     assert.match(await errors(source.replace('  ## okf:/_premises/societe-cotee.md\n', '')), /fait du scénario sans justification : écrivez ## okf:\/_premises\/<fiche>\.md juste au-dessus de cas\.société_cotée\./);
     assert.match(await errors(source, { ...task, type: 'contentieux' }), /type de tâche inconnu : écrivez litigation, transactional\./);
+  } finally { cleanup(); }
+});
+
+const RULE = "```catala\nchamp d'application Prime:\n  définition montant égal à 1 €\n```\n";
+const ANCHORED = (id = 'LEGIARTI000000000001') => `## Article 1 | ${id}\n\n« Passage exact. »\n\n`;
+const documentationErrors = (content) => catalaDocumentation(content).errors.map((error) => error.message);
+
+test('documentation rejects a rule under an unanchored subtitle of an anchored parent', () => {
+  assert.deepEqual(documentationErrors(`${ANCHORED()}${RULE}`), []);
+  assert.match(documentationErrors(`${ANCHORED()}### Détail\n\n${RULE}`).join('\n'), /règle sans source juridique/);
+  assert.deepEqual(documentationErrors(`${ANCHORED()}### Détail | LEGIARTI000000000002\n\n« Autre passage. »\n\n${RULE}`), []);
+});
+
+test('documentation rejects a rule in a catala-metadata block without anchor', () => {
+  const metadata = "```catala-metadata\ndéclaration champ d'application Prime:\n  définition montant égal à 1 €\n```\n";
+  assert.match(documentationErrors(`## Définitions\n\n${metadata}`).join('\n'), /règle sans source juridique/);
+  assert.deepEqual(documentationErrors(`${ANCHORED()}${metadata}`), []);
+});
+
+test('documentation rejects a whole-text identifier in a title', () => {
+  for (const id of ['LEGITEXT000000000001', 'JORFTEXT000000000001']) {
+    assert.match(documentationErrors(`## Code fictif | ${id}\n\n« Passage exact. »\n`).join('\n'), /pas le texte entier/);
+  }
+});
+
+test('documentation rejects a malformed identifier', () => {
+  assert.deepEqual(documentationErrors(ANCHORED()), []);
+  for (const id of ['LEGIARTI 000000000001', 'LEGIARTI00000000001', 'LEGIARTI']) {
+    assert.match(documentationErrors(`## Article 1 | ${id}\n\n« Passage exact. »\n`).join('\n'), /mal formé/);
+  }
+});
+
+test('documentation rejects an inclusion outside the program and keeps a local one', () => {
+  assert.match(documentationErrors('> Inclusion: ../x.catala_fr\n').join('\n'), /hors du dossier du programme/);
+  assert.match(documentationErrors('> Inclusion: /etc/x.catala_fr\n').join('\n'), /hors du dossier du programme/);
+  assert.match(documentationErrors('> Inclusion: ../../x.catala_fr\n').join('\n'), /hors du dossier du programme/);
+  assert.deepEqual(documentationErrors('> Inclusion: x.catala_fr\n'), []);
+  assert.deepEqual(documentationErrors('> Inclusion: sous/x.catala_fr\n'), []);
+});
+
+test('documentation requires the article number and text in a label', () => {
+  const labelled = (label) => `${ANCHORED()}\`\`\`catala\nchamp d'application Prime:\n  étiquette ${label}\n  définition montant égal à 1 €\n\`\`\`\n`;
+  assert.match(documentationErrors(labelled('article_2')).join('\n'), /étiquette « article_2 »/);
+  assert.deepEqual(documentationErrors(labelled('article_2_code_civil')), []);
+  assert.deepEqual(documentationErrors(labelled('conditions_principales')), []);
+});
+
+test('documentation rejects an identifier cited without its own anchored title', () => {
+  assert.match(documentationErrors(`${ANCHORED()}Voir aussi LEGIARTI000000000002.\n`).join('\n'), /LEGIARTI000000000002 cité sans section propre/);
+  assert.deepEqual(documentationErrors(`${ANCHORED()}Voir aussi LEGIARTI000000000001.\n`), []);
+  assert.deepEqual(documentationErrors(`${ANCHORED()}## Article 2 | LEGIARTI000000000002\n\n« Autre passage. »\n\nVoir LEGIARTI000000000002.\n`), []);
+});
+
+test('documentation accepts JORFARTI as an anchor', () => {
+  assert.deepEqual(documentationErrors(`${ANCHORED('JORFARTI000000000001')}${RULE}`), []);
+});
+
+function catlegWith({ file, article, diff }) {
+  const scenario = catlegScenario({ 'prime.catala_fr': file }, { tache: 'Acte', type: 'autre', raisonnements: [], date_vigueur: '2026-03-04' });
+  scenario.deps.run = async (command, args) => {
+    if (args.includes('lf')) return { code: 0, stdout: JSON.stringify({ article: { id: 'LEGIARTI000000000001', dateDebut: '2020-01-01', dateFin: '2999-01-01', ...article } }), stderr: '' };
+    if (args.includes('diff')) return { code: 0, stdout: diff ?? 'Found 0 articles\n', stderr: '' };
+    return { code: 0, stdout: 'PIECEMAKER_ARTICLES=[{"id":"LEGIARTI000000000001","archive":false}]\n', stderr: '' };
+  };
+  return scenario;
+}
+
+test('catleg fails when the title number differs from the official number', async () => {
+  const wrong = catlegWith({ file: '## Article 2 | LEGIARTI000000000001\n', article: { num: '1' } });
+  const right = catlegWith({ file: '## Article 1 | LEGIARTI000000000001\n', article: { num: '1' } });
+  try {
+    await runCatala({ commande: 'catleg', cwd: wrong.dossier, flags: { au: '2026-03-04' }, deps: wrong.deps });
+    assert.equal(wrong.report().passed, false);
+    assert.match(wrong.report().fichiers[0].messages.join('\n'), /titre « Article 2 » ne correspond pas à l'article 1/);
+    await runCatala({ commande: 'catleg', cwd: right.dossier, flags: { au: '2026-03-04' }, deps: right.deps });
+    assert.equal(right.report().passed, true);
+  } finally { wrong.cleanup(); right.cleanup(); }
+});
+
+test('catleg accepts an archived section whose bounds equal the official period', async () => {
+  const article = { num: '1', dateDebut: '2020-01-01', dateFin: '2021-01-01' };
+  const bounded = catlegWith({ file: '## Article 1 [archive] | LEGIARTI000000000001\n\n« Version |2020-01-01| à |2021-01-01| du texte. »\n', article });
+  const unbounded = catlegWith({ file: '## Article 1 [archive] | LEGIARTI000000000001\n\n« Version sans bornes. »\n', article });
+  const different = catlegWith({ file: '## Article 1 [archive] | LEGIARTI000000000001\n\n« Version |2020-01-01| à |2020-06-01| du texte. »\n', article });
+  try {
+    for (const scenario of [bounded, unbounded, different]) await runCatala({ commande: 'catleg', cwd: scenario.dossier, flags: { au: '2022-01-01' }, deps: scenario.deps });
+    assert.equal(bounded.report().passed, true);
+    assert.equal(bounded.report().fichiers[0].versions[0].valide, true);
+    assert.equal(unbounded.report().passed, false);
+    assert.equal(different.report().passed, false);
+  } finally { bounded.cleanup(); unbounded.cleanup(); different.cleanup(); }
+});
+
+test('catleg fails on a whole-text difference even when diff exits with code 0', async () => {
+  const diff = 'LEGIARTI000000000001\nprime.catala_fr:2\n- texte officiel\n+ texte recopié\nFound 1 articles\n';
+  const different = catlegWith({ file: '## Article 1 | LEGIARTI000000000001\n\n« Texte recopié. »\n', article: { num: '1' }, diff });
+  try {
+    await runCatala({ commande: 'catleg', cwd: different.dossier, flags: { au: '2026-03-04' }, deps: different.deps });
+    assert.equal(different.report().passed, false);
+    assert.match(different.report().fichiers[0].messages.join('\n'), /prime\.catala_fr:3: LEGIARTI000000000001 : le texte recopié diffère du texte officiel/);
+    assert.equal(different.report().fichiers[0].versions[0].valide, true);
+  } finally { different.cleanup(); }
+});
+
+test('catleg ignores a whole-text difference limited to spaces and reports a word difference plainly', async () => {
+  const colored = (written, official) => `LEGIARTI000000000001\nprime.catala_fr:2\n\u001b[36m@@ -1 +1 @@\u001b[m\nVoir l'article \u001b[31m${written}\u001b[m\u001b[32m${official}\u001b[m\nFound 1 articles\n`;
+  const spaces = catlegWith({ file: '## Article 1 | LEGIARTI000000000001\n\n« Texte. »\n', article: { num: '1' }, diff: colored('L. 22-10-9.', 'L. 22-10-9 .') });
+  const words = catlegWith({ file: '## Article 1 | LEGIARTI000000000001\n\n« Texte. »\n', article: { num: '1' }, diff: colored('payé', 'versé') });
+  try {
+    for (const scenario of [spaces, words]) await runCatala({ commande: 'catleg', cwd: scenario.dossier, flags: { au: '2026-03-04' }, deps: scenario.deps });
+    assert.equal(spaces.report().passed, true);
+    assert.equal(words.report().passed, false);
+    assert.match(words.report().fichiers[0].messages.join('\n'), /écrit « payé », officiel « versé »/);
+  } finally { spaces.cleanup(); words.cleanup(); }
+});
+
+test('verifier rewrites a corrected citation once in the program file', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime');
+    const file = path.join(directory, 'prime.catala_fr');
+    fs.writeFileSync(file, FACTS.replace('« Passage exact. »', '« Passage exact. » puis « Passage exact. »'));
+    const { runner } = fakeRun();
+    const outside = path.join(dossier, 'autre.catala_fr');
+    fs.writeFileSync(outside, '« Passage exact. »');
+    const citations = async () => ({ passed: true, status: 'passed', message: 'ok', results: [
+      { origin: file, correction: { avant: 'Passage exact. »', apres: 'Passage exact. Complété. »' } },
+      { origin: outside, correction: { avant: 'Passage exact.', apres: 'Modifié.' } },
+    ] });
+    await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null, citations } });
+    assert.equal(fs.readFileSync(file, 'utf8').match(/Complété/g).length, 1);
+    assert.equal(fs.readFileSync(file, 'utf8').match(/Passage exact\./g).length, 2);
+    assert.equal(fs.readFileSync(outside, 'utf8'), '« Passage exact. »');
   } finally { cleanup(); }
 });

@@ -8,8 +8,8 @@ export function verifyCatala(projectPath: string, programme: string): Promise<Ca
   return request<CatalaSnapshot>('/api/piecemaker/catala/verify', { projectPath, programme });
 }
 
-export function citeCatala(projectPath: string, programme: string, fichier: string, source: string, citation: string): Promise<{ token: string }> {
-  return request('/api/piecemaker/catala/citation', { projectPath, programme, fichier, source, citation });
+export function citeCatala(projectPath: string, programme: string, fichier: string, source: string, citation: string, parent = ''): Promise<{ token: string }> {
+  return request('/api/piecemaker/catala/citation', { projectPath, programme, fichier, source, citation, ...(parent ? { parent } : {}) });
 }
 
 async function request<T>(url: string, body?: object): Promise<T> {

@@ -1,6 +1,6 @@
 ---
 name: catala
-description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — pages du livre Catala, typecheck, format, tests clerk, tests Python, squelette de test, trace d'exécution, arbre des exceptions, preuve d'absence de conflit entre exceptions, explication d’une exécution, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
+description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — pages du livre Catala, typecheck, format, tests clerk, tests Python, squelette de test, trace d'exécution, arbre des exceptions, preuve d'absence de conflit entre exceptions, explication d’une exécution, numéro, vigueur à la date retenue et texte intégral des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are in force at the chosen date and copied in full.
 ---
 
 # Catala
@@ -49,7 +49,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 
 1. Lisez les pièces et les textes. Formulez la question juridique.
 2. Écrivez `tache.json`, puis `clerk.toml` (`[project]`, `name = "<nom>"`).
-3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article titré, son extrait exact, puis son bloc ` ```catala `.
+3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article sous son propre titre, son extrait exact, son texte intégral, puis ses blocs ` ```catala `.
 4. Déclarez chaque fait du dossier comme un `contexte` : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur (`references/format.md`). Confiez les prémisses à `premise-maker`.
 5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier, chacun sous `## okf:/_premises/<fiche>.md`.
 6. Lancez `pm catala verifier --programme <nom>` jusqu'à « vérifié », puis `pm okf verify`. Suivez chaque message.
@@ -106,7 +106,7 @@ N'ouvrez pas les JSON de `resultats/` : ils servent au volet. Le bouton « Rédi
 
 ## Limites à dire à l'avocat
 
-- Catleg contrôle la vigueur à `date_vigueur` (ou `--au`). Zéro article contrôlé ne vaut pas validation. Ce contrôle ne prouve ni l'applicabilité ni les dispositions transitoires.
+- Catleg contrôle le numéro, le texte intégral et la vigueur à `date_vigueur` (ou `--au`). Zéro article contrôlé ne vaut pas validation. Ce contrôle ne prouve ni l'applicabilité ni les dispositions transitoires.
 - La preuve porte sur le programme : ni sur les faits, ni sur sa fidélité au texte. Catala 1.3 peut omettre des obligations pour des définitions globales.
 - L'explication concerne une exécution. Elle ne remplace ni les tests, ni la preuve, ni la justification des faits.
 

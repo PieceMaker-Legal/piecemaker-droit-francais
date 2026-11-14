@@ -114,6 +114,71 @@ déclaration champ d'application AnalyseIndemnité:
 ## Article L. 22-10-8 | LEGIARTI000042338833
 
 « Dans les sociétés dont les actions sont admises aux négociations sur un marché réglementé »
+« ne peut être pris par la société s'il n'est pas conforme à la politique de rémunération approuvée »
+
+I.-Dans les sociétés dont les actions sont admises aux négociations sur un
+marché réglementé, le conseil d'administration établit une politique de
+rémunération des mandataires sociaux. Cette politique est conforme à l'intérêt
+social de la société, contribue à sa pérennité et s'inscrit dans sa stratégie
+commerciale. Elle décrit toutes les composantes de la rémunération fixe et
+variable et explique le processus de décision suivi pour sa détermination, sa
+révision et sa mise en œuvre.
+
+Elle est présentée de manière claire et compréhensible au sein du rapport sur le
+gouvernement d'entreprise mentionné au dernier alinéa de l'article L. 225-37.
+
+Le contenu et les modalités de la publicité de la politique de rémunération sont
+fixés par décret en Conseil d'Etat.
+
+II.-La politique de rémunération fait l'objet d'un projet de résolution soumis à
+l'approbation de l'assemblée générale des actionnaires dans les conditions
+prévues aux articles L. 225-98 et L. 22-10-32 chaque année et lors de chaque
+modification importante dans la politique de rémunération.
+
+Lorsque l'assemblée générale des actionnaires n'approuve pas le projet de
+résolution et qu'elle a précédemment approuvé une politique de rémunération dans
+les conditions prévues au présent article, celle-ci continue de s'appliquer et
+le conseil d'administration soumet à l'approbation de la prochaine assemblée
+générale des actionnaires, dans les conditions prévues aux articles L. 225-98 et
+L. 22-10-32, un projet de résolution présentant une politique de rémunération
+révisée et indiquant de quelle manière ont été pris en compte le vote des
+actionnaires et, le cas échéant, les avis exprimés lors de l'assemblée générale.
+
+En l'absence de politique de rémunération précédemment approuvée dans les
+conditions prévues au présent article, si l'assemblée générale des actionnaires
+n'approuve pas le projet de résolution, la rémunération est déterminée
+conformément à la rémunération attribuée au titre de l'exercice précédent ou, en
+l'absence de rémunération attribuée au titre de l'exercice précédent,
+conformément aux pratiques existant au sein de la société. Dans ce cas, le
+conseil d'administration soumet à l'approbation de la prochaine assemblée
+générale des actionnaires, dans les conditions prévues aux articles L. 225-98 et
+L. 22-10-32, un projet de résolution présentant une politique de rémunération
+révisée et indiquant de quelle manière ont été pris en compte le vote des
+actionnaires et, le cas échéant, les avis exprimés lors de l'assemblée générale.
+
+III.-Aucun élément de rémunération, de quelque nature que ce soit, ne peut être
+déterminé, attribué ou versé par la société, ni aucun engagement correspondant à
+des éléments de rémunération, des indemnités ou des avantages dus ou
+susceptibles d'être dus à raison de la prise, de la cessation ou du changement
+de leurs fonctions ou postérieurement à l'exercice de celles-ci, ne peut être
+pris par la société s'il n'est pas conforme à la politique de rémunération
+approuvée ou, en son absence, aux rémunérations ou aux pratiques mentionnées au
+dernier alinéa du II.
+
+Toutefois, en cas de circonstances exceptionnelles, le conseil d'administration
+peut déroger à l'application de la politique de rémunération si cette dérogation
+est temporaire, conforme à l'intérêt social et nécessaire pour garantir la
+pérennité ou la viabilité de la société.
+
+Tout versement, attribution ou engagement effectué ou pris en méconnaissance des
+dispositions du présent III est nul dans cette mesure.
+
+IV.-Les éléments ou les engagements mentionnés au premier alinéa du III sont
+déterminés, attribués, ou pris par délibération du conseil d'administration.
+Lorsque le conseil d'administration se prononce sur un élément ou un engagement
+au bénéfice de son président, d'un directeur général ou d'un directeur général
+délégué, les personnes intéressées ne peuvent prendre part ni aux délibérations
+ni au vote sur l'élément ou l'engagement concerné.
 
 ```catala
 champ d'application AnalyseIndemnité:
@@ -126,10 +191,6 @@ champ d'application AnalyseIndemnité:
     et date_engagement < |2025-10-01|
 ```
 
-## Article L. 22-10-8 | LEGIARTI000042338833
-
-« ne peut être pris par la société s'il n'est pas conforme à la politique de rémunération approuvée »
-
 ```catala
 champ d'application AnalyseIndemnité:
   ## Engagement conforme à la politique approuvée
@@ -140,6 +201,43 @@ champ d'application AnalyseIndemnité:
 ## Article L. 22-10-34 | LEGIARTI000042338905
 
 « ne peuvent être versés qu'après approbation par une assemblée générale des éléments de rémunération de la personne concernée »
+
+I.-Dans les sociétés dont les actions sont admises aux négociations sur un
+marché réglementé, l'assemblée générale ordinaire statue sur un projet de
+résolution portant sur les informations mentionnées au I de l'article L.
+22-10-9.
+
+Lorsque l'assemblée générale ordinaire n'approuve pas le projet de résolution
+mentionné à l'alinéa précédent, le conseil d'administration ou le conseil de
+surveillance soumet une politique de rémunération révisée, tenant compte du vote
+des actionnaires, à l'approbation de la prochaine assemblée générale. Le
+versement de la somme allouée pour l'exercice en cours en application du premier
+alinéa de l'article L. 225-45 ou du premier alinéa de l'article L. 225-83 est
+suspendu jusqu'à l'approbation de la politique de rémunération révisée.
+Lorsqu'il est rétabli, il inclut l'arriéré depuis la dernière assemblée
+générale.
+
+Lorsque l'assemblée générale n'approuve pas le projet de résolution présentant
+la politique de rémunération révisée en application du précédent alinéa, la
+somme suspendue ne peut être versée, et les mêmes effets que ceux associés à la
+désapprobation du projet de résolution mentionné au premier alinéa s'appliquent.
+
+II.-Dans les sociétés dont les actions sont admises aux négociations sur un
+marché réglementé, l'assemblée générale statue sur les éléments fixes, variables
+et exceptionnels composant la rémunération totale et les avantages de toute
+nature versés au cours de l'exercice écoulé ou attribués au titre du même
+exercice par des résolutions distinctes pour le président du conseil
+d'administration ou du conseil de surveillance, le directeur général, les
+directeurs généraux délégués, ou pour le président du directoire et les autres
+membres du directoire ou le directeur général unique.
+
+Les éléments de rémunération variables ou exceptionnels attribués au titre de
+l'exercice écoulé au président du conseil d'administration ou du conseil de
+surveillance, au directeur général, aux directeurs généraux délégués, au
+président du directoire, aux autres membres du directoire ou au directeur
+général unique, ne peuvent être versés qu'après approbation par une assemblée
+générale des éléments de rémunération de la personne concernée dans les
+conditions prévues à l'alinéa précédent.
 
 ```catala
 champ d'application AnalyseIndemnité:
@@ -175,12 +273,11 @@ La situation financière du corpus est insuffisamment documentée. Aucun seuil d
 
 « Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »
 
-### Clause d’indemnité de départ
-
-La clause est établie par la pièce 02 : ses termes sont des prémisses du dossier, sa force obligatoire vient de l’article 1103.
+Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits.
 
 ```catala
 champ d'application AnalyseIndemnité:
+  # La clause est établie par la pièce 02 : ses termes sont des prémisses du dossier, sa force obligatoire vient de l’article 1103.
   ## Performance atteinte
   définition performance_satisfaite égal à
     marge_constatée >= seuil_de_performance
@@ -233,6 +330,10 @@ champ d'application AnalyseIndemnité:
 ## Article 2224 | LEGIARTI000019017112
 
 « Les actions personnelles ou mobilières se prescrivent par cinq ans à compter du jour où le titulaire d'un droit a connu ou aurait dû connaître les faits lui permettant de l'exercer. »
+
+Les actions personnelles ou mobilières se prescrivent par cinq ans à compter du
+jour où le titulaire d'un droit a connu ou aurait dû connaître les faits lui
+permettant de l'exercer.
 
 ```catala
 champ d'application AnalyseIndemnité:

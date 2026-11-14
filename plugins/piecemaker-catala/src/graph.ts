@@ -5,8 +5,8 @@ import { nativeExecution, type NativeOrigin, type NativeProvenance } from './nat
 import { applicationMarkup, conditionApplication } from './condition-application.js';
 
 type File = { nom: string; chemin: string; contenu?: string };
-type Citation = { origin: string; target: string; quote: string; status: string; title?: string; id?: string; pieces?: Array<{ target: string; quote: string; status: string; title?: string }> };
-export type Source = { label: string; target: string; kind: string; origin: string; quote: string; status: string; title?: string; id?: string };
+type Citation = { origin: string; target: string; quote: string; status: string; title?: string; id?: string; recours?: Array<{ id: string; date: string; juridiction: string }>; pieces?: Array<{ target: string; quote: string; status: string; title?: string }> };
+export type Source = { label: string; target: string; kind: string; origin: string; quote: string; status: string; title?: string; id?: string; recours?: Array<{ id: string; date: string; juridiction: string }> };
 export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: string; refs: string[]; members: Clause[]; met: string };
 type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
 type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
@@ -144,7 +144,7 @@ function citationOf(sources: Citation[], origin: string, target: string, quote: 
 function citedSources(entry: Omit<Source, 'status'>, citations: Citation[]): Source[] {
   const cited = citationOf(citations, entry.origin, entry.target, entry.quote);
   if (entry.kind === 'premise' && cited?.pieces?.length) return cited.pieces.map((piece) => ({ label: piece.title ?? entry.label, target: piece.target, kind: 'piece', origin: entry.origin, quote: piece.quote, status: piece.status, ...(piece.title ? { title: piece.title } : {}) }));
-  return [{ ...entry, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}) }];
+  return [{ ...entry, status: cited?.status ?? '', ...(cited?.title ? { title: cited.title } : {}), ...(cited?.id ? { id: cited.id } : {}), ...(cited?.recours?.length ? { recours: cited.recours } : {}) }];
 }
 
 const emptyNotes = (): Notes => ({ question: '', justification: '', recherche: '', demarches: [] });
@@ -416,7 +416,7 @@ const sourceLink = (source: Source, chip = false) => {
   const { main, note } = sourceName(source);
   return `<button type="button" class="pmc-reference${chip ? ' pmc-chip' : ''}" data-kind="${escape(source.kind)}" data-open-reference data-target="${escape(source.target)}" data-origin="${escape(source.origin)}" data-quote="${escape(source.quote)}"${source.id ? ` data-id="${escape(source.id)}"` : ''}${source.status === 'failed' ? ' data-citation="failed"' : ''} title="${escape(source.status === 'failed' ? `${main} · citation non retrouvée` : `Afficher ${main}`)}">${escape(main)}${note ? `<span class="pmc-code">${escape(note)}</span>` : ''}</button>`;
 };
-const sourceItem = (source: Source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}${source.quote ? `<q>${escape(source.quote)}</q>` : ''}${source.status === 'failed' ? '<span class="pmc-warn">Citation non retrouvée dans la source</span>' : ''}</li>`;
+const sourceItem = (source: Source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}${source.quote ? `<q>${escape(source.quote)}</q>` : ''}${source.status === 'failed' ? '<span class="pmc-warn">Citation non retrouvée dans la source</span>' : ''}${source.recours?.length ? `<span class="pmc-muted">Non rendue en dernier ressort, voir ${source.recours.map((entry) => `<button type="button" class="pmc-reference" data-kind="jurisprudence" data-open-reference data-target="" data-origin="${escape(source.origin)}" data-quote="" data-id="${escape(entry.id)}" data-parent="${escape(source.id ?? '')}">${escape(`${entry.juridiction}, ${entry.date}`)}</button>`).join(' ; ')}</span>` : ''}</li>`;
 const sourceList = (sources: Source[]) => sources.length ? `<ul class="pmc-sources">${sources.map(sourceItem).join('')}</ul>` : '';
 const chips = (sources: Source[]) => sources.length ? `<span class="pmc-chips">${sources.map((source) => sourceLink(source, true)).join('')}</span>` : '';
 

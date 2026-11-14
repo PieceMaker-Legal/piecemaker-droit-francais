@@ -12,16 +12,20 @@ import { expectedValue, matchesExpected, premiseEvidence } from './okf/premises.
 import { scenarioFacts } from './vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
 
 export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
+  const appeals = (details: string[] = []) => details.flatMap((line) => { const found = /^Recours (\S+) du (\S+) \((.*?)\)/.exec(line); return found ? [{ id: found[1], date: found[2], juridiction: found[3] }] : []; });
   const inspect = async (cwd: string, id: string, quote: string, content?: string) => {
-    if (!/^(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) && !/^[0-9a-f]{24}$/i.test(id) && !path.isAbsolute(id)) throw new Error('Source absente du programme Catala.');
+    if (!/^(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) && !/^[0-9a-f]{24}$/i.test(id) && !path.isAbsolute(id)) throw new Error('Source absente du programme Catala.');
     if (content !== undefined && quote && !content.includes(quote) && !sourceContext('https://catala.local/source.catala_fr', [{ nom: 'source.catala_fr', chemin: '/source.catala_fr', contenu: content }], true).text.replace(/^>\s?/gm, '').includes(quote)) throw new Error('Citation absente du programme Catala.');
     const info = await connectors.source(cwd, id);
     if (!info) throw new Error(path.isAbsolute(id) ? 'Pièce ou texte converti indisponible dans le dossier.' : 'Texte officiel indisponible.');
-    const verified = Boolean(quote && connectors.match(info.text, quote));
-    const quotes = quote ? [{ quote, verification: { verified } }] : [];
+    const found = quote ? connectors.match(info.text, quote) : null;
+    const verified = Boolean(found);
+    const correction = found && found !== quote ? { avant: quote, apres: found } : undefined;
+    const recours = appeals(info.history?.details);
+    const quotes = quote ? [{ quote: found || quote, verification: { verified } }] : [];
     const source = info.validity ? `Validité : ${info.validity.from} → ${info.validity.to ?? 'en vigueur'}\n\n${info.text}` : info.text;
     const token = await store.save({ sessionId: `catala:${cwd}`, title: info.title, source, citation: { ref: 1, ...(info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id }), verified, quotes }, ranges: locateSourcePassages(source, quotes) });
-    return { token, title: info.title, verified, status: !quote ? 'missing' : verified ? 'passed' : 'failed', message: !quote ? 'Aucun extrait cité.' : verified ? 'Citation retrouvée dans la source.' : 'Citation non retrouvée dans la source.' };
+    return { token, title: info.title, verified, status: !quote ? 'missing' : verified ? 'passed' : 'failed', message: !quote ? 'Aucun extrait cité.' : verified ? 'Citation retrouvée dans la source.' : 'Citation non retrouvée dans la source.', ...(correction ? { correction } : {}), ...(recours.length ? { recours, mention: `Non rendue en dernier ressort, voir ${recours.map((entry) => `${entry.juridiction}, ${entry.date}`).join(' ; ')}` } : {}) };
   };
   const entries = (files: Array<{ nom: string; chemin: string; contenu: string }>) => files.flatMap((file) => {
     const found = new Map<string, { target: string; quote: string; origin: string; label: string; kind: string; values?: string[] }>();
@@ -36,8 +40,12 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
     return [...found.values()];
   });
   return {
-    async cite(cwd: string, id: string, quote: string, content: string) {
-      if (!content.includes(id)) throw new Error('Source absente du programme Catala.');
+    async cite(cwd: string, id: string, quote: string, content: string, parent?: string) {
+      if (!content.includes(id)) {
+        const history = parent && content.includes(parent) ? (await connectors.source(cwd, parent))?.history : undefined;
+        if (!appeals(history?.details).some((entry) => entry.id === id)) throw new Error('Source absente du programme Catala.');
+        return (await inspect(cwd, id, '')).token;
+      }
       return (await inspect(cwd, id, quote, content)).token;
     },
     async verify(cwd: string, files: Array<{ nom: string; chemin: string; contenu: string }>) {
@@ -64,7 +72,7 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
           let id: string;
           if (/^https?:/i.test(ref.target)) {
             const url = new URL(ref.target);
-            const legal = /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname) && url.pathname.match(/\/(LEGIARTI\d+|JURITEXT\d+|CETATEXT\d+|CONSTEXT\d+)(?:\/|$)/)?.[1];
+            const legal = /^(?:www\.)?legifrance\.gouv\.fr$/.test(url.hostname) && url.pathname.match(/\/(LEGIARTI\d+|JORFARTI\d+|JURITEXT\d+|CETATEXT\d+|CONSTEXT\d+)(?:\/|$)/)?.[1];
             const judilibre = /^www\.courdecassation\.fr$/.test(url.hostname) && url.pathname.match(/^\/decision\/([0-9a-f]{24})\/?$/i)?.[1];
             const sourceId = legal || judilibre;
             if (!sourceId) { results.push({ ...ref, verified: false, status: 'missing', message: 'Source non prise en charge par le contrôle existant.' }); continue; }

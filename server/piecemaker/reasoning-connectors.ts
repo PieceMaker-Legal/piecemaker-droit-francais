@@ -39,9 +39,9 @@ const readHistory = (raw: string): SourceInfo['history'] | null => {
 type Resolver = { accepts(id: string): boolean; resolve(cwd: string, id: string): Promise<SourceInfo | null> };
 
 const legifrance: Resolver = {
-  accepts: (id) => /^(?:(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+|[0-9a-f]{24})$/.test(id),
+  accepts: (id) => /^(?:(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+|[0-9a-f]{24})$/.test(id),
   async resolve(_cwd, id) {
-    const article = id.startsWith('LEGIARTI');
+    const article = /^(?:LEGIARTI|JORFARTI)/.test(id);
     const raw = await legifranceText(article ? 'consulter_article' : 'consulter_decision', article ? { article_id: id } : { text_id: id });
     const text = extractFullText(raw);
     if (!text) return null;

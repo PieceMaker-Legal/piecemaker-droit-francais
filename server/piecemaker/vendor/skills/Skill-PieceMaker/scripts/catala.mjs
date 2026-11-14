@@ -260,12 +260,24 @@ async function clerkTests(context, program, tests) {
   return { entry: { ...entry, command: 'clerk runtest --whole-program + clerk report --json', seconds: Math.round((Date.now() - started) / 10) / 100, passed: !failed && reports.length === tests.length && entry.passed && summary.scopes.length > 0 && summary.scopes.every((scope) => scope.success) }, scopes: summary.scopes };
 }
 
+async function correctedCitations(context, program) {
+  const report = await context.citations({ cwd: program.root, programme: program.name });
+  for (const result of report.results ?? []) {
+    if (!result.correction || !path.resolve(result.origin).startsWith(path.resolve(program.directory) + path.sep)) continue;
+    const content = fs.readFileSync(result.origin, 'utf8');
+    if (content.includes(result.correction.avant)) fs.writeFileSync(result.origin, content.replace(result.correction.avant, () => result.correction.apres));
+    result.quote = result.correction.apres;
+  }
+  return report;
+}
+
 async function verifier(context, program, flags = {}) {
   const files = sourceFiles(program.directory);
   if (!files.length) throw new TypeError(`Aucun fichier .catala_fr dans .piecemaker/catala/${program.name}/.`);
   vigueurOf(context, program, flags);
   const started = context.now();
   const formatted = context.pack ? await formatSources(context, program, files) : null;
+  const cited = context.citations ? await correctedCitations(context, program).catch((error) => ({ error })) : null;
   const digest = sourcesDigest(program.directory, files);
   const previous = readJson(path.join(program.directory, 'resultats', 'explication.json'));
   for (const file of ['preuve.json', 'catleg.json', 'citations.json', 'tests.json', 'explication.json', 'explication.dot', 'scenarios.json']) fs.rmSync(path.join(program.directory, 'resultats', file), { force: true });
@@ -379,9 +391,10 @@ async function verifier(context, program, flags = {}) {
     }),
     record('citations', 'Contrôle des citations PieceMaker', async () => {
       if (!context.citations) return missing('Contrôle de citations indisponible : serveur PieceMaker requis.');
-      const report = await context.citations({ cwd: program.root, programme: program.name });
+      if (cited.error) throw cited.error;
+      const report = cited;
       writeResult(program.directory, 'citations.json', { ...report, sources_sha256: digest, started_utc: started, finished_utc: context.now() });
-      return { passed: report.passed, status: report.status, message: [report.message, ...(report.warnings ?? [])].join(' · ') };
+      return { passed: report.passed, status: report.status, message: [report.message, ...(report.warnings ?? []), ...(report.results ?? []).flatMap((result) => result.mention ? [`${result.label || result.target} : ${result.mention}`] : [])].join(' · ') };
     }),
   ]);
   const changed = digest !== sourcesDigest(program.directory, sourceFiles(program.directory));
@@ -571,6 +584,64 @@ async function squelette(context, program, flags) {
   }
 }
 
+const LEGAL_HEADING = /^(#{1,6})\s+(.*?)\s*\|\s*((?:LEGIARTI|JORFARTI)\d{12})\b(.*)$/;
+
+function articleSections(content) {
+  const lines = content.split(/\r?\n/);
+  const sections = [];
+  let fence = '';
+  lines.forEach((line, index) => {
+    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})/);
+    if (marker) fence = fence ? (marker[1][0] === fence[0] ? '' : fence) : marker[1];
+    const heading = !fence && line.match(LEGAL_HEADING);
+    if (!heading) return;
+    const end = lines.findIndex((other, at) => at > index && /^(#{1,6})\s/.test(other) && other.match(/^#+/)[0].length <= heading[1].length);
+    sections.push({ id: heading[3], line: index + 1, label: heading[2].replace(/\[archive\]/gi, '').trim(), archive: /\[archive\]/i.test(line), text: lines.slice(index + 1, end < 0 ? lines.length : end).join('\n') });
+  });
+  return sections;
+}
+
+const normalizedNumber = (value) => String(value).replace(/\[archive\]/gi, '').replace(/^\s*article\s*/i, '').replace(/[\s.]/g, '').toLowerCase();
+
+async function wholeText(context, program, file, content, credentials) {
+  const lines = content.split(/\r?\n/);
+  lines.forEach((line, index) => {
+    if (!LEGAL_HEADING.test(line)) return;
+    let start = index + 1;
+    for (;;) {
+      while (start < lines.length && !lines[start].trim()) start++;
+      if (!lines[start]?.trim().startsWith('«')) return;
+      for (; start < lines.length; start++) {
+        const closed = lines[start].includes('»');
+        lines[start] = '';
+        if (closed) break;
+      }
+    }
+  });
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-catleg-'));
+  const copy = path.join(work, path.basename(file));
+  try {
+    fs.writeFileSync(copy, lines.join('\n'));
+    const result = await context.run(context.python, ['-I', '-c', 'import sys; from catleg.catleg import main; sys.argv[0]="catleg"; main()', 'diff', copy], { cwd: program.directory, env: { ...context.env, ...credentials } });
+    const raw = `${result.stdout}${result.stderr}`;
+    const output = raw.replace(/\u001b\[[0-9;]*m/g, '');
+    if (result.code !== 0) return [`texte intégral non comparé : ${/git/i.test(output) ? 'git introuvable sur ce poste' : output.trim().split('\n').at(-1) || 'catleg diff a échoué'}.`];
+    const found = [...raw.matchAll(/^((?:LEGIARTI|JORFARTI)\d{12})\n[^\n]*:(\d+)\n([\s\S]*?)(?=^(?:LEGIARTI|JORFARTI)\d{12}\n|^Found \d+ articles|(?![\s\S]))/gm)];
+    const missing = [...output.matchAll(/Could not retrieve article '([^']+)'/g)].map((match) => `${match[1]} : texte officiel indisponible pour la comparaison.`);
+    const fragments = (block, color) => [...block.matchAll(new RegExp(`\\u001b\\[${color}m([^\\u001b]*)`, 'g'))].map((match) => match[1].trim()).filter(Boolean);
+    const differences = found.flatMap((match) => {
+      const written = fragments(match[3], 31);
+      const official = fragments(match[3], 32);
+      if ((written.length || official.length) && written.join('').replace(/\s/g, '') === official.join('').replace(/\s/g, '')) return [];
+      const detail = written.length || official.length ? `écrit « ${written.join(' … ')} », officiel « ${official.join(' … ')} »` : match[3].replace(/\u001b\[[0-9;]*m/g, '').trim();
+      return [`${file}:${Number(match[2]) + 1}: ${match[1]} : le texte recopié diffère du texte officiel (NOTA compris) : ${detail}`];
+    });
+    return [...differences, ...missing];
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+}
+
 async function catleg(context, program, flags) {
   const python = context.python;
   if (!python) throw new Error('Python partagé de PieceMaker introuvable (config.json › pythonPath).');
@@ -589,9 +660,13 @@ async function catleg(context, program, flags) {
     const marker = /^PIECEMAKER_ARTICLES=(.+)$/m.exec(output);
     let articles = [];
     try { articles = JSON.parse(marker?.[1] ?? '[]'); } catch {}
-    const cited = [...new Set(fs.readFileSync(path.join(program.directory, file), 'utf8').match(/\b(?:LEGIARTI|JORFARTI)\d+\b/g) ?? [])];
+    const content = fs.readFileSync(path.join(program.directory, file), 'utf8');
+    const sections = articleSections(content);
+    const cited = [...new Set(sections.map((section) => section.id))];
     const checked = [...new Set([...articles.map((article) => article.id), ...cited])];
     const messages = output.split('\n').map((line) => line.trim()).filter((line) => line && !line.startsWith('PIECEMAKER_ARTICLES='));
+    const differences = cited.length ? await wholeText(context, program, file, content, credentials) : [];
+    messages.push(...differences);
     if (!checked.length) messages.push('Aucun article contrôlé : aucun titre d’article reconnu.');
     const versions = [];
     for (const id of checked) {
@@ -601,8 +676,14 @@ async function catleg(context, program, flags) {
         const official = (value) => typeof value === 'number' ? new Date(value).toISOString().slice(0, 10) : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
         const debut = official(article?.dateDebut), fin = official(article?.dateFin);
         if (response.code !== 0 || article?.id !== id || !debut || !fin) throw new Error('Période officielle indisponible');
+        const own = sections.filter((section) => section.id === id);
+        const number = normalizedNumber(article?.num ?? '');
+        if (!number) messages.push(`${id} : numéro officiel absent, vérifiez le titre à la main.`);
+        for (const section of own) if (number && normalizedNumber(section.label) !== number) messages.push(`${id} : le titre « ${section.label} » ne correspond pas à l'article ${article.num}.`);
+        const numbered = !number || own.every((section) => normalizedNumber(section.label) === number);
         for (const at of dates) {
-          const valide = debut <= at && at < fin;
+          const bounded = fin < '2999-01-01' && own.some((section) => section.text.includes(`|${debut}|`) && section.text.includes(`|${fin}|`));
+          const valide = numbered && ((debut <= at && at < fin) || bounded);
           versions.push({ id, au: at, debut, fin: fin >= '2999-01-01' ? null : fin, valide });
           messages.push(`${id} : période officielle ${debut} → ${fin >= '2999-01-01' ? 'sans fin publiée' : fin} ; ${valide ? 'couvre' : 'ne couvre pas'} le ${at}. Applicabilité juridique à justifier séparément.`);
         }
@@ -612,7 +693,7 @@ async function catleg(context, program, flags) {
       }
     }
     const skipped = Boolean(marker) && !cited.length && !articles.length;
-    results.push({ fichier: file, exit_code: result.code, passed: Boolean(marker) && checked.length > 0 && versions.every((version) => version.valide === true) && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
+    results.push({ fichier: file, exit_code: result.code, passed: Boolean(marker) && checked.length > 0 && versions.every((version) => version.valide === true) && !differences.length && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
   }
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), dates_reference: dates, origine_date: origine, passed: results.some((entry) => entry.articles.length) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), fichiers: results };
   writeResult(program.directory, 'catleg.json', report);

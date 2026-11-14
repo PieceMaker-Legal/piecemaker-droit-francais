@@ -1,6 +1,10 @@
 const decode = (value) => value.replace(/\\\r?\n[ \t]*/g, '').replace(/\\([\s\S])/g, (_, char) => char === 'n' ? '\n' : char === 't' ? '\t' : char);
 
-const ANCHOR = /\|\s*(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+/;
+const ANCHOR = /\|\s*(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+/;
+const CITED = /\b(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d{12}\b/g;
+const MALFORMED = /\b(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)(?!\d{12}\b)/;
+const WHOLE_TEXT = /\b(?:LEGITEXT|JORFTEXT)\d+/;
+const ARTICLE_LABEL = /\d[\p{L}\p{N}]*_\p{L}[\p{L}_]*$/u;
 const PREMISE = /^okf:\/\S+$/;
 const DECLARED_TEST = /#\[test\]\s*(?:déclaration|declaration)\s+(?:champ d'application|scope)\s+([\p{L}\p{N}_]+)/gu;
 
@@ -12,13 +16,12 @@ export function catalaDocumentation(content, { test = false } = {}) {
   let headings = [];
   let fence = '';
   let code = false;
-  let metadata = false;
   let startLine = 0;
   let block = [];
   let scope = '';
   const inspect = () => {
     const text = block.join('\n');
-    const anchored = headings.some((heading) => heading.anchored);
+    const anchored = Boolean(headings.at(-1)?.anchored);
     const tokens = /#\[\s*doc\s*=\s*"((?:\\[\s\S]|[^"\\])*)"\s*\]|##[ \t]+([^\n]*)|#\[(?:"(?:\\[\s\S]|[^"\\])*"|[^\]])*\]|"(?:\\[\s\S]|[^"\\])*"|#[^\n]*|(?<![\p{L}\p{N}_])(?:(?:déclaration|declaration)\s+(?:champ d'application|scope|structure|énumération|enumeration)|définition|definition|règle|rule|déclaration|declaration|champ d'application|scope|assertion|entrée|input|résultat|output|interne|internal|contexte|context|étiquette|label|exception)(?![\p{L}\p{N}_])/gu;
     let pending = [];
     let meta = {};
@@ -43,7 +46,12 @@ export function catalaDocumentation(content, { test = false } = {}) {
         }
         continue;
       }
-      if (/^[#"]/.test(token[0]) || /^(?:étiquette|label|exception)$/.test(token[0])) continue;
+      if (/^(?:étiquette|label|exception)$/.test(token[0])) {
+        const label = text.slice(token.index + token[0].length).match(/^\s+([\p{L}\p{N}_]+)/u)?.[1] ?? '';
+        if (/article/i.test(label) && /\d/.test(label) && !ARTICLE_LABEL.test(label)) errors.push({ line: lineAt(token.index), message: `étiquette « ${label} » : ajoutez le texte après le numéro (ex. article_2_code_civil).` });
+        continue;
+      }
+      if (/^[#"]/.test(token[0])) continue;
       if (/^(?:champ d'application|scope)$/.test(token[0])) scope = text.slice(token.index + token[0].length).match(/^\s+([\p{L}\p{N}_]+)/u)?.[1] ?? '';
       if (/^(?:déclaration|declaration)/.test(token[0])) scope = '';
       if (previous) previous.endLine = lineAt(token.index) - 1;
@@ -54,14 +62,24 @@ export function catalaDocumentation(content, { test = false } = {}) {
       entries.push(entry);
       previous = entry;
       if (/^(?:entrée|input)$/.test(token[0]) && !meta.title) errors.push({ line, message: 'titre manquant pour cette entrée. Écrivez ## texte court au-dessus.' });
-      if (/^(?:définition|definition|règle|rule)$/.test(token[0]) && !metadata && !test && !tests.has(scope) && !anchored) errors.push({ line, message: "règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »." });
+      if (/^(?:définition|definition|règle|rule)$/.test(token[0]) && !test && !tests.has(scope) && !anchored) errors.push({ line, message: "règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »." });
       pending = [];
       meta = {};
       pendingLine = 0;
     }
     block = [];
   };
+  const anchoredIds = new Set();
   lines.forEach((line, index) => {
+    if (!/^#{1,6}\s/.test(line) || !ANCHOR.test(line) || !(lines.slice(index + 1).find((following) => following.trim()) ?? '').trim().startsWith('«')) return;
+    for (const id of line.match(CITED) ?? []) anchoredIds.add(id);
+  });
+  lines.forEach((line, index) => {
+    if (MALFORMED.test(line)) errors.push({ line: index + 1, message: 'identifiant Légifrance mal formé : le préfixe est suivi de 12 chiffres, sans espace.' });
+    if (/^#{1,6}\s/.test(line) && WHOLE_TEXT.test(line)) errors.push({ line: index + 1, message: "citez l'article (LEGIARTI ou JORFARTI), pas le texte entier (LEGITEXT ou JORFTEXT)." });
+    const inclusion = line.match(/^>\s*(?:Inclusion|Include)\s*:\s*(\S+)/)?.[1];
+    if (inclusion && !/^(?:LEGIARTI|JORFARTI)\d+$/.test(inclusion) && (inclusion.startsWith('/') || inclusion.split(/[\\/]/).includes('..'))) errors.push({ line: index + 1, message: `inclusion « ${inclusion} » hors du dossier du programme : placez le fichier dans le programme.` });
+    for (const id of line.match(CITED) ?? []) if (!anchoredIds.has(id)) errors.push({ line: index + 1, message: `${id} cité sans section propre : écrivez ## Article N | ${id} suivi de l'extrait entre « ».` });
     const heading = !fence && line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       const next = lines.slice(index + 1).find((following) => following.trim()) ?? '';
@@ -73,7 +91,7 @@ export function catalaDocumentation(content, { test = false } = {}) {
       fence = ''; code = false;
     } else if (marker && !fence) {
       if (/catala/i.test(marker[2]) && !/^catala(?:-metadata)?\s*$/.test(marker[2])) errors.push({ line: index + 1, message: 'bloc ignoré par Catala : ouvrez-le exactement par ```catala ou ```catala-metadata, sans espace ni majuscule.' });
-      fence = marker[1]; code = /^catala(?:-metadata)?\s*$/.test(marker[2].trim()); metadata = /^catala-metadata\s*$/.test(marker[2].trim()); startLine = index + 1;
+      fence = marker[1]; code = /^catala(?:-metadata)?\s*$/.test(marker[2].trim()); startLine = index + 1;
     } else if (fence && code) block.push(line);
   });
   if (code) inspect();
