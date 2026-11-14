@@ -7,7 +7,7 @@ import type { CompanySearchResult, ScanJob } from './api.js';
 import { ficheLinks } from './okf.js';
 import type { OkfContradiction, OkfError, OkfIndex, OkfView, PendingProposals } from './okf.js';
 
-export type Tab = 'general' | 'chronology';
+export type Tab = 'general' | 'chronology' | 'graph';
 export type BodaccScanState = {
   status: 'idle' | 'loading' | 'error';
   error?: string;
@@ -140,9 +140,11 @@ const folderTreeIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 
 const partiesIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>';
 const bodaccSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h10v16H4z"></path><path d="M7 8h4M7 12h4"></path><circle cx="16.5" cy="16.5" r="3.5"></circle><path d="m19.2 19.2 2 2"></path></svg>';
 const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
+const graphIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="8" r="3"></circle><circle cx="9" cy="18" r="3"></circle><path d="m8.7 7.3 6.5.4M7 8.8l1.4 6.3M16.3 10.4l-5.4 5.4"></path></svg>';
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
   { id: 'general', label: 'Parties', icon: partiesIcon },
   { id: 'chronology', label: 'Index', icon: folderTreeIcon },
+  { id: 'graph', label: 'Graphe', icon: graphIcon },
 ];
 
 export function scanPercentLabel(job: ScanJob): string {
@@ -362,11 +364,6 @@ function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode
   return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${sortHeading('Document', 'document')}${sortHeading('Date', 'date')}${heading('Mentions')}${sortHeading('Classement', 'classification')}${heading('Liens')}${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath, okf)).join('')}</tbody></table></div>`;
 }
 
-function okfSwitch(mode: OkfView['mode']): string {
-  const option = (value: OkfView['mode'], label: string) => `<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-okf-mode="${value}" aria-pressed="${mode === value}">${label}</button>`;
-  return `<div class="pmd-okf-switch" role="group" aria-label="Affichage de l’index">${option('table', 'Tableau')}${option('graph', 'Graphe')}</div>`;
-}
-
 function okfContradictions(contradictions: OkfContradiction[]): string {
   if (!contradictions.length) return '';
   return `<div class="pmd-okf-report" data-okf-report="contradictions"><strong>${contradictions.length} contradiction${contradictions.length > 1 ? 's' : ''} entre pièces</strong><ul>${contradictions.map((entry) => `<li><span class="pmd-okf-premise">${escapeHtml(entry.titre)}</span> <span class="pmd-badges">${entry.valeurs.map((value) => `<span class="pmd-badge">${escapeHtml(value.piece)} : ${escapeHtml(value.valeur)}</span>`).join('')}</span></li>`).join('')}</ul></div>`;
@@ -378,12 +375,12 @@ function okfErrors(errors: OkfError[] | null): string {
   return `<div class="pmd-okf-report" data-okf-report="errors"><strong>${errors.length} erreur${errors.length > 1 ? 's' : ''} dans l’index</strong><ul>${errors.map((entry) => `<li><code>${escapeHtml(entry.fiche)}</code> ${escapeHtml(entry.erreur)}</li>`).join('')}</ul></div>`;
 }
 
-function okfGraph(okf: OkfIndex | null): string {
+export function graphView(okf: OkfIndex | null, withPremises = false): string {
   if (!okf) return '<div class="pmd-empty">Index indisponible.</div>';
   const count = okf.fiches.filter((fiche) => okf.typesGraphe.includes(fiche.type)).length;
   if (!count) return `<div class="pmd-empty">Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.</div>`;
   const key = (kind: string, label: string) => `<span class="pmd-okf-key">${iconSvg(kind)}${label}</span>`;
-  return `<div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, prémisses et parties.</div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}</div><div class="pmd-okf-graph-wrap" data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, prémisses et parties : fiches dans .piecemaker/okf/"><button type="button" class="pmd-icon-button pmd-okf-center" data-okf-center title="Centrer le graphe" aria-label="Centrer le graphe">⌖</button><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div></div>`;
+  return `<div class="pmd-toolbar"><div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, ${withPremises ? 'prémisses et ' : ''}parties.</div><span class="pmd-spacer"></span><label class="pmd-okf-toggle"><input type="checkbox" data-okf-premises${withPremises ? ' checked' : ''}> Afficher les prémisses</label><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}</div><div class="pmd-okf-graph-wrap" data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, prémisses et parties : fiches dans .piecemaker/okf/"><button type="button" class="pmd-icon-button pmd-okf-center" data-okf-center title="Centrer le graphe" aria-label="Centrer le graphe">⌖</button><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div></div>`;
 }
 
 export function proposalBanner(proposals?: PendingProposals): string {
@@ -395,7 +392,7 @@ export function proposalBanner(proposals?: PendingProposals): string {
   return `<div class="pmd-proposals" data-proposals role="status"${entries.length ? '' : ' hidden'}><span>L’assistant propose des modifications à examiner.</span>${entries.join('')}</div>`;
 }
 
-export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }, view: Pick<OkfView, 'mode' | 'errors' | 'contradictions' | 'proposals'> = { mode: 'table', errors: null }): string {
+export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }, view: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null }): string {
   const value = (node: KnowledgeNode) => sort.column === 'date' ? dateFor(node) : sort.column === 'classification' ? chronologyFolder(node, projectPath) : node.label;
   const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
   const documents = data.graph.nodes.filter((node) => node.kind === 'document').sort((left, right) => {
@@ -408,7 +405,7 @@ export function chronologyView(data: ViewData, projectPath = '', sort: Chronolog
   const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
   const label = { document: 'Document', date: 'Date', classification: 'Classement' }[sort.column];
   return `
-    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span>${okfSwitch(view.mode)}<button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="okf-verify" title="Contrôler les fiches, les types et les liens de l’index">Vérifier l’index</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</button><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-action="index-analysis">Analyse tabulaire</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
+    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="okf-verify" title="Contrôler les fiches, les types et les liens de l’index">Vérifier l’index</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</button><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-action="index-analysis">Analyse tabulaire</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
     ${proposalBanner(view.proposals)}${okfErrors(view.errors)}${okfContradictions(view.contradictions || [])}
-    ${view.mode === 'graph' ? okfGraph(data.okf ?? null) : chronologyTable(documents, byId, data.graph.links, projectPath, sort, data.okf ?? null)}`;
+    ${chronologyTable(documents, byId, data.graph.links, projectPath, sort, data.okf ?? null)}`;
 }

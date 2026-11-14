@@ -11,7 +11,7 @@ import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, 
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { CUSTOM_NATURE, chronologyView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
+import { CUSTOM_NATURE, chronologyView, graphView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
 import type { BodaccScanState, ChronologySort, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -43,7 +43,7 @@ function takeRequestedView(): Tab | null {
   const pending = window as Window & { [VIEW_KEY]?: unknown };
   const view = pending[VIEW_KEY];
   delete pending[VIEW_KEY];
-  return view === 'general' || view === 'chronology' ? view : null;
+  return view === 'general' || view === 'chronology' || view === 'graph' ? view : null;
 }
 
 function takeRequestedMapping(): string | null {
@@ -66,7 +66,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let data: ViewData | null = null;
   let closeIndexAnalysis: (() => void) | null = null;
   let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
-  let okfView: Pick<OkfView, 'mode' | 'errors' | 'contradictions' | 'proposals'> = { mode: 'table', errors: null };
+  let okfView: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null };
+  let showPremises = (() => { try { return localStorage.getItem('pmd-okf-premises') === '1'; } catch { return false; } })();
   const okfHandle = () => {
     const projectId = context.project?.name || '';
     return {
@@ -75,7 +76,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (!data || context.project?.name !== projectId) return;
         data = { ...data, okf };
         viewCache.set(projectId, data);
-        if (okfView.mode === 'graph') paintContent();
+        if (active === 'graph') paintContent();
         else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
       }, () => undefined),
     };
@@ -241,7 +242,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (sequence !== loadSequence || !data) return;
         data = { ...data, okf };
         viewCache.set(projectId, data);
-        if (okfView.mode === 'graph') paintContent();
+        if (active === 'graph') paintContent();
         else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
       }, () => undefined);
       viewCache.set(projectId, data);
@@ -412,7 +413,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     destroyGraph = null;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort, okfView) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort, okfView) : active === 'graph' ? graphView(data.okf ?? null, showPremises) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
     const graphHost = content.querySelector<HTMLElement>('[data-okf-graph]');
     const projectPath = context.project?.path || '';
     if (!graphHost || !data?.okf) return;
@@ -455,7 +456,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     };
     wrap.querySelector('[data-okf-center]')?.addEventListener('click', () => graph?.center());
     wrap.addEventListener('keydown', (event) => { if (event.key === 'Escape' && wrap.querySelector('[data-okf-detail]')) closeDetail(); });
-    void mountGraph(graphHost, data.okf, (fiche) => showFiche(fiche.id)).then((mounted) => {
+    void mountGraph(graphHost, data.okf, showPremises, (fiche) => showFiche(fiche.id)).then((mounted) => {
       if (!graphHost.isConnected) return mounted.destroy();
       graph = mounted;
       destroyGraph = mounted.destroy;
@@ -524,9 +525,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         root.querySelector<HTMLElement>(`[data-sort="${sort}"]`)?.focus();
         return;
       }
-      const okfMode = target.closest<HTMLElement>('[data-okf-mode]')?.dataset.okfMode;
-      if (okfMode === 'table' || okfMode === 'graph') {
-        okfView = { ...okfView, mode: okfMode };
+      const premisesToggle = target.closest<HTMLInputElement>('[data-okf-premises]');
+      if (premisesToggle) {
+        showPremises = premisesToggle.checked;
+        try { localStorage.setItem('pmd-okf-premises', showPremises ? '1' : '0'); } catch { }
         paintContent();
         return;
       }

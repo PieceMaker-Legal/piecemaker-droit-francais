@@ -302,7 +302,7 @@ describe('index OKF contradictions', () => {
   const contradiction = { premise: '/_premises/Prix.md', titre: 'Prix', valeurs: [{ piece: 'Contrat', valeur: '1 000 €' }, { piece: 'Courrier', valeur: '1 200 €' }] };
 
   it('shows the contradictions between pieces in the chronology', () => {
-    const html = chronologyView({ graph: snapshot }, '', undefined, { mode: 'table', errors: null, contradictions: [contradiction] });
+    const html = chronologyView({ graph: snapshot }, '', undefined, { errors: null, contradictions: [contradiction] });
     expect(html).toContain('data-okf-report="contradictions"');
     expect(html).toContain('Prix');
     expect(html).toContain('Contrat : 1 000 €');
@@ -310,7 +310,7 @@ describe('index OKF contradictions', () => {
   });
 
   it('shows no contradiction report without contradictions', () => {
-    expect(chronologyView({ graph: snapshot }, '', undefined, { mode: 'table', errors: null, contradictions: [] })).not.toContain('data-okf-report="contradictions"');
-    expect(chronologyView({ graph: snapshot }, '', undefined, { mode: 'table', errors: null })).not.toContain('data-okf-report="contradictions"');
+    expect(chronologyView({ graph: snapshot }, '', undefined, { errors: null, contradictions: [] })).not.toContain('data-okf-report="contradictions"');
+    expect(chronologyView({ graph: snapshot }, '', undefined, { errors: null })).not.toContain('data-okf-report="contradictions"');
   });
 });

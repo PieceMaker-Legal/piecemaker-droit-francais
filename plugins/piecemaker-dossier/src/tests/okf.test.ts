@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { spreadBoxes, premiseReviewDraft, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
-import { chronologyView } from '../views.js';
+import { chronologyView, graphView, shell } from '../views.js';
 
 const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', relations });
 const index: OkfIndex = {
@@ -38,11 +38,18 @@ describe('index OKF', () => {
 
   it('le tableau affiche la colonne Liens et le rapport de vérification', () => {
     const node = { id: 'document:1', kind: 'document' as const, label: 'Courrier.pdf', aliases: [], data: { path: '/dossier/Pièces/Courrier.pdf' }, date: null };
-    const html = chronologyView({ graph: { nodes: [node], links: [] } as never, okf: index }, '/dossier', undefined, { mode: 'table', errors: [{ fiche: '/Pièces/Courrier.pdf.md', erreur: 'type absent' }] });
+    const html = chronologyView({ graph: { nodes: [node], links: [] } as never, okf: index }, '/dossier', undefined, { errors: [{ fiche: '/Pièces/Courrier.pdf.md', erreur: 'type absent' }] });
     expect(html).toContain('se réfère à → Contrat');
     expect(html).toContain('title="Nous faisons suite au contrat."');
     expect(html).toContain('1 erreur dans l’index');
-    expect(chronologyView({ graph: { nodes: [node], links: [] } as never, okf: index }, '/dossier', undefined, { mode: 'graph', errors: null })).toContain('data-okf-graph');
+    expect(html).not.toContain('data-okf-graph');
+  });
+
+  it('le graphe a son propre onglet, à côté de l’Index', () => {
+    expect(shell('graph')).toMatch(/data-tab="chronology"[\s\S]*data-tab="graph" aria-selected="true"/);
+    expect(graphView(index)).toContain('data-okf-graph');
+    expect(graphView(index)).not.toMatch(/data-okf-premises checked/);
+    expect(graphView(index, true)).toContain('data-okf-premises checked');
   });
 });
 
@@ -99,6 +106,13 @@ describe('prémisses de l’index OKF', () => {
       'Société Exemple SAS': 'party-adverse',
       ZETABIO: 'party-tiers',
     });
+  });
+
+  it('sans les prémisses, le graphe retire leurs nœuds et leurs liens', () => {
+    const elements = graphElements(premiseIndex, false);
+    expect(elements.some((element) => element.data.kind === 'premise')).toBe(false);
+    expect(elements.some((element) => element.data.relation === 'states' || element.data.target?.startsWith('/_premises/'))).toBe(false);
+    expect(elements.some((element) => element.data.kind === 'party-client')).toBe(true);
   });
 
   it('le graphe porte la relation sur chaque arête', () => {
@@ -196,5 +210,12 @@ describe('écartement du graphe', () => {
       const apart = Math.abs(a.x - b.x) >= (a.w + b.w) / 2 + 19.9 || Math.abs(a.y - b.y) >= (a.h + b.h) / 2 + 19.9;
       expect(apart).toBe(true);
     }
+  });
+
+  it('spreadBoxes écarte une rangée de nœuds sans l’étirer en ligne', () => {
+    const boxes = Array.from({ length: 6 }, (_, at) => ({ x: at * 40, y: 0, w: 120, h: 36 }));
+    spreadBoxes(boxes, 24, 12);
+    expect(Math.max(...boxes.map((box) => box.x)) - Math.min(...boxes.map((box) => box.x))).toBeLessThan(6 * 144);
+    expect(new Set(boxes.map((box) => Math.round(box.y))).size).toBeGreaterThan(1);
   });
 });

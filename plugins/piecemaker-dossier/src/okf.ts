@@ -13,7 +13,7 @@ export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
 export type OkfReport = { erreurs: OkfError[]; contradictions: OkfContradiction[] };
 export type PendingProposals = { ontologie: number; arborescence: number };
-export type OkfView = { index: OkfIndex | null; mode: 'table' | 'graph'; errors: OkfError[] | null; contradictions?: OkfContradiction[]; proposals?: PendingProposals };
+export type OkfView = { index: OkfIndex | null; errors: OkfError[] | null; contradictions?: OkfContradiction[]; proposals?: PendingProposals };
 export type OkfLink = { source: string; relation: string; target: string; citation?: string; value?: string };
 
 export const PREMISE_TYPE = 'Premise';
@@ -75,8 +75,8 @@ export function ficheLinks(index: OkfIndex | null, resource: string): Array<{ la
   ];
 }
 
-export function graphElements(index: OkfIndex): Array<{ data: Record<string, string> }> {
-  const fiches = index.fiches.filter((fiche) => [...index.typesGraphe, PREMISE_TYPE, PARTY_TYPE].includes(fiche.type));
+export function graphElements(index: OkfIndex, withPremises = true): Array<{ data: Record<string, string> }> {
+  const fiches = index.fiches.filter((fiche) => [...index.typesGraphe, ...(withPremises ? [PREMISE_TYPE] : []), PARTY_TYPE].includes(fiche.type));
   const ids = new Set(fiches.map((fiche) => fiche.id));
   const kind = (fiche: OkfFiche) => fiche.type === PREMISE_TYPE ? 'premise' : fiche.type === PARTY_TYPE ? `party-${fiche.side === 'adversaire' ? 'adverse' : fiche.side || 'tiers'}` : 'document';
   return [
@@ -110,7 +110,7 @@ export function premiseReviewDraft(index: OkfIndex, premiseId: string, project: 
   return { project, title: premise.title, templateName: '', columns: [{ name: premise.title, prompt: premise.description || premise.title, format: 'text', premise: premise.single ? 'single' : 'checkpoint' }], rows: [] };
 }
 
-export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: number }>, gap: number, rounds = 300): void {
+export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: number }>, gap: number, gapY = gap, rounds = 300): void {
   for (let round = 0; round < rounds; round += 1) {
     let moved = false;
     for (let i = 0; i < boxes.length; i += 1) {
@@ -120,10 +120,10 @@ export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: n
         const dx = b.x - a.x;
         const dy = b.y - a.y;
         const overlapX = (a.w + b.w) / 2 + gap - Math.abs(dx);
-        const overlapY = (a.h + b.h) / 2 + gap - Math.abs(dy);
+        const overlapY = (a.h + b.h) / 2 + gapY - Math.abs(dy);
         if (overlapX <= 0 || overlapY <= 0) continue;
         moved = true;
-        if (overlapX / (a.w + b.w) < overlapY / (a.h + b.h)) {
+        if (overlapX < overlapY) {
           const push = (overlapX / 2) * (dx < 0 ? -1 : 1);
           a.x -= push; b.x += push;
         } else {
@@ -138,7 +138,7 @@ export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: n
 
 export type OkfGraph = { center: () => void; destroy: () => void; select: (id: string | null) => void };
 
-export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen: (fiche: OkfFiche) => void): Promise<OkfGraph> {
+export async function mountGraph(container: HTMLElement, index: OkfIndex, withPremises: boolean, onOpen: (fiche: OkfFiche) => void): Promise<OkfGraph> {
   const { default: cytoscape } = await import('cytoscape');
   const paint = document.createElement('canvas').getContext('2d');
   const style = getComputedStyle(container);
@@ -156,7 +156,7 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen
   const fontFamily = style.fontFamily || 'sans-serif';
   const measure = document.createElement('canvas').getContext('2d');
   if (measure) measure.font = `500 12px ${fontFamily}`;
-  const elements = graphElements(index).map((element) => {
+  const elements = graphElements(index, withPremises).map((element) => {
     if (element.data.source) return element;
     const label = element.data.label;
     const width = Math.max(96, Math.min(200, (measure?.measureText(label).width || label.length * 7) + 54));
@@ -204,10 +204,10 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen
   });
   const nodes = graph.nodes();
   const extent = nodes.boundingBox();
-  const area = 2 * nodes.reduce((sum, node) => sum + node.outerWidth() * node.outerHeight(), 0);
+  const area = 3 * nodes.reduce((sum, node) => sum + node.outerWidth() * node.outerHeight(), 0);
   const width = Math.sqrt(area * (container.clientWidth && container.clientHeight ? container.clientWidth / container.clientHeight : 4 / 3));
   const boxes = nodes.map((node) => ({ x: (node.position('x') - extent.x1) * width / (extent.w || 1), y: (node.position('y') - extent.y1) * (area / width) / (extent.h || 1), w: node.outerWidth(), h: node.outerHeight() }));
-  spreadBoxes(boxes, 10);
+  spreadBoxes(boxes, 24, 12);
   nodes.forEach((node, at) => { node.position({ x: boxes[at].x, y: boxes[at].y }); });
   let focus: cytoscape.Collection | null = null;
   const fitView = () => { graph.resize(); graph.fit(focus ?? undefined, focus ? 40 : 24); };
