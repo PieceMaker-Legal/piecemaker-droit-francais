@@ -68,14 +68,8 @@ export const PLUGIN_STYLES = `
 .pmd-icon-button:hover{color:var(--pmd-text);background:var(--pmd-soft)}
 .pmd-icon-button svg{display:block;width:16px;height:16px}
 .pmd-spacer{flex:1}
-.pmd-models{position:relative;margin-left:auto;display:flex;flex-shrink:0;align-items:center;gap:8px}
-.pmd-scan-status{position:absolute;top:-6px;right:-6px;display:flex;border-radius:9999px;background:var(--pmd-bg)}
-.pmd-status-icon{position:relative;display:inline-flex;padding:0;border:0;background:transparent;color:var(--pmd-muted);cursor:pointer}
-.pmd-status-icon svg{width:14px;height:14px}
-.pmd-mapping-pill{position:absolute;bottom:calc(100% + 2px);left:50%;transform:translateX(-50%);padding:1px 6px;border-radius:999px;background:#e5484d;color:#fff;font-size:10px;font-weight:600;line-height:14px;white-space:nowrap;pointer-events:none}
+.pmd-scan-status{margin-left:auto;display:flex;flex-shrink:0;align-items:center}
 .pmd-mapping-validated{align-self:center;color:var(--pmd-muted);font-size:12px}
-.pmd-status-icon:hover{color:var(--pmd-text)}
-.pmd-status-icon:focus-visible{outline:2px solid rgb(0 136 255 / 40%);outline-offset:2px}
 .pmd-scan-progress{display:flex;min-width:128px;align-items:center;gap:8px}
 .pmd-scan-progress-label{white-space:nowrap;color:var(--pmd-muted);font-size:11px;font-variant-numeric:tabular-nums}
 .pmd-scan-progress-track{display:block;flex:1;height:3px;overflow:hidden;border-radius:999px;background:var(--pmd-soft)}
@@ -503,7 +497,7 @@ button.pmd-fact-pill:hover{filter:brightness(.95)}
   .pmd-content{padding:14px}
   .pmd-header{display:grid;width:100%;min-width:0;box-sizing:border-box;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:8px 10px}
   .pmd-tabs{grid-column:1 / -1;min-width:0;max-width:100%;overflow-x:auto}
-  .pmd-models{grid-column:2;grid-row:2;margin-left:0}
+  .pmd-scan-status{grid-column:2;grid-row:2;margin-left:0}
   .pmd-scan-progress{min-width:80px}
   .pmd-party-layout{display:grid;grid-template-columns:minmax(0,1fr) 40px;overflow:visible}
   .pmd-party-columns{grid-template-columns:1fr;overflow:visible}

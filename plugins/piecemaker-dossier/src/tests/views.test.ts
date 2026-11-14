@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName, scanStatusMarkup, shell } from '../views.js';
+import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName, shell } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -212,54 +212,6 @@ describe('empty parties state', () => {
   });
 });
 
-describe('scan status badge', () => {
-  it('shows a shield when the case is anonymized and a crossed-out shield otherwise', () => {
-    const anonymized = scanStatusMarkup(3, null, true);
-    const plain = scanStatusMarkup(0, null, false);
-
-    expect(anonymized).toContain('data-anonymized="true"');
-    expect(anonymized).toContain('m9 12 2 2 4-4');
-    expect(anonymized).not.toContain('m2 2 20 20');
-    expect(plain).toContain('aria-label="Dossier non anonymisé — afficher le mapping" title="Dossier non anonymisé — afficher le mapping"');
-    expect(plain).toContain('m2 2 20 20');
-  });
-
-  const runningJob = (percent: number) => ({
-    id: 'job-1',
-    projectId: 'project-1',
-    state: 'running' as const,
-    percent,
-    error: null,
-  });
-
-  it('shows a single shield next to the models icon when no scan is running', () => {
-    const html = shell('general', 12, null, true);
-
-    expect(html).toContain('class="pmd-status-icon" data-action="mapping" data-anonymized="true" aria-label="Dossier anonymisé — afficher le mapping"');
-    expect(html).toMatch(/data-action="local-models"[\s\S]*class="pmd-scan-status"/);
-    expect(html).not.toContain('anonymisé(s)');
-    expect(html).not.toContain('data-action="scan"');
-    expect(html).not.toContain('role="progressbar"');
-    expect(html).toContain('data-tab="general"');
-    expect(html).toContain('data-tab="chronology"');
-    expect(html).not.toContain('data-tab="scan"');
-  });
-
-  it('replaces the count by a progress bar showing only the percentage', () => {
-    const html = shell('general', 12, runningJob(42.4));
-
-    expect(html).toContain('>42 %<');
-    expect(html).toContain('aria-valuenow="42"');
-    expect(html).toContain('width:42.4%');
-  });
-
-  it('keeps a single percentage for markitdown and gliner', () => {
-    const html = shell('general', 0, runningJob(10));
-
-    expect(html).toContain('>10 %<');
-    expect(html).not.toContain('Conversion');
-  });
-});
 
 describe('piece names', () => {
   it('proposes a name from the date, the type and the place', () => {

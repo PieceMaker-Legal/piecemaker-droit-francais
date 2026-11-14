@@ -78,7 +78,6 @@ export function citationListMarkup(entries: CitationEntry[]): string {
 
 const userIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"></path><circle cx="10" cy="7" r="4"></circle><path d="M22 21a8 8 0 0 0-5-7.7"></path></svg>';
 const companyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4c0-.5.4-1 1-1h10c.6 0 1 .5 1 1v18"></path><path d="M6 12H4c-.6 0-1 .4-1 1v9"></path><path d="M18 9h2c.6 0 1 .4 1 1v12"></path><path d="M10 6h4M10 10h4M10 14h4M10 18h4"></path></svg>';
-const cpuIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><path d="M15 2v2"></path><path d="M15 20v2"></path><path d="M2 15h2"></path><path d="M2 9h2"></path><path d="M20 15h2"></path><path d="M20 9h2"></path><path d="M9 2v2"></path><path d="M9 20v2"></path></svg>';
 const tagIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.8A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .8 1.4l8.5 8.5a2.4 2.4 0 0 0 3.4 0l6.4-6.4a2.4 2.4 0 0 0 0-3.4z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>';
 const gearIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.2a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.2a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.2a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.2a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
 const moreIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>';
@@ -133,7 +132,6 @@ function nodeCard(node: KnowledgeNode, graph: KnowledgeSnapshot, state?: BodaccS
 }
 
 const shieldCheckIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg>';
-const shieldOffIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m2 2 20 20"></path><path d="M5 5a1 1 0 0 0-1 1v7c0 5 3.5 7.5 7.67 8.94a1 1 0 0 0 .67.01c2.35-.82 4.48-1.97 5.9-3.71"></path><path d="M9.31 3.65a12.25 12.25 0 0 0 1.93-1.37 1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1v7a9.78 9.78 0 0 1-.08 1.26"></path></svg>';
 const scanSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"></path><path d="M17 3h2a2 2 0 0 1 2 2v2"></path><path d="M21 17v2a2 2 0 0 1-2 2h-2"></path><path d="M7 21H5a2 2 0 0 1-2-2v-2"></path><circle cx="12" cy="12" r="3"></circle><path d="m16 16-1.9-1.9"></path></svg>';
 const tiersProfileIcon = '<svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 21a8 8 0 0 0-16 0"></path><circle cx="10" cy="7" r="4"></circle><path d="M22 21a8 8 0 0 0-5-7.7"></path></svg>';
 
@@ -152,14 +150,6 @@ export function scanPercentLabel(job: ScanJob): string {
   return `${Math.round(Math.max(0, Math.min(100, job.percent || 0)))} %`;
 }
 
-export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null, scanned = false, mappingValidated = true): string {
-  const scanning = Boolean(job && job.state === 'running');
-  const ready = scanned || mappingCount > 0;
-  const pending = ready && !scanning && !mappingValidated;
-  const label = `${scanned ? 'Dossier anonymisé' : 'Dossier non anonymisé'} — ${pending ? 'mapping à valider' : 'afficher le mapping'}`;
-  return `<button type="button" class="pmd-status-icon" data-action="mapping" data-anonymized="${scanned}" aria-label="${label}" title="${label}">${scanned ? shieldCheckIcon : shieldOffIcon}${pending ? '<span class="pmd-mapping-pill">À valider</span>' : ''}</button>`;
-}
-
 export function scanProgress(job: ScanJob): string {
   const percent = Math.max(0, Math.min(100, job.percent || 0));
   return `
@@ -172,19 +162,14 @@ export function scanProgress(job: ScanJob): string {
     </span>`;
 }
 
-export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null, scanned = false): string {
-  const scanning = Boolean(job && job.state === 'running');
+export function shell(active: Tab, job: ScanJob | null = null): string {
   return `
     <div class="pmd-header">
       <div class="pmd-tabs" role="tablist">
         ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
         <button class="pmd-button pmd-agents-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
-      <div class="pmd-models">
-        ${scanning && job ? scanProgress(job) : ''}
-        <button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--sm" data-action="local-models" title="Système de pseudonymisation" aria-label="Voir l’installation du système de pseudonymisation">${cpuIcon}</button>
-        <div class="pmd-scan-status" data-ready="${scanned || mappingCount > 0}" data-scanning="${scanning}">${scanStatusMarkup(mappingCount, job, scanned)}</div>
-      </div>
+      <div class="pmd-scan-status">${job?.state === 'running' ? scanProgress(job) : ''}</div>
     </div>
     <div data-error></div>
     <div class="pmd-workspace"><main class="pmd-content" data-content></main></div>`;

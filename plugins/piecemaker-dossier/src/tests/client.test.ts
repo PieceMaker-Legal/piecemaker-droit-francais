@@ -168,17 +168,23 @@ describe('Dossier edit action', () => {
     const openFileInEditor = vi.fn();
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor });
     await vi.waitFor(() => expect(container.querySelector('[data-edit-node]')).not.toBeNull());
-    if (source === 'mapping') container.querySelector<HTMLElement>('[data-action="mapping"]')!.click();
+    if (source === 'mapping') { (window as Window & { __piecemakerMappingShow?: string }).__piecemakerMappingShow = '/dossier-exemple'; window.dispatchEvent(new window.Event('piecemaker:mapping-show')); }
     const scope = source === 'mapping' ? container.querySelector('.pmd-mapping-dialog')! : container;
     scope.querySelector<HTMLElement>('[data-edit-node]')!.click();
     expect(openFileInEditor).toHaveBeenCalledExactlyOnceWith('piecemaker://identity/open/Soci%C3%A9t%C3%A9%20Exemple%20SAS');
     expect(container.querySelector('.pmd-modal')).toBeNull();
   });
 
-  it('opens the mapping from the shield', async () => {
+  it('publishes the anonymization state and opens the mapping on request', async () => {
+    const states: Array<{ anonymized: boolean; project: string }> = [];
+    const listen = (event: Event) => states.push((event as CustomEvent).detail);
+    window.addEventListener('piecemaker:anonymization-state', listen);
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
-    await vi.waitFor(() => expect(container.querySelector('.pmd-status-icon')).not.toBeNull());
-    container.querySelector<HTMLButtonElement>('.pmd-status-icon')!.click();
+    await vi.waitFor(() => expect(container.querySelector('[data-edit-node]')).not.toBeNull());
+    window.removeEventListener('piecemaker:anonymization-state', listen);
+    expect(states.at(-1)?.project).toBe('/dossier-exemple');
+    (window as Window & { __piecemakerMappingShow?: string }).__piecemakerMappingShow = '/dossier-exemple';
+    window.dispatchEvent(new window.Event('piecemaker:mapping-show'));
     expect(container.querySelector('.pmd-mapping-dialog')).not.toBeNull();
   });
 });

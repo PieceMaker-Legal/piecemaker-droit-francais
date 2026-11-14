@@ -11,7 +11,7 @@ import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, 
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { CUSTOM_NATURE, chronologyView, graphView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
+import { CUSTOM_NATURE, chronologyView, graphView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanProgress, shell } from './views.js';
 import type { BodaccScanState, ChronologySort, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -35,6 +35,7 @@ const VIEW_EVENT = 'piecemaker:dossier-view';
 const VIEW_KEY = '__piecemakerDossierView';
 const MAPPING_EVENT = 'piecemaker:mapping-show';
 const MAPPING_KEY = '__piecemakerMappingShow';
+const ANONYMIZATION_STATE_EVENT = 'piecemaker:anonymization-state';
 const SCAN_POLL_INTERVAL_MS = 1000;
 const VERSION_POLL_INTERVAL_MS = 5000;
 const viewCache = new Map<string, ViewData>();
@@ -396,13 +397,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
 
   const paintScanStatus = () => {
     const status = root.querySelector<HTMLElement>('.pmd-scan-status');
-    if (!status) return;
-    const mappingCount = data?.graph.mappings.length || 0;
-    const scanned = Boolean(data?.graph.anonymizationComplete);
-    const scanning = Boolean(scanJob && scanJob.state === 'running');
-    status.dataset.ready = String(scanned || mappingCount > 0);
-    status.dataset.scanning = String(scanning);
-    status.innerHTML = scanStatusMarkup(mappingCount, scanJob, scanned, Boolean(mappingValidated));
+    const scanning = scanJob?.state === 'running';
+    if (status) status.innerHTML = scanning && scanJob ? scanProgress(scanJob) : '';
+    const ready = Boolean(data?.graph.anonymizationComplete) || Boolean(data?.graph.mappings.length);
+    window.dispatchEvent(new CustomEvent(ANONYMIZATION_STATE_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', project: context.project?.path || null, anonymized: Boolean(data?.graph.anonymizationComplete), pending: ready && !scanning && !mappingValidated } }));
   };
 
   const paintContent = () => {
@@ -646,10 +644,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         openMapping();
         return;
       }
-      if (action === 'local-models') {
-        window.dispatchEvent(new Event('piecemaker:pseudonymization-open'));
-        return;
-      }
       if (action === 'agents') {
         if (!context.project) return;
         knowledgeApi.ensureAgentInstructions(context.project.name)
@@ -780,7 +774,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const render = () => {
     root.dataset.theme = context.theme;
     if (!root.querySelector('[data-content]')) {
-      root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanJob, Boolean(data?.graph.anonymizationComplete));
+      root.innerHTML = shell(active, scanJob);
       bindOnce();
     } else {
       paintTabs();

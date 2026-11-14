@@ -125,6 +125,21 @@
   height: 14px;
 }
 
+.piecemaker-workspace-panel-header .piecemaker-panel-anonymization {
+  position: relative;
+}
+
+.piecemaker-workspace-panel-header .piecemaker-panel-anonymization[data-pending='true']::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: #e5484d;
+}
+
 .piecemaker-workspace-panel-content {
   flex: 1;
   min-height: 0;
