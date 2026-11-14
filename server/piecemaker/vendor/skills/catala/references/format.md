@@ -72,11 +72,11 @@ déclaration champ d'application TestResolution:
   résultat calcul champ d'application Resolution.ResolutionUnilaterale
 
 champ d'application TestResolution:
-  ## Inexécution grave
+  ## okf:/_premises/inexecution-grave.md
   règle calcul.inexécution_grave rempli
-  ## Mise en demeure reçue
+  ## okf:/_premises/mise-en-demeure.md
   règle calcul.mise_en_demeure rempli
-  ## Prix facturé
+  ## okf:/_premises/prix.md
   définition calcul.prix égal à 12 000 €
   assertion calcul.possible
   assertion calcul.restitution = 12 000 €
@@ -87,6 +87,8 @@ champ d'application TestResolution:
 
 - Déclarez chaque fait du dossier comme un `contexte` titré : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur.
 - Une `condition` est fausse tant qu'aucune règle ne la remplit. Dans le test, écrivez `règle calcul.fait rempli` pour un fait établi, `définition calcul.prix égal à …` pour une valeur.
+- Justifiez chaque fait du scénario : écrivez `## okf:/_premises/<fiche>.md` juste au-dessus. `pm catala verifier` refuse un fait sans ce lien, une fiche sans pièce citée et une valeur différente de celle de la prémisse. Il avertit quand le lien de la pièce a été posé par l'avocat.
+- Une constante d'énumération (`Inconnu`, une thèse) est une hypothèse du scénario : elle ne demande pas de lien.
 - Confiez les prémisses à `premise-maker`. Il les cherche dans les pièces et les relie par des liens `states` cités.
 - Gardez les déclarations dans un bloc ` ```catala-metadata ` : un module n'expose que ces blocs.
 

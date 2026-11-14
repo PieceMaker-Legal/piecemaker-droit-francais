@@ -5,6 +5,7 @@ import {
   PARTY_TYPE,
   PREMISE_TYPE,
   STATES,
+  isoDateOf,
   migratedId,
   readBundle,
   relationsOf,
@@ -13,7 +14,7 @@ import {
 import { graphTypesOf, readOntology, relationNames } from './ontology.js';
 
 export const OKF_SCHEME = 'okf:';
-export type PremisePiece = { resource: string; title: string; citation: string; value: string };
+export type PremisePiece = { resource: string; title: string; citation: string; value: string; origin: string };
 export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[] };
 export type OkfGap = { element: string; manque: string; programmes?: string[] };
 
@@ -26,12 +27,34 @@ function evidenceOf(concepts: Concept[], id: string): PremiseEvidence | null {
   if (!premise) return null;
   const pieces = concepts.flatMap((concept) => live(concept, STATES)
     .filter((entry) => entry.target === id)
-    .map((entry) => ({ resource: text(concept.frontmatter.resource), title: text(concept.frontmatter.title), citation: entry.citation, value: entry.value || '' })));
+    .map((entry) => ({ resource: text(concept.frontmatter.resource), title: text(concept.frontmatter.title), citation: entry.citation, value: entry.value || '', origin: entry.origin })));
   return { id, title: text(premise.frontmatter.title), pieces };
 }
 
 export function premiseEvidence(projectPath: string, source: string): PremiseEvidence | null {
   return evidenceOf(readBundle(projectPath).filter((concept) => !concept.error), premiseIdOf(source));
+}
+
+const NUMBER = /-?\d[\d   ]*(?:[.,]\d+)*/;
+
+function numberOf(value: string): number | null {
+  const digits = value.match(NUMBER)?.[0].replace(/[   ]/g, '');
+  if (!digits) return null;
+  const normalized = digits.includes('.') && digits.includes(',') ? digits.replace(/,/g, '') : digits.replace(',', '.');
+  const number = Number(normalized);
+  return Number.isFinite(number) ? number : null;
+}
+
+export function expectedValue(expression: string): { date: string } | { number: number } | null {
+  const date = expression.match(/^\|(\d{4}-\d{2}-\d{2})\|$/)?.[1];
+  if (date) return { date };
+  if (!/^\$?-?\d[\d   .,]*(?:\s*(?:€|[\p{L}]+))?$/u.test(expression)) return null;
+  const number = numberOf(expression);
+  return number === null ? null : { number };
+}
+
+export function matchesExpected(expected: { date: string } | { number: number }, value: string): boolean {
+  return 'date' in expected ? isoDateOf(value) === expected.date : numberOf(value) === expected.number;
 }
 
 export function graphGaps(projectPath: string): OkfGap[] {

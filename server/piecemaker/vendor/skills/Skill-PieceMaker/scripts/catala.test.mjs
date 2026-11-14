@@ -570,7 +570,7 @@ const FACTS = [
   '```',
   '',
 ].join('\n');
-const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  définition calcul.demande égal à 0 €\n  assertion calcul.montant = 0 €\n```\n";
+const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  ## okf:/_premises/demande.md\n  définition calcul.demande égal à 0 €\n  assertion calcul.montant = 0 €\n```\n";
 
 test('verifier requires a title, a legal anchor and a complete task', async () => {
   const { home, dossier, cleanup } = scratch();
@@ -661,6 +661,7 @@ test('the indemnity fixture passes documentation and each rule rejects its fault
     assert.equal(await errors(source), '');
     assert.match(await errors(source.replace('## Article 2224 | LEGIARTI000019017112', '## Article 2224')), /règle sans source juridique/);
     assert.match(await errors(source.replace('## Société cotée', '## société_cotée')), /titre « société_cotée » : écrivez 2 à 7 mots/);
+    assert.match(await errors(source.replace('  ## okf:/_premises/societe-cotee.md\n', '')), /fait du scénario sans justification : écrivez ## okf:\/_premises\/<fiche>\.md juste au-dessus de cas\.société_cotée\./);
     assert.match(await errors(source, { ...task, type: 'contentieux' }), /type de tâche inconnu : écrivez litigation, transactional\./);
   } finally { cleanup(); }
 });

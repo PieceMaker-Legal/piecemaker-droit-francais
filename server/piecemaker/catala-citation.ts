@@ -7,7 +7,9 @@ import { sourceContext } from '../../shared/piecemaker/catala-sources.js';
 
 import type { createCitationStore } from './harness/citation-store.js';
 import { locateSourcePassages } from './harness/source-passages.js';
-import { premiseEvidence } from './okf/premises.js';
+import { LAWYER_ACTOR } from './okf/bundle.js';
+import { expectedValue, matchesExpected, premiseEvidence } from './okf/premises.js';
+import { scenarioFacts } from './vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
 
 export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
   const inspect = async (cwd: string, id: string, quote: string, content?: string) => {
@@ -22,9 +24,15 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
     return { token, title: info.title, verified, status: !quote ? 'missing' : verified ? 'passed' : 'failed', message: !quote ? 'Aucun extrait cité.' : verified ? 'Citation retrouvée dans la source.' : 'Citation non retrouvée dans la source.' };
   };
   const entries = (files: Array<{ nom: string; chemin: string; contenu: string }>) => files.flatMap((file) => {
-    const found = new Map<string, { target: string; quote: string; origin: string; label: string; kind: string }>();
+    const found = new Map<string, { target: string; quote: string; origin: string; label: string; kind: string; values?: string[] }>();
     const contexts = [sourceContext(`https://catala.local/${encodeURIComponent(path.basename(file.nom))}`, [file], true), ...file.contenu.split('\n').map((_, index) => sourceContext(`https://catala.local/${encodeURIComponent(path.basename(file.nom))}#L${index + 1}`, [file]))];
     for (const context of contexts) for (const ref of context.references) if (['article', 'piece', 'jurisprudence', 'premise'].includes(ref.kind)) found.set(JSON.stringify([ref.target || ref.label, ref.quote]), ref);
+    for (const fact of scenarioFacts(file.contenu, { test: /^test_/.test(path.basename(file.nom)) })) {
+      if (!fact.source) continue;
+      const key = JSON.stringify([fact.source, '']);
+      const ref = found.get(key) ?? { label: fact.source, target: fact.source, kind: 'premise', origin: file.chemin, quote: '' };
+      found.set(key, { ...ref, values: [...(ref.values ?? []), fact.value].filter(Boolean) });
+    }
     return [...found.values()];
   });
   return {
@@ -46,8 +54,11 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
               const located = { target: encodeURI(path.relative(path.dirname(ref.origin), id).split(path.sep).join('/')), quote: piece.citation, id };
               try { pieces.push({ ...located, ...await inspect(cwd, id, piece.citation) }); } catch (error) { pieces.push({ ...located, title: piece.title, verified: false, status: 'failed', message: error instanceof Error ? error.message : String(error) }); }
             }
-            const verified = pieces.length > 0 && pieces.every((piece) => piece.verified);
-            results.push({ ...ref, title: evidence.title, verified, status: verified ? 'passed' : pieces.length ? 'failed' : 'missing', message: verified ? 'Prémisse établie par des pièces citées.' : pieces.length ? 'Citation non retrouvée dans une pièce de la prémisse.' : 'Prémisse sans pièce citée.', pieces });
+            const stated = evidence.pieces.map((piece) => piece.value).filter(Boolean);
+            const differs = (ref.values ?? []).find((expression) => { const expected = expectedValue(expression); return expected && stated.length && !stated.some((value) => matchesExpected(expected, value)); });
+            const verified = pieces.length > 0 && pieces.every((piece) => piece.verified) && !differs;
+            const warning = evidence.pieces.some((piece) => piece.origin === LAWYER_ACTOR) ? `${ref.target} : lien posé par l’avocat, vérification manuelle requise.` : undefined;
+            results.push({ ...ref, title: evidence.title, verified, status: verified ? 'passed' : pieces.length ? 'failed' : 'missing', message: differs ? `Valeur du scénario (${differs}) différente de la prémisse (${stated.join(' ; ')}).` : verified ? 'Prémisse établie par des pièces citées.' : pieces.length ? 'Citation non retrouvée dans une pièce de la prémisse.' : 'Prémisse sans pièce citée.', pieces, ...(warning ? { warning } : {}) });
             continue;
           }
           let id: string;
@@ -67,7 +78,8 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
         } catch (error) { results.push({ ...ref, verified: false, status: 'failed', message: error instanceof Error ? error.message : String(error) }); }
       }
       const passed = results.length > 0 && results.every((entry) => entry.verified);
-      return { passed, status: passed ? 'passed' : results.some((entry) => entry.status === 'failed') ? 'failed' : 'missing', message: results.length ? `${results.filter((entry) => entry.verified).length}/${results.length} citation(s) vérifiée(s).` : 'Aucune citation déclarée.', results };
+      const warnings = results.flatMap((entry) => 'warning' in entry && entry.warning ? [entry.warning] : []);
+      return { passed, status: passed ? 'passed' : results.some((entry) => entry.status === 'failed') ? 'failed' : 'missing', message: results.length ? `${results.filter((entry) => entry.verified).length}/${results.length} citation(s) vérifiée(s).` : 'Aucune citation déclarée.', results, warnings };
     },
   };
 }

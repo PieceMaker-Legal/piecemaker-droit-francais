@@ -21,7 +21,7 @@ Un fait est un `contexte` du champ (`format.md`, « Faits du dossier »). Dans l
 
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées. Gardez les étiquettes et exceptions dans Catala.
 
-Dans un scénario, définissez les faits comme des données intermédiaires sous les sections de leurs pièces, puis passez ces données au champ métier. La trace conserve ainsi leur origine. Une déclaration de champ donne seulement son contexte ; elle ne prouve pas l’origine factuelle de sa valeur.
+Au-dessus de chaque fait du scénario, écrivez `## okf:/_premises/<fiche>.md`. La prémisse porte les pièces et leurs citations ; `pm catala verifier` les contrôle.
 
 Le graphe est un arbre lu de gauche à droite : la conclusion, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
 La couleur donne l’état de chaque case : vert pour validé, orange pour à établir ou à justifier, rouge pour non rempli.

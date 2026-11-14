@@ -91,7 +91,7 @@ flowchart LR
   P -->|states, citation| D[Pièce]
 ```
 
-1. Une condition Catala se justifie par une prémisse : `okf:/_premises/<titre normalisé>.md`.
+1. Un fait de scénario Catala se justifie par une prémisse : `## okf:/_premises/<titre normalisé>.md` juste au-dessus de lui.
 2. Une prémisse se justifie par des pièces citées (`states`).
 3. Une condition ne cite jamais une pièce directement.
 

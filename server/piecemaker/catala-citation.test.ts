@@ -82,6 +82,29 @@ test('verifies Judilibre and constitutional decisions through the existing sourc
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
+test('a scenario fact justified by a premise is checked against the stated value and flags a lawyer link', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-fact-'));
+  try {
+    const bundle = path.join(home, '.piecemaker', 'okf');
+    await mkdir(path.join(bundle, 'Pièces'), { recursive: true });
+    await mkdir(path.join(bundle, '_premises'), { recursive: true });
+    await writeFile(path.join(bundle, 'Pièces', 'Contrat.pdf.md'), '---\ntype: Pièces\ntitle: Contrat.pdf\nresource: Pièces/Contrat.pdf\nrelations:\n  states:\n    - target: /_premises/prix.md\n      citation: Le prix est de 1 000 euros.\n      origin: piecemaker/avocat\n      value: 1 000 euros\n---\n');
+    await writeFile(path.join(bundle, '_premises', 'prix.md'), '---\ntype: Premise\ntitle: Prix\n---\n');
+    const service = createCatalaCitation({
+      source: async () => ({ kind: 'piece', title: 'Contrat.pdf', text: 'Le prix est de 1 000 euros.' }),
+      match: (text, quote) => text.includes(quote) ? quote : null,
+    }, createCitationStore(home));
+    const origin = path.join(home, '.piecemaker/catala/prime/test_prime.catala_fr');
+    const scenario = (value: string) => ['```catala', '#[test]', "déclaration champ d'application Essai:", '  résultat cas champ d\'application Prime', '', "champ d'application Essai:", '  ## okf:/_premises/prix.md', `  définition cas.prix égal à ${value}`, '  assertion cas.montant = 0 €', '```'].join('\n');
+    const good = await service.verify(home, [{ nom: 'test_prime.catala_fr', chemin: origin, contenu: scenario('1 000 €') }]);
+    assert.equal(good.passed, true);
+    assert.deepEqual(good.warnings, ['okf:/_premises/prix.md : lien posé par l’avocat, vérification manuelle requise.']);
+    const bad = await service.verify(home, [{ nom: 'test_prime.catala_fr', chemin: origin, contenu: scenario('2 000 €') }]);
+    assert.equal(bad.passed, false);
+    assert.match(bad.results[0].message, /Valeur du scénario \(2 000 €\) différente de la prémisse/);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
 test('develops an OKF premise into its cited pieces and fails without evidence', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'catala-premise-'));
   try {

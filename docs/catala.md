@@ -169,7 +169,7 @@ Le graphe reste disponible lorsqu’un scénario réussit, même si une autre v�
 
 Le contrôle des citations utilise les mêmes références que le graphe et les connecteurs PieceMaker existants.
 Les sources officielles passent par le MCP Légifrance et les identifiants PISTE de l’utilisateur.
-Un fait du dossier est un `contexte` du programme. Un lien `okf:/_premises/<fiche>.md` du programme renvoie à sa prémisse, jamais à une pièce : le contrôle développe la prémisse en ses pièces citées et vérifie chaque citation (`docs/okf.md`). Les pièces passent par le lecteur existant du dossier. Aucun extrait absent ou introuvable ne vaut validation.
+Un fait du dossier est un `contexte` du programme. Dans un scénario, chaque fait (`règle cas.x rempli`, `définition cas.x égal à …`) porte juste au-dessus `## okf:/_premises/<fiche>.md` ; le contrôle `documentation` refuse un fait sans ce lien, sauf une constante d'énumération (hypothèse du scénario). Le contrôle des citations compare la valeur du fait à celle de la prémisse et avertit quand le lien de la pièce a été posé par l'avocat. Ce lien renvoie à sa prémisse, jamais à une pièce : le contrôle développe la prémisse en ses pièces citées et vérifie chaque citation (`docs/okf.md`). Les pièces passent par le lecteur existant du dossier. Aucun extrait absent ou introuvable ne vaut validation.
 `citations.json` conserve les résultats et les jetons du lecteur interne. Le graphe affiche les erreurs sur leurs références.
 Le lecteur réutilise ces résultats tant que le programme reste inchangé. Aucun contrôle sémantique supplémentaire n’est ajouté.
 La commande CLI joint le serveur local pour ce contrôle ; serveur absent, le bilan signale l’indisponibilité.

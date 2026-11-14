@@ -287,7 +287,7 @@ async function verifier(context, program, flags = {}) {
     return entry;
   };
   const contents = files.map((file) => ({ name: file, content: fs.readFileSync(path.join(program.directory, file), 'utf8') }));
-  await record('documentation', 'Titres, sources juridiques des règles, ouverture des blocs', async () => {
+  await record('documentation', 'Titres, sources juridiques des règles, faits justifiés, ouverture des blocs', async () => {
     const errors = contents.flatMap(({ name, content }) => catalaDocumentation(content, { test: /^test_/.test(path.basename(name)) }).errors.map((error) => `${name}:${error.line}: ${error.message}`));
     errors.push(...taskErrors(program.directory, files).map((message) => `tache.json:1: ${message}`));
     return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
@@ -381,7 +381,7 @@ async function verifier(context, program, flags = {}) {
       if (!context.citations) return missing('Contrôle de citations indisponible : serveur PieceMaker requis.');
       const report = await context.citations({ cwd: program.root, programme: program.name });
       writeResult(program.directory, 'citations.json', { ...report, sources_sha256: digest, started_utc: started, finished_utc: context.now() });
-      return { passed: report.passed, status: report.status, message: report.message };
+      return { passed: report.passed, status: report.status, message: [report.message, ...(report.warnings ?? [])].join(' · ') };
     }),
   ]);
   const changed = digest !== sourcesDigest(program.directory, sourceFiles(program.directory));

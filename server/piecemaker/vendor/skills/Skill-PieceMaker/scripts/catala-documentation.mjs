@@ -1,6 +1,7 @@
 const decode = (value) => value.replace(/\\\r?\n[ \t]*/g, '').replace(/\\([\s\S])/g, (_, char) => char === 'n' ? '\n' : char === 't' ? '\t' : char);
 
 const ANCHOR = /\|\s*(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT)\d+/;
+const PREMISE = /^okf:\/\S+$/;
 const DECLARED_TEST = /#\[test\]\s*(?:déclaration|declaration)\s+(?:champ d'application|scope)\s+([\p{L}\p{N}_]+)/gu;
 
 export function catalaDocumentation(content, { test = false } = {}) {
@@ -33,6 +34,8 @@ export function catalaDocumentation(content, { test = false } = {}) {
           pending.push(decode(token[1]));
           const field = decode(token[1]).match(/^\s*(titre|source|quote)\s*:/im)?.[1];
           if (field) errors.push({ line: lineAt(token.index), message: `#[doc] contient « ${field}: » : le titre va dans ## texte court, la source juridique dans le titre de section.` });
+        } else if (PREMISE.test(token[2].trim())) {
+          pending.push(token[2].trim());
         } else {
           meta.title = token[2].trim();
           const words = meta.title.split(/\s+/).filter(Boolean);
@@ -74,7 +77,26 @@ export function catalaDocumentation(content, { test = false } = {}) {
     } else if (fence && code) block.push(line);
   });
   if (code) inspect();
+  for (const fact of scenarioFacts(content, { test })) if (!fact.source) errors.push({ line: fact.line, message: `fait du scénario sans justification : écrivez ## okf:/_premises/<fiche>.md juste au-dessus de ${fact.variable}.` });
   return { entries, errors };
+}
+
+const FACT = /^\s*(?:(?:règle|rule)\s+([\p{L}\p{N}_]+\.[\p{L}\p{N}_.]+)\s+(?:rempli|fulfilled)|(?:définition|definition)\s+([\p{L}\p{N}_]+\.[\p{L}\p{N}_.]+)\s+(?:égal à|equals)(.*))\s*$/u;
+
+export function scenarioFacts(content, { test = false } = {}) {
+  const tests = new Set([...content.matchAll(DECLARED_TEST)].map((match) => match[1]));
+  const facts = [];
+  let scope = '';
+  let source = '';
+  content.split(/\r?\n/).forEach((line, index) => {
+    const opened = line.match(/^\s*(?:champ d'application|scope)\s+([\p{L}\p{N}_]+)\s*:/u);
+    if (opened) scope = opened[1];
+    else if (/^\s*(?:#\[test\]\s*)?(?:déclaration|declaration)(?![\p{L}\p{N}_])|^\s{0,3}(?:`{3,}|~{3,})/u.test(line)) scope = '';
+    const fact = scope && (test || tests.has(scope)) && line.match(FACT);
+    if (fact && !/^\p{Lu}[\p{L}\p{N}_]*$/u.test((fact[3] ?? '').trim())) facts.push({ line: index + 1, variable: fact[1] ?? fact[2], value: (fact[3] ?? '').trim(), source });
+    if (line.trim()) source = line.match(/^\s*##\s+(okf:\/\S+)\s*$/)?.[1] ?? '';
+  });
+  return facts;
 }
 
 export function testsWithoutAssertion(content) {

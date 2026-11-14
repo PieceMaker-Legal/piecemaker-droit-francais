@@ -51,7 +51,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 2. Écrivez `tache.json`, puis `clerk.toml` (`[project]`, `name = "<nom>"`).
 3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article titré, son extrait exact, puis son bloc ` ```catala `.
 4. Déclarez chaque fait du dossier comme un `contexte` : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur (`references/format.md`). Confiez les prémisses à `premise-maker`.
-5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier ou des faits fictifs.
+5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier, chacun sous `## okf:/_premises/<fiche>.md`.
 6. Lancez `pm catala verifier --programme <nom>` jusqu'à « vérifié », puis `pm okf verify`. Suivez chaque message.
 
 ## Où chercher

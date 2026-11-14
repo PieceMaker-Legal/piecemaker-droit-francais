@@ -33,7 +33,7 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 
 ## Méthode
 
-1. La demande donne, pour chaque prémisse : son chemin `okf:`, la question, le type, la valeur attendue, les pièces repérées et le passage Catala. C'est la liste complète de votre travail. Sans cette liste, relevez chaque lien `okf:/_premises/…` du programme désigné.
+1. La demande donne, pour chaque prémisse : son chemin `okf:`, la question, le type, la valeur attendue, les pièces repérées et le passage Catala. C'est la liste complète de votre travail. Sans cette liste, relevez chaque `## okf:/_premises/…` des scénarios du programme désigné.
 2. Pour chaque prémisse de la liste, lisez sa fiche si elle existe.
 3. Vérifiez la valeur attendue dans les pièces repérées, puis dans les autres pièces utiles : Markdown converti ou `pm dossier sql`.
 4. Écrivez uniquement avec `pm okf link` et `pm okf unlink`, sous le titre exact attendu par la condition. Donnez la valeur trouvée (`--value`) quand le fait est une date, un montant ou une durée, dans le type demandé.

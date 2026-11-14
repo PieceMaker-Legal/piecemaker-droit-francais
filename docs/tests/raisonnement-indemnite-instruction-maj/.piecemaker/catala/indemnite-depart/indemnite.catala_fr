@@ -255,26 +255,40 @@ champ d'application AnalyseIndemnité:
 déclaration champ d'application DossierEnÉtat:
   résultat cas champ d'application AnalyseIndemnité
 champ d'application DossierEnÉtat:
+  ## okf:/_premises/societe-cotee.md
   règle cas.société_cotée rempli
+  ## okf:/_premises/mandat-de-directeur-general.md
   règle cas.mandat_de_directeur_général rempli
+  ## okf:/_premises/engagement-decide.md
   règle cas.engagement_décidé rempli
+  ## okf:/_premises/politique-approuvee.md
   règle cas.politique_approuvée rempli
+  ## okf:/_premises/revocation-decidee.md
   règle cas.révocation_décidée rempli
+  ## okf:/_premises/indemnite-impayee.md
   règle cas.indemnité_impayée rempli
   définition cas.non_participation_au_conseil égal à Inconnu
   définition cas.absence_effet_dissuasif égal à Inconnu
   définition cas.vote_ex_post_initial égal à Inconnu
+  ## okf:/_premises/marge-constatee.md
   définition cas.marge_constatée égal à 8,6
+  ## okf:/_premises/seuil-de-performance.md
   définition cas.seuil_de_performance égal à 8,0
+  ## okf:/_premises/remuneration-mensuelle.md
   définition cas.rémunération_mensuelle égal à 20 000 €
+  ## okf:/_premises/mois-contractuels.md
   définition cas.mois_contractuels égal à 24,0
+  ## okf:/_premises/montant-stipule.md
   définition cas.montant_stipulé égal à 480 000 €
+  ## okf:/_premises/montant-reclame.md
   définition cas.montant_réclamé égal à 480 000 €
+  ## okf:/_premises/capital-social.md
   définition cas.capital_social égal à 40 000 000 €
+  ## okf:/_premises/date-engagement.md
   définition cas.date_engagement égal à |2022-03-15|
+  ## okf:/_premises/date-cessation.md
   définition cas.date_cessation égal à |2022-12-19|
   définition cas.lecture_du_vote égal à NonTranchée
-  définition cas.date_examen égal à |2026-10-21|
   assertion cas.paiement_de_l_indemnité = Inconnu
   assertion cas.montant_contractuel = 480 000 €
   assertion cas.échéance_contractuelle = |2023-01-18|
@@ -288,26 +302,40 @@ champ d'application DossierEnÉtat:
 déclaration champ d'application ThèseContractuelleSansPrémisses:
   résultat cas champ d'application AnalyseIndemnité
 champ d'application ThèseContractuelleSansPrémisses:
+  ## okf:/_premises/societe-cotee.md
   règle cas.société_cotée rempli
+  ## okf:/_premises/mandat-de-directeur-general.md
   règle cas.mandat_de_directeur_général rempli
+  ## okf:/_premises/engagement-decide.md
   règle cas.engagement_décidé rempli
+  ## okf:/_premises/politique-approuvee.md
   règle cas.politique_approuvée rempli
+  ## okf:/_premises/revocation-decidee.md
   règle cas.révocation_décidée rempli
+  ## okf:/_premises/indemnite-impayee.md
   règle cas.indemnité_impayée rempli
   définition cas.non_participation_au_conseil égal à Inconnu
   définition cas.absence_effet_dissuasif égal à Inconnu
   définition cas.vote_ex_post_initial égal à Inconnu
+  ## okf:/_premises/marge-constatee.md
   définition cas.marge_constatée égal à 8,6
+  ## okf:/_premises/seuil-de-performance.md
   définition cas.seuil_de_performance égal à 8,0
+  ## okf:/_premises/remuneration-mensuelle.md
   définition cas.rémunération_mensuelle égal à 20 000 €
+  ## okf:/_premises/mois-contractuels.md
   définition cas.mois_contractuels égal à 24,0
+  ## okf:/_premises/montant-stipule.md
   définition cas.montant_stipulé égal à 480 000 €
+  ## okf:/_premises/montant-reclame.md
   définition cas.montant_réclamé égal à 480 000 €
+  ## okf:/_premises/capital-social.md
   définition cas.capital_social égal à 40 000 000 €
+  ## okf:/_premises/date-engagement.md
   définition cas.date_engagement égal à |2022-03-15|
+  ## okf:/_premises/date-cessation.md
   définition cas.date_cessation égal à |2022-12-19|
   définition cas.lecture_du_vote égal à ThèseContractuelle
-  définition cas.date_examen égal à |2026-10-21|
   assertion cas.paiement_de_l_indemnité = Inconnu
   assertion cas.montant_contractuel = 480 000 €
   assertion cas.échéance_contractuelle = |2023-01-18|
@@ -321,27 +349,42 @@ champ d'application ThèseContractuelleSansPrémisses:
 déclaration champ d'application VoteAprèsDépartRefusé:
   résultat cas champ d'application AnalyseIndemnité
 champ d'application VoteAprèsDépartRefusé:
+  ## okf:/_premises/societe-cotee.md
   règle cas.société_cotée rempli
+  ## okf:/_premises/mandat-de-directeur-general.md
   règle cas.mandat_de_directeur_général rempli
+  ## okf:/_premises/engagement-decide.md
   règle cas.engagement_décidé rempli
+  ## okf:/_premises/politique-approuvee.md
   règle cas.politique_approuvée rempli
+  ## okf:/_premises/revocation-decidee.md
   règle cas.révocation_décidée rempli
+  ## okf:/_premises/vote-apres-depart-refuse.md
   règle cas.vote_après_départ_refusé rempli
+  ## okf:/_premises/indemnite-impayee.md
   règle cas.indemnité_impayée rempli
   définition cas.non_participation_au_conseil égal à Inconnu
   définition cas.absence_effet_dissuasif égal à Inconnu
   définition cas.vote_ex_post_initial égal à Inconnu
+  ## okf:/_premises/marge-constatee.md
   définition cas.marge_constatée égal à 8,6
+  ## okf:/_premises/seuil-de-performance.md
   définition cas.seuil_de_performance égal à 8,0
+  ## okf:/_premises/remuneration-mensuelle.md
   définition cas.rémunération_mensuelle égal à 20 000 €
+  ## okf:/_premises/mois-contractuels.md
   définition cas.mois_contractuels égal à 24,0
+  ## okf:/_premises/montant-stipule.md
   définition cas.montant_stipulé égal à 480 000 €
+  ## okf:/_premises/montant-reclame.md
   définition cas.montant_réclamé égal à 480 000 €
+  ## okf:/_premises/capital-social.md
   définition cas.capital_social égal à 40 000 000 €
+  ## okf:/_premises/date-engagement.md
   définition cas.date_engagement égal à |2022-03-15|
+  ## okf:/_premises/date-cessation.md
   définition cas.date_cessation égal à |2022-12-19|
   définition cas.lecture_du_vote égal à VoteAprèsDépart
-  définition cas.date_examen égal à |2026-10-21|
   assertion cas.paiement_de_l_indemnité = Réfuté
   assertion cas.montant_contractuel = 480 000 €
   assertion cas.échéance_contractuelle = |2023-01-18|
