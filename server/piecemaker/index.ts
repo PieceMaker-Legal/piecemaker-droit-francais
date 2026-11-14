@@ -32,6 +32,7 @@ import { createKnowledgeBackend } from './knowledge/index.js';
 import { declarePieceMakerServer } from './mcp-declaration.js';
 import { declareBundledSkills } from './skill-declaration.js';
 import { installPmCommand } from './pm-command.js';
+import { installDocxCommand } from './docx-command.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
@@ -159,6 +160,7 @@ const remoteRouter = startRemoteAccess(applicationRoot);
 installCustomFiles(applicationRoot, piecemakerHome()).catch(() => undefined);
 try {
   installPmCommand({ applicationRoot, piecemakerHome: piecemakerHome() });
+  installDocxCommand(piecemakerHome(), applicationRoot);
 } catch (error) {
   console.warn(`[piecemaker] commande pm non installée : ${error instanceof Error ? error.message : String(error)}`);
 }

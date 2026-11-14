@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, readFile, realpath, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { DocxEdit, DocxEditAnnotation, DocxReview } from '../../../shared/piecemaker/docx-review.js';
 
 import { DocxDocumentConflictError, readDocxDocumentVersion, saveDocxDocument } from './docx-document.service.js';
 import { applyTrackedEdits, resolveTrackedChange } from './mike/docxTrackedChanges.js';
+import { withDocxReviewLock } from './docx-review-lock.js';
 
 const operations = new Map<string, Promise<unknown>>();
 
@@ -68,7 +69,7 @@ export async function runDocxReview(project: string, filename: string, input: {
 }) {
   const target = await location(project, filename);
   const previous = operations.get(target.file) ?? Promise.resolve();
-  const operation = previous.catch(() => {}).then(async () => {
+  const operation = previous.catch(() => {}).then(() => withDocxReviewLock(target.directory, async () => {
     const version = await readDocxDocumentVersion(target.file);
     const bytes = await readFile(target.file);
     const currentHash = sha256(bytes);
@@ -112,8 +113,73 @@ export async function runDocxReview(project: string, filename: string, input: {
     if (review.current_version_id) await writeFile(path.join(target.directory, `${review.current_version_id}.docx`), await readFile(target.file));
     await saveReview(target, review);
     return { ...review, errors };
-  });
+  }));
   operations.set(target.file, operation);
   try { return await operation; }
   finally { if (operations.get(target.file) === operation) operations.delete(target.file); }
+}
+
+export type DirectDocxRevision = {
+  id: string; kind: string; revisionId: string; blockId: string; text: string;
+  author?: string; date?: string; group?: string;
+};
+
+export type DirectDocxReason = { pattern?: string; replacement?: string; at?: string; reason?: string };
+
+export async function runDirectDocxReview<T>(project: string, filename: string, options: {
+  inventory(file: string): Promise<DirectDocxRevision[]>;
+  mutate(file: string): Promise<T>;
+  reasons: DirectDocxReason[];
+}) {
+  const target = await location(project, filename);
+  return withDocxReviewLock(target.directory, async () => {
+    if (!(await realpath(target.directory)).startsWith(target.root + path.sep)) throw new DocxReviewError('Historique hors du dossier.', 403);
+    const version = await readDocxDocumentVersion(target.file);
+    const before = await readFile(target.file);
+    const staging = path.join(target.directory, `${randomUUID()}.docx`);
+    await writeFile(staging, before);
+    try {
+      const fingerprint = (entry: DirectDocxRevision) => JSON.stringify([entry.kind, entry.revisionId, entry.author, entry.date, entry.text]);
+      const previous = new Set((await options.inventory(staging)).map(fingerprint));
+      const result = await options.mutate(staging);
+      const after = await readFile(staging);
+      if (sha256(before) === sha256(after)) return result;
+      const revisions = (await options.inventory(staging)).filter((entry) => !previous.has(fingerprint(entry)));
+      const groups = new Map<string, DirectDocxRevision[]>();
+      for (const entry of revisions) {
+        const key = entry.group ?? entry.id;
+        groups.set(key, [...(groups.get(key) ?? []), entry]);
+      }
+      const review = await readReview(target.metadata);
+      const next = { id: randomUUID(), version_number: review.versions.length + (review.versions.length ? 1 : 2), created_at: new Date().toISOString(), source: 'assistant_edit' as const };
+      const annotations: DocxEditAnnotation[] = [];
+      for (const entries of groups.values()) {
+        if (entries.some((entry) => !['ins', 'del'].includes(entry.kind) || !entry.text || !/^p\d+$|^t\d+[:]/.test(entry.blockId))) continue;
+        const deleted = entries.filter((entry) => entry.kind === 'del');
+        const inserted = entries.filter((entry) => entry.kind === 'ins');
+        if (deleted.length > 1 || inserted.length > 1) continue;
+        const deletedText = deleted[0]?.text ?? '';
+        const insertedText = inserted[0]?.text ?? '';
+        const reasons = options.reasons.filter((entry) => entry.pattern === deletedText && entry.replacement === insertedText && (!entry.at || entry.at === entries[0].blockId));
+        annotations.push({ edit_id: randomUUID(), version_id: next.id, change_id: randomUUID(),
+          del_w_id: deleted[0]?.revisionId, ins_w_id: inserted[0]?.revisionId,
+          deleted_text: deletedText, inserted_text: insertedText, context_before: '', context_after: '',
+          reason: reasons.length === 1 ? reasons[0].reason : undefined, status: 'pending' });
+      }
+      if (sha256(await readFile(target.file)) !== sha256(before)) throw new DocxDocumentConflictError('Le document a été modifié ailleurs. Relisez-le avant de reprendre.');
+      await saveDocxDocument(target.file, after, version);
+      if (!review.versions.length) {
+        const source = { id: randomUUID(), version_number: 1, created_at: new Date().toISOString(), source: 'upload' as const };
+        await writeFile(path.join(target.directory, `${source.id}.docx`), before);
+        review.versions.push(source);
+      } else if (review.current_version_id) await writeFile(path.join(target.directory, `${review.current_version_id}.docx`), before);
+      review.versions.push(next);
+      review.current_version_id = next.id;
+      review.annotations.push(...annotations);
+      review.sha256 = sha256(await readFile(target.file));
+      await writeFile(path.join(target.directory, `${next.id}.docx`), await readFile(target.file));
+      await saveReview(target, review);
+      return result;
+    } finally { await rm(staging, { force: true }); }
+  });
 }

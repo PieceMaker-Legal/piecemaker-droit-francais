@@ -41,6 +41,17 @@ pm tab afficher fichier FICHIER
 ```
 
 `FICHIER` est le même chemin que celui que vous venez d’écrire.
+Ouvrez le document dans cet éditeur intégré ; l’édition par `docx` ne nécessite pas l’application Microsoft Word.
+
+Dans les sessions PieceMaker, les éditions directes enregistrent automatiquement les versions et les cartes de substitutions suivies.
+Pour expliquer une proposition, ajoutez un champ facultatif `reason` à la substitution du lot JSONL :
+
+```json
+{"pattern":"90 jours","replacement":"30 jours","reason":"Aligner le délai sur la clause négociée."}
+```
+
+Utilisez `docx replace FICHIER --batch LOT.jsonl --track` ou `--batch -` avec le lot sur l’entrée standard.
+La justification apparaît dans la carte ; elle ne crée pas de commentaire Word.
 
 ## PieceMaker — auteur et suivi des modifications
 

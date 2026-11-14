@@ -37,6 +37,41 @@ La copie revue reste séparée de la pièce source, comme avant cette intégrati
 Les sauvegardes ordinaires d’Eigenpal gardent leur fonctionnement existant.
 L’historique Git du dossier continue de conserver les modifications directes.
 
+## Éditions directes par docx-cli
+
+Au démarrage, PieceMaker place son adaptateur `docx` avant le binaire personnel dans le PATH du serveur.
+Cette installation ne modifie pas le binaire personnel ni les fichiers de configuration du shell.
+Les nouvelles sessions héritent de cet environnement ; les sessions déjà ouvertes doivent être rouvertes après le redémarrage du serveur.
+
+L’adaptateur conserve les octets avant modification et lance le vrai binaire sur une copie de préparation.
+Il publie le résultat seulement si le document ouvert n’a pas changé pendant la commande.
+Il enregistre les versions et les nouvelles substitutions suivies dans le registre commun, sans réappliquer les modifications.
+Le panneau Eigenpal existant les affiche lors de son prochain rafraîchissement.
+Un verrou local partagé avec les décisions des cartes ordonne les opérations de revue entre processus.
+
+Pour fournir un motif, ajouter `reason` à chaque substitution du lot JSONL :
+
+```json
+{"pattern":"90 jours","replacement":"30 jours","reason":"Aligner le délai sur la clause négociée."}
+```
+
+La commande reste `docx replace FICHIER --batch LOT.jsonl --track`, ou `--batch -` pour lire l’entrée standard.
+Le motif est associé lorsque le texte et l’emplacement désignent une substitution sans ambiguïté.
+Les expressions régulières ou motifs normalisés peuvent produire une carte sans motif si cette correspondance n’est pas exacte.
+
+L’adaptateur conserve le code de retour du binaire, y compris lorsqu’un lot partiellement en erreur a déjà produit des modifications.
+Il utilise les véritables identifiants OOXML ; les repères CLI `tcN` et `revN` peuvent changer après une décision.
+Les révisions préexistantes ne sont pas ajoutées comme propositions de la nouvelle commande.
+
+Les cartes couvrent les insertions et suppressions textuelles simples du corps et des tableaux.
+Les révisions structurelles ou de mise en forme restent des révisions natives ; elles ne deviennent pas des cartes de substitution.
+Les lectures, aperçus et écritures avec `--output` passent directement au binaire sans enregistrer de cartes.
+Les décisions effectuées par le CLI ou les contrôles natifs ne réconcilient pas encore les statuts du registre.
+Les commandes exécutées par chemin absolu vers le binaire personnel contournent cet adaptateur.
+L’exécution a été vérifiée sur macOS avec docx-cli 0.28.0 ; Windows reste à vérifier.
+
+Code : `server/piecemaker/docx-command.ts`, `docx-cli-entry.ts`, `docx-cli.ts` et `runDirectDocxReview` dans le service de revue.
+
 ## Consignes conservées de Mike
 
 Le skill documentaire existant reçoit seulement ces consignes : lire chaque version une fois, modifier les documents ordinaires directement,
