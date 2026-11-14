@@ -527,6 +527,6 @@ export function reasoningIssues(model: Reasoning) {
   ];
 }
 
-export function reasoningGraph(model: Reasoning) {
-  return reasoningMap(model, human, sourceLink);
+export function reasoningGraph(model: Reasoning, only?: Step[]) {
+  return reasoningMap(model, human, sourceLink, only);
 }

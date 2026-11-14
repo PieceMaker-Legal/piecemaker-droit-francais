@@ -46,7 +46,7 @@ export function formula(step: Step, human: (text: string) => string) {
     .replace(/>=/g, '≥').replace(/<=/g, '≤').replace(/\s\*\s/g, ' × ').replace(/\s\/\s/g, ' ÷ ').replace(/\s=\s/g, ' = ');
 }
 
-export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source) => string) {
+export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source) => string, only?: Step[]) {
   if (!model.steps.length) return '';
   const steps = new Map(model.steps.map((step) => [step.id, step]));
   const rules = model.steps.filter((step) => step.kind === 'rule' && !container(step));
@@ -106,7 +106,8 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const kind = step === goal ? 'Objectif' : step.kind === 'rule' ? `${rank(step)}${exception ? ' · Exception' : ''}` : exception ? 'Exception' : step.kind === 'fact' ? 'Fait' : 'Condition';
     return branch(`<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}" data-kind="${conclusion ? 'answer' : exception ? 'exception' : step.kind}" data-state="${current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === goal && model.objective || named(step))}</h3><p class="pmc-result">${status(step, negated, current)}</p>${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, step.kind === 'rule' ? 'Source de la règle à indiquer' : '', 'law')}${evidence}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? warn(`À rechercher : ${step.notes.recherche}`) : ''}</article>`, children, current);
   };
-  const trees = spine.map((step) => node(step, null)).join('');
+  const trees = (only ?? spine).map((step) => node(step, null)).join('');
+  if (only) return `<div class="pmc-map" data-layout="columns"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;
   const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, '', 'other')}</details>` : '';
   const legend = '<p class="pmc-map-legend"><span data-state="ok">Validé</span><span data-state="warn">À établir ou à justifier</span><span data-state="ko">Non rempli</span></p>';
   return `<div class="pmc-map-summary">${legend}</div>${unused}<div class="pmc-map" data-layout="columns" aria-label="Graphe du raisonnement : étapes à gauche, conditions puis faits vers la droite"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;

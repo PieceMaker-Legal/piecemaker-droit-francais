@@ -3,9 +3,10 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const canvas = view.querySelector<HTMLElement>('.pmc-map');
   const edges = [...view.querySelectorAll<HTMLElement>('[data-from][data-to]')];
   const scroll = view.querySelector<HTMLElement>('.pmc-map-scroll');
-  const wires = view.querySelector<SVGSVGElement>('.pmc-wires');
-  const draw = () => {
-    if (!canvas || !wires) return;
+  const program = view.querySelector<HTMLElement>('.pmc-program');
+  const draw = () => [...view.querySelectorAll<HTMLElement>('.pmc-map')].forEach((canvas) => {
+    const wires = canvas.querySelector<SVGSVGElement>(':scope > .pmc-wires');
+    if (!wires) return;
     const frame = canvas.getBoundingClientRect();
     const scale = frame.width / canvas.offsetWidth || 1;
     const selecting = nodes.some((node) => node.classList.contains('is-dim'));
@@ -18,7 +19,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
         return `<path data-state="${(child as HTMLElement).dataset.state ?? ''}"${selecting && !child.querySelector('[data-node]:not(.is-dim)') ? ' class="is-dim"' : ''} d="M${x1} ${y1}C${middle} ${y1} ${middle} ${y2} ${x2} ${y2}"/>`;
       });
     }).join('');
-  };
+  });
   const select = (id: string) => {
     const related = new Set(id ? [id] : []);
     for (const direction of ['from', 'to'] as const) {
@@ -62,9 +63,9 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     const link = target.closest<HTMLElement>('[data-goto]');
     if (link) {
       event.preventDefault();
-      if (view.dataset.mode !== 'graph') goto(link.dataset.goto!);
+      if (view.dataset.mode === 'written') goto(link.dataset.goto!);
       else {
-        const destination = nodes.find((node) => node.dataset.card === link.dataset.goto);
+        const destination = nodes.find((node) => node.dataset.card === link.dataset.goto && !node.closest('[hidden]'));
         const owner = link.closest<HTMLElement>('[data-node]');
         select(destination?.dataset.node ?? owner?.dataset.node ?? '');
         destination?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
@@ -83,7 +84,9 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const watch = Observer ? new Observer(draw) : null;
   if (canvas) watch?.observe(canvas);
   if (scroll) watch?.observe(scroll);
+  if (program) watch?.observe(program);
   scroll?.addEventListener('scroll', draw);
+  program?.addEventListener('scroll', draw);
   draw();
   view.ownerDocument.addEventListener('click', click);
   view.addEventListener('keydown', key);
@@ -91,6 +94,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     select('');
     watch?.disconnect();
     scroll?.removeEventListener('scroll', draw);
+    program?.removeEventListener('scroll', draw);
     view.ownerDocument.removeEventListener('click', click);
     view.removeEventListener('keydown', key);
   };
