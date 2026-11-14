@@ -37,7 +37,7 @@ relations:
 ---
 ```
 
-- `type` d'un document : dossier de premier niveau de l'arborescence (`.piecemaker/arborescence.json`). Un document hors arborescence reçoit `Non classé` ; `verify` le signale.
+- `type` d’un document : champ `type` du dossier, hérité du parent. Sans ce champ, nom du dossier de premier niveau. Un document hors arborescence reçoit `Non classé` ; `verify` le signale.
 - Seules les personnes qualifiées de parties ont une fiche. Le scan pose `mentions` ; tu ne l'écris pas.
 - Aucun champ de statut (projet, signé) n'existe.
 
@@ -52,6 +52,17 @@ pm okf unlink "Pièces/Courrier.pdf" refers-to "Pièces/Contrat.pdf"
 ```
 
 Ajoute un lien seulement si tu as lu la phrase qui le fonde. Un lien du scan retiré reste écarté.
+
+## Types de documents et icônes
+
+1. Lire `pm okf ontologie` : types principaux, natures et icônes disponibles.
+2. Modifier le catalogue commun avec `pm okf types --json '[{"name":"contrat","icon":"pen"}]'`. Fournir toute la liste, y compris les types conservés.
+3. La commande valide la liste, conserve les relations et lance `pm okf verify`. Corriger les erreurs signalées.
+
+Cette commande applique directement les natures et leurs icônes. Les relations et l’arborescence restent des propositions soumises à l’avocat.
+Le champ facultatif `type` d’un dossier fixe son type principal. Les sous-dossiers héritent du parent. Sans champ `type`, le nom du dossier de premier niveau reste le type principal.
+Supprimer une nature conserve les documents. Leur icône devient générique. Modifier `data_json.nature` avec `pm dossier sql` pour changer la nature d’un document.
+Le graphe reprend le titre descriptif de la revue : colonne `Titre`, `Intitulé`, `Titre du document`, ou `Événement` à défaut.
 
 ## Prémisses
 

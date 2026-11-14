@@ -28,7 +28,7 @@ export type TemplateColumn = {
   premise?: ColumnPremise;
 };
 
-export type ClassificationFolder = { name: string; explanation: string };
+export type ClassificationFolder = { name: string; explanation: string; type?: string };
 
 export const DEFAULT_CLASSIFICATION: ClassificationFolder[] = [
   { name: 'Projets', explanation: 'Documents de travail.' },
@@ -62,7 +62,7 @@ export function classificationFolders(rows: ClassificationTreeRow[]): Classifica
     const name = row.name.trim();
     ancestors.length = row.depth;
     ancestors[row.depth] = name;
-    return name ? [{ name: ancestors.filter(Boolean).join('/'), explanation: row.explanation }] : [];
+    return name ? [{ name: ancestors.filter(Boolean).join('/'), explanation: row.explanation, ...(row.type ? { type: row.type } : {}) }] : [];
   });
 }
 

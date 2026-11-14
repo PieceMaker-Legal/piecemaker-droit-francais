@@ -33,6 +33,7 @@ import {
   writeIfChanged,
 } from './bundle.js';
 import { isSystemRelation, readOntology, ruleOf } from './ontology.js';
+import { documentMetadataFromReviews } from './reviews.js';
 import type { ReviewPremise } from './reviews.js';
 import { quoted } from './verify.js';
 
@@ -63,6 +64,7 @@ export function partiesFromSnapshot(snapshot: KnowledgeSnapshot): SourceParty[] 
 }
 
 export function documentsFromSnapshot(projectPath: string, snapshot: KnowledgeSnapshot): SourceDocument[] {
+  const metadata = documentMetadataFromReviews(projectPath);
   const partyCodes = new Set(partiesFromSnapshot(snapshot).map((party) => party.code));
   const documents = new Map<string, SourceDocument>();
   for (const node of snapshot.nodes) {
@@ -76,7 +78,7 @@ export function documentsFromSnapshot(projectPath: string, snapshot: KnowledgeSn
       if (citation.fromNodeId !== node.id || !citation.toNodeId.startsWith('entity:') || !citation.texte || !partyCodes.has(code) || parties.has(code)) continue;
       parties.set(code, { code, citation: squash(citation.texte) });
     }
-    documents.set(resource, { resource, title: node.label, nature: text(node.data.nature), date: text(node.date), parties: [...parties.values()] });
+    documents.set(resource, { resource, title: metadata.get(resource)?.title || text(node.data.title) || text(node.data.titre) || node.label, nature: text(node.data.nature) || metadata.get(resource)?.nature || '', date: text(node.date), parties: [...parties.values()] });
   }
   return [...documents.values()].sort((left, right) => left.resource.localeCompare(right.resource));
 }
@@ -166,7 +168,7 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
   const stored = readBundle(projectPath);
   const existing = renamedConcepts(stored, input.renamed);
   const scanRule = ruleOf(readOntology(projectPath), SCAN_RELATION);
-  const ofTypes = (allowed: string[] = []) => documents.filter((document) => allowed.includes(typeOf(document.resource, types)));
+  const ofTypes = (allowed: string[] = []) => documents.filter((document) => allowed.includes(typeOf(document.resource, types, projectPath)));
   const scanSources = ofTypes(scanRule?.source);
   const scanTargets = ofTypes(scanRule?.target);
   const entries: Array<{ id: string; frontmatter: Frontmatter }> = [];
@@ -224,8 +226,9 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
     const relations = mergedRelations(previous ? relationsOf(previous.frontmatter) : {}, derived, livePremises);
     const frontmatter: Frontmatter = {
       ...previous?.frontmatter,
-      type: typeOf(document.resource, types),
+      type: typeOf(document.resource, types, projectPath),
       title: document.title,
+      nature: document.nature,
       description: [document.nature, document.date].filter(Boolean).join(' du ') || document.title,
       resource: document.resource,
       date: document.date,

@@ -71,6 +71,14 @@ describe('arborescence du dossier', () => {
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
 
+  it('conserve le type principal et refuse un type réservé', async () => {
+    const folders = [{ name: 'Documents', explanation: 'Pièces reçues', type: 'Pièces' }];
+    await saveClassification(project, folders);
+    expect(readClassification(project)).toEqual(folders);
+    await expect(saveClassification(project, [{ ...folders[0], type: 'Partie' }])).rejects.toThrow('Type principal invalide');
+    await saveClassification(project, DEFAULT_CLASSIFICATION);
+  });
+
   it.each(['', '../hors', '.cache', 'a//b', 'Tabular Review', 'a:b'])('refuse le dossier « %s »', async (name) => {
     await expect(saveClassification(project, [{ name, explanation: '' }])).rejects.toThrow('Nom de dossier invalide');
   });

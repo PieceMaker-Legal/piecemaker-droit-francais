@@ -1,3 +1,5 @@
+import { editClassification } from './classification.js';
+import { editDocumentTypes } from './document-types-editor.js';
 import { modal } from './editors.js';
 import { okfApi, type OntologyRelation } from './okf.js';
 import { askChat as ask, chatAttributes as attributes, type ChatPlace } from './chat-pick.js';
@@ -16,7 +18,7 @@ const askChat = (title: string, kind: string, place: ChatPlace) => ask(title, ki
 
 function relationMarkup(relation: OntologyRelation, index: number, place: ChatPlace): string {
   return `
-    <div class="pmd-form-section pmd-ontology-row" data-ontology-row${relation.name ? chatAttributes(relation.name, 'Relation', place) : ''}>
+    <div class="pmd-form-section pmd-ontology-row" data-ontology-row data-source="${escapeHtml(JSON.stringify(relation.source))}" data-target="${escapeHtml(JSON.stringify(relation.target))}"${relation.name ? chatAttributes(relation.name, 'Relation', place) : ''}>
       <div class="pmd-ontology-head">
         <input class="pmd-input pmd-ontology-name" data-ontology-name maxlength="40" value="${escapeHtml(relation.name)}" placeholder="nom-technique" aria-label="Nom technique">
         <button type="button" class="pmd-icon-button" data-ontology-ask="${index}" title="Demander à l’assistant sur ce lien" aria-label="Demander à l’assistant sur ce lien">?</button>
@@ -36,12 +38,12 @@ export function readOntologyRows(list: HTMLElement): OntologyRelation[] {
     label: row.querySelector<HTMLInputElement>('[data-ontology-label]')!.value.trim(),
     inverse: row.querySelector<HTMLInputElement>('[data-ontology-inverse]')!.value.trim(),
     description: row.querySelector<HTMLInputElement>('[data-ontology-description]')!.value.trim(),
-    source: [PIECES],
-    target: [PIECES],
+    source: JSON.parse(row.dataset.source || '["Pièces"]'),
+    target: JSON.parse(row.dataset.target || '["Pièces"]'),
   }));
 }
 
-export async function editOntology(root: HTMLElement, projectId: string, onSaved: () => void): Promise<void> {
+async function editRelations(root: HTMLElement, projectId: string, onSaved: () => void, inline = false): Promise<() => Promise<void>> {
   let state = await okfApi.ontology(projectId);
   const proposed = state.proposition?.relations ?? [];
   const changes = state.proposition ? ontologyChanges(state.relations, proposed) : [];
@@ -70,7 +72,7 @@ export async function editOntology(root: HTMLElement, projectId: string, onSaved
         <button type="button" class="pmd-button" data-close>Annuler</button>
         <button type="submit" class="pmd-button pmd-button-primary">Enregistrer</button>
       </div>
-    </form>`);
+    </form>`, inline);
   const list = layer.querySelector<HTMLElement>('[data-ontology-rows]')!;
   const proposalHost = layer.querySelector<HTMLElement>('[data-ontology-proposal]')!;
   const showError = (error: unknown) => {
@@ -114,12 +116,76 @@ export async function editOntology(root: HTMLElement, projectId: string, onSaved
     if (!remove) list.querySelectorAll<HTMLInputElement>('[data-ontology-name]')[relations.length - 1]?.focus();
   });
   layer.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); layer.remove(); } });
+  const save = async () => {
+    await okfApi.saveOntology(projectId, readOntologyRows(list));
+    if (!inline) { layer.remove(); onSaved(); }
+  };
   layer.querySelector('form')!.addEventListener('submit', (event) => {
     event.preventDefault();
     const submit = layer.querySelector<HTMLButtonElement>('[type="submit"]')!;
     if (submit.disabled) return;
     submit.disabled = true;
-    void okfApi.saveOntology(projectId, readOntologyRows(list)).then(() => { layer.remove(); onSaved(); }).catch(showError).finally(() => { submit.disabled = false; });
+    void save().catch(showError).finally(() => { submit.disabled = false; });
   });
   list.querySelector<HTMLInputElement>('[data-ontology-name]')?.focus();
+  return save;
+}
+
+export async function editOntology(root: HTMLElement, projectId: string, onSaved: () => void, projectPath = '', initial = 'relations'): Promise<void> {
+  const tabs = [['relations', 'Relations'], ['tree', 'Classement'], ['types', 'Types de documents']];
+  const layer = modal(root, `<h2 class="pmd-title piecemaker-display">Ontologie</h2><div class="pmd-settings-tabs" role="tablist" aria-label="Ontologie">${tabs.map(([id, label]) => `<button type="button" class="pmd-button" role="tab" id="pmd-settings-${id}" aria-controls="pmd-pane-${id}" data-settings-tab="${id}" aria-selected="false">${label}</button>`).join('')}</div>${tabs.map(([id]) => `<section role="tabpanel" id="pmd-pane-${id}" aria-labelledby="pmd-settings-${id}" data-settings-pane="${id}" hidden></section>`).join('')}<div class="pmd-error" data-settings-error role="alert" hidden></div><div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button type="button" class="pmd-button pmd-button-primary" data-settings-save>Enregistrer</button></div>`);
+  const saved = () => { layer.remove(); onSaved(); };
+  const mounted = new Set<string>();
+  const saves = new Map<string, () => Promise<void>>();
+  const show = async (id: string) => {
+    layer.querySelectorAll<HTMLElement>('[data-settings-pane]').forEach((pane) => { pane.hidden = pane.dataset.settingsPane !== id; });
+    layer.querySelectorAll<HTMLElement>('[data-settings-tab]').forEach((button) => { button.setAttribute('aria-selected', String(button.dataset.settingsTab === id)); });
+    if (mounted.has(id)) return;
+    mounted.add(id);
+    const pane = layer.querySelector<HTMLElement>(`[data-settings-pane="${id}"]`)!;
+    try {
+      const save = id === 'relations' ? await editRelations(pane, projectId, saved, true) : id === 'tree' ? await editClassification(pane, projectPath, saved, true) : await editDocumentTypes(pane, projectId, saved);
+      saves.set(id, save);
+      pane.querySelector('.pmd-form-actions')?.remove();
+    } catch (error) {
+      mounted.delete(id);
+      const message = layer.querySelector<HTMLElement>('[data-settings-error]')!;
+      message.textContent = error instanceof Error ? error.message : String(error);
+      message.hidden = false;
+    }
+  };
+  const saveAll = async () => {
+    const button = layer.querySelector<HTMLButtonElement>('[data-settings-save]')!;
+    if (button.disabled || saves.size !== mounted.size) return;
+    button.disabled = true;
+    try {
+      for (const save of saves.values()) await save();
+      if (saves.has('tree')) await okfApi.rebuild(projectId);
+      saved();
+    }
+    catch (error) {
+      const message = layer.querySelector<HTMLElement>('[data-settings-error]')!;
+      message.textContent = error instanceof Error ? error.message : String(error);
+      message.hidden = false;
+    } finally { button.disabled = false; }
+  };
+  layer.addEventListener('submit', (event) => { event.preventDefault(); event.stopPropagation(); void saveAll(); }, true);
+  layer.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement;
+    if (target.closest('[data-settings-save]')) void saveAll();
+    const tab = target.closest<HTMLElement>('[data-settings-tab]');
+    if (tab) void show(tab.dataset.settingsTab!);
+    if (target.closest('[data-close]')) layer.remove();
+  });
+  layer.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') layer.remove();
+    const tab = (event.target as HTMLElement).closest<HTMLElement>('[data-settings-tab]');
+    if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const current = tabs.findIndex(([id]) => id === tab.dataset.settingsTab);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    layer.querySelector<HTMLElement>(`[data-settings-tab="${tabs[next][0]}"]`)?.focus();
+    void show(tabs[next][0]);
+  });
+  await show(initial);
 }

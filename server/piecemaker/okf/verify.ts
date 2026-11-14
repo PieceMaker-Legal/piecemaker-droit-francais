@@ -87,7 +87,7 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
       else {
         if (!fs.existsSync(path.join(projectPath, resource))) report(`document absent : ${resource}`);
         if (conceptId(resource) !== concept.id) report(`la fiche ne correspond pas à son document : ${resource}`);
-        if (type && typeOf(resource, types) !== type) report(`type « ${type} » différent du dossier du document`);
+        if (type && typeOf(resource, types, projectPath) !== type) report(`type « ${type} » différent du dossier du document`);
       }
     }
     const allowed = ALLOWED[reserved] || documentRelations;

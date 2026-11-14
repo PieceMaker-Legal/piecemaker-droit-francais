@@ -23,7 +23,7 @@ Seules les personnes qualifiées de parties ont une fiche. Les tiers n'entrent p
 
 ## Types
 
-Le type d'une fiche de document est le dossier de premier niveau de `.piecemaker/arborescence.json`. Sans arborescence, la classification par défaut s'applique. Un document hors arborescence reçoit `Non classé` ; la vérification le signale. `Premise` et `Partie` sont réservés.
+Le type principal d’une fiche suit le champ `type` du dossier, hérité du parent. Sans ce champ, le nom du dossier de premier niveau reste le type. Sans arborescence, la classification par défaut s’applique. Un document hors arborescence reçoit `Non classé` ; la vérification le signale. `Premise` et `Partie` sont réservés.
 
 Le graphe ne montre que certains types de documents : ceux que relie l'ontologie (sources et cibles de ses relations). Sans ontologie : `['Pièces']` par défaut, ou `typesGraphe` dans `.piecemaker/okf.json`. Il montre aussi les prémisses et les parties.
 
@@ -33,9 +33,9 @@ L'avocat seul fixe l'arborescence, donc les types de documents. L'agent modifie 
 
 `~/.piecemaker/ontologie.json` (ou `$PIECEMAKER_HOME/ontologie.json`), un seul fichier commun à tous les dossiers : `{ "relations": [{ name, label, inverse, description, source: [types], target: [types] }], "sceau" }`. Une relation ne s'applique que dans les dossiers où ses types existent. Sans fichier, chaque dossier reçoit l'ontologie par défaut : les quatre relations ci-dessous entre documents des types du graphe. Un fichier illisible fait appliquer l'ontologie par défaut, avec un message.
 
-Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA256 des relations, calculé avec la clé `ontologie.cle` du même répertoire (créée au premier enregistrement, mode 600). Un fichier dont le sceau ne correspond pas a été modifié hors de l'onglet Index : l'ontologie par défaut s'applique, `verify` et l'onglet Index le signalent, et l'avocat l'enregistre de nouveau.
+Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA256 des relations et du catalogue des types, calculé avec la clé `ontologie.cle` du même répertoire (créée au premier enregistrement, mode 600). Un fichier dont le sceau ne correspond pas a été modifié hors de l'onglet Index : l'ontologie par défaut s'applique, `verify` et l'onglet Index le signalent, et l'avocat l'enregistre de nouveau.
 
-- L'avocat l'édite dans l'onglet Index, bouton Ontologie (`GET`/`PUT /api/piecemaker/okf/ontologie`). L'écran ne règle que des liens `Pièces` → `Pièces` : chaque lien montre d'abord son nom technique, puis son libellé (→), son libellé inverse (←) et sa description ; « Créer un autre lien » en ajoute un. L'enregistrement fixe la source et la cible à `Pièces`. Le fichier admet toujours d'autres types, lus tels quels. `Premise` et `Partie` sont réservés ; les relations système (`states`, `mentions`, `involves`) ne se redéfinissent pas.
+- L’avocat règle les relations dans l’onglet Index, bouton Ontologie. Chaque lien montre son nom technique, son libellé, son libellé inverse et sa description. Un nouveau lien relie `Pièces` à `Pièces`. L’enregistrement conserve les types source et cible existants. Les relations système restent réservées.
 - L'agent la lit avec `pm okf ontologie`. Il propose une modification en éditant `ontologie.json` (Edit, Write ou apply_patch) : le hook `guard-ontologie` refuse l'écriture, applique la modification à la proposition en attente (ou au fichier actuel), la fait valider par `pm okf ontologie proposer` et répond à l'agent ce qui a changé. Sans hook, il lance `pm okf ontologie proposer --json '{"relations":[…]}' --motif "…"`. C'est l'ontologie complète proposée, écrite dans `ontologie.proposition.json` (même répertoire, non scellé, une seule proposition à la fois). Elle ne s'applique pas. L'onglet Index › Ontologie la montre en suivi des modifications (ajout, modification, suppression ; texte retiré barré, texte ajouté souligné). L'avocat accepte, refuse ou modifie chaque changement, puis enregistre : seuls les changements acceptés ou modifiés passent dans l'ontologie, le reste est écarté, et l'enregistrement supprime la proposition (`DELETE /api/piecemaker/okf/ontologie/proposition` pour « Tout refuser »).
 - L'avocat interroge l'assistant sur l'ontologie : bouton « Demander à l’assistant » (toute l'ontologie) ou « ? » d'une relation. La pastille du chat transmet `ontologie.json` et les lignes de la relation (`lignes` dans la réponse du `GET`). `pm okf link` refuse une relation absente de l'ontologie ou un type source ou cible non admis.
 - `verify` signale chaque lien hors ontologie, y compris un lien posé avant une modification de l'ontologie.
@@ -126,6 +126,20 @@ Le serveur refuse une citation absente du document source.
 ## Interface
 
 Onglet Index du plugin `piecemaker-dossier` :
+
+Le bouton **Ontologie** réunit trois onglets : Relations, Classement et Types de documents. Un seul bouton enregistre les onglets ouverts. Les saisies restent présentes lors du passage à un autre onglet.
+
+- **Relations** conserve les types source et cible existants. Un nouveau lien relie `Pièces` à `Pièces`. Les propositions restent soumises aux décisions de l’avocat.
+- **Classement** réutilise l’éditeur d’arborescence. Le champ `type` d’un dossier fixe son type principal, par exemple `Pièces` ou `Archives`. Les sous-dossiers héritent du parent. Sans champ `type`, le nom du dossier de premier niveau reste le type principal. L’enregistrement reconstruit l’index sans déplacer les fichiers.
+- **Types de documents** règle les natures et leurs icônes SVG monochromes. Le catalogue reprend les 21 natures existantes. L’avocat peut ajouter, renommer ou supprimer une nature, et choisir son icône. Supprimer une nature conserve les documents ; leur icône devient générique.
+
+Le catalogue commun est stocké dans le champ `documentTypes: [{ name, icon }]` de l’ontologie. Le sceau couvre les relations et le catalogue. Les anciens sceaux restent lisibles et sont migrés à l’enregistrement. Enregistrer les relations conserve le catalogue.
+
+L’agent lit les types principaux, natures et icônes avec `pm okf ontologie`. Il remplace directement le catalogue avec `pm okf types --json '[{"name":"contrat","icon":"pen"}]'`. La liste doit être complète. Le serveur valide les noms, doublons et icônes. La commande lance ensuite `pm okf verify`. Les relations et l’arborescence gardent leur circuit de propositions.
+
+Le graphe affiche des pastilles avec titre et icône, sur fond uni. Les traits sont fins ; les mentions et parties utilisent des pointillés. Le survol révèle les libellés proches. Les documents reprennent le titre de la revue : `Titre`, `Intitulé`, `Titre du document`, puis `Événement`. À défaut : champ `title` ou `titre` du document, puis nom du fichier sans extension. La lecture reflète les dernières réponses sans réécrire les fiches.
+
+Routes ajoutées : `PUT /api/piecemaker/okf/types`, `POST /api/piecemaker/okf/rebuild`. Catalogue et sélecteur : `plugins/piecemaker-dossier/src/document-types.ts` et `document-types-editor.ts`.
 
 - Tableau : colonne Liens (survol : citation).
 - Graphe (cytoscape) : pièces, prémisses, parties. Un clic ouvre la fiche : visionneuse pour une pièce, fiche de l'onglet Parties pour une partie (avec ses prémisses), fiche du même design pour une prémisse (pièces, valeurs, citations, parties, bouton « Revue tabulaire »).

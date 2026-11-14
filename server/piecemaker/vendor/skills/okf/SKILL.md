@@ -45,8 +45,9 @@ Une pièce établit une `Premise` par `states` (citation, valeur facultative). L
 1. Lisez les fiches directement avec Read et Grep dans `.piecemaker/okf/`.
 2. N'écrivez jamais une fiche à la main. Passez par `pm okf`. Un hook refuse toute écriture directe dans `.piecemaker/okf/`, `~/.piecemaker/ontologie.json` et `.piecemaker/arborescence.json`.
 3. Avant la première écriture, lisez `references/okf.md` du skill `piecemaker` (`.agents/skills/Skill-PieceMaker/references/okf.md`). Cette référence décrit les sous-commandes à jour.
-4. Après toute écriture, lancez `pm okf verify`. Corrigez chaque erreur et relancez jusqu'à zéro erreur.
-5. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce sans prémisse, prémisse sans pièce, sans valeur ou sans partie, partie isolée.
+4. Pour régler les natures et icônes, lisez `pm okf ontologie`. Remplacez la liste complète avec `pm okf types --json`. Cette commande les applique directement et vérifie l’index. Les relations et l’arborescence restent des propositions.
+5. Après toute écriture, lancez `pm okf verify`. Corrigez chaque erreur et relancez jusqu'à zéro erreur.
+6. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce sans prémisse, prémisse sans pièce, sans valeur ou sans partie, partie isolée.
 
 ## Règles de conduite
 

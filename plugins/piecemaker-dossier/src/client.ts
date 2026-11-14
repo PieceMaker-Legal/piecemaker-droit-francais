@@ -1,5 +1,4 @@
 import { openIndexAnalysis } from './index-analysis.js';
-import { editClassification } from './classification.js';
 import { editOntology } from './ontology.js';
 import { pendingProposals } from './pending-proposals.js';
 import { etapesApi, knowledgeApi, tabularReviewRpc } from './api.js';
@@ -489,7 +488,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       if (editNature) {
         const node = data?.graph.nodes.find((entry) => entry.id === editNature.dataset.editNature);
         if (!node) return;
-        editNature.parentElement!.innerHTML = natureSelectMarkup(node);
+        editNature.parentElement!.innerHTML = natureSelectMarkup(node, data?.okf?.documentTypes);
         root.querySelector<HTMLElement>('[data-nature-select]')?.focus();
         return;
       }
@@ -536,11 +535,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         return;
       }
       if (action === 'edit-ontology' && context.project) {
-        void editOntology(root, context.project.name, () => { okfView = { ...okfView, errors: null, contradictions: [] }; void load(); }).catch(showError);
+        void editOntology(root, context.project.name, () => { okfView = { ...okfView, errors: null, contradictions: [] }; void load(); }, context.project.path).catch(showError);
         return;
       }
       if (action === 'edit-tree' && context.project) {
-        void editClassification(root, context.project.path, () => { void load(); }).catch(showError);
+        void editOntology(root, context.project.name, () => { void load(); }, context.project.path, 'tree').catch(showError);
         return;
       }
       if (action === 'company-search') {

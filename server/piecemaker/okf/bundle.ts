@@ -102,10 +102,14 @@ function readJson(filePath: string): unknown {
   }
 }
 
-export function readTypes(projectPath: string): string[] {
+function typeFolders(projectPath: string): Array<{ name?: unknown; type?: unknown }> {
   const stored = readJson(path.join(projectPath, '.piecemaker', 'arborescence.json'));
-  const folders = Array.isArray(stored) && stored.length ? stored as Array<{ name?: unknown }> : DEFAULT_CLASSIFICATION;
-  return [...new Set(folders.map((folder) => text(folder.name).split('/')[0].normalize('NFC')).filter(Boolean))];
+  return Array.isArray(stored) && stored.length ? stored : DEFAULT_CLASSIFICATION;
+}
+
+export function readTypes(projectPath: string): string[] {
+  const folders = typeFolders(projectPath);
+  return [...new Set(folders.map((folder) => folderType(`${text(folder.name)}/_`, folders)).filter(Boolean))];
 }
 
 export function readGraphTypes(projectPath: string): string[] {
@@ -114,9 +118,14 @@ export function readGraphTypes(projectPath: string): string[] {
   return types.length ? types : DEFAULT_GRAPH_TYPES;
 }
 
-export function typeOf(resource: string, types: string[]): string {
-  const segments = resource.split('/');
-  return segments.length > 1 && types.includes(segments[0]) ? segments[0] : UNCLASSIFIED;
+function folderType(resource: string, folders: Array<{ name?: unknown; type?: unknown }>): string {
+  const folder = folders.filter((entry) => text(entry.type) && resource.startsWith(`${text(entry.name)}/`)).sort((a, b) => text(b.name).length - text(a.name).length)[0];
+  return text(folder?.type) || resource.split('/')[0].normalize('NFC');
+}
+
+export function typeOf(resource: string, types: string[], projectPath?: string): string {
+  const type = projectPath ? folderType(resource, typeFolders(projectPath)) : resource.split('/')[0];
+  return resource.includes('/') && types.includes(type) ? type : UNCLASSIFIED;
 }
 
 export function writeIfChanged(filePath: string, content: string): boolean {

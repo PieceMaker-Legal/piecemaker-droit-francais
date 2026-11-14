@@ -8,7 +8,7 @@ const ASK_NOTE = 'arborescence du dossier, lue avec pm dossier arborescence ; po
 
 export const TREE_SHAPE: ProposalShape<ClassificationFolder> = {
   key: (folder) => folder.name,
-  fields: [['explanation', 'Explication']],
+  fields: [['explanation', 'Explication'], ['type', 'Type principal']],
   empty: (name) => ({ name, explanation: '' }),
   unchanged: 'La proposition reprend l’arborescence actuelle sans changement.',
 };
@@ -40,7 +40,7 @@ export function treeFolders(rows: TreeRow[]): ClassificationFolder[] {
     const name = row.name.trim();
     ancestors.length = row.depth;
     ancestors[row.depth] = name;
-    return name ? [{ name: ancestors.filter(Boolean).join('/'), explanation: row.explanation }] : [];
+    return name ? [{ name: ancestors.filter(Boolean).join('/'), explanation: row.explanation, ...(row.type ? { type: row.type } : {}) }] : [];
   });
 }
 
@@ -59,7 +59,7 @@ function subtreeEnd(rows: TreeRow[], index: number): number {
   return end;
 }
 
-export async function editClassification(root: HTMLElement, project: string, onSaved: () => void = () => undefined): Promise<void> {
+export async function editClassification(root: HTMLElement, project: string, onSaved: () => void = () => undefined, inline = false): Promise<() => Promise<void>> {
   let state = await classificationApi.read(project);
   const changes = state.proposition ? treeChanges(state.folders, state.proposition.dossiers) : [];
   const decisions: Array<ChangeDecision | undefined> = changes.map(() => undefined);
@@ -77,6 +77,7 @@ export async function editClassification(root: HTMLElement, project: string, onS
     <div class="pmd-tree-row" data-tree-row data-tree-depth="${folder.depth}"${names[index] ? chatAttributes(names[index], 'Dossier', ASK_NOTE, placeOf(names[index])) : ''}>
       <input class="pmd-input" data-tree-name maxlength="60" style="margin-left:${folder.depth * 24}px;width:calc(100% - ${folder.depth * 24}px)" value="${escapeHtml(folder.name)}" placeholder="${folder.depth ? 'Sous-dossier' : 'Dossier'}" aria-label="Nom du dossier">
       <input class="pmd-input" data-tree-explanation maxlength="500" value="${escapeHtml(folder.explanation)}" placeholder="Ce qu’on y range" aria-label="Explication du dossier">
+      <input class="pmd-input" data-tree-type list="pmd-primary-types" title="Type principal des documents dans ce dossier" maxlength="60" value="${escapeHtml(folder.type || '')}" placeholder="${folder.depth ? 'Hérite du parent' : escapeHtml(folder.name)}" aria-label="Type principal du dossier">
       <button type="button" class="pmd-icon-button" data-tree-ask="${index}" title="Demander à l’assistant sur ce dossier" aria-label="Demander à l’assistant sur ce dossier">?</button>
       <button type="button" class="pmd-icon-button" data-tree-add-child="${index}" title="Ajouter un sous-dossier" aria-label="Ajouter un sous-dossier">+</button>
       <button type="button" class="pmd-icon-button" data-tree-remove="${index}" title="Supprimer ce dossier et ses sous-dossiers" aria-label="Supprimer ce dossier et ses sous-dossiers">×</button>
@@ -85,8 +86,9 @@ export async function editClassification(root: HTMLElement, project: string, onS
   const layer = modal(root, `
     <form class="pmd-form" data-tree-form${chatAttributes('Arborescence du dossier', 'Arborescence', ASK_NOTE, wholePlace())}>
       <div class="pmd-ontology-change-head"><h2 class="pmd-title piecemaker-display">Arborescence du dossier</h2><span class="pmd-spacer"></span><button type="button" class="pmd-button" data-tree-ask-all>Demander à l’assistant</button></div>
-      <p class="pmd-form-note">L’IA classe chaque document d’après ces explications. Le bouton « + » d’une ligne ajoute un sous-dossier. Les dossiers de premier niveau sont les types de documents. L’assistant peut proposer de modifier cette arborescence : vous acceptez, refusez ou modifiez chaque changement. Enregistrer ne déplace aucun fichier.</p>
+      <p class="pmd-form-note">L’IA classe chaque document d’après ces explications. Le bouton « + » d’une ligne ajoute un sous-dossier. Le type principal indique la catégorie (Pièces, Projets…) des documents rangés dans ce dossier. Sans type, le sous-dossier hérite de son parent. L’assistant peut proposer de modifier cette arborescence : vous acceptez, refusez ou modifiez chaque changement. Enregistrer ne déplace aucun fichier.</p>
       <div data-tree-proposal>${proposalHtml()}</div>
+      <datalist id="pmd-primary-types">${[...new Set(state.folders.map((folder) => folder.type || folder.name.split('/')[0]))].map((type) => `<option value="${escapeHtml(type)}"></option>`).join('')}</datalist><div class="pmd-tree-labels"><span>Dossier</span><span>Contenu</span><span>Type principal</span></div>
       <div class="pmd-form" data-tree-rows>${rowsHtml()}</div>
       <button type="button" class="pmd-button" data-tree-add>+ Dossier</button>
       <div class="pmd-error" data-tree-error role="alert" hidden></div>
@@ -94,13 +96,14 @@ export async function editClassification(root: HTMLElement, project: string, onS
         <button type="button" class="pmd-button" data-close>Annuler</button>
         <button type="submit" class="pmd-button pmd-button-primary">Enregistrer</button>
       </div>
-    </form>`);
+    </form>`, inline);
   const list = layer.querySelector<HTMLElement>('[data-tree-rows]')!;
   const sync = () => {
     rows = Array.from(list.querySelectorAll<HTMLElement>('[data-tree-row]')).map((row) => ({
       depth: Number(row.dataset.treeDepth),
       name: row.querySelector<HTMLInputElement>('[data-tree-name]')!.value,
       explanation: row.querySelector<HTMLInputElement>('[data-tree-explanation]')!.value,
+      type: row.querySelector<HTMLInputElement>('[data-tree-type]')!.value.trim() || undefined,
     }));
   };
   const proposalHost = layer.querySelector<HTMLElement>('[data-tree-proposal]')!;
@@ -155,13 +158,19 @@ export async function editClassification(root: HTMLElement, project: string, onS
     if (!remove) list.querySelectorAll<HTMLInputElement>('[data-tree-name]')[focused]?.focus();
   });
   layer.addEventListener('keydown', (event) => { if (event.key === 'Escape') { event.preventDefault(); layer.remove(); } });
+  const save = async () => {
+    sync();
+    await classificationApi.save(project, treeFolders(rows));
+    if (!inline) { layer.remove(); onSaved(); }
+  };
   layer.querySelector('form')!.addEventListener('submit', (event) => {
     event.preventDefault();
     const submit = layer.querySelector<HTMLButtonElement>('[type="submit"]')!;
     if (submit.disabled) return;
     sync();
     submit.disabled = true;
-    void classificationApi.save(project, treeFolders(rows)).then(() => { layer.remove(); onSaved(); }).catch(showError).finally(() => { submit.disabled = false; });
+    void save().catch(showError).finally(() => { submit.disabled = false; });
   });
   layer.querySelector<HTMLInputElement>('[data-tree-name]')?.focus();
+  return save;
 }

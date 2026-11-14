@@ -1,3 +1,5 @@
+import { DEFAULT_DOCUMENT_TYPES, iconSvg } from './document-types.js';
+import type { DocumentType } from './document-types.js';
 import { NODE_KINDS } from './types.js';
 import { nodePosition } from './party-codes.js';
 import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
@@ -273,17 +275,16 @@ export function mappingView(data: ViewData, mappingValidated: string | null = nu
   }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-save-mapping>Enregistrer</button>${mappingValidated ? `<span class="pmd-mapping-validated">✓ Validé le ${escapeHtml(new Date(mappingValidated).toLocaleDateString('fr-FR'))}</span>` : '<button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-validate-mapping>✓ Valider le mapping</button>'}</div></div>`;
 }
 
-export const PIECE_NATURES = ['assignation', 'conclusions', 'requête', 'courrier', 'courriel', 'mise en demeure', 'contrat', 'facture', 'devis', 'attestation', 'jugement', 'arrêt', 'ordonnance', 'procès-verbal', 'constat', 'expertise', 'statuts de société', 'extrait Kbis', 'relevé bancaire', 'acte notarié', 'bordereau de pièces'];
 export const CUSTOM_NATURE = '__piecemaker_custom_nature__';
 
-export function natureOptionsMarkup(nature: string): string {
-  return [...new Set([nature, ...PIECE_NATURES].filter(Boolean))]
+export function natureOptionsMarkup(nature: string, types: DocumentType[] = DEFAULT_DOCUMENT_TYPES): string {
+  return [...new Set([nature, ...types.map((type) => type.name)].filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, 'fr', { sensitivity: 'base' }))
     .map((value) => `<option value="${escapeHtml(value)}" ${value === nature ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
 }
 
-export function natureSelectMarkup(node: KnowledgeNode): string {
-  return `<select class="pmd-nature-select" data-nature-select="${escapeHtml(node.id)}" aria-label="Nature de ${escapeHtml(node.label)}"><option value="">— Aucune —</option>${natureOptionsMarkup(textValue(node.data.nature))}<option value="${CUSTOM_NATURE}">Autre type…</option></select>`;
+export function natureSelectMarkup(node: KnowledgeNode, types?: DocumentType[]): string {
+  return `<select class="pmd-nature-select" data-nature-select="${escapeHtml(node.id)}" aria-label="Nature de ${escapeHtml(node.label)}"><option value="">— Aucune —</option>${natureOptionsMarkup(textValue(node.data.nature), types)}<option value="${CUSTOM_NATURE}">Autre type…</option></select>`;
 }
 
 export function natureInputMarkup(nodeId: string): string {
@@ -381,8 +382,8 @@ function okfGraph(okf: OkfIndex | null): string {
   if (!okf) return '<div class="pmd-empty">Index indisponible.</div>';
   const count = okf.fiches.filter((fiche) => okf.typesGraphe.includes(fiche.type)).length;
   if (!count) return `<div class="pmd-empty">Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.</div>`;
-  const key = (kind: string, label: string) => `<span class="pmd-okf-key" data-kind="${kind}"><i aria-hidden="true"></i>${label}</span>`;
-  return `<div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, prémisses et parties.</div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('document', 'Pièce')}${key('premise', 'Premise')}${key('party-client', 'Partie cliente')}${key('party-adverse', 'Partie adverse')}</div><div class="pmd-okf-graph-wrap"><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div></div>`;
+  const key = (kind: string, label: string) => `<span class="pmd-okf-key">${iconSvg(kind)}${label}</span>`;
+  return `<div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, prémisses et parties.</div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}</div><div class="pmd-okf-graph-wrap"><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div></div>`;
 }
 
 export function proposalBanner(proposals?: PendingProposals): string {

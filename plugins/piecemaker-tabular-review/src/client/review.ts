@@ -549,6 +549,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     let rows = classificationTreeRows(folders);
     const rowsHtml = () => rows.map((folder, index) => `
       <div class="ptr-tree-row" data-tree-row data-tree-depth="${folder.depth}">
+        <input type="hidden" data-tree-type value="${escapeHtml(folder.type || '')}">
         <input class="ptr-input" data-tree-name maxlength="60" style="margin-left:${folder.depth * 24}px;width:calc(100% - ${folder.depth * 24}px)" value="${escapeHtml(folder.name)}" placeholder="${folder.depth ? 'Sous-dossier' : 'Dossier'}" aria-label="Nom du dossier">
         <input class="ptr-input" data-tree-explanation maxlength="500" value="${escapeHtml(folder.explanation)}" placeholder="Ce qu’on y range" aria-label="Explication du dossier">
         <button type="button" class="ptr-icon-button" data-tree-add-child="${index}" title="Ajouter un sous-dossier" aria-label="Ajouter un sous-dossier">+</button>
@@ -568,6 +569,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
             depth: Number(row.dataset.treeDepth),
             name: row.querySelector<HTMLInputElement>('[data-tree-name]')!.value,
             explanation: row.querySelector<HTMLInputElement>('[data-tree-explanation]')!.value,
+            type: row.querySelector<HTMLInputElement>('[data-tree-type]')!.value || undefined,
           }));
         };
         dialog.addEventListener('input', sync);

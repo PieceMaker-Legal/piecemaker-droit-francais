@@ -90,7 +90,7 @@ export const etapesApi = {
   validateMapping: (projectPath: string) => request<{ mappingValide?: string }>(ETAPES_BASE, '/dossier', { method: 'POST', body: JSON.stringify({ projectPath, mappingValide: true }) }),
 };
 
-export type ClassificationFolder = { name: string; explanation: string };
+export type ClassificationFolder = { name: string; explanation: string; type?: string };
 
 const CLASSIFICATION_BASE = '/api/plugins/piecemaker-tabular-review/rpc';
 

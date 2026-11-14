@@ -17,7 +17,7 @@ const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lan
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verify', 'ontologie', 'link', 'unlink'];
+const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single']);
@@ -81,6 +81,8 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       et les contradictions (une prémisse à valeur unique, plusieurs valeurs selon les pièces),
       puis les éléments manquants du graphe : pièce sans prémisse ni lien, prémisse sans pièce,
       sans valeur ou sans partie, partie isolée
+  okf types --json '[{"name":"contrat","icon":"pen"}]'
+      remplace directement le catalogue commun des types et icônes ; liste complète, validation et vérification OKF
   okf ontologie
       relations admises entre documents (~/.piecemaker/ontologie.json, commune à tous les dossiers, réglée par l'avocat dans l'onglet Index) :
       nom, sens, types de la source et de la cible ; lecture seule
@@ -724,6 +726,13 @@ async function okf(api, positional, flags, resolved) {
       ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}${entry.programmes?.length ? ` (programme ${entry.programmes.join(', ')})` : ''}`),
     ].join('\n');
   }
+  if (action === 'types') {
+    if (!value(flags.json)) usage('okf types attend --json : liste complète des types {name, icon}.');
+    let documentTypes;
+    try { documentTypes = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
+    await api.okfFn({ action, folder, documentTypes });
+    return `Types de documents enregistrés.\n${await okf(api, ['okf', 'verify'], {}, resolved)}`;
+  }
   if (action === 'ontologie' && positional[2] === 'proposer') {
     if (!value(flags.json)) usage('okf ontologie proposer attend --json \'{"relations":[...]}\'.');
     let proposee;
@@ -733,12 +742,16 @@ async function okf(api, positional, flags, resolved) {
     return `Proposition enregistrée (${proposition.relations.length} relation(s)) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Ontologie.`;
   }
   if (action === 'ontologie') {
-    const { relations, systeme, erreur, proposition } = await api.okfFn({ action, folder });
+    const { relations, systeme, erreur, proposition, documentTypes = [], types = [], icones = [] } = await api.okfFn({ action, folder });
     return [
       ...(erreur ? [`Attention : ${erreur}`] : []),
       ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}) : ${proposition.relations.map((entry) => entry.name).join(', ')}.`] : []),
       'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :',
       ...relations.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source.join(', ')} → ${entry.target.join(', ')}${entry.description ? ` — ${entry.description}` : ''}`),
+      `Types principaux du dossier : ${types.join(', ')}. Classement : pm dossier arborescence.`,
+      `Icônes disponibles : ${icones.join(', ')}.`,
+      'Types de documents (pm okf types --json pour remplacer la liste) :',
+      ...documentTypes.map((entry) => `- ${entry.name} : ${entry.icon}`),
       'Relations système :',
       ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),
     ].join('\n');

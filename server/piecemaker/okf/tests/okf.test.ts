@@ -5,10 +5,9 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { REVIEW_FOLDER } from '../../../../plugins/piecemaker-tabular-review/src/shared.js';
-
 import type { SourceDocument, SourceParty } from '../build.js';
-import { buildBundle, datesIn } from '../build.js';
-import { bundleRoot, conceptFile, parseConcept, readBundle, relationsOf } from '../bundle.js';
+import { buildBundle, datesIn, documentsFromSnapshot } from '../build.js';
+import { bundleRoot, conceptFile, parseConcept, readBundle, readTypes, relationsOf } from '../bundle.js';
 import { graphGaps, premiseEvidence } from '../premises.js';
 import { premisesFromReviews } from '../reviews.js';
 import type { ReviewPremise } from '../reviews.js';
@@ -496,4 +495,58 @@ test('l\'assistant propose une ontologie que seul l\'enregistrement de l\'avocat
   proposeOntology({ relations: [] });
   dropProposal();
   assert.equal(readProposal(), null);
+});
+
+
+test('le titre descriptif de la revue et sa nature arrivent dans le graphe sans reconstruction', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  buildBundle({ projectPath, documents, markdownOf });
+  const directory = path.join(projectPath, REVIEW_FOLDER);
+  fs.mkdirSync(directory);
+  fs.writeFileSync(path.join(directory, 'index.json'), JSON.stringify({
+    category: 'documents', updatedAt: '2026-01-01',
+    columns: [{ index: 0, name: 'Titre' }, { index: 1, name: 'Nature' }],
+    rows: [{ id: 'r1', piece: CONTRACT, documents: [] }],
+    cells: { r1: { 0: { summary: 'Convention de prestation' }, 1: { summary: 'contrat' } } },
+  }));
+  const before = fs.readFileSync(conceptFile(projectPath, `/${CONTRACT}.md`), 'utf8');
+  const view = backendOf(projectPath, markdownOf).read('p');
+  assert.equal(view.fiches.find((fiche) => fiche.resource === CONTRACT)?.title, 'Convention de prestation');
+  assert.equal(view.fiches.find((fiche) => fiche.resource === CONTRACT)?.icon, 'pen');
+  assert.equal(fs.readFileSync(conceptFile(projectPath, `/${CONTRACT}.md`), 'utf8'), before);
+  const snapshot = { projectId: 'p', nodes: [{ id: 'document:1', kind: 'document', label: 'Contrat.pdf', data: { path: path.join(projectPath, CONTRACT) }, aliases: [], date: null }], citations: [], links: [], mappings: [] };
+  assert.equal(documentsFromSnapshot(projectPath, snapshot as never)[0].title, 'Convention de prestation');
+});
+
+test('le catalogue conserve ses icônes à une sauvegarde des relations et détecte une altération', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  buildBundle({ projectPath, documents, markdownOf });
+  const relations = readOntology(projectPath).relations;
+  const documentTypes = [{ name: 'Contrat de prestation', icon: 'scroll' }];
+  saveOntology(projectPath, { relations, documentTypes });
+  saveOntology(projectPath, { relations });
+  assert.deepEqual(readOntology(projectPath).documentTypes, documentTypes);
+  assert.equal(backendOf(projectPath, markdownOf).read('p').fiches.find((fiche) => fiche.resource === CONTRACT)?.icon, 'scroll');
+  for (const invalid of [[{ name: 'contrat', icon: 'javascript:alert(1)' }], [{ name: 'x', icon: 'file' }, { name: 'X', icon: 'pen' }], [{ name: 'Partie', icon: 'users' }]]) {
+    assert.throws(() => saveOntology(projectPath, { relations, documentTypes: invalid }), TypeError);
+  }
+  const stored = JSON.parse(fs.readFileSync(ontologyFile(), 'utf8'));
+  stored.documentTypes[0].icon = 'mail';
+  fs.writeFileSync(ontologyFile(), JSON.stringify(stored));
+  assert.match(readOntology(projectPath).erreur || '', /sceau|modifiée hors/);
+});
+
+test('le type principal suit le dossier choisi et ses sous-dossiers sans déplacer les pièces', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  fs.writeFileSync(path.join(projectPath, '.piecemaker', 'arborescence.json'), JSON.stringify([
+    { name: 'Pièces', type: 'Archives', explanation: '' },
+    { name: 'Pièces/Contrats', explanation: '' },
+    { name: 'Projets', type: 'Pièces', explanation: '' },
+  ]));
+  buildBundle({ projectPath, documents, markdownOf });
+  assert.deepEqual(readTypes(projectPath), ['Archives', 'Pièces']);
+  assert.equal(concept(projectPath, CONTRACT).frontmatter.type, 'Archives');
+  assert.equal(concept(projectPath, DRAFT).frontmatter.type, 'Pièces');
+  assert.ok(fs.existsSync(path.join(projectPath, CONTRACT)));
+  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });

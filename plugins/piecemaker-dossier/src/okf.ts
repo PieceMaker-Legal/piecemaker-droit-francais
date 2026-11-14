@@ -1,11 +1,14 @@
+import { DEFAULT_DOCUMENT_TYPES, documentIcon, iconSvg } from './document-types.js';
+import type { DocumentType } from './document-types.js';
+
 export type OkfRelation = { relation: string; target: string; citation: string; origin: string; value?: string };
-export type OkfFiche = { id: string; type: string; title: string; description: string; resource: string; date: string; side?: string; single?: boolean; relations: OkfRelation[] };
+export type OkfFiche = { id: string; type: string; title: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; relations: OkfRelation[] };
 export type OkfRelationLabel = { name: string; label: string; inverse: string };
-export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[] };
+export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[]; documentTypes?: DocumentType[] };
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
 export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
 export type OntologyProposal = { relations: OntologyRelation[]; motif: string; date: string };
-export type OntologyState = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: OntologyProposal | null };
+export type OntologyState = { relations: OntologyRelation[]; documentTypes?: DocumentType[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: OntologyProposal | null };
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
 export type OkfReport = { erreurs: OkfError[]; contradictions: OkfContradiction[] };
@@ -34,11 +37,13 @@ async function request<T>(path: string, payload?: unknown, method = 'POST'): Pro
 
 export const okfApi = {
   read: (projectId: string) => request<OkfIndex>(`?projectId=${encodeURIComponent(projectId)}`),
+  rebuild: (projectId: string) => request<{ written: number; removed: number }>('/rebuild', { projectId }),
   verify: (projectId: string) => request<OkfReport>(`/verify?projectId=${encodeURIComponent(projectId)}`),
   link: (projectId: string, link: OkfLink) => request<OkfLink>('/link', { projectId, ...link }),
   unlink: (projectId: string, link: OkfLink) => request<OkfLink>('/unlink', { projectId, ...link }),
   ontology: (projectId: string) => request<OntologyState>(`/ontologie?projectId=${encodeURIComponent(projectId)}`),
   saveOntology: (projectId: string, relations: OntologyRelation[]) => request<OntologyState>('/ontologie', { projectId, relations }, 'PUT'),
+  saveTypes: (projectId: string, documentTypes: DocumentType[]) => request<OntologyState>('/types', { projectId, documentTypes }, 'PUT'),
   dropProposal: (projectId: string) => request<OntologyState>(`/ontologie/proposition?projectId=${encodeURIComponent(projectId)}`, undefined, 'DELETE'),
 };
 
@@ -75,7 +80,7 @@ export function graphElements(index: OkfIndex): Array<{ data: Record<string, str
   const ids = new Set(fiches.map((fiche) => fiche.id));
   const kind = (fiche: OkfFiche) => fiche.type === PREMISE_TYPE ? 'premise' : fiche.type === PARTY_TYPE ? `party-${fiche.side === 'adversaire' ? 'adverse' : fiche.side || 'tiers'}` : 'document';
   return [
-    ...fiches.map((fiche) => ({ data: { id: fiche.id, label: fiche.title, resource: fiche.resource, kind: kind(fiche), type: fiche.type } })),
+    ...fiches.map((fiche) => ({ data: { id: fiche.id, label: fiche.title.replace(/\.(?:pdf|docx?|xlsx?|png|jpe?g|txt|md)$/i, ''), resource: fiche.resource, kind: kind(fiche), type: fiche.type, icon: fiche.type === PREMISE_TYPE ? 'diamond' : fiche.type === PARTY_TYPE ? 'users' : fiche.icon || documentIcon(fiche.nature || '', index.documentTypes || DEFAULT_DOCUMENT_TYPES) } })),
     ...fiches.flatMap((fiche) => fiche.relations
       .filter((entry) => ids.has(entry.target))
       .map((entry) => ({ data: { id: `${fiche.id}|${entry.relation}|${entry.target}`, source: fiche.id, target: entry.target, label: relationLabel(index, entry.relation), relation: entry.relation } }))),
@@ -138,33 +143,29 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen
   const border = color('--pmd-border', '#d0d7de');
   const surface = color('--pmd-surface', '#ffffff');
   const accent = color('--pmd-accent', '#0088ff');
-  const palette = {
-    document: [color('--pmd-tiers', '#b3cdee'), color('--pmd-tiers-ink', '#55759e')],
-    premise: [color('--pmd-premise', '#d6cbef'), color('--pmd-muted', '#6b7280')],
-    client: [color('--pmd-client', '#a8d5b5'), color('--pmd-client-ink', '#4e7a5c')],
-    adverse: [color('--pmd-adverse', '#efb4b4'), color('--pmd-adverse-ink', '#9a5555')],
-    tiers: [color('--pmd-tiers', '#b3cdee'), color('--pmd-tiers-ink', '#55759e')],
-  };
   const fontFamily = getComputedStyle(container).fontFamily || 'sans-serif';
   probe.remove();
-  const partyStyle = (side: 'client' | 'adverse') => ({ selector: `node[kind = "party-${side}"]`, style: { shape: 'ellipse', width: 34, height: 34, 'background-color': palette[side][0], 'border-color': palette[side][1] } });
+  const measure = document.createElement('canvas').getContext('2d');
+  if (measure) measure.font = `500 12px ${fontFamily}`;
+  const elements = graphElements(index).map((element) => {
+    if (element.data.source) return element;
+    const label = element.data.label;
+    const width = Math.max(96, Math.min(420, (measure?.measureText(label).width || label.length * 7) + 54));
+    const svg = iconSvg(element.data.icon, text);
+    return { data: { ...element.data, width, image: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` } };
+  });
   const graph = cytoscape({
     container,
-    elements: graphElements(index),
-    layout: { name: 'cose', animate: false, padding: 40, nodeDimensionsIncludeLabels: true, nodeRepulsion: () => 14000, idealEdgeLength: () => 130, componentSpacing: 90 },
+    elements,
+    layout: { name: 'cose', animate: false, padding: 40, nodeDimensionsIncludeLabels: true, nodeRepulsion: () => 24000, idealEdgeLength: () => 180, componentSpacing: 110 },
     style: [
-      { selector: 'node', style: { label: 'data(label)', shape: 'round-rectangle', width: 22, height: 28, 'background-color': palette.document[0], 'border-width': 2, 'border-color': palette.document[1], color: text, 'font-family': fontFamily, 'font-size': 11, 'font-weight': 500, 'text-valign': 'bottom', 'text-halign': 'center', 'text-margin-y': 6, 'text-wrap': 'ellipsis', 'text-max-width': '120px', 'text-background-color': surface, 'text-background-opacity': 0.85, 'text-background-padding': '2px', 'text-background-shape': 'roundrectangle', 'transition-property': 'opacity, border-width', 'transition-duration': 120 } },
-      { selector: 'node[kind = "premise"]', style: { shape: 'diamond', width: 32, height: 32, 'background-color': palette.premise[0], 'border-color': palette.premise[1] } },
-      partyStyle('client'),
-      partyStyle('adverse'),
-      { selector: 'node[kind = "party-tiers"]', style: { shape: 'ellipse', width: 34, height: 34, 'background-color': palette.tiers[0], 'border-color': palette.tiers[1] } },
-      { selector: 'edge', style: { width: 1.25, 'line-color': border, 'target-arrow-color': border, 'target-arrow-shape': 'triangle', 'arrow-scale': 0.9, 'curve-style': 'bezier', 'line-style': 'solid', label: 'data(label)', color: muted, 'font-family': fontFamily, 'font-size': 9, 'text-rotation': 'autorotate', 'text-background-color': surface, 'text-background-opacity': 0.9, 'text-background-padding': '2px', 'text-background-shape': 'roundrectangle', 'transition-property': 'opacity, width', 'transition-duration': 120 } },
+      { selector: 'node', style: { label: 'data(label)', shape: 'round-rectangle', 'corner-radius': '18px', width: 'data(width)', height: 36, 'background-color': surface, 'border-width': 1, 'border-color': border, color: text, 'font-family': fontFamily, 'font-size': 12, 'font-weight': 500, 'text-valign': 'center', 'text-halign': 'center', 'text-margin-x': 12, 'text-wrap': 'ellipsis', 'text-max-width': '340px', 'background-image': 'data(image)', 'background-width': 17, 'background-height': 17, 'background-position-x': '13px', 'background-position-y': '50%', 'background-fit': 'none', 'transition-property': 'opacity, border-width', 'transition-duration': 120 } },
+      { selector: 'edge', style: { width: 1, 'line-color': border, 'target-arrow-color': muted, 'target-arrow-shape': 'none', 'arrow-scale': 0.7, 'curve-style': 'bezier', 'line-style': 'solid', label: '', color: muted, 'font-family': fontFamily, 'font-size': 10, 'text-rotation': 'autorotate', 'text-background-color': surface, 'text-background-opacity': 0.95, 'text-background-padding': '4px', 'text-background-shape': 'roundrectangle', 'transition-property': 'opacity, width', 'transition-duration': 120 } },
       { selector: 'edge[relation = "mentions"], edge[relation = "involves"]', style: { 'line-style': 'dashed' } },
-      { selector: 'edge[relation = "states"]', style: { width: 1.75 } },
       { selector: '.pmd-dim', style: { opacity: 0.15 } },
-      { selector: 'edge.pmd-near', style: { width: 2.25, 'line-color': muted, 'target-arrow-color': muted, color: text } },
-      { selector: 'node.pmd-near', style: { 'border-width': 3 } },
-      { selector: 'node:selected', style: { 'border-width': 3, 'border-color': accent, 'overlay-color': accent, 'overlay-opacity': 0.08, 'overlay-padding': 6 } },
+      { selector: 'edge.pmd-near', style: { width: 1.5, label: 'data(label)', 'target-arrow-shape': 'triangle', 'line-color': muted, 'target-arrow-color': muted, color: text } },
+      { selector: 'node.pmd-near', style: { 'border-width': 1.5 } },
+      { selector: 'node:selected', style: { 'border-width': 1.5, 'border-color': accent, 'overlay-color': accent, 'overlay-opacity': 0.08, 'overlay-padding': 6 } },
     ],
   });
   const focusOn = (node: cytoscape.NodeSingular | null) => {
@@ -185,5 +186,7 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, onOpen
   graph.on('tap', (event) => {
     if (event.target === graph) focusOn(null);
   });
-  return () => graph.destroy();
+  const resize = new ResizeObserver(() => graph.resize());
+  resize.observe(container);
+  return () => { resize.disconnect(); graph.destroy(); };
 }

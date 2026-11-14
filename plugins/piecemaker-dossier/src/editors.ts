@@ -14,12 +14,12 @@ import type { PartySide } from './party-codes.js';
 import { changeNodeSide, cleanSelection, createEntity, findEntityBySelection, parseSelectionDate } from './selection-categories.js';
 import type { SelectionChange, SelectionGraph } from './selection-categories.js';
 
-export function modal(root: HTMLElement, body: string): HTMLElement {
+export function modal(root: HTMLElement, body: string, inline = false): HTMLElement {
   const layer = document.createElement('div');
-  layer.className = 'pmd-modal';
-  layer.innerHTML = `<div class="pmd-dialog">${body}</div>`;
+  layer.className = inline ? 'pmd-settings-pane' : 'pmd-modal';
+  layer.innerHTML = inline ? body : `<div class="pmd-dialog">${body}</div>`;
   root.appendChild(layer);
-  layer.addEventListener('click', (event) => { if (event.target === layer) layer.remove(); });
+  layer.addEventListener('click', (event) => { if (!inline && event.target === layer) layer.remove(); });
   layer.querySelectorAll('[data-close]').forEach((button) => button.addEventListener('click', () => layer.remove()));
   return layer;
 }
@@ -589,7 +589,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
     ? node.data.fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string')
     : [];
   const nature = textValue(node.data.nature);
-  const natureOptions = natureOptionsMarkup(nature);
+  const natureOptions = natureOptionsMarkup(nature, data.okf?.documentTypes);
   const fieldRows = fields.map((field, index) => `<div class="pmd-document-field-row" data-field-row><input class="pmd-input" data-field-label value="${escapeHtml(field.label)}" placeholder="Libellé"><input class="pmd-input" data-field-value value="${escapeHtml(field.value)}" placeholder="Valeur"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" type="button" data-remove-field="${index}" aria-label="Supprimer le champ">×</button></div>`).join('');
   const layer = modal(root, `
     <div role="dialog" aria-modal="true" class="pmd-document-dialog" data-piecemaker-identity-highlight="off">

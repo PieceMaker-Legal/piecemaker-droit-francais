@@ -3,10 +3,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { DEFAULT_DOCUMENT_TYPES, DOCUMENT_ICONS } from '../../../plugins/piecemaker-dossier/src/document-types.js';
+import type { DocumentType } from '../../../plugins/piecemaker-dossier/src/document-types.js';
+
 import { INVOLVES, MENTIONS, PARTY_TYPE, PREMISE_TYPE, STATES, readGraphTypes, readTypes, text } from './bundle.js';
 
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
-export type Ontology = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string };
+export type Ontology = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string; documentTypes?: DocumentType[] };
 export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
 
 export const SYSTEM_RELATIONS: SystemRelation[] = [
@@ -38,9 +41,9 @@ function sealKey(create: boolean): Buffer | null {
   return fs.readFileSync(filePath);
 }
 
-const sealOf = (key: Buffer, relations: OntologyRelation[]): string => createHmac('sha256', key).update(JSON.stringify(relations)).digest('hex');
+const sealOf = (key: Buffer, relations: unknown): string => createHmac('sha256', key).update(JSON.stringify(relations)).digest('hex');
 
-function sealed(key: Buffer | null, relations: OntologyRelation[], seal: unknown): boolean {
+function sealed(key: Buffer | null, relations: unknown, seal: unknown): boolean {
   if (!key || typeof seal !== 'string') return false;
   const expected = Buffer.from(sealOf(key, relations));
   const actual = Buffer.from(seal);
@@ -81,14 +84,29 @@ export function normalizeOntology(value: unknown): OntologyRelation[] {
   });
 }
 
+function normalizeDocumentTypes(value: unknown): DocumentType[] {
+  if (!Array.isArray(value) || value.length > 100) throw new TypeError('types : donner une liste de 100 types au plus.');
+  const seen = new Set<string>();
+  return value.map((entry) => {
+    const name = text(entry?.name).normalize('NFC');
+    const icon = text(entry?.icon);
+    if (!name || name.length > 120 || RESERVED_TYPES.includes(name)) throw new TypeError('type : nom obligatoire, non réservé, 120 caractères au plus.');
+    if (seen.has(name.toLocaleLowerCase('fr'))) throw new TypeError(`type « ${name} » en double.`);
+    if (!Object.hasOwn(DOCUMENT_ICONS, icon)) throw new TypeError(`icône inconnue : ${icon}.`);
+    seen.add(name.toLocaleLowerCase('fr'));
+    return { name, icon };
+  });
+}
+
 export function readOntology(projectPath: string): Ontology {
   const filePath = ontologyFile();
   if (!fs.existsSync(filePath)) return { relations: defaultOntology(projectPath), personnalisee: false };
   try {
     const stored = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^﻿/, ''));
     const relations = normalizeOntology(stored);
-    if (!sealed(sealKey(false), relations, stored?.sceau)) return { relations: defaultOntology(projectPath), personnalisee: true, erreur: TAMPERED };
-    return { relations, personnalisee: true };
+    const documentTypes = stored.documentTypes === undefined ? undefined : normalizeDocumentTypes(stored.documentTypes);
+    if (!sealed(sealKey(false), documentTypes === undefined ? relations : { relations, documentTypes }, stored?.sceau)) return { relations: defaultOntology(projectPath), personnalisee: true, erreur: TAMPERED };
+    return { relations, personnalisee: true, ...(documentTypes === undefined ? {} : { documentTypes }) };
   } catch (error) {
     return { relations: defaultOntology(projectPath), personnalisee: true, erreur: `ontologie illisible, ontologie par défaut appliquée : ${error instanceof Error ? error.message : String(error)}` };
   }
@@ -96,10 +114,13 @@ export function readOntology(projectPath: string): Ontology {
 
 export function saveOntology(projectPath: string, value: unknown): Ontology {
   const relations = normalizeOntology(value);
+  const supplied = (value as { documentTypes?: unknown }).documentTypes;
+  const documentTypes = normalizeDocumentTypes(supplied === undefined ? readOntology(projectPath).documentTypes || DEFAULT_DOCUMENT_TYPES : supplied);
+  const content = { relations, documentTypes };
   const filePath = ontologyFile();
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify({ relations, sceau: sealOf(sealKey(true)!, relations) }, null, 2)}\n`);
+  fs.writeFileSync(temporary, `${JSON.stringify({ ...content, sceau: sealOf(sealKey(true)!, content) }, null, 2)}\n`);
   fs.renameSync(temporary, filePath);
   return readOntology(projectPath);
 }

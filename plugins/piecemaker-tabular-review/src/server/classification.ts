@@ -29,7 +29,9 @@ function normalizeFolders(value: unknown): ClassificationFolder[] {
   if (value.length > MAX_FOLDERS) throw new UserError(`L’arborescence contient au plus ${MAX_FOLDERS} dossiers.`);
   const folders = value.map((entry) => {
     const input = (entry ?? {}) as Record<string, unknown>;
-    return { name: folderName(input.name), explanation: typeof input.explanation === 'string' ? input.explanation.trim().slice(0, MAX_EXPLANATION) : '' };
+    const type = typeof input.type === 'string' ? input.type.trim().normalize('NFC') : '';
+    if (type && (type.length > 60 || ['Premise', 'Partie', 'Non classé'].includes(type) || /[\/\\\u0000-\u001f]/.test(type))) throw new UserError('Type principal invalide.');
+    return { ...(type ? { type } : {}), name: folderName(input.name), explanation: typeof input.explanation === 'string' ? input.explanation.trim().slice(0, MAX_EXPLANATION) : '' };
   });
   if (new Set(folders.map((folder) => folder.name.toLowerCase())).size !== folders.length) throw new UserError('Deux dossiers portent le même nom.');
   return folders;
