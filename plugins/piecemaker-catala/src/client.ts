@@ -73,8 +73,9 @@ export function mount(container: HTMLElement, api: Host) {
   const shown = () => data?.programmes.find((entry) => entry.nom === chosen) ?? data?.programmes[0];
   const plainGap = (message: string) => {
     const [, file = '', line = '', text = message] = message.match(/^(.*?):(\d+):\s*(.*)$/) ?? [];
-    const meaning = /piecemaker\.citation/.test(text) ? 'Citation manquante : le passage exact de la pièce n’est pas cité.'
-      : /titre manquant/i.test(text) ? 'Titre manquant : cette entrée n’a ni titre, ni source, ni question.'
+    const meaning = /titre manquant/i.test(text) ? 'Titre manquant : cette entrée n’a pas de titre ## texte court.'
+      : /règle sans source juridique/i.test(text) ? 'Règle sans source : placez-la sous le titre d’un article ou d’une décision, suivi de l’extrait cité.'
+      : /fait sans preuve typée/i.test(text) ? 'Fait sans preuve : déclarez cette entrée de type Fait, pour qu’une prémisse l’établisse.'
       : text;
     return { meaning, place: file ? `${file}, ligne ${line}` : '' };
   };

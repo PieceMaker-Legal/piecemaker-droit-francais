@@ -3,7 +3,7 @@
 1. Formulez la question juridique avant de coder sa réponse.
 2. Décomposez la réponse en qualifications, conditions et exceptions nommées. Gardez les liens dans les expressions Catala.
 3. Une entrée est un fait typé (date, montant, durée, texte d’une clause), jamais une question. La règle le qualifie.
-4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque fait à sa pièce : `Prouvé contenu <Pièce>` (`format.md`, « Faits prouvés par une pièce »).
+4. Rattachez chaque fait à sa prémisse : `Prouvé contenu <Prémisse>` (`format.md`, « Prémisses »).
 5. Établissez chaque fait par les pièces. Un fait que les pièces ne prouvent pas vaut `NonProuvé` : il est écarté, faute de preuve, au détriment de la partie qui le supporte (art. 1353 C. civ.). Ne le laissez pas inconnu.
 6. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée, sourcée par le texte ou la jurisprudence, pas une entrée.
 7. Écrivez un scénario `#[test]` du dossier, avec les faits établis. Ajoutez un scénario seulement quand un fait contesté change l’issue.
@@ -13,34 +13,13 @@
 11. Pour examiner une autre exécution sans entrée, lancez `pm catala expliquer --fichier F --scope S`.
 12. Si la preuve signale un conflit, contrôlez la hiérarchie avec `pm catala exceptions`.
 
-## Titre, source et citation
+## Titre, source et preuve
 
-Suivez le modèle de `format.md`. Chaque définition et chaque entrée porte un titre `## texte court` sur la ligne au-dessus : il nomme la case du graphe. Rédigez-le selon « Style des titres » de `SKILL.md`.
+Suivez le modèle de `format.md`. Le titre `## texte court` au-dessus d'une définition ou d'une entrée nomme la case du graphe. Rédigez-le selon « Style des titres » de `SKILL.md`. Une règle tient sa source de sa position, sous le titre de son article.
 
-Une règle tient sa source de sa position : elle se place juste sous le titre de son article et l'extrait exact entre « ».
+Le graphe affiche sous un fait les pièces citées de sa prémisse OKF. Dans le scénario du dossier, fixez la prémisse établie : `-- mise_en_demeure: Resolution.Fait.Prouvé contenu Resolution.Prémisse.MiseEnDemeureRecue`.
 
-````catala
-champ d'application Exemple:
-  ## Vérifier la condition juridique
-  définition condition_juridique égal à donnée_observée
-````
-
-Un fait est une `entrée` de type `Fait`. Sa preuve est un cas de l'énumération `Pièce`, dont l'attribut `#[pm.preuve]` porte la source (prémisse OKF ou pièce), la citation et l'auteur du lien. Le graphe affiche cette pièce sous le fait. Si la prémisse manque, écrivez `goal` : ce qu'elle doit établir.
-
-````catala
-  ## Mise en demeure reçue
-  #[pm.preuve = "source: okf:/_premises/mise-en-demeure-recue.md | goal: établir la réception de la mise en demeure | by: agent"]
-  -- MiseEnDemeure
-````
-
-Dans le scénario du dossier, fixez la preuve établie par les pièces : `-- mise_en_demeure: Resolution.Fait.Prouvé contenu Resolution.Pièce.MiseEnDemeure`. Un fait chiffré porte aussi sa valeur (`FaitMontant`, `format.md`) ; `pm okf verify` compare cette valeur aux valeurs des pièces de la prémisse (date ou nombre).
-
-Une règle lit chaque fait. Ne déclarez jamais un fait que rien ne lit : `verifier` bloque une prémisse sans effet.
-Les liens fictifs de l’exemple ne constituent pas des références vérifiées.
-
-Le graphe rattache le titre et les attributs à la définition ou à l'entrée qui les suit. N'écrivez pas `#[doc]`.
-
-Placez chaque définition sous le texte ou la décision qui la fonde. Un même champ peut être défini par plusieurs blocs, répartis sous les différentes sources. Gardez les étiquettes et exceptions dans Catala.
+Les liens fictifs de l’exemple ne constituent pas des références vérifiées. Gardez les étiquettes et exceptions dans Catala.
 
 Dans un scénario, définissez les faits comme des données intermédiaires sous les sections de leurs pièces, puis passez ces données au champ métier. La trace conserve ainsi leur origine. Une déclaration de champ donne seulement son contexte ; elle ne prouve pas l’origine factuelle de sa valeur.
 

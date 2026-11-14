@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { catalaDocumentation, okfCitedVariables, testsWithoutAssertion } from './catala-documentation.mjs';
+import { catalaDocumentation, factInputs, testsWithoutAssertion, untypedFacts } from './catala-documentation.mjs';
 
 export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
@@ -92,7 +92,7 @@ export function selectProgram(cwd, name) {
   return { name: names[0], directory: path.join(programsRoot(cwd), names[0]) };
 }
 
-const TASK_TYPES = ['contentieux', 'contrat', 'autre'];
+const TASK_TYPES = ['litigation', 'transactional'];
 
 function isDay(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -109,7 +109,7 @@ function vigueurOf(context, program, flags = {}) {
 
 function taskErrors(directory, files) {
   const file = path.join(directory, 'tache.json');
-  if (!fs.existsSync(file)) return [];
+  if (!fs.existsSync(file)) return ['tâche absente : créez tache.json avec tache, type, date_vigueur et raisonnements.'];
   let task;
   try { task = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return ['tâche illisible : JSON invalide.']; }
   const sources = files.map((name) => fs.readFileSync(path.join(directory, name), 'utf8')).join('\n');
@@ -118,7 +118,7 @@ function taskErrors(directory, files) {
   return [
     typeof task?.tache === 'string' && task.tache.trim() ? '' : 'tâche sans nom : renseignez « tache ».',
     TASK_TYPES.includes(task?.type) ? '' : `type de tâche inconnu : écrivez ${TASK_TYPES.join(', ')}.`,
-    task?.date_vigueur === undefined || task.date_vigueur === 'today' || isDay(task.date_vigueur) ? '' : 'date_vigueur invalide : écrivez today ou AAAA-MM-JJ.',
+    task?.date_vigueur === undefined ? 'date_vigueur absente : écrivez today ou AAAA-MM-JJ.' : task.date_vigueur === 'today' || isDay(task.date_vigueur) ? '' : 'date_vigueur invalide : écrivez today ou AAAA-MM-JJ.',
     parts.length ? '' : 'tâche sans raisonnement : renseignez « raisonnements ».',
     ...parts.flatMap((part) => [
       part?.champ && declared(part.champ) ? '' : `raisonnement « ${part?.champ ?? ''} » : aucun champ d’application de ce nom.`,
@@ -286,8 +286,10 @@ async function verifier(context, program, flags = {}) {
     checks.push(entry);
     return entry;
   };
-  await record('documentation', 'Titres des entrées, citations des pièces, ouverture des blocs', async () => {
-    const errors = files.flatMap((file) => catalaDocumentation(fs.readFileSync(path.join(program.directory, file), 'utf8')).errors.map((error) => `${file}:${error.line}: ${error.message}`));
+  const contents = files.map((file) => ({ name: file, content: fs.readFileSync(path.join(program.directory, file), 'utf8') }));
+  await record('documentation', 'Titres, sources juridiques des règles, faits typés, ouverture des blocs', async () => {
+    const errors = contents.flatMap(({ name, content }) => catalaDocumentation(content, { test: /^test_/.test(path.basename(name)) }).errors.map((error) => `${name}:${error.line}: ${error.message}`));
+    errors.push(...untypedFacts(contents).map((error) => `${error.file}:${error.line}: ${error.message}`));
     errors.push(...taskErrors(program.directory, files).map((message) => `tache.json:1: ${message}`));
     return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
   });
@@ -305,11 +307,11 @@ async function verifier(context, program, flags = {}) {
       writeResult(program.directory, 'format.log', formatted.log);
       return { passed: !formatted.failed.length, exit_code: formatted.failed.length ? 1 : 0, files: formatted.failed, message: formatted.rewritten.length ? `reformatés : ${formatted.rewritten.join(', ')}` : '' };
     });
-    await record('premisses', 'catala dependency-graph + prémisses OKF lues', async () => {
+    await record('premisses', 'catala dependency-graph + faits lus', async () => {
       if (!typed.passed) return blocked('Compilation non validée.');
       const errors = [];
       for (const file of files) {
-        const cited = okfCitedVariables(fs.readFileSync(path.join(program.directory, file), 'utf8'));
+        const cited = factInputs(contents.filter(({ name }) => name === file));
         if (!cited.length) continue;
         const args = ['dependency-graph', '--color=never', '-I', '.', file];
         const key = JSON.stringify(args);
@@ -321,11 +323,11 @@ async function verifier(context, program, flags = {}) {
           graph = JSON.parse(listed.result.stdout).intra_scopes;
           if (!graph) throw new Error();
         } catch { errors.push(`Dépendances Catala indisponibles pour ${file}.`); continue; }
-        for (const { scope, variable, source } of cited) {
+        for (const { scope, name: variable } of cited) {
           const nodes = graph[scope]?.nodes ?? {};
           const id = Object.keys(nodes).find((candidate) => nodes[candidate] === variable);
           const read = id !== undefined && (graph[scope].edges ?? []).some((edge) => String(edge.from) === id && String(edge.to) !== id);
-          if (!read) errors.push(`${file}: Prémisse sans effet : ${scope}.${variable} cite ${source} mais aucune règle ne la lit.`);
+          if (!read) errors.push(`${file}: Fait sans effet : ${scope}.${variable} n'est lu par aucune règle.`);
         }
       }
       return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
@@ -405,7 +407,7 @@ async function verifier(context, program, flags = {}) {
       if (!context.citations) return missing('Contrôle de citations indisponible : serveur PieceMaker requis.');
       const report = await context.citations({ cwd: program.root, programme: program.name });
       writeResult(program.directory, 'citations.json', { ...report, sources_sha256: digest, started_utc: started, finished_utc: context.now() });
-      return { passed: report.passed, status: report.status, message: report.message };
+      return { passed: report.passed, status: report.status, message: [report.message, ...(report.warnings ?? [])].join(' · ') };
     }),
   ]);
   const changed = digest !== sourcesDigest(program.directory, sourceFiles(program.directory));

@@ -8,6 +8,7 @@ import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredent
 import { run } from './pm.mjs';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
+const TASK = { tache: 'Calcul de la prime de Jean Dupont', type: 'litigation', date_vigueur: '2024-01-15', raisonnements: [{ champ: 'Prime', objectif: 'Calculer la prime' }] };
 const TESTS = '> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d\'application JeanDupont:\n  résultat calcul champ d\'application Prime.Prime\n\nchamp d\'application JeanDupont:\n  assertion calcul.montant = 0 €\n```\n';
 
 function scratch() {
@@ -26,6 +27,7 @@ function program(dossier, name, files = { 'prime.catala_fr': MODULE, 'test_prime
   const directory = path.join(dossier, '.piecemaker', 'catala', name);
   fs.mkdirSync(directory, { recursive: true });
   fs.writeFileSync(path.join(directory, 'clerk.toml'), `[project]\nname = "${name}"\n`);
+  fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(TASK));
   for (const [file, content] of Object.entries(files)) fs.writeFileSync(path.join(directory, file), content);
   return directory;
 }
@@ -275,6 +277,7 @@ function catlegScenario(files, task) {
   const context = scratch();
   const directory = program(context.dossier, 'prime-anciennete', files);
   if (task) fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
+  else fs.rmSync(path.join(directory, 'tache.json'));
   const runner = async (command, args) => args.includes('lf')
     ? { code: 0, stdout: JSON.stringify({ article: { id: 'LEGIARTI000000000001', dateDebut: '2020-01-01', dateFin: '2999-01-01' } }), stderr: '' }
     : { code: 0, stdout: 'PIECEMAKER_ARTICLES=[]\n', stderr: '' };
@@ -297,7 +300,7 @@ test('catleg checks an identifier cited only in a doc attribute', async () => {
 });
 
 test('catleg takes the reference date from --au, then tache.json, and accepts today', async () => {
-  const task = { tache: 'Acte', type: 'contentieux', raisonnements: [], date_vigueur: '2024-01-15' };
+  const task = { tache: 'Acte', type: 'litigation', raisonnements: [], date_vigueur: '2024-01-15' };
   const files = { 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' };
   const withTask = catlegScenario(files, task);
   const today = catlegScenario(files, { ...task, date_vigueur: 'today' });
@@ -327,7 +330,7 @@ test('a missing reference date stops catleg and verifier before any check', asyn
 });
 
 test('an invalid date_vigueur in tache.json is reported', async () => {
-  const { dossier, deps, cleanup } = catlegScenario({ 'prime.catala_fr': MODULE }, { tache: 'Acte', type: 'contentieux', raisonnements: [{ champ: 'Prime', objectif: 'Calculer' }], date_vigueur: '2024-02-30' });
+  const { dossier, deps, cleanup } = catlegScenario({ 'prime.catala_fr': MODULE }, { tache: 'Acte', type: 'litigation', raisonnements: [{ champ: 'Prime', objectif: 'Calculer' }], date_vigueur: '2024-02-30' });
   try {
     await assert.rejects(() => runCatala({ commande: 'catleg', cwd: dossier, deps }), /date_vigueur attend today ou une date valide/);
     await assert.rejects(() => runCatala({ commande: 'verifier', cwd: dossier, deps }), /date_vigueur attend today ou une date valide/);
@@ -547,55 +550,91 @@ test('exceptions, executer and squelette call Catala with the expected arguments
   } finally { cleanup(); }
 });
 
-test('verifier requires a title on each input and a citation on each cited document', async () => {
+const FACTS = [
+  '> Module Prime',
+  '',
+  '```catala-metadata',
+  'déclaration énumération Prémisse:',
+  '  -- MontantDemande',
+  '',
+  'déclaration énumération Fait:',
+  '  -- Prouvé contenu Prémisse',
+  '  -- NonProuvé',
+  '',
+  "déclaration champ d'application Prime:",
+  '  ## Montant demandé',
+  '  entrée demande contenu Fait',
+  '  résultat montant contenu argent',
+  '```',
+  '',
+  '## Article 1 | LEGIARTI000000000001',
+  '',
+  '« Passage exact. »',
+  '',
+  '```catala',
+  "champ d'application Prime:",
+  '  définition montant égal à si demande sous forme Prouvé alors 10 € sinon 0 €',
+  '```',
+  '',
+].join('\n');
+const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  définition calcul.demande égal à Prime.Fait.NonProuvé\n  assertion calcul.montant = 0 €\n```\n";
+
+test('verifier requires a title, a typed fact, a legal anchor and a complete task', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
-    const directory = program(dossier, 'prime');
+    const directory = program(dossier, 'prime', { 'test_prime.catala_fr': FACT_TESTS });
     const { runner } = fakeRun();
-    const cases = [
-      ['', 'titre manquant pour cette entrée'],
-      ['## Montant demandé\n', null],
-      ['#[piecemaker.source = "okf:/_premises/montant-de-la-prime.md"]\n', null],
-      ['#[piecemaker.question = "Quel montant Jean Dupont a-t-il demandé ?"]\n', null],
-      ['## Montant demandé\n#[piecemaker.source = "pieces/contrat-fictif.md"]\n', 'citation] manquante'],
-      ['## Montant demandé\n#[piecemaker.source = "pieces/contrat-fictif.md"]\n#[piecemaker.citation = "  "]\n', 'citation] manquante'],
-      ['## Montant demandé\n#[piecemaker.source = "pieces/contrat-fictif.md"]\n#[piecemaker.citation = "La prime est de \\"10 €\\"."]\n', null],
-    ];
-    for (const [annotation, message] of cases) {
-      fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n' + annotation + '  entrée demande contenu argent\n  résultat montant contenu argent\n```\n\n```catala\nchamp d\'application Prime:\n  définition montant égal à demande\n```\n');
+    const documentation = async () => {
       const output = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
-      const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8'));
-      const check = report.checks.find((entry) => entry.name === 'documentation');
-      assert.equal(check.passed, !message, annotation);
-      if (message) {
-        assert.equal(report.passed, false);
-        assert.ok(check.errors.some((error) => error.includes('prime.catala_fr:') && error.includes(message)));
-        assert.ok(output.includes(message));
-      }
-    }
-    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE + '\n```catala\nchamp d\'application Prime:\n# Le montant suit l\'article fictif.\ndéfinition montant égal à 10 €\n```\n');
-    await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation').errors, []);
-    const verify = async (task) => {
-      fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
-      await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
-      return JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation').errors.filter((error) => error.startsWith('tache.json:1: '));
+      return { output, errors: JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation').errors };
     };
-    assert.deepEqual(await verify({ tache: 'Conclusions en défense Dupont / Société Exemple', type: 'contentieux', raisonnements: [{ champ: 'Prime', objectif: 'Obtenir la prime', rang: 'principal' }] }), []);
-    const faults = await verify({ type: 'litige', raisonnements: [{ champ: 'Absent' }] });
-    assert.equal(faults.length, 4);
-    assert.match(faults.join('\n'), /sans nom[\s\S]*type de tâche inconnu[\s\S]*« Absent » : aucun champ[\s\S]*sans objectif/);
+    const cases = [
+      [FACTS, null],
+      [FACTS.replace('  ## Montant demandé\n', ''), 'prime.catala_fr:12: titre manquant pour cette entrée. Écrivez ## texte court au-dessus.'],
+      [FACTS.replace('## Montant demandé', '## Montant ?'), 'prime.catala_fr:12: titre « Montant ? » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
+      [FACTS.replace('## Montant demandé', '## montant_demande de Jean'), 'prime.catala_fr:12: titre « montant_demande de Jean » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
+      [FACTS.replace('  ## Montant demandé\n', '  ## Montant demandé\n  #[doc="source: okf:/_premises/montant-demande.md"]\n'), 'prime.catala_fr:13: #[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section, la preuve d\'un fait dans un cas de Prémisse.'],
+      [FACTS.replace('entrée demande contenu Fait', 'entrée demande contenu argent'), "prime.catala_fr:13: fait sans preuve typée : l'entrée demande est de type argent. Déclarez-la de type Fait (Prouvé contenu Prémisse | NonProuvé) ou d'une énumération dont un cas porte une Prémisse."],
+      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1'), "prime.catala_fr:23: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
+      [FACTS.replace('« Passage exact. »\n\n', ''), "prime.catala_fr:21: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
+      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Décision fictive | JURITEXT000000000001'), null],
+      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1 | LEGIARTI000000000001\n\n« Passage exact. »\n\n### Montant'), null],
+    ];
+    for (const [content, message] of cases) {
+      fs.writeFileSync(path.join(directory, 'prime.catala_fr'), content);
+      const { output, errors } = await documentation();
+      assert.deepEqual(errors, message ? [message] : [], message ?? 'valide');
+      if (message) assert.ok(output.includes(message));
+    }
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), FACTS);
+    const verify = async (task) => {
+      if (task) fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
+      else fs.rmSync(path.join(directory, 'tache.json'));
+      return (await documentation()).errors.filter((error) => error.startsWith('tache.json:1: '));
+    };
+    assert.deepEqual(await verify({ tache: 'Conclusions en défense Dupont / Société Exemple', type: 'litigation', date_vigueur: 'today', raisonnements: [{ champ: 'Prime', objectif: 'Obtenir la prime', rang: 'principal' }] }), []);
+    assert.deepEqual(await verify({ tache: 'Contrat de Société Exemple SAS', type: 'transactional', date_vigueur: '2024-01-15', raisonnements: [{ champ: 'Prime', objectif: 'Fixer la prime' }] }), []);
+    const faults = await verify({ type: 'contentieux', raisonnements: [{ champ: 'Absent' }] });
+    assert.equal(faults.length, 5);
+    assert.match(faults.join('\n'), /sans nom[\s\S]*type de tâche inconnu : écrivez litigation, transactional\.[\s\S]*date_vigueur absente : écrivez today ou AAAA-MM-JJ\.[\s\S]*« Absent » : aucun champ[\s\S]*sans objectif/);
+    assert.deepEqual(await verify(null), ['tache.json:1: tâche absente : créez tache.json avec tache, type, date_vigueur et raisonnements.']);
   } finally { cleanup(); }
 });
 
 const PREMISE_SOURCE = [
   '```catala-metadata',
+  'déclaration énumération Prémisse:',
+  '  -- MentionLue',
+  '',
+  'déclaration énumération Fait:',
+  '  -- Prouvé contenu Prémisse',
+  '  -- NonProuvé',
+  '',
   "déclaration champ d'application Prime:",
-  '  #[piecemaker.source = "okf:/_premises/exemple"]',
-  '  entrée mention_lue contenu booléen',
+  '  ## Mention lue',
+  '  entrée mention_lue contenu Fait',
   '  ## Mention morte',
-  '  #[piecemaker.source = "okf:/_premises/exemple"]',
-  '  entrée mention_morte contenu booléen',
+  '  entrée mention_morte contenu Fait',
   '  résultat possible contenu booléen',
   '```',
   '',
@@ -609,24 +648,24 @@ function premiseRun(edges) {
   };
 }
 
-test('verifier accepts an OKF premise read by a rule', async () => {
+test('verifier accepts facts read by a rule', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime', { 'prime.catala_fr': PREMISE_SOURCE });
     const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }, { from: 2, to: 3 }]), python: null, credentials: null } });
     assert.match(text, /- premisses : ok/);
-    assert.doesNotMatch(text, /Prémisse sans effet/);
+    assert.doesNotMatch(text, /Fait sans effet/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'premisses').passed, true);
   } finally { cleanup(); }
 });
 
-test('verifier blocks an OKF premise that no rule reads', async () => {
+test('verifier blocks a fact that no rule reads', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime', { 'prime.catala_fr': PREMISE_SOURCE });
     const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }]), python: null, credentials: null } });
     assert.match(text, /- premisses : échec/);
-    assert.match(text, /Prémisse sans effet : Prime\.mention_morte cite okf:\/_premises\/exemple mais aucune règle ne la lit\./);
+    assert.match(text, /Fait sans effet : Prime\.mention_morte n'est lu par aucune règle\./);
     assert.doesNotMatch(text, /Prime\.mention_lue/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).passed, false);
   } finally { cleanup(); }
@@ -635,7 +674,7 @@ test('verifier blocks an OKF premise that no rule reads', async () => {
 test('verifier fails a test without assertion, a typecheck warning, and a misspelled block', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
-    const module = MODULE + '\n```catala\nchamp d\'application Prime:\n  #[doc="titre: Fixer le montant\\nquote: « Passage exact. »"]\n  définition montant égal à 10 €\n```\n';
+    const module = MODULE + '\n## Article 1 | LEGIARTI000000000001\n\n« Passage exact. »\n\n```catala\nchamp d\'application Prime:\n  #[doc="Fixe le montant."]\n  définition montant égal à 10 €\n```\n';
     const directory = program(dossier, 'prime', { 'prime.catala_fr': module, 'test_prime.catala_fr': TESTS + '\n```catala\n#[test]\ndéclaration champ d\'application SansAssertion:\n  résultat calcul champ d\'application Prime.Prime\n```\n' });
     const { runner } = fakeRun();
     const run = async (command, args, options) => {
@@ -658,7 +697,29 @@ test('verifier fails a test without assertion, a typecheck warning, and a misspe
       fs.writeFileSync(path.join(directory, 'prime.catala_fr'), module.replace('\n```catala\n', `\n${opening}\n`));
       await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { ...deps, run: passing } });
       const documentation = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation');
-      assert.deepEqual(documentation.errors, ['prime.catala_fr:8: bloc ignoré par Catala : ouvrez-le exactement par ```catala ou ```catala-metadata, sans espace ni majuscule.'], opening);
+      assert.deepEqual(documentation.errors, ['prime.catala_fr:12: bloc ignoré par Catala : ouvrez-le exactement par ```catala ou ```catala-metadata, sans espace ni majuscule.'], opening);
     }
+  } finally { cleanup(); }
+});
+
+test('the indemnity fixture follows model D and each rule rejects its fault', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    const fixture = path.join(import.meta.dirname, '../../../../../../docs/tests/raisonnement-indemnite-instruction-maj/.piecemaker/catala/indemnite-depart');
+    const source = fs.readFileSync(path.join(fixture, 'indemnite.catala_fr'), 'utf8');
+    const task = JSON.parse(fs.readFileSync(path.join(fixture, 'tache.json'), 'utf8'));
+    const directory = program(dossier, 'indemnite-depart', { 'indemnite.catala_fr': source });
+    const { runner } = fakeRun();
+    const errors = async (content, tache = task) => {
+      fs.writeFileSync(path.join(directory, 'indemnite.catala_fr'), content);
+      fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(tache));
+      await runCatala({ commande: 'verifier', cwd: dossier, flags: {}, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
+      return JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'documentation').errors.join('\n');
+    };
+    assert.equal(await errors(source), '');
+    assert.match(await errors(source.replace('## Article 2224 | LEGIARTI000019017112', '## Article 2224')), /règle sans source juridique/);
+    assert.match(await errors(source.replace('entrée société_cotée contenu Fait', 'entrée société_cotée contenu booléen')), /fait sans preuve typée : l'entrée société_cotée est de type booléen/);
+    assert.match(await errors(source.replace('## Société cotée', '## société_cotée')), /titre « société_cotée » : écrivez 2 à 7 mots/);
+    assert.match(await errors(source, { ...task, type: 'contentieux' }), /type de tâche inconnu : écrivez litigation, transactional\./);
   } finally { cleanup(); }
 });

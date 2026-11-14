@@ -1,5 +1,5 @@
 import { sourceContext } from './source-context.js';
-import { catalaDocumentation } from '../../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
+import { catalaDocumentation, premiseCases, premiseSource } from '../../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
 import { display, formula, reasoningMap } from './reasoning-map.js';
 import { nativeExecution, type NativeOrigin, type NativeProvenance } from './native-provenance.js';
 import { applicationMarkup, conditionApplication } from './condition-application.js';
@@ -287,7 +287,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
       return citedSources({ ...entry, label }, citations);
     });
   };
-  const documentation = new Map(files.map((file) => [file.chemin, catalaDocumentation(file.contenu ?? '').entries.filter((entry) => entry.hasDoc || entry.title || entry.source)]));
+  const documentation = new Map(files.map((file) => [file.chemin, catalaDocumentation(file.contenu ?? '').entries.filter((entry) => entry.hasDoc || entry.title)]));
   const docTitle = (file: string, line: number) => documentation.get(file)?.find((entry) => entry.startLine <= line && line <= entry.endLine)?.title ?? '';
   const enrich = (entry: NativeOrigin): Origin => {
     const source = `${new URL(`file:///${entry.file.replaceAll('\\', '/').replace(/^\/+/, '')}`).href}#L${entry.line}`;
@@ -344,10 +344,14 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     steps.delete(step.id);
     for (const other of steps.values()) other.parents = other.parents.map((id) => id === step.id ? twin.id : id);
   }
+  const premises = activeFiles.flatMap((file) => premiseCases(file.contenu ?? '').map(({ name }) => ({ name, origin: file.chemin })));
+  const proofOf = (step: Step) => premises.filter(({ name }) => new RegExp(`(?<![\\p{L}\\p{N}_])${human(name)}(?![\\p{L}\\p{N}_])`, 'u').test(step.value))
+    .flatMap(({ name, origin }) => citedSources({ label: name, target: premiseSource(name), kind: 'premise', origin, quote: '' }, citations));
   const used = new Set<string>();
   for (const step of steps.values()) {
-    step.sources = unique([...step.origins.filter((origin) => origin.selected).flatMap((origin) => origin.sources), ...located(nodes.get(step.id)!.source), ...(step.name ? linked.get(key(step.name)) ?? [] : [])]);
-    if (step.kind === 'rule' && !step.answer && !step.expression && !step.parents.length && step.sources.some((source) => source.kind === 'piece' || source.kind === 'premise') && !step.sources.some(legal)) step.kind = 'fact';
+    const proof = step.parents.length ? [] : proofOf(step);
+    step.sources = unique([...proof, ...step.origins.filter((origin) => origin.selected).flatMap((origin) => origin.sources), ...located(nodes.get(step.id)!.source), ...(step.name ? linked.get(key(step.name)) ?? [] : [])]);
+    if (step.kind === 'rule' && !step.answer && !step.expression && !step.parents.length && (proof.length || (step.sources.some((source) => source.kind === 'piece' || source.kind === 'premise') && !step.sources.some(legal)))) step.kind = 'fact';
     step.sources.forEach((source) => used.add(identity(source)));
     step.origins.flatMap((origin) => origin.sources).forEach((source) => used.add(identity(source)));
   }
@@ -366,7 +370,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
   for (const step of steps.values()) {
     step.parents = step.parents.filter((id) => steps.has(id));
     if (step.kind === 'fact' && /\b(?:Disputé|Contesté)(?!\p{L})/iu.test(step.value)) step.issue = 'Fait contesté : tranchez-le au vu des pièces.';
-    if (step.kind === 'fact' && (!step.value || /\b(?:Indéterminé|Inconnu|null|None)(?!\p{L})/iu.test(step.value))) step.issue = 'Fait non établi : indiquez la pièce qui l’établit.';
+    if (step.kind === 'fact' && (!step.value || /\b(?:Indéterminé|Inconnu|null|None|Non Prouvé)(?!\p{L})/iu.test(step.value))) step.issue = 'Fait non établi : indiquez la pièce qui l’établit.';
     if (step.kind === 'rule' && !step.sources.some(legal) && !(step.clause && roots(step.clause).some((clause) => lawOf(clause, steps).length))) step.issue = 'Aucun article ni aucune décision rattaché à cette règle.';
   }
   const levels = new Map<string, number>();

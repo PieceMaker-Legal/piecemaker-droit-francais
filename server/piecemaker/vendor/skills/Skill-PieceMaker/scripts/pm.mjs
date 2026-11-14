@@ -80,7 +80,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
       et les contradictions (une prémisse à valeur unique, plusieurs valeurs selon les pièces),
       puis les éléments manquants du graphe : pièce sans prémisse ni lien, prémisse sans pièce,
-      sans valeur ou sans partie, partie isolée, #[piecemaker.source] Catala citant une prémisse absente,
+      sans valeur ou sans partie, partie isolée, cas Prémisse d'un programme Catala sans fiche,
       sans pièce ou de valeur différente, prémisse citée par aucun programme Catala ; chaque manque nomme son programme
   okf ontologie
       relations admises entre documents (~/.piecemaker/ontologie.json, commune à tous les dossiers, réglée par l'avocat dans l'onglet Index) :
@@ -540,7 +540,7 @@ async function dossierState(api, project) {
 
 const DOSSIER_LABELS = { conversion: 'Conversion', anonymisation: 'Anonymisation', mapping: 'Mapping' };
 
-const isPremiseGap = (entry) => entry.element.startsWith('/_premises/') || entry.manque.includes('#[piecemaker.source]');
+const isPremiseGap = (entry) => entry.element.startsWith('/_premises/') || /^(?:Prémisse|Valeur du scénario)/.test(entry.manque);
 const agents = (names) => (names.length ? ` (sous-agent ${names.join(', ')})` : '');
 const point = (numero, nom, defauts, detail, depth = 0) => ({ numero, depth, ok: !defauts, texte: `${nom} : ${defauts ? `${defauts}${detail ? ` → ${detail}` : ''}` : 'valide'}` });
 const titre = (numero, texte, depth = 0) => ({ numero, depth, texte, titre: true });

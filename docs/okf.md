@@ -87,15 +87,15 @@ Le raisonnement Catala se branche sur la prémisse, pas sur la pièce.
 
 ```mermaid
 flowchart LR
-  C[Condition Catala] -->|"#[doc] source: okf:/_premises/…"| P[Premise]
+  C[Condition Catala] -->|"Prouvé contenu Prémisse.Cas"| P[Premise]
   P -->|states, citation| D[Pièce]
 ```
 
-1. Une condition Catala se justifie par une prémisse : `source: okf:/_premises/<titre normalisé>.md` dans son `#[doc]`, sans `quote`.
+1. Une condition Catala se justifie par un fait `Prouvé contenu Prémisse.<Cas>`. Le cas `MiseEnDemeureRecue` désigne `okf:/_premises/mise-en-demeure-recue.md` (mots séparés, sans accents, en tirets).
 2. Une prémisse se justifie par des pièces citées (`states`).
 3. Une condition ne cite jamais une pièce directement.
 
-`pm catala verifier` développe la prémisse en ses pièces et contrôle chaque citation. Le volet Catala affiche ces pièces sous l'étape.
+`pm catala verifier` développe la prémisse en ses pièces et contrôle chaque citation et la valeur du scénario (`-- valeur:`). Il liste les « Prémisses non prouvées » et avertit d'un lien posé par l'avocat (« vérification manuelle requise »). Le volet Catala affiche ces pièces sous l'étape.
 
 ## Production, sans token
 
@@ -122,7 +122,7 @@ Le serveur refuse une citation absente du document source.
 | Pièce d'un type du graphe | aucune prémisse ni lien vers une autre pièce |
 | Partie | aucune mention dans une pièce ni prémisse qui la concerne |
 | Prémisse | aucune pièce citée ; valeur unique sans valeur ; aucune partie concernée ; citée par aucun programme Catala (si le dossier en contient) |
-| `#[doc]` Catala (`fichier:ligne`) | prémisse absente de l'index ; prémisse sans pièce citée ; pièce citée directement |
+| Cas `Prémisse` Catala (`fichier:ligne`) | prémisse absente de l'index ; prémisse sans pièce citée ; valeur du scénario différente |
 
 ## Interface
 

@@ -5,7 +5,7 @@ description: Écrire et vérifier un programme Catala qui code une règle juridi
 
 # Catala
 
-> **Délégation.** Agent principal : lisez les pièces, puis écrivez vous-même le programme avec ce skill. Confiez ensuite ses prémisses à `premise-maker`, avec le nom du programme et, pour chacune : le chemin `okf:`, la question, le type et l’unité, la valeur attendue, les pièces repérées et le passage Catala qui lit le fait. `premise-maker` confirme, corrige ou déclare le fait absent ; un fait absent est écarté faute de preuve. Une source manque → `research-maker`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
+> **Délégation.** Agent principal : lisez les pièces, puis écrivez vous-même le programme avec ce skill. Confiez ensuite ses prémisses à `premise-maker`, avec le nom du programme et, pour chacune : le cas de l'énumération `Prémisse` et sa fiche `okf:`, la question, le type et l’unité, la valeur attendue, les pièces repérées et le passage Catala qui lit le fait. `premise-maker` confirme, corrige ou déclare le fait absent ; un fait absent reste `NonProuvé`. Une source manque → `research-maker`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
 
 Catala code une règle juridique en programme exécutable. Le pack Catala est installé par l'app de bureau PieceMaker. Lancez chaque outil par `pm catala`, jamais par un chemin direct. `pm catala verifier` contrôle documentation, typage, format, prémisses, tests, preuve, vigueur et citations : ce skill ne répète pas ses règles, suivez ses messages.
 
@@ -32,7 +32,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 ```json
 {
   "tache": "Conclusions en défense Dupont / Société Exemple, TC Paris",
-  "type": "contentieux",
+  "type": "litigation",
   "date_vigueur": "2024-01-15",
   "raisonnements": [
     { "champ": "RejetDeLaDemande", "objectif": "Faire rejeter la demande en paiement", "rang": "À titre principal" },
@@ -41,8 +41,8 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 }
 ```
 
-- `tache` nomme l'acte comme l'avocat. `type` : `contentieux`, `contrat` ou `autre`.
-- `date_vigueur` : date à laquelle le droit s'apprécie (`today` ou AAAA-MM-JJ), tirée des pièces (conclusion du contrat, fait générateur, acte), sinon demandée à l'avocat. Catleg la lit.
+- `tache` nomme l'acte comme l'avocat. `type` : `litigation` (contentieux) ou `transactional` (contrat, acte).
+- `date_vigueur` : date à laquelle le droit s'apprécie, tirée des pièces (conclusion du contrat, fait générateur, acte), sinon demandée à l'avocat. `today` se résout à la date de chaque vérification. Catleg la lit.
 - `champ` : nom exact du champ qui porte la conclusion. `objectif` : celui annoncé par l'avocat ; demandez-le s'il manque. `rang` : `À titre principal`, `À titre subsidiaire` ou la clause.
 
 ## Démarche
@@ -50,7 +50,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 1. Lisez les pièces et les textes. Formulez la question juridique.
 2. Écrivez `tache.json`, puis `clerk.toml` (`[project]`, `name = "<nom>"`).
 3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article titré, son extrait exact, puis son bloc ` ```catala `.
-4. Déclarez les pièces et les faits prouvés (règle ci-dessous). Confiez les prémisses à `premise-maker`.
+4. Déclarez l'énumération `Prémisse` et les faits prouvés (`references/format.md`). Confiez les prémisses à `premise-maker`.
 5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier ou des faits fictifs.
 6. Lancez `pm catala verifier --programme <nom>` jusqu'à « vérifié », puis `pm okf verify`. Suivez chaque message.
 
@@ -60,7 +60,7 @@ Lisez la page avant d'écrire, pas de mémoire : le site catala-lang.org peut vo
 
 | Besoin ou erreur | Lire |
 |---|---|
-| Fichier complet, faits prouvés, attribut `pm.preuve` | `references/format.md` |
+| Fichier complet, prémisses, faits prouvés | `references/format.md` |
 | Erreur dont le message ne donne pas la correction | `references/pieges.md` |
 | Graphe, titres, carte visée par l'avocat | `references/graphe.md` |
 | Titres, extraits, blocs, mots réservés | `references/livre/5-1-literate-programming.md` |
@@ -78,22 +78,21 @@ Lisez la page avant d'écrire, pas de mémoire : le site catala-lang.org peut vo
 ## Modéliser
 
 - Séparez faits, qualifications, conditions et exceptions. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée et sourcée, pas une entrée.
-- **Faits prouvés.** Un fait du dossier est une `entrée` de type `Fait` : `Prouvé contenu Pièce` ou `NonProuvé`. Chaque pièce est un cas de l'énumération `Pièce`, avec un seul attribut `#[pm.preuve = "source: … | citation: … | by: agent"]` (`goal` remplace `citation` pour une prémisse encore absente). Une condition n'est remplie que si une pièce est citée : `fait sous forme Prouvé`.
-- `by: human` : l'avocat a posé le lien ou doit le vérifier lui-même. N'écrivez `human` que dans ces cas.
+- **Faits prouvés.** Un fait du dossier est une `entrée` de type `Fait` : `Prouvé contenu Prémisse` ou `NonProuvé`. Chaque cas de `Prémisse` désigne une fiche OKF que des pièces citées établissent. Une condition n'est remplie que par `fait sous forme Prouvé`.
 - Codez une exception avec `étiquette` et `exception`. Choisir la règle qui l'emporte est une interprétation : justifiez-la en commentaire `#` au-dessus de l'exception et signalez-la à l'avocat.
 - Pour une date de fin de mois ou un montant, choisissez l'arrondi d'après le texte et testez le cas limite.
 - Écrivez les justifications en commentaires `#`. Nommez les identifiants en français, avec les accents. N'inventez aucun extrait, aucune pièce, aucun fait. Si une source manque, signalez-la et recherchez-la.
 
 ## Style des titres
 
-Le titre `##` nomme la case du graphe. L’avocat le lit sans le code. Aucun contrôle ne vérifie ce style : relisez chaque titre.
+Le titre `##` nomme la case du graphe. L’avocat le lit sans le code. `verifier` contrôle sa longueur ; relisez sa forme.
 
 | Case | Forme | Exemples | À éviter |
 |---|---|---|---|
 | Règle, condition, qualification, calcul | Verbe à l’infinitif, puis son objet | `Vérifier le montant demandé`, `Calculer l’indemnité` | `Montant`, `Le montant est-il dû ?` |
 | Fait, clause ou pièce | Nom, puis participe passé qui constate | `Montant demandé`, `Contrat conclu` | `Contrat`, `Vérifier le contrat` |
 
-- Écrivez 2 à 7 mots, dans la langue du programme. Ni phrase, ni question, ni point final, ni identifiant, ni numéro d’article.
+- Écrivez dans la langue du programme. Ni phrase, ni point final, ni numéro d’article.
 - Reprenez les mêmes mots dans la condition et dans le fait qui la valide. N’annoncez pas le résultat dans le titre d’une règle.
 
 ## Commandes

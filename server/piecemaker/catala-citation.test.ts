@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -50,15 +50,15 @@ test('checks all declared quotations, retains missing and failed citations and s
       match: (text, quote) => text.includes(quote) ? quote : null,
     }, store);
     const origin = path.join(home, '.piecemaker/catala/prime/prime.catala_fr');
-    const content = '## Article fictif | LEGIARTI000000000001\n« Passage exact. »\n\n```catala\ndéfinition montant égal à 1\n```\n\n## Autre règle | LEGIARTI000000000001\n« Passage différent. »\n\n```catala\ndéfinition montant égal à 2\n```\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  ## Attestation\n  #[piecemaker.source = "pieces/attestation.md"]\n  #[piecemaker.citation = "Passage exact."]\n  entrée attestation contenu booléen\n  ## Contrat\n  #[piecemaker.source = "pieces/contrat.md"]\n  entrée contrat contenu booléen\n  ## Secret\n  #[piecemaker.source = "../secret.md"]\n  #[piecemaker.citation = "Passage exact."]\n  entrée secret contenu booléen\n```\n';
+    const content = '## Article fictif | LEGIARTI000000000001\n« Passage exact. »\n\n```catala\ndéfinition montant égal à 1\n```\n\n## Autre règle\n[Article cité](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001)\nCitation : « Passage différent. »\n\n```catala\ndéfinition montant égal à 2\n```\n\n## Pièces\n[Pièce fictive](../../../pieces/attestation.md)\nCitation : « Passage exact. »\n\n[Pièce sans extrait](../../../pieces/contrat.md)\n\n[Pièce interdite](../../../../secret.md)\n';
     const result = await service.verify(home, [{ nom: 'prime.catala_fr', chemin: origin, contenu: content }]);
     assert.equal(result.passed, false);
     assert.equal(result.status, 'failed');
     assert.equal(result.results.length, 5);
     assert.equal(result.results.filter((entry) => entry.status === 'passed').length, 2);
     assert.equal(result.results.find((entry) => entry.quote === 'Passage différent.')?.status, 'failed');
-    assert.match(result.results.find((entry) => entry.label === 'pieces/contrat.md')!.message, /Aucun extrait/);
-    assert.match(result.results.find((entry) => entry.label === '../secret.md')!.message, /hors du dossier/);
+    assert.match(result.results.find((entry) => entry.label === 'Pièce sans extrait')!.message, /Aucun extrait/);
+    assert.match(result.results.find((entry) => entry.label === 'Pièce interdite')!.message, /hors du dossier/);
     for (const entry of result.results) if ('token' in entry) assert.equal((await store.read(entry.token))?.citation.verified, entry.verified);
     const empty = await service.verify(home, [{ nom: 'vide.catala_fr', chemin: origin, contenu: 'Aucune source.' }]);
     assert.equal(empty.status, 'missing');
@@ -91,24 +91,58 @@ test('develops an OKF premise into its cited pieces and fails without evidence',
     await writeFile(path.join(bundle, 'Pièces', 'Contrat.pdf.md'), '---\ntype: Pièces\ntitle: Contrat.pdf\nresource: Pièces/Contrat.pdf\nrelations:\n  states:\n    - target: /_premises/prix.md\n      citation: Le prix est de 1 000 euros.\n      origin: piecemaker/agent\n      value: 1 000 euros\n---\n');
     await writeFile(path.join(bundle, '_premises', 'prix.md'), '---\ntype: Premise\ntitle: Prix\n---\n');
     await writeFile(path.join(bundle, '_premises', 'delai.md'), '---\ntype: Premise\ntitle: Délai\n---\n');
+    await writeFile(path.join(bundle, 'Pièces', 'Lettre.pdf.md'), '---\ntype: Pièces\ntitle: Lettre.pdf\nresource: Pièces/Lettre.pdf\nrelations:\n  states:\n    - target: /_premises/lettre-recue.md\n      citation: Le prix est de 1 000 euros.\n      origin: piecemaker/avocat\n---\n');
+    await writeFile(path.join(bundle, '_premises', 'lettre-recue.md'), '---\ntype: Premise\ntitle: Lettre reçue\n---\n');
     const read: string[] = [];
     const service = createCatalaCitation({
       source: async (_cwd, id) => { read.push(id); return { kind: 'piece', title: 'Contrat.pdf', text: 'Le prix est de 1 000 euros.' }; },
       match: (text, quote) => text.includes(quote) ? quote : null,
     }, createCitationStore(home));
     const origin = path.join(home, '.piecemaker/catala/prime/prime.catala_fr');
-    const premise = (title: string, source: string) => `## ${title}\n#[piecemaker.source = "${source}"]`;
-    const content = ['```catala', premise('Prix', 'okf:/_premises/prix.md'), 'définition a égal à vrai', premise('Délai', 'okf:/_premises/delai.md'), 'définition b égal à vrai', premise('Absente', 'okf:/_premises/absente.md'), 'définition c égal à vrai', premise('À établir', 'okf:/_premises/a-etablir.md'), '#[piecemaker.question = "Jean Dupont a-t-il reçu la lettre ?"]', 'définition d égal à vrai', '```'].join('\n');
-    const report = await service.verify(home, [{ nom: 'prime.catala_fr', chemin: origin, contenu: content }]);
-    const result = (target: string) => report.results.find((entry) => entry.target === target) as { status: string; title?: string; pieces?: Array<{ target: string; quote: string; verified: boolean }> };
+    const content = ['```catala-metadata', 'déclaration énumération Prémisse:', '  -- Prix', '  -- Délai', '  -- Absente', '  -- LettreReçue', '```'].join('\n');
+    const scenario = (amount: string) => ({ nom: 'test_prime.catala_fr', chemin: path.join(path.dirname(origin), 'test_prime.catala_fr'), contenu: `\`\`\`catala\nPrime.MontantProuvé {\n  -- valeur: ${amount}\n  -- preuve: Prime.Prémisse.Prix\n}\n\`\`\`` });
+    const report = await service.verify(home, [{ nom: 'prime.catala_fr', chemin: origin, contenu: content }, scenario('1 000 €')]);
+    const result = (target: string) => report.results.find((entry) => entry.target === target) as { status: string; title?: string; message?: string; warning?: string; pieces?: Array<{ target: string; quote: string; verified: boolean }> };
     assert.equal(report.passed, false);
     assert.equal(result('okf:/_premises/prix.md').status, 'passed');
     assert.equal(result('okf:/_premises/prix.md').title, 'Prix');
     assert.deepEqual(result('okf:/_premises/prix.md').pieces?.map((piece) => [piece.target, piece.quote, piece.verified]), [[encodeURI('../../../Pièces/Contrat.pdf'), 'Le prix est de 1 000 euros.', true]]);
-    assert.deepEqual(read, [path.join(home, 'Pièces/Contrat.pdf')]);
+    assert.deepEqual(read, [path.join(home, 'Pièces/Contrat.pdf'), path.join(home, 'Pièces/Lettre.pdf')]);
     assert.equal(result('okf:/_premises/delai.md').status, 'missing');
     assert.equal(result('okf:/_premises/absente.md').status, 'failed');
-    assert.equal(result('okf:/_premises/a-etablir.md').status, 'missing');
-    assert.match((result('okf:/_premises/a-etablir.md') as { message?: string }).message ?? '', /Prémisse à établir : Jean Dupont a-t-il reçu la lettre \?/);
+    assert.equal(report.status, 'failed');
+    assert.match(report.message, /Prémisses non prouvées : Délai, Absente\.$/);
+    assert.equal(result('okf:/_premises/lettre-recue.md').status, 'passed');
+    assert.deepEqual(report.warnings, ['Prémisse LettreReçue : lien posé par l’avocat, vérification manuelle requise.']);
+    const differs = await service.verify(home, [{ nom: 'prime.catala_fr', chemin: origin, contenu: content }, scenario('1 500 €')]);
+    assert.equal(differs.results.find((entry) => entry.target === 'okf:/_premises/prix.md')?.message, 'Valeur du scénario (1 500 €) différente de la prémisse (1 000 euros).');
+    assert.match(differs.message, /Prémisses non prouvées : Prix, Délai, Absente\.$/);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
+test('the indemnity fixture proves every premise and reports each removed or lawyer-set link', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-fixture-'));
+  try {
+    await cp(path.join(import.meta.dirname, '../../docs/tests/raisonnement-indemnite-instruction-maj'), home, { recursive: true });
+    const origin = path.join(home, '.piecemaker/catala/indemnite-depart/indemnite.catala_fr');
+    const service = createCatalaCitation({
+      source: async (_cwd, id) => path.isAbsolute(id) ? { kind: 'piece', title: path.basename(id), text: await readFile(id, 'utf8') } : null,
+      match: (text, quote) => text.includes(quote) ? quote : null,
+    }, createCitationStore(home));
+    const verify = async () => {
+      const report = await service.verify(home, [{ nom: 'indemnite.catala_fr', chemin: origin, contenu: await readFile(origin, 'utf8') }]);
+      return { ...report, premises: report.results.filter((entry) => entry.kind === 'premise') };
+    };
+    const proven = await verify();
+    assert.equal(proven.premises.length, 16);
+    assert.ok(proven.premises.every((entry) => entry.status === 'passed'));
+    assert.doesNotMatch(proven.message, /Prémisses non prouvées/);
+    assert.deepEqual(proven.warnings, []);
+    const record = path.join(home, '.piecemaker', 'okf', 'pieces', '06_ag_2023_refus_approbation_ex_post.md.md');
+    const links = await readFile(record, 'utf8');
+    await writeFile(record, links.replace('/_premises/vote-apres-depart-refuse.md', '/_premises/vote-retire.md'));
+    assert.match((await verify()).message, /Prémisses non prouvées : VoteApresDepartRefuse\.$/);
+    await writeFile(record, links.replace(/origin: piecemaker\/agent/g, 'origin: piecemaker/avocat'));
+    assert.deepEqual((await verify()).warnings, ['Prémisse VoteApresDepartRefuse : lien posé par l’avocat, vérification manuelle requise.', 'Prémisse IndemniteImpayee : lien posé par l’avocat, vérification manuelle requise.']);
   } finally { await rm(home, { recursive: true, force: true }); }
 });

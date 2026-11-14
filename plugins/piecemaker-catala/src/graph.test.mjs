@@ -300,11 +300,13 @@ test('reads the article extract and the piece attributes in the qualification ca
     '## Article 1 | LEGIARTI000000000001',
     '« La participation doit atteindre trois séances. »',
     '',
+    '```catala-metadata',
+    'déclaration énumération Prémisse:',
+    '  -- SeancesConstatees',
+    '```',
+    '',
     '```catala',
     "champ d'application Attribution:",
-    '  ## Séances constatées',
-    '  #[piecemaker.source = "pieces/presence-fictive.md"]',
-    '  #[piecemaker.citation = "Jean Dupont a participé à quatre séances."]',
     '  définition séances_constatées égal à 4',
     '  définition participation_suffisante égal à séances_constatées >= 3',
     '  définition prime_due égal à participation_suffisante',
@@ -313,12 +315,12 @@ test('reads the article extract and the piece attributes in the qualification ca
     '[Article 1 du règlement fictif](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000001)',
   ].join('\n');
   const model = reasoning(`digraph G {
-    x001 [label=<<table><tr><td>séances_constatées</td><td>4</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L12"];
-    x002 [label=<<table><tr><td>participation_suffisante</td></tr><tr><td>séances_constatées &gt;= 3</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L13"];
-    x003 [label=<<table><tr><td>prime_due</td></tr><tr><td>participation_suffisante</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L14"];
+    x001 [label=<<table><tr><td>séances_constatées</td><td>SeancesConstatees 4</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L14"];
+    x002 [label=<<table><tr><td>participation_suffisante</td></tr><tr><td>séances_constatées &gt;= 3</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L15"];
+    x003 [label=<<table><tr><td>prime_due</td></tr><tr><td>participation_suffisante</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L16"];
     x001 -> x002 [style="solid"];
     x002 -> x003 [style="solid"];
-  }`, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }]);
+  }`, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }], [{ origin: '/dossier/demo.catala_fr', target: 'okf:/_premises/seances-constatees.md', quote: '', status: 'passed', pieces: [{ target: 'pieces/presence-fictive.md', quote: 'Jean Dupont a participé à quatre séances.', status: 'passed' }] }]);
   assert.equal(model.steps.find((step) => step.id === 'x001').kind, 'fact');
   const document = new JSDOM(reasoningGraph(model)).window.document;
   const card = document.querySelector('[data-node="x002"]');
@@ -326,7 +328,7 @@ test('reads the article extract and the piece attributes in the qualification ca
   assert.match(card.querySelector('[data-part="law"] q').textContent, /trois séances/);
   assert.match(card.querySelector('.pmc-calculation').textContent, /séances constatées ≥ 3/);
   assert.equal(document.querySelector('.pmc-gate[data-op="leaf"] p').textContent, 'séances constatées ≥ 3');
-  assert.equal(fact.querySelector('.pmc-value').textContent, '4');
+  assert.match(fact.querySelector('.pmc-value').textContent, / 4$/);
   assert.match(fact.querySelector('[data-part="evidence"] [data-quote]').dataset.quote, /quatre séances/);
   assert.equal(card.querySelector('[data-part="evidence"]'), null);
   assert.doesNotMatch(card.textContent, /Autre article/);

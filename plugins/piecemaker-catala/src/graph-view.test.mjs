@@ -61,7 +61,7 @@ test('the panel reloads after verification notifications for its project and sto
 
 
 test('shows each rule with its legal basis and documentation errors', async () => {
-  const view = await open([program({ verification: { passed: false, checks: [{ name: 'documentation', passed: false, errors: ['demo.catala_fr:9: titre manquant pour cette entrée.', 'demo.catala_fr:12: #[piecemaker.citation] manquante pour la pièce pieces/contrat-fictif.md.'] }] } })]);
+  const view = await open([program({ verification: { passed: false, checks: [{ name: 'documentation', passed: false, errors: ['demo.catala_fr:9: titre manquant pour cette entrée. Écrivez ## texte court au-dessus.', 'demo.catala_fr:12: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l\'extrait exact entre « ».'] }] } })]);
   try {
     assert.equal(view.container.querySelector('.pmc-explanation').hidden, false);
     view.click(view.container.querySelector('[role=tab][data-mode=written]'));
@@ -70,7 +70,7 @@ test('shows each rule with its legal basis and documentation errors', async () =
     view.click(view.container.querySelector('[data-alerts]'));
     const alerts = view.container.querySelector('.pmc-alert-list').textContent;
     assert.match(alerts, /Titre manquant.*demo\.catala_fr, ligne 9/);
-    assert.match(alerts, /Citation manquante.*demo\.catala_fr, ligne 12/);
+    assert.match(alerts, /Règle sans source.*demo\.catala_fr, ligne 12/);
     assert.doesNotMatch(alerts, /piecemaker\.|#\[/);
     const asked = [];
     const listen = (event) => asked.push(event.detail);
@@ -316,14 +316,14 @@ test('keeps one toolbar line and shows the drafted text with its Catala blocks f
 test('groups the scenarios of a task by reasoning and drafts from every reasoning', async () => {
   const tests = "```catala\n#[test]\ndéclaration champ d'application TestPrincipal:\n  résultat calcul contenu Demo.Principal\n\n#[test]\ndéclaration champ d'application TestSubsidiaire:\n  résultat calcul contenu Demo.Subsidiaire\n```\n";
   const scenarios = ['TestPrincipal', 'TestSubsidiaire'].map((scope) => ({ fichier: 'test_demo.catala_fr', scope, passed: true, test_reussi: true, graphe, message: '' }));
-  const tache = { tache: 'Conclusions en défense Dupont / Société Exemple', type: 'contentieux', raisonnements: [{ champ: 'Principal', objectif: 'Rejeter la demande', rang: 'À titre principal' }, { champ: 'Subsidiaire', objectif: 'Réduire le montant', rang: 'À titre subsidiaire' }] };
+  const tache = { tache: 'Conclusions en défense Dupont / Société Exemple', type: 'litigation', raisonnements: [{ champ: 'Principal', objectif: 'Rejeter la demande', rang: 'À titre principal' }, { champ: 'Subsidiaire', objectif: 'Réduire le montant', rang: 'À titre subsidiaire' }] };
   const base = program();
   const view = await open([{ ...base, tache, scenarios, fichiers: [...base.fichiers, { nom: 'test_demo.catala_fr', chemin: '/dossier/.piecemaker/catala/demo/test_demo.catala_fr', contenu: tests }] }]);
   try {
     const options = (name) => [...view.container.querySelectorAll(`[${name}] option`)].map((option) => option.textContent);
     assert.deepEqual(options('data-part-choice'), ['À titre principal — Rejeter la demande', 'À titre subsidiaire — Réduire le montant']);
     assert.deepEqual(options('data-scenario-choice'), ['Principal — test réussi']);
-    assert.match(view.container.querySelector('[data-part=task]').textContent, /Tâche : Conclusions en défense Dupont \/ Société Exemple\s*contentieux/);
+    assert.match(view.container.querySelector('[data-part=task]').textContent, /Tâche : Conclusions en défense Dupont \/ Société Exemple\s*litigation/);
     const select = view.container.querySelector('[data-part-choice]');
     select.value = 'Subsidiaire';
     select.dispatchEvent(new view.dom.window.Event('change', { bubbles: true }));
@@ -334,7 +334,7 @@ test('groups the scenarios of a task by reasoning and drafts from every reasonin
     view.click(view.container.querySelector('[data-draft]'));
     view.click(view.container.querySelector('[data-draft-style="-1"]'));
     window.removeEventListener('piecemaker:catala-card-pick', listen);
-    assert.match(demande, /tâche « Conclusions en défense Dupont \/ Société Exemple » \(contentieux\)[\s\S]*Raisonnement — À titre principal — Rejeter la demande \(scénario TestPrincipal\) :\n- [\s\S]*Raisonnement — À titre subsidiaire — Réduire le montant \(scénario TestSubsidiaire\) :\n- /);
+    assert.match(demande, /tâche « Conclusions en défense Dupont \/ Société Exemple » \(litigation\)[\s\S]*Raisonnement — À titre principal — Rejeter la demande \(scénario TestPrincipal\) :\n- [\s\S]*Raisonnement — À titre subsidiaire — Réduire le montant \(scénario TestSubsidiaire\) :\n- /);
     await new Promise((resolve) => setImmediate(resolve));
   } finally { view.close(); }
 });

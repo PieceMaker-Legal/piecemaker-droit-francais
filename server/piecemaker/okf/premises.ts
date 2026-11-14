@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { catalaDocumentation } from '../vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
+import { premiseCases, premiseSource, premiseValues } from '../vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
 
 import type { Concept } from './bundle.js';
 import {
@@ -20,7 +20,7 @@ import {
 import { graphTypesOf, readOntology, relationNames } from './ontology.js';
 
 export const OKF_SCHEME = 'okf:';
-export type PremisePiece = { resource: string; title: string; citation: string; value: string };
+export type PremisePiece = { resource: string; title: string; citation: string; value: string; origin: string };
 export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[] };
 export type OkfGap = { element: string; manque: string; programmes?: string[] };
 
@@ -36,7 +36,7 @@ function evidenceOf(concepts: Concept[], id: string): PremiseEvidence | null {
   if (!premise) return null;
   const pieces = concepts.flatMap((concept) => live(concept, STATES)
     .filter((entry) => entry.target === id)
-    .map((entry) => ({ resource: text(concept.frontmatter.resource), title: text(concept.frontmatter.title), citation: entry.citation, value: entry.value || '' })));
+    .map((entry) => ({ resource: text(concept.frontmatter.resource), title: text(concept.frontmatter.title), citation: entry.citation, value: entry.value || '', origin: entry.origin })));
   return { id, title: text(premise.frontmatter.title), pieces };
 }
 
@@ -57,10 +57,7 @@ function catalaSources(projectPath: string): Array<{ place: string; source: stri
   return catalaFiles(path.join(projectPath, '.piecemaker', 'catala')).sort().flatMap((filePath) => {
     const place = path.relative(projectPath, filePath).split(path.sep).join('/');
     const content = fs.readFileSync(filePath, 'utf8');
-    const lines = content.split('\n');
-    return catalaDocumentation(content).entries
-      .filter((entry) => isOkfSource(entry.source))
-      .map((entry) => ({ place: `${place}:${entry.startLine}`, source: entry.source, expression: lines.slice(entry.startLine - 1, entry.endLine).join('\n').match(/(?:égal à|equals)[ \t]+([^\n]+)/)?.[1].trim() ?? '' }));
+    return [...premiseCases(content), ...premiseValues(content)].map((entry) => ({ place: `${place}:${entry.line}`, source: premiseSource(entry.name), expression: 'expression' in entry ? entry.expression : '' }));
   });
 }
 
@@ -74,7 +71,7 @@ function numberOf(value: string): number | null {
   return Number.isFinite(number) ? number : null;
 }
 
-function expectedValue(expression: string): { date: string } | { number: number } | null {
+export function expectedValue(expression: string): { date: string } | { number: number } | null {
   const date = expression.match(/^\|(\d{4}-\d{2}-\d{2})\|$/)?.[1];
   if (date) return { date };
   if (!/^\$?-?\d[\d   .,]*(?:\s*(?:€|[\p{L}]+))?$/u.test(expression)) return null;
@@ -82,7 +79,7 @@ function expectedValue(expression: string): { date: string } | { number: number 
   return number === null ? null : { number };
 }
 
-function matchesExpected(expected: { date: string } | { number: number }, value: string): boolean {
+export function matchesExpected(expected: { date: string } | { number: number }, value: string): boolean {
   return 'date' in expected ? isoDateOf(value) === expected.date : numberOf(value) === expected.number;
 }
 
@@ -132,9 +129,9 @@ export function graphGaps(projectPath: string): OkfGap[] {
       const evidence = evidenceOf(concepts, id);
       const expected = expectedValue(expression);
       const values = evidence?.pieces.map((piece) => piece.value).filter(Boolean) ?? [];
-      if (!evidence) report(place, `#[piecemaker.source] cite une prémisse absente de l'index : ${id}`, [programOf(place)]);
-      else if (!evidence.pieces.length) report(place, `#[piecemaker.source] cite une prémisse sans pièce citée : ${id}`, [programOf(place)]);
-      else if (expected && values.length && !values.some((value) => matchesExpected(expected, value))) report(place, `#[piecemaker.source] valeur du scénario (${expression}) différente de la prémisse (${values.join(' ; ')}) : ${id}`, [programOf(place)]);
+      if (!evidence) report(place, `Prémisse absente de l'index : ${id}`, [programOf(place)]);
+      else if (!evidence.pieces.length) report(place, `Prémisse sans pièce citée : ${id}`, [programOf(place)]);
+      else if (expected && values.length && !values.some((value) => matchesExpected(expected, value))) report(place, `Valeur du scénario (${expression}) différente de la prémisse (${values.join(' ; ')}) : ${id}`, [programOf(place)]);
     }
   }
   if (sources.length) {

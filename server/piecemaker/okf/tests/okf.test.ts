@@ -315,7 +315,7 @@ test('premiseEvidence donne les pièces citées d’une prémisse', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros' }, markdownOf);
-  assert.deepEqual(premiseEvidence(projectPath, `okf:${RESILIATION_ID}`), { id: RESILIATION_ID, title: 'Montant de la facture', pieces: [{ resource: LETTER, title: 'Courrier.pdf', citation: 'Nous contestons la facture.', value: '1 200 euros' }] });
+  assert.deepEqual(premiseEvidence(projectPath, `okf:${RESILIATION_ID}`), { id: RESILIATION_ID, title: 'Montant de la facture', pieces: [{ resource: LETTER, title: 'Courrier.pdf', citation: 'Nous contestons la facture.', value: '1 200 euros', origin: 'piecemaker/agent' }] });
   assert.equal(premiseEvidence(projectPath, 'okf:/_faits/montant-de-la-facture.md')?.id, RESILIATION_ID);
   assert.equal(premiseEvidence(projectPath, 'okf:/_premises/inconnue.md'), null);
 });
@@ -329,28 +329,29 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   build();
   const program = path.join(projectPath, '.piecemaker', 'catala', 'demo');
   fs.mkdirSync(program, { recursive: true });
-  const doc = (title: string, source: string) => `## ${title}\n#[piecemaker.source = ${JSON.stringify(source)}]`;
-  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Prémisse absente', 'okf:/_premises/inconnue.md'), 'définition a égal à vrai', '```', ''].join('\n'));
+  const premises = (...cases: string[]) => ['```catala-metadata', 'déclaration énumération Prémisse:', ...cases.map((name) => `  -- ${name}`), '```', ''].join('\n');
+  const scenario = (amount: string) => ['```catala', 'Demo.MontantProuvé {', `  -- valeur: ${amount}`, '  -- preuve: Demo.Prémisse.MontantDeLaFacture', '}', '```', ''].join('\n');
+  fs.writeFileSync(path.join(program, 'demo.catala_fr'), premises('Inconnue'));
 
   const gaps = graphGaps(projectPath).map((gap) => `${gap.element} | ${gap.manque}`);
   assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse à valeur unique sans valeur`));
   assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse sans partie concernée (involves)`));
   assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse citée par aucun programme Catala`));
   assert.ok(gaps.includes(`/_parties/${COMPANY}.md | partie sans mention dans une pièce ni prémisse qui la concerne`));
-  assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| #\[piecemaker\.source\] cite une prémisse absente de l'index : \/_premises\/inconnue\.md/.test(gap)));
+  assert.ok(gaps.some((gap) => /demo\.catala_fr:\d+ \| Prémisse absente de l'index : \/_premises\/inconnue\.md/.test(gap)));
   assert.equal(gaps.some((gap) => gap.startsWith(`/${LETTER}.md`)), false);
   assert.deepEqual([...new Set(graphGaps(projectPath).filter((gap) => gap.element.includes('demo.catala_fr')).flatMap((gap) => gap.programmes ?? []))], ['demo']);
   assert.equal(graphGaps(projectPath).find((gap) => gap.element === RESILIATION_ID)?.programmes, undefined);
 
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros', single: true }, markdownOf);
   addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf);
-  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à vrai', '```', ''].join('\n'));
+  fs.writeFileSync(path.join(program, 'demo.catala_fr'), premises('MontantDeLaFacture'));
   assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element === RESILIATION_ID || gap.element.includes('catala')), []);
 
-  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à 1 200 €', '```', ''].join('\n'));
+  fs.writeFileSync(path.join(program, 'test_demo.catala_fr'), scenario('1 200 €'));
   assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element.includes('catala')), []);
-  fs.writeFileSync(path.join(program, 'demo.catala_fr'), ['```catala', doc('Montant', `okf:${RESILIATION_ID}`), 'définition a égal à 1 500 €', '```', ''].join('\n'));
-  assert.ok(graphGaps(projectPath).some((gap) => gap.manque === `#[piecemaker.source] valeur du scénario (1 500 €) différente de la prémisse (1 200 euros) : ${RESILIATION_ID}` && gap.programmes?.[0] === 'demo'));
+  fs.writeFileSync(path.join(program, 'test_demo.catala_fr'), scenario('1 500 €'));
+  assert.ok(graphGaps(projectPath).some((gap) => gap.manque === `Valeur du scénario (1 500 €) différente de la prémisse (1 200 euros) : ${RESILIATION_ID}` && gap.programmes?.[0] === 'demo'));
 });
 
 function backendOf(projectPath: string, markdownOf: (resource: string) => string | null) {

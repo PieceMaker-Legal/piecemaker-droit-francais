@@ -2,7 +2,53 @@
 
 Le statut Inconnu n’est jamais remplacé par Faux. Les interprétations sont des hypothèses juridiques, pas des faits du dossier.
 
-```catala
+```catala-metadata
+déclaration énumération Prémisse:
+  -- SocieteCotee
+  -- MandatDeDirecteurGeneral
+  -- EngagementDecide
+  -- PolitiqueApprouvee
+  -- RevocationDecidee
+  -- MargeConstatee
+  -- SeuilDePerformance
+  -- RemunerationMensuelle
+  -- MoisContractuels
+  -- MontantStipule
+  -- MontantReclame
+  -- CapitalSocial
+  -- DateEngagement
+  -- DateCessation
+  -- VoteApresDepartRefuse
+  -- IndemniteImpayee
+
+déclaration énumération Fait:
+  -- Prouvé contenu Prémisse
+  -- NonProuvé
+
+déclaration structure MontantProuvé:
+  donnée valeur contenu argent
+  donnée preuve contenu Prémisse
+
+déclaration énumération FaitMontant:
+  -- MontantÉtabli contenu MontantProuvé
+  -- MontantNonProuvé
+
+déclaration structure NombreProuvé:
+  donnée valeur contenu décimal
+  donnée preuve contenu Prémisse
+
+déclaration énumération FaitNombre:
+  -- NombreÉtabli contenu NombreProuvé
+  -- NombreNonProuvé
+
+déclaration structure DateProuvée:
+  donnée valeur contenu date
+  donnée preuve contenu Prémisse
+
+déclaration énumération FaitDate:
+  -- DateÉtablie contenu DateProuvée
+  -- DateNonProuvée
+
 déclaration énumération Appréciation:
   -- Confirmé
   -- Réfuté
@@ -13,7 +59,11 @@ déclaration énumération Lecture:
   -- ThèseContractuelle
   -- VoteInitialVersailles
   -- VoteAprèsDépart
+```
 
+# Outils de raisonnement
+
+```catala
 # Une condition inconnue reste inconnue ; un obstacle confirmé suffit à écarter la conclusion.
 ## Cumuler deux appréciations
 déclaration cumul
@@ -35,50 +85,96 @@ déclaration qualifier
   dépend de fait contenu booléen
   égal à
     si fait alors Confirmé sinon Réfuté
+
+# Un fait non prouvé reste inconnu : il n’est jamais remplacé par Faux.
+## Apprécier un fait prouvé
+déclaration apprécier
+  contenu Appréciation
+  dépend de fait contenu Fait
+  égal à
+    selon fait sous forme
+    -- Prouvé contenu prémisse : Confirmé
+    -- NonProuvé : Inconnu
+
+## Lire un montant prouvé
+déclaration montant_de
+  contenu argent
+  dépend de fait contenu FaitMontant
+  égal à
+    selon fait sous forme
+    -- MontantÉtabli contenu montant : montant.valeur
+    -- MontantNonProuvé : 0 €
+
+## Lire un nombre prouvé
+déclaration nombre_de
+  contenu décimal
+  dépend de fait contenu FaitNombre
+  égal à
+    selon fait sous forme
+    -- NombreÉtabli contenu établi : établi.valeur
+    -- NombreNonProuvé : 0,0
+
+## Lire une date prouvée
+déclaration date_de
+  contenu optionnel de date
+  dépend de fait contenu FaitDate
+  égal à
+    selon fait sous forme
+    -- DateÉtablie contenu établie : Présent contenu établie.valeur
+    -- DateNonProuvée : Absent
 ```
 
 # Interface du dossier
 
-```catala
+```catala-metadata
 déclaration champ d'application AnalyseIndemnité:
+  ## Société cotée
+  entrée société_cotée contenu Fait
+  ## Mandat de directeur général
+  entrée mandat_de_directeur_général contenu Fait
+  ## Engagement décidé
+  entrée engagement_décidé contenu Fait
+  ## Politique approuvée
+  entrée politique_approuvée contenu Fait
+  ## Révocation décidée
+  entrée révocation_décidée contenu Fait
+  ## Faute grave ou lourde
+  entrée faute_grave_ou_lourde contenu Fait
   # À rechercher : le procès-verbal du conseil du 15 mars 2022. Ne pas confondre conseil et assemblée.
   ## Non-participation du dirigeant au conseil
-  #[piecemaker.source = "okf:/_premises/non-participation-au-conseil.md"]
-  #[piecemaker.question = "Le dirigeant s’est-il abstenu lors de la délibération du conseil ?"]
-  entrée non_participation_au_conseil contenu Appréciation
+  entrée non_participation_au_conseil contenu Fait
   # À rechercher : les comptes et l’effet de l’engagement sur l’équilibre financier.
   ## Absence d’effet dissuasif
-  #[piecemaker.source = "okf:/_premises/absence-effet-dissuasif.md"]
-  #[piecemaker.question = "L’indemnité respecte-t-elle la libre révocabilité au regard de la situation financière ?"]
-  entrée absence_effet_dissuasif contenu Appréciation
+  entrée absence_effet_dissuasif contenu Fait
   # À rechercher : la résolution individuelle et son objet exact. La politique ex ante ne suffit pas.
   ## Vote individuel ex post initial
-  #[piecemaker.source = "okf:/_premises/vote-ex-post-initial.md"]
-  #[piecemaker.question = "Un vote individuel ex post initial est-il établi ?"]
-  entrée vote_ex_post_initial contenu Appréciation
+  entrée vote_ex_post_initial contenu Fait
+  ## Vote après départ refusé
+  entrée vote_après_départ_refusé contenu Fait
+  ## Indemnité impayée
+  entrée indemnité_impayée contenu Fait
+  ## Marge constatée
+  entrée marge_constatée contenu FaitNombre
+  ## Seuil de performance
+  entrée seuil_de_performance contenu FaitNombre
+  ## Rémunération mensuelle
+  entrée rémunération_mensuelle contenu FaitMontant
+  ## Mois contractuels
+  entrée mois_contractuels contenu FaitNombre
+  ## Montant stipulé
+  entrée montant_stipulé contenu FaitMontant
+  ## Montant réclamé
+  entrée montant_réclamé contenu FaitMontant
+  ## Capital social
+  entrée capital_social contenu FaitMontant
+  ## Date de l’engagement
+  entrée date_engagement contenu FaitDate
+  ## Date de cessation
+  entrée date_cessation contenu FaitDate
   ## Lecture du vote retenue
-  #[piecemaker.question = "Quelle lecture du vote ex post retenir ?"]
-  entrée lecture_du_vote contenu Lecture
+  contexte lecture_du_vote contenu Lecture
   ## Date d’examen
-  #[piecemaker.question = "À quelle date le dossier est-il examiné ?"]
-  entrée date_examen contenu date
-  interne société_cotée contenu booléen
-  interne mandat_de_directeur_général contenu booléen
-  interne engagement_décidé contenu booléen
-  interne politique_approuvée contenu booléen
-  interne révocation_décidée contenu booléen
-  interne faute_grave_ou_lourde contenu booléen
-  interne marge_constatée contenu décimal
-  interne seuil_de_performance contenu décimal
-  interne rémunération_mensuelle contenu argent
-  interne mois_contractuels contenu entier
-  interne montant_stipulé contenu argent
-  interne montant_réclamé contenu argent
-  interne capital_social contenu argent
-  interne date_engagement contenu date
-  interne date_cessation contenu date
-  interne vote_ex_post_2023 contenu booléen
-  interne indemnité_impayée contenu booléen
+  contexte date_examen contenu date
   interne régime_codé_applicable contenu booléen
   interne engagement_approuvé contenu Appréciation
   interne performance_satisfaite contenu booléen
@@ -92,82 +188,8 @@ déclaration champ d'application AnalyseIndemnité:
   résultat paiement_de_l_indemnité contenu Appréciation
   résultat montant_contractuel contenu argent
   résultat rapport_sur_capital contenu décimal
-  résultat échéance_contractuelle contenu date
-  résultat borne_prudente_prescription contenu date
-```
-
-# Données du dossier
-
-```catala
-champ d'application AnalyseIndemnité:
-  ## Société cotée
-  #[piecemaker.source = "pieces/01_extrait_kbis_et_identification_emetteur.md"]
-  #[piecemaker.citation = "Les actions ordinaires de Société Exemple SA sont admises, depuis le 15 juin 2015 et sans interruption pendant les exercices 2022 et 2023, aux négociations sur le marché réglementé Euronext Paris."]
-  définition société_cotée égal à vrai
-  ## Mandat de directeur général
-  #[piecemaker.source = "pieces/01_extrait_kbis_et_identification_emetteur.md"]
-  #[piecemaker.citation = "Jean Dupont exerce uniquement un mandat de directeur général, sans contrat de travail avec la société."]
-  définition mandat_de_directeur_général égal à vrai
-  ## Engagement décidé
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ."]
-  définition engagement_décidé égal à vrai
-  ## Politique approuvée
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "Elle approuve notamment le principe et les modalités de l'indemnité de départ décrite au paragraphe 4 de l'annexe."]
-  définition politique_approuvée égal à vrai
-  ## Révocation décidée
-  #[piecemaker.source = "pieces/03_lettre_revocation_decembre_2022.md"]
-  #[piecemaker.citation = "a décidé de mettre fin à vos fonctions de directeur général avec effet le 19 décembre 2022"]
-  définition révocation_décidée égal à vrai
-  ## Faute grave ou lourde écartée
-  #[piecemaker.source = "pieces/03_lettre_revocation_decembre_2022.md"]
-  #[piecemaker.citation = "Le conseil ne retient à votre encontre aucune faute grave ou lourde."]
-  définition faute_grave_ou_lourde égal à faux
-  ## Marge constatée
-  #[piecemaker.source = "pieces/03_lettre_revocation_decembre_2022.md"]
-  #[piecemaker.citation = "la moyenne de la marge opérationnelle des exercices 2020 et 2021 s'établit à 8,6 %"]
-  définition marge_constatée égal à 8,6
-  ## Seuil de performance
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "la moyenne de la marge opérationnelle du groupe au titre des exercices 2020 et 2021 doit être au moins égale à 8 %"]
-  définition seuil_de_performance égal à 8,0
-  ## Rémunération mensuelle
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts"]
-  définition rémunération_mensuelle égal à 20 000 €
-  ## Mois contractuels
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts."]
-  définition mois_contractuels égal à 24
-  ## Montant stipulé
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "Son montant est fixé à 480 000 euros bruts."]
-  définition montant_stipulé égal à 480 000 €
-  ## Montant réclamé
-  #[piecemaker.source = "pieces/04_demande_paiement_dirigeant.md"]
-  #[piecemaker.citation = "Je vous mets en demeure de verser la somme de 480 000 euros bruts."]
-  définition montant_réclamé égal à 480 000 €
-  ## Capital social
-  #[piecemaker.source = "pieces/01_extrait_kbis_et_identification_emetteur.md"]
-  #[piecemaker.citation = "Capital social : 40 000 000 euros"]
-  définition capital_social égal à 40 000 000 €
-  ## Date de l'engagement
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ."]
-  définition date_engagement égal à |2022-03-15|
-  ## Date de cessation
-  #[piecemaker.source = "pieces/03_lettre_revocation_decembre_2022.md"]
-  #[piecemaker.citation = "avec effet le 19 décembre 2022 à l'issue de la réunion."]
-  définition date_cessation égal à |2022-12-19|
-  ## Vote ex post de 2023 refusé
-  #[piecemaker.source = "pieces/06_ag_2023_refus_approbation_ex_post.md"]
-  #[piecemaker.citation = "La quinzième résolution n'est pas adoptée."]
-  définition vote_ex_post_2023 égal à faux
-  ## Indemnité impayée
-  #[piecemaker.source = "pieces/06_ag_2023_refus_approbation_ex_post.md"]
-  #[piecemaker.citation = "Le rapport présenté à l'assemblée précise que l'indemnité n'a pas été versée."]
-  définition indemnité_impayée égal à vrai
+  résultat échéance_contractuelle contenu optionnel de date
+  résultat borne_prudente_prescription contenu optionnel de date
 ```
 
 # Code de commerce
@@ -180,7 +202,14 @@ champ d'application AnalyseIndemnité:
 champ d'application AnalyseIndemnité:
   # Le régime de la SA cotée et la version de 2022 s’appliquent à un engagement pris entre 2021 et octobre 2025.
   ## Régime de la société cotée applicable
-  définition régime_codé_applicable égal à société_cotée et mandat_de_directeur_général et date_engagement >= |2021-01-01| et date_engagement < |2025-10-01|
+  définition régime_codé_applicable égal à
+    société_cotée sous forme Prouvé
+    et mandat_de_directeur_général sous forme Prouvé
+    et (
+      selon (date_de de date_engagement) sous forme
+      -- Présent contenu le_jour : le_jour >= |2021-01-01| et le_jour < |2025-10-01|
+      -- Absent : faux
+    )
 ```
 
 ## Article L. 22-10-8 | LEGIARTI000042338833
@@ -189,8 +218,9 @@ champ d'application AnalyseIndemnité:
 
 ```catala
 champ d'application AnalyseIndemnité:
-  ## Engagement décidé et conforme à la politique approuvée
-  définition engagement_approuvé égal à qualifier de (engagement_décidé et politique_approuvée)
+  ## Engagement conforme à la politique approuvée
+  définition engagement_approuvé égal à
+    cumul de (apprécier de engagement_décidé), (apprécier de politique_approuvée)
 ```
 
 ## Article L. 22-10-34 | LEGIARTI000042338905
@@ -200,14 +230,19 @@ champ d'application AnalyseIndemnité:
 ```catala
 champ d'application AnalyseIndemnité:
   # La lecture du vote retenue fixe la conséquence ; la CA de Versailles ne requiert que le vote suivant la conclusion du contrat.
+  ## Lecture du vote non tranchée
+  définition lecture_du_vote égal à NonTranchée
   # Le vote de politique ex ante et le vote individuel ex post sont distincts. Le procès-verbal de 2022 ne suffit pas à établir le second.
   ## Condition du vote ex post appréciée
   définition condition_du_vote égal à
     selon lecture_du_vote sous forme
     -- NonTranchée : Inconnu
     -- ThèseContractuelle : Confirmé
-    -- VoteInitialVersailles : vote_ex_post_initial
-    -- VoteAprèsDépart : qualifier de vote_ex_post_2023
+    -- VoteInitialVersailles : apprécier de vote_ex_post_initial
+    -- VoteAprèsDépart :
+      selon vote_après_départ_refusé sous forme
+      -- Prouvé contenu prémisse : Réfuté
+      -- NonProuvé : Inconnu
 ```
 
 ### Discussion — CA Versailles, 3 juin 2025, RG 23/06335
@@ -223,62 +258,75 @@ champ d'application AnalyseIndemnité:
 
 La situation financière du corpus est insuffisamment documentée. Aucun seuil de 1,2 % n’est utilisé comme preuve.
 
-# Clause d’indemnité de départ
-
-```catala
-champ d'application AnalyseIndemnité:
-  ## Performance atteinte
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "la moyenne de la marge opérationnelle du groupe au titre des exercices 2020 et 2021 doit être au moins égale à 8 %"]
-  définition performance_satisfaite égal à marge_constatée >= seuil_de_performance
-  ## Montant contractuel calculé
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts."]
-  définition montant_contractuel égal à rémunération_mensuelle * mois_contractuels
-  ## Montant calculé et réclamé conforme
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "Son montant est fixé à 480 000 euros bruts."]
-  définition montant_cohérent égal à montant_contractuel = montant_stipulé et montant_réclamé = montant_stipulé
-  ## Conditions de la clause réunies
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "En cas de révocation de Jean Dupont de ses fonctions de directeur général par le conseil d'administration, autre qu'une révocation motivée par une faute grave ou lourde"]
-  étiquette conditions_principales
-  définition conditions_contractuelles égal à qualifier de (révocation_décidée et performance_satisfaite et montant_cohérent)
-  # La faute grave ou lourde écarte les conditions principales de la clause.
-  ## Conditions écartées pour faute grave
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "autre qu'une révocation motivée par une faute grave ou lourde"]
-  exception conditions_principales
-  définition conditions_contractuelles
-  sous condition faute_grave_ou_lourde
-  conséquence égal à
-    Réfuté
-  ## Échéance contractuelle calculée
-  #[piecemaker.source = "pieces/02_ag_2022_approbation_indemnite.md"]
-  #[piecemaker.citation = "L'indemnité est payable dans les trente jours suivant la cessation effective des fonctions."]
-  définition échéance_contractuelle égal à date_cessation + 30 jour
-  ## Rapport entre indemnité et capital calculé
-  #[piecemaker.source = "pieces/01_extrait_kbis_et_identification_emetteur.md"]
-  #[piecemaker.citation = "Capital social : 40 000 000 euros"]
-  définition rapport_sur_capital égal à montant_contractuel / capital_social
-```
-
 # Code civil
 
 ## Article 1103 | LEGIARTI000032040777
 
 « Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »
 
+### Clause d’indemnité de départ
+
+La clause est établie par la pièce 02 : ses termes sont des prémisses du dossier, sa force obligatoire vient de l’article 1103.
+
+```catala
+champ d'application AnalyseIndemnité:
+  ## Performance atteinte
+  définition performance_satisfaite égal à
+    nombre_de de marge_constatée >= nombre_de de seuil_de_performance
+    et seuil_de_performance sous forme NombreÉtabli
+  ## Montant contractuel calculé
+  définition montant_contractuel égal à
+    montant_de de rémunération_mensuelle * nombre_de de mois_contractuels
+  ## Montant calculé et réclamé conforme
+  définition montant_cohérent égal à
+    montant_stipulé sous forme MontantÉtabli
+    et montant_contractuel = montant_de de montant_stipulé
+    et montant_de de montant_réclamé = montant_de de montant_stipulé
+  ## Conditions de la clause réunies
+  étiquette conditions_principales
+  définition conditions_contractuelles égal à
+    cumul de (apprécier de révocation_décidée), (qualifier de (performance_satisfaite et montant_cohérent))
+  # La faute grave ou lourde écarte les conditions principales de la clause.
+  ## Conditions écartées pour faute grave
+  exception conditions_principales
+  définition conditions_contractuelles
+  sous condition faute_grave_ou_lourde sous forme Prouvé
+  conséquence égal à
+    Réfuté
+  ## Échéance contractuelle calculée
+  définition échéance_contractuelle égal à
+    selon (date_de de date_cessation) sous forme
+    -- Présent contenu le_jour : Présent contenu (le_jour + 30 jour)
+    -- Absent : Absent
+  ## Rapport entre indemnité et capital
+  définition rapport_sur_capital égal à
+    si
+      capital_social sous forme MontantÉtabli
+    alors
+      montant_contractuel / montant_de de capital_social
+    sinon 0,0
+```
+
 ```catala
 champ d'application AnalyseIndemnité:
   ## Engagement opposable à la société
-  définition engagement_opposable égal à cumul de engagement_approuvé, (cumul de non_participation_au_conseil, absence_effet_dissuasif)
+  définition engagement_opposable égal à
+    cumul de engagement_approuvé, (cumul de (apprécier de non_participation_au_conseil), (apprécier de absence_effet_dissuasif))
   ## Délai contractuel écoulé
-  définition délai_contractuel_écoulé égal à qualifier de (date_examen >= échéance_contractuelle)
+  définition délai_contractuel_écoulé égal à
+    selon échéance_contractuelle sous forme
+    -- Présent contenu le_jour : qualifier de (date_examen >= le_jour)
+    -- Absent : Inconnu
   ## Autres conditions du paiement réunies
-  définition socle_contractuel égal à cumul de engagement_opposable, (cumul de conditions_contractuelles, (cumul de délai_contractuel_écoulé, prescription_sur_borne_prudente))
+  définition socle_contractuel égal à
+    cumul de engagement_opposable, (cumul de conditions_contractuelles, (cumul de délai_contractuel_écoulé, prescription_sur_borne_prudente))
   ## Paiement de l’indemnité retenu
-  définition paiement_de_l_indemnité égal à si régime_codé_applicable alors (cumul de socle_contractuel, (cumul de condition_du_vote, (qualifier de indemnité_impayée))) sinon Inconnu
+  définition paiement_de_l_indemnité égal à
+    si
+      régime_codé_applicable
+    alors
+      cumul de socle_contractuel, (cumul de condition_du_vote, (apprécier de indemnité_impayée))
+    sinon Inconnu
 ```
 
 ## Article 2224 | LEGIARTI000019017112
@@ -287,11 +335,20 @@ champ d'application AnalyseIndemnité:
 
 ```catala
 champ d'application AnalyseIndemnité:
+  # La date d’examen est celle de l’analyse ; chaque scénario la fixe.
+  ## Date d’examen du dossier
+  définition date_examen égal à |2026-10-21|
   # Borne calculée par prudence à partir de l’échéance contractuelle.
   ## Borne prudente de prescription calculée
-  définition borne_prudente_prescription égal à échéance_contractuelle + 5 an
+  définition borne_prudente_prescription égal à
+    selon échéance_contractuelle sous forme
+    -- Présent contenu le_jour : Présent contenu (le_jour + 5 an)
+    -- Absent : Absent
   ## Prescription écartée sur la borne prudente
-  définition prescription_sur_borne_prudente égal à si date_examen < borne_prudente_prescription alors Confirmé sinon Inconnu
+  définition prescription_sur_borne_prudente égal à
+    selon borne_prudente_prescription sous forme
+    -- Présent contenu le_jour : si date_examen < le_jour alors Confirmé sinon Inconnu
+    -- Absent : Inconnu
 ```
 
 # Scénario — DossierEnÉtat
@@ -301,89 +358,149 @@ champ d'application AnalyseIndemnité:
 déclaration champ d'application DossierEnÉtat:
   résultat calcul contenu AnalyseIndemnité
 champ d'application DossierEnÉtat:
-  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  # Seuls les faits établis par une prémisse citée sont prouvés ; les autres restent non prouvés.
   ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
-      -- non_participation_au_conseil: Inconnu
-      -- absence_effet_dissuasif: Inconnu
-      -- vote_ex_post_initial: Inconnu
+      -- société_cotée: Prouvé contenu Prémisse.SocieteCotee
+      -- mandat_de_directeur_général: Prouvé contenu Prémisse.MandatDeDirecteurGeneral
+      -- engagement_décidé: Prouvé contenu Prémisse.EngagementDecide
+      -- politique_approuvée: Prouvé contenu Prémisse.PolitiqueApprouvee
+      -- révocation_décidée: Prouvé contenu Prémisse.RevocationDecidee
+      -- faute_grave_ou_lourde: NonProuvé
+      -- non_participation_au_conseil: NonProuvé
+      -- absence_effet_dissuasif: NonProuvé
+      -- vote_ex_post_initial: NonProuvé
+      -- vote_après_départ_refusé: NonProuvé
+      -- indemnité_impayée: Prouvé contenu Prémisse.IndemniteImpayee
+      -- marge_constatée:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 8,6
+          -- preuve: Prémisse.MargeConstatee
+        }
+      -- seuil_de_performance:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 8,0
+          -- preuve: Prémisse.SeuilDePerformance
+        }
+      -- rémunération_mensuelle:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 20 000 €
+          -- preuve: Prémisse.RemunerationMensuelle
+        }
+      -- mois_contractuels:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 24,0
+          -- preuve: Prémisse.MoisContractuels
+        }
+      -- montant_stipulé:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 480 000 €
+          -- preuve: Prémisse.MontantStipule
+        }
+      -- montant_réclamé:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 480 000 €
+          -- preuve: Prémisse.MontantReclame
+        }
+      -- capital_social:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 40 000 000 €
+          -- preuve: Prémisse.CapitalSocial
+        }
+      -- date_engagement:
+        DateÉtablie contenu DateProuvée {
+          -- valeur: |2022-03-15|
+          -- preuve: Prémisse.DateEngagement
+        }
+      -- date_cessation:
+        DateÉtablie contenu DateProuvée {
+          -- valeur: |2022-12-19|
+          -- preuve: Prémisse.DateCessation
+        }
       -- lecture_du_vote: NonTranchée
       -- date_examen: |2026-10-21|
     }
   assertion calcul.paiement_de_l_indemnité = Inconnu
   assertion calcul.montant_contractuel = 480 000 €
-  assertion calcul.échéance_contractuelle = |2023-01-18|
-  assertion calcul.borne_prudente_prescription = |2028-01-18|
+  assertion calcul.échéance_contractuelle = Présent contenu |2023-01-18|
+  assertion calcul.borne_prudente_prescription = Présent contenu |2028-01-18|
 ```
 
-# Scénario — ThèseContractuelleFavorable
+# Scénario — ThèseContractuelleSansPrémisses
 
 ```catala
 #[test]
-déclaration champ d'application ThèseContractuelleFavorable:
+déclaration champ d'application ThèseContractuelleSansPrémisses:
   résultat calcul contenu AnalyseIndemnité
-champ d'application ThèseContractuelleFavorable:
-  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+champ d'application ThèseContractuelleSansPrémisses:
+  # Seuls les faits établis par une prémisse citée sont prouvés ; les autres restent non prouvés.
   ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
-      -- non_participation_au_conseil: Confirmé
-      -- absence_effet_dissuasif: Confirmé
-      -- vote_ex_post_initial: Inconnu
+      -- société_cotée: Prouvé contenu Prémisse.SocieteCotee
+      -- mandat_de_directeur_général: Prouvé contenu Prémisse.MandatDeDirecteurGeneral
+      -- engagement_décidé: Prouvé contenu Prémisse.EngagementDecide
+      -- politique_approuvée: Prouvé contenu Prémisse.PolitiqueApprouvee
+      -- révocation_décidée: Prouvé contenu Prémisse.RevocationDecidee
+      -- faute_grave_ou_lourde: NonProuvé
+      -- non_participation_au_conseil: NonProuvé
+      -- absence_effet_dissuasif: NonProuvé
+      -- vote_ex_post_initial: NonProuvé
+      -- vote_après_départ_refusé: NonProuvé
+      -- indemnité_impayée: Prouvé contenu Prémisse.IndemniteImpayee
+      -- marge_constatée:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 8,6
+          -- preuve: Prémisse.MargeConstatee
+        }
+      -- seuil_de_performance:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 8,0
+          -- preuve: Prémisse.SeuilDePerformance
+        }
+      -- rémunération_mensuelle:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 20 000 €
+          -- preuve: Prémisse.RemunerationMensuelle
+        }
+      -- mois_contractuels:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 24,0
+          -- preuve: Prémisse.MoisContractuels
+        }
+      -- montant_stipulé:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 480 000 €
+          -- preuve: Prémisse.MontantStipule
+        }
+      -- montant_réclamé:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 480 000 €
+          -- preuve: Prémisse.MontantReclame
+        }
+      -- capital_social:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 40 000 000 €
+          -- preuve: Prémisse.CapitalSocial
+        }
+      -- date_engagement:
+        DateÉtablie contenu DateProuvée {
+          -- valeur: |2022-03-15|
+          -- preuve: Prémisse.DateEngagement
+        }
+      -- date_cessation:
+        DateÉtablie contenu DateProuvée {
+          -- valeur: |2022-12-19|
+          -- preuve: Prémisse.DateCessation
+        }
       -- lecture_du_vote: ThèseContractuelle
-      -- date_examen: |2026-10-21|
-    }
-  assertion calcul.paiement_de_l_indemnité = Confirmé
-  assertion calcul.montant_contractuel = 480 000 €
-  assertion calcul.échéance_contractuelle = |2023-01-18|
-  assertion calcul.borne_prudente_prescription = |2028-01-18|
-```
-
-# Scénario — VersaillesSansPreuveDuVoteInitial
-
-```catala
-#[test]
-déclaration champ d'application VersaillesSansPreuveDuVoteInitial:
-  résultat calcul contenu AnalyseIndemnité
-champ d'application VersaillesSansPreuveDuVoteInitial:
-  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
-  ## Calculer le scénario
-  définition calcul égal à
-    résultat de AnalyseIndemnité avec {
-      -- non_participation_au_conseil: Confirmé
-      -- absence_effet_dissuasif: Confirmé
-      -- vote_ex_post_initial: Inconnu
-      -- lecture_du_vote: VoteInitialVersailles
       -- date_examen: |2026-10-21|
     }
   assertion calcul.paiement_de_l_indemnité = Inconnu
   assertion calcul.montant_contractuel = 480 000 €
-  assertion calcul.échéance_contractuelle = |2023-01-18|
-  assertion calcul.borne_prudente_prescription = |2028-01-18|
-```
-
-# Scénario — VersaillesAvecVoteInitialProuvé
-
-```catala
-#[test]
-déclaration champ d'application VersaillesAvecVoteInitialProuvé:
-  résultat calcul contenu AnalyseIndemnité
-champ d'application VersaillesAvecVoteInitialProuvé:
-  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
-  ## Calculer le scénario
-  définition calcul égal à
-    résultat de AnalyseIndemnité avec {
-      -- non_participation_au_conseil: Confirmé
-      -- absence_effet_dissuasif: Confirmé
-      -- vote_ex_post_initial: Confirmé
-      -- lecture_du_vote: VoteInitialVersailles
-      -- date_examen: |2026-10-21|
-    }
-  assertion calcul.paiement_de_l_indemnité = Confirmé
-  assertion calcul.montant_contractuel = 480 000 €
-  assertion calcul.échéance_contractuelle = |2023-01-18|
-  assertion calcul.borne_prudente_prescription = |2028-01-18|
+  assertion calcul.échéance_contractuelle = Présent contenu |2023-01-18|
+  assertion calcul.borne_prudente_prescription = Présent contenu |2028-01-18|
 ```
 
 # Scénario — VoteAprèsDépartRefusé
@@ -393,64 +510,71 @@ champ d'application VersaillesAvecVoteInitialProuvé:
 déclaration champ d'application VoteAprèsDépartRefusé:
   résultat calcul contenu AnalyseIndemnité
 champ d'application VoteAprèsDépartRefusé:
-  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
+  # Seuls les faits établis par une prémisse citée sont prouvés ; les autres restent non prouvés.
   ## Calculer le scénario
   définition calcul égal à
     résultat de AnalyseIndemnité avec {
-      -- non_participation_au_conseil: Confirmé
-      -- absence_effet_dissuasif: Confirmé
-      -- vote_ex_post_initial: Inconnu
+      -- société_cotée: Prouvé contenu Prémisse.SocieteCotee
+      -- mandat_de_directeur_général: Prouvé contenu Prémisse.MandatDeDirecteurGeneral
+      -- engagement_décidé: Prouvé contenu Prémisse.EngagementDecide
+      -- politique_approuvée: Prouvé contenu Prémisse.PolitiqueApprouvee
+      -- révocation_décidée: Prouvé contenu Prémisse.RevocationDecidee
+      -- faute_grave_ou_lourde: NonProuvé
+      -- non_participation_au_conseil: NonProuvé
+      -- absence_effet_dissuasif: NonProuvé
+      -- vote_ex_post_initial: NonProuvé
+      -- vote_après_départ_refusé: Prouvé contenu Prémisse.VoteApresDepartRefuse
+      -- indemnité_impayée: Prouvé contenu Prémisse.IndemniteImpayee
+      -- marge_constatée:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 8,6
+          -- preuve: Prémisse.MargeConstatee
+        }
+      -- seuil_de_performance:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 8,0
+          -- preuve: Prémisse.SeuilDePerformance
+        }
+      -- rémunération_mensuelle:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 20 000 €
+          -- preuve: Prémisse.RemunerationMensuelle
+        }
+      -- mois_contractuels:
+        NombreÉtabli contenu NombreProuvé {
+          -- valeur: 24,0
+          -- preuve: Prémisse.MoisContractuels
+        }
+      -- montant_stipulé:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 480 000 €
+          -- preuve: Prémisse.MontantStipule
+        }
+      -- montant_réclamé:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 480 000 €
+          -- preuve: Prémisse.MontantReclame
+        }
+      -- capital_social:
+        MontantÉtabli contenu MontantProuvé {
+          -- valeur: 40 000 000 €
+          -- preuve: Prémisse.CapitalSocial
+        }
+      -- date_engagement:
+        DateÉtablie contenu DateProuvée {
+          -- valeur: |2022-03-15|
+          -- preuve: Prémisse.DateEngagement
+        }
+      -- date_cessation:
+        DateÉtablie contenu DateProuvée {
+          -- valeur: |2022-12-19|
+          -- preuve: Prémisse.DateCessation
+        }
       -- lecture_du_vote: VoteAprèsDépart
       -- date_examen: |2026-10-21|
     }
   assertion calcul.paiement_de_l_indemnité = Réfuté
   assertion calcul.montant_contractuel = 480 000 €
-  assertion calcul.échéance_contractuelle = |2023-01-18|
-  assertion calcul.borne_prudente_prescription = |2028-01-18|
-```
-
-# Scénario — EffetDissuasifRetenu
-
-```catala
-#[test]
-déclaration champ d'application EffetDissuasifRetenu:
-  résultat calcul contenu AnalyseIndemnité
-champ d'application EffetDissuasifRetenu:
-  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
-  ## Calculer le scénario
-  définition calcul égal à
-    résultat de AnalyseIndemnité avec {
-      -- non_participation_au_conseil: Confirmé
-      -- absence_effet_dissuasif: Réfuté
-      -- vote_ex_post_initial: Confirmé
-      -- lecture_du_vote: ThèseContractuelle
-      -- date_examen: |2026-10-21|
-    }
-  assertion calcul.paiement_de_l_indemnité = Réfuté
-  assertion calcul.montant_contractuel = 480 000 €
-  assertion calcul.échéance_contractuelle = |2023-01-18|
-  assertion calcul.borne_prudente_prescription = |2028-01-18|
-```
-
-# Scénario — ParticipationAuConseilRetenue
-
-```catala
-#[test]
-déclaration champ d'application ParticipationAuConseilRetenue:
-  résultat calcul contenu AnalyseIndemnité
-champ d'application ParticipationAuConseilRetenue:
-  # Les scénarios font varier des hypothèses ; leurs valeurs ne sont pas des preuves nouvelles.
-  ## Calculer le scénario
-  définition calcul égal à
-    résultat de AnalyseIndemnité avec {
-      -- non_participation_au_conseil: Réfuté
-      -- absence_effet_dissuasif: Confirmé
-      -- vote_ex_post_initial: Confirmé
-      -- lecture_du_vote: ThèseContractuelle
-      -- date_examen: |2026-10-21|
-    }
-  assertion calcul.paiement_de_l_indemnité = Réfuté
-  assertion calcul.montant_contractuel = 480 000 €
-  assertion calcul.échéance_contractuelle = |2023-01-18|
-  assertion calcul.borne_prudente_prescription = |2028-01-18|
+  assertion calcul.échéance_contractuelle = Présent contenu |2023-01-18|
+  assertion calcul.borne_prudente_prescription = Présent contenu |2028-01-18|
 ```
