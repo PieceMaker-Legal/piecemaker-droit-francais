@@ -143,7 +143,7 @@ Le graphe affiche des pastilles avec titre et icône, sur fond uni. Les traits s
 Routes ajoutées : `PUT /api/piecemaker/okf/types`, `POST /api/piecemaker/okf/rebuild`. Catalogue et sélecteur : `plugins/piecemaker-dossier/src/document-types.ts` et `document-types-editor.ts`.
 
 - Tableau : colonne Liens (survol : citation).
-- Graphe (cytoscape) : pièces, prémisses, parties. Un clic ouvre la fiche : visionneuse pour une pièce, fiche de l'onglet Parties pour une partie (avec ses prémisses), fiche du même design pour une prémisse (pièces, valeurs, citations, parties, bouton « Revue tabulaire »).
+- Graphe (cytoscape) : pièces, prémisses, parties, écartés sans chevauchement (y compris après un glisser). Un clic ouvre la fiche dans un volet à droite du graphe, fermable par × ou Échap : titre, méta, actions, propriétés en pastilles (valeurs, parties, prémisses, liens), alertes (sources divergentes, aucune pièce), pièces sources avec citation. Prémisse : bouton « Revue tabulaire » ; pièce : « Corriger la pièce » ; partie : « Modifier la partie ». Une pastille ouvre la fiche liée. Fiche : `plugins/piecemaker-dossier/src/okf-card.ts`.
 - Visionneuse : texte de la pièce, passages repérés surlignés (parties, date, citations des prémisses), section « Prémisses établies par la pièce » avec retrait. Les prémisses s'écrivent dans l'OKF dès le choix, par `POST /api/piecemaker/okf/link` et `/unlink`.
 
 ## Agent

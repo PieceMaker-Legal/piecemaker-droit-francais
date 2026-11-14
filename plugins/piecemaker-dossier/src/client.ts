@@ -2,7 +2,9 @@ import { openIndexAnalysis } from './index-analysis.js';
 import { editOntology } from './ontology.js';
 import { pendingProposals } from './pending-proposals.js';
 import { etapesApi, knowledgeApi, tabularReviewRpc } from './api.js';
-import { PREMISE_TYPE, PARTY_TYPE, premiseFicheMarkup, premiseReviewDraft, mountGraph, okfApi } from './okf.js';
+import { PREMISE_TYPE, PARTY_TYPE, premiseReviewDraft, mountGraph, okfApi } from './okf.js';
+import type { OkfGraph } from './okf.js';
+import { ficheCardMarkup } from './okf-card.js';
 import type { OkfView } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
@@ -79,6 +81,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     };
   };
   let destroyGraph: (() => void) | null = null;
+  let okfDetail: string | null = null;
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
   let mappingValidated: string | null = null;
@@ -412,44 +415,49 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort, okfView) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
     const graphHost = content.querySelector<HTMLElement>('[data-okf-graph]');
     const projectPath = context.project?.path || '';
-    if (!graphHost) root.querySelector('.pmd-modal-side')?.remove();
     if (!graphHost || !data?.okf) return;
-    const inSidePanel = (open: () => void) => {
-      root.querySelector('.pmd-modal-side')?.remove();
-      const before = new Set(Array.from(root.querySelectorAll(':scope > .pmd-modal')));
-      open();
-      root.querySelectorAll<HTMLElement>(':scope > .pmd-modal').forEach((layer) => { if (!before.has(layer)) layer.classList.add('pmd-modal-side'); });
-    };
-    const openDocument = (resource: string) => {
-      const node = data?.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === resource);
-      if (data && node) inSidePanel(() => documentEditor(root, data!, node, projectPath, save, renamePiece, okfHandle()));
-    };
-    void mountGraph(graphHost, data.okf, (fiche) => {
-      if (!data?.okf) return;
-      if (fiche.type === PARTY_TYPE) {
-        const node = data.graph.nodes.find((entry) => entry.id === `entity:${fiche.title}`);
-        if (node) inSidePanel(() => nodeEditor(root, data!, node, save));
-        return;
-      }
-      if (fiche.type !== PREMISE_TYPE) return openDocument(fiche.resource);
-      let layer!: HTMLElement;
-      inSidePanel(() => { layer = modal(root, premiseFicheMarkup(data!.okf!, fiche.id)); });
-      const draft = premiseReviewDraft(data.okf, fiche.id, projectPath);
-      layer.querySelector<HTMLButtonElement>('[data-premise-review]')?.addEventListener('click', (event) => {
+    const wrap = graphHost.parentElement!;
+    let graph: OkfGraph | null = null;
+    const closeDetail = () => { okfDetail = null; wrap.querySelector('[data-okf-detail]')?.remove(); graph?.select(null); };
+    const showFiche = (id: string) => {
+      const okf = data?.okf;
+      if (!okf) return;
+      const fiche = okf.fiches.find((entry) => entry.id === id);
+      if (!fiche) return closeDetail();
+      okfDetail = id;
+      wrap.querySelector('[data-okf-detail]')?.remove();
+      wrap.insertAdjacentHTML('beforeend', ficheCardMarkup(okf, id));
+      const card = wrap.querySelector<HTMLElement>('[data-okf-detail]')!;
+      graph?.select(id);
+      card.focus({ preventScroll: true });
+      card.querySelector('[data-detail-close]')?.addEventListener('click', closeDetail);
+      card.querySelectorAll<HTMLElement>('[data-open-fiche]').forEach((button) => button.addEventListener('click', () => showFiche(button.dataset.openFiche || '')));
+      card.querySelector('[data-edit-fiche]')?.addEventListener('click', () => {
+        if (!data) return;
+        if (fiche.type === PARTY_TYPE) {
+          const node = data.graph.nodes.find((entry) => entry.id === `entity:${fiche.title}`);
+          if (node) nodeEditor(root, data, node, save);
+          return;
+        }
+        const node = data.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === fiche.resource);
+        if (node) documentEditor(root, data, node, projectPath, save, renamePiece, okfHandle());
+      });
+      const draft = fiche.type === PREMISE_TYPE ? premiseReviewDraft(okf, id, projectPath) : null;
+      card.querySelector<HTMLButtonElement>('[data-premise-review]')?.addEventListener('click', (event) => {
         if (!draft) return;
         (event.currentTarget as HTMLButtonElement).disabled = true;
         void (tabularReviewRpc('PUT', '/drafts', { draft }) as Promise<{ draft: { id: string } }>)
           .then((saved) => openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); }, saved.draft.id))
-          .then((dispose) => { closeIndexAnalysis = dispose; layer.remove(); })
-          .catch((error) => { layer.remove(); showError(error); });
+          .then((dispose) => { closeIndexAnalysis = dispose; })
+          .catch(showError);
       });
-      layer.querySelectorAll<HTMLElement>('[data-open-resource]').forEach((row) => row.addEventListener('click', () => {
-        layer.remove();
-        openDocument(row.dataset.openResource || '');
-      }));
-    }).then((destroy) => {
-      if (graphHost.isConnected) destroyGraph = destroy;
-      else destroy();
+    };
+    wrap.addEventListener('keydown', (event) => { if (event.key === 'Escape' && wrap.querySelector('[data-okf-detail]')) closeDetail(); });
+    void mountGraph(graphHost, data.okf, (fiche) => showFiche(fiche.id)).then((mounted) => {
+      if (!graphHost.isConnected) return mounted.destroy();
+      graph = mounted;
+      destroyGraph = mounted.destroy;
+      if (okfDetail) showFiche(okfDetail);
     }).catch(showError);
   };
 

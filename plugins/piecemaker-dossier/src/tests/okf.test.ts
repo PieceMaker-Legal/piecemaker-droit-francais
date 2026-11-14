@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { premiseFicheMarkup, premiseReviewDraft, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
+import { spreadBoxes, premiseReviewDraft, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
+import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
 import { chronologyView } from '../views.js';
 
@@ -114,25 +115,31 @@ describe('prémisses de l’index OKF', () => {
     expect(premiseEstablishers(premiseIndex, '/_premises/Inconnu.md')).toEqual([]);
   });
 
-  it('premiseFicheMarkup affiche les pièces, valeurs et citations', () => {
-    const html = premiseFicheMarkup(premiseIndex, '/_premises/Prix.md');
-    expect(html).toContain('<span class="pmd-profile-eyebrow">Prémisse</span><strong>Prix</strong>');
-    expect(html).toContain('data-open-resource="Pièces/Contrat.pdf"');
-    expect(html).toContain('<span class="pmd-relation-type">1 000 €</span><strong class="pmd-relation-target">Contrat</strong>');
+  it('la carte d’une prémisse donne valeurs, pièces sources, citations et divergence', () => {
+    const html = ficheCardMarkup(premiseIndex, '/_premises/Prix.md');
+    expect(html).toContain('<h2 class="pmd-fact-title">Prix</h2>');
+    expect(html).toContain('data-detail-close');
+    expect(html).toContain('data-open-fiche="/Pièces/Contrat.pdf.md"');
+    expect(html).toContain('data-chat-file="Pièces/Contrat.pdf"');
     expect(html).toContain('« Le prix est de 1 000 euros. »');
-    expect(html).toContain('<strong class="pmd-relation-target">Courrier</strong>');
-    expect(html).not.toContain('Aucune pièce');
+    expect(html).toContain('<strong>Courrier</strong>');
+    expect(html).not.toContain('Les sources divergent');
+    expect(ficheCardMarkup({ ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, single: true })) }, '/_premises/Prix.md')).toContain('Les sources divergent');
   });
 
-  it('premiseFicheMarkup échappe le titre et signale une prémisse sans pièce', () => {
-    const html = premiseFicheMarkup(premiseIndex, '/_premises/Clause.md');
+  it('la carte échappe le titre et signale une prémisse sans pièce', () => {
+    const html = ficheCardMarkup(premiseIndex, '/_premises/Clause.md');
     expect(html).toContain('Clause &lt;pénale&gt;');
     expect(html).not.toContain('<pénale>');
     expect(html).toContain('Aucune pièce n’établit cette prémisse.');
+    expect(ficheCardMarkup(premiseIndex, '/_premises/Inconnu.md')).toBe('');
   });
 
-  it('premiseFicheMarkup reste vide pour une prémisse inconnue', () => {
-    expect(premiseFicheMarkup(premiseIndex, '/_premises/Inconnu.md')).toBe('');
+  it('la carte d’une pièce liste ses prémisses et la cible au chat', () => {
+    const html = ficheCardMarkup(premiseIndex, '/Pièces/Contrat.pdf.md');
+    expect(html).toContain('data-edit-fiche');
+    expect(html).toContain('data-open-fiche="/_premises/Prix.md"');
+    expect(html).toContain('data-chat-kind="Document"');
   });
 
   it('ficheLinks affiche la valeur d’une prémisse établie', () => {
@@ -157,19 +164,29 @@ describe('fiches du graphe', () => {
     expect(partyPremises(null, 'Jean Dupont')).toEqual([]);
   });
 
-  it('la fiche d’une prémisse reprend le design de la fiche de partie', () => {
-    const html = premiseFicheMarkup(linked, '/_premises/Prix.md');
-    expect(html).toContain('class="pmd-profile-editor" data-kind="premise" data-side="premise"');
-    expect(html).toContain('<span class="pmd-profile-kind">Valeur unique</span>');
+  it('la carte d’une prémisse montre ses parties', () => {
+    const html = ficheCardMarkup(linked, '/_premises/Prix.md');
+    expect(html).toContain('Prémisse · valeur unique');
     expect(html).toContain('Prix de vente');
-    expect(html).toContain('Parties concernées');
-    expect(html).toContain('<strong class="pmd-relation-target">Jean Dupont</strong>');
+    expect(html).toContain('data-open-fiche="/Parties/Jean Dupont.md"');
   });
 
   it('premiseReviewDraft prépare une revue à une colonne qui porte la prémisse', () => {
-    expect(premiseFicheMarkup(premiseIndex, '/_premises/Prix.md')).toContain('data-premise-review');
+    expect(ficheCardMarkup(premiseIndex, '/_premises/Prix.md')).toContain('data-premise-review');
     expect(premiseReviewDraft(premiseIndex, '/_premises/Prix.md', '/dossier-fictif')).toEqual({ project: '/dossier-fictif', title: 'Prix', templateName: '', columns: [{ name: 'Prix', prompt: 'Prix', format: 'text', premise: 'checkpoint' }], rows: [] });
     expect(premiseReviewDraft({ ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, single: true })) }, '/_premises/Prix.md', '/dossier-fictif')?.columns[0].premise).toBe('single');
     expect(premiseReviewDraft(premiseIndex, '/_premises/Inconnue.md', '/dossier-fictif')).toBeNull();
+  });
+});
+
+describe('écartement du graphe', () => {
+  it('spreadBoxes sépare les nœuds superposés d’au moins l’écart demandé', () => {
+    const boxes = [{ x: 0, y: 0, w: 100, h: 36 }, { x: 10, y: 5, w: 100, h: 36 }, { x: 20, y: 0, w: 60, h: 36 }];
+    spreadBoxes(boxes, 20);
+    for (let i = 0; i < boxes.length; i += 1) for (let j = i + 1; j < boxes.length; j += 1) {
+      const [a, b] = [boxes[i], boxes[j]];
+      const apart = Math.abs(a.x - b.x) >= (a.w + b.w) / 2 + 19.9 || Math.abs(a.y - b.y) >= (a.h + b.h) / 2 + 19.9;
+      expect(apart).toBe(true);
+    }
   });
 });
