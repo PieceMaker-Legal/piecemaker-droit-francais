@@ -37,8 +37,8 @@ Une pièce établit une `Premise` par `states` (citation, valeur facultative). L
 
 ## Chaîne de justification
 
-1. Une condition Catala n'est remplie que par un fait `Prouvé contenu <Prémisse>`. Le cas `MiseEnDemeureRecue` de l'énumération `Prémisse` désigne la fiche `_premises/mise-en-demeure-recue.md` (skill `catala`, `references/format.md`).
-2. Une `Premise` se justifie par des pièces citées (`states`). `pm catala verifier` contrôle chaque citation et la valeur du scénario. Un lien posé par l'avocat (`piecemaker/avocat`) demande une vérification manuelle.
+1. Un fait d'un programme Catala se justifie par une `Premise` : la fiche `_premises/<titre normalisé>.md`.
+2. Une `Premise` se justifie par des pièces citées (`states`).
 
 ## Lire et écrire
 
@@ -46,7 +46,7 @@ Une pièce établit une `Premise` par `states` (citation, valeur facultative). L
 2. N'écrivez jamais une fiche à la main. Passez par `pm okf`. Un hook refuse toute écriture directe dans `.piecemaker/okf/`, `~/.piecemaker/ontologie.json` et `.piecemaker/arborescence.json`.
 3. Avant la première écriture, lisez `references/okf.md` du skill `piecemaker` (`.agents/skills/Skill-PieceMaker/references/okf.md`). Cette référence décrit les sous-commandes à jour.
 4. Après toute écriture, lancez `pm okf verify`. Corrigez chaque erreur et relancez jusqu'à zéro erreur.
-5. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce sans prémisse, prémisse sans pièce, sans valeur ou sans partie, partie isolée, cas `Prémisse` d'un programme Catala sans fiche.
+5. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce sans prémisse, prémisse sans pièce, sans valeur ou sans partie, partie isolée.
 
 ## Règles de conduite
 

@@ -35,7 +35,7 @@ Le volet exploite les positions et titres du pack Catala 1.3.0 pour relier les �
 | Trace d’exécution en JSON | Les événements portent valeurs, positions, titres, appels de champs et définitions sélectionnées. | La trace enrichit les origines du DOT. Si le DOT échoue, la trace et les dépendances natives fournissent le graphe. |
 | Définitions réparties sous plusieurs sources | Une règle générale et ses exceptions peuvent définir la même variable sous des textes distincts. | Une formule globale ne permet pas cette précision. |
 
-Les titres et positions sont natifs. L’extrait entre « » sous le titre d’un article et l'énumération `Prémisse` sont des conventions PieceMaker écrites en Catala natif. PieceMaker ne lit aucun attribut propre.
+Les titres et positions sont natifs. L’extrait entre « » sous le titre d’un article est une convention PieceMaker écrite en Catala natif. PieceMaker ne lit aucun attribut propre.
 
 Deux commandes natives permettent d’obtenir les informations structurées :
 
@@ -81,19 +81,19 @@ Références : [structure documentaire](https://github.com/CatalaLang/catala/blo
 Le format est décrit dans `server/piecemaker/vendor/skills/catala/references/format.md`.
 
 - Un article s’écrit `## Article N | LEGIARTI…`, une décision `## … | JURITEXT…` ou `CETATEXT…`. L’extrait exact suit le titre, entre « ». Le bloc ` ```catala ` placé dessous est rattaché à ce texte par sa position.
-- Une entrée porte un titre `## texte court` et un type `Fait` (`Prouvé contenu Prémisse | NonProuvé`) ou une énumération dont un cas porte une `Prémisse`.
-- Chaque cas de `Prémisse` désigne une fiche OKF établie par des pièces citées. Un fait non prouvé vaut `NonProuvé`.
+- Une entrée porte un titre `## texte court`.
+- Un fait du dossier est un `contexte` ; sa prémisse OKF porte les pièces citées.
 - Les justifications s’écrivent en commentaires `#`.
 
 `pm catala verifier` produit des erreurs distinctes, avec fichier et ligne :
 
 - `titre manquant pour cette entrée.` : une `entrée` sans `##`.
-- les erreurs des règles 1 à 7 listées dans `docs/catala.md` (« Règles du vérifieur »).
+- les erreurs des règles 1 à 3 listées dans `docs/catala.md` (« Règles du vérifieur »).
 
 Une définition sans titre n’est pas une erreur ; le graphe affiche alors la question ou le nom de la variable. Le vérifieur contrôle la longueur des titres ; le skill `catala` fixe leur forme.
 Le volet affiche les erreurs de documentation. Le bilan ne peut pas être réussi si ces erreurs restent présentes.
 
-Le même lecteur alimente les cartes du graphe et le contrôle des citations. Le graphe affiche sous un fait les pièces citées de sa prémisse OKF. La présence d’une citation ne valide ni le passage cité ni sa pertinence.
+Le même lecteur alimente les cartes du graphe et le contrôle des citations. Le graphe affiche sous une étape les pièces des prémisses que cite un lien `okf:`. La présence d’une citation ne valide ni le passage cité ni sa pertinence.
 
 Implantation commune : `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs`.
 Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecemaker/catala-sources.ts` exploite ses positions.
@@ -161,7 +161,7 @@ Les justifications s’écrivent en commentaires `#` dans le code. Pour les anci
 
 Ces champs ne sont pas des instructions Catala. Ils ne changent pas le résultat du programme. Ils ne prouvent pas davantage l’exactitude des explications.
 
-L’extrait sous l’article et l'énumération `Prémisse` sont des conventions PieceMaker. Catala permet de joindre les textes au code, sans imposer ces conventions.
+L’extrait sous l’article est une convention PieceMaker. Catala permet de joindre les textes au code, sans imposer ces conventions.
 
 La provenance complète demande un élément, une source, une citation exacte et une justification du lien. Le contrôle de citation vérifie le passage ; il ne valide pas cette justification.
 

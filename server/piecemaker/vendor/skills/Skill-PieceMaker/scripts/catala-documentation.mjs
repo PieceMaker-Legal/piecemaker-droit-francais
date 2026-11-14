@@ -32,7 +32,7 @@ export function catalaDocumentation(content, { test = false } = {}) {
         if (token[1] !== undefined) {
           pending.push(decode(token[1]));
           const field = decode(token[1]).match(/^\s*(titre|source|quote)\s*:/im)?.[1];
-          if (field) errors.push({ line: lineAt(token.index), message: `#[doc] contient « ${field}: » : le titre va dans ## texte court, la source juridique dans le titre de section, la preuve d'un fait dans un cas de Prémisse.` });
+          if (field) errors.push({ line: lineAt(token.index), message: `#[doc] contient « ${field}: » : le titre va dans ## texte court, la source juridique dans le titre de section.` });
         } else {
           meta.title = token[2].trim();
           const words = meta.title.split(/\s+/).filter(Boolean);
@@ -85,71 +85,4 @@ export function testsWithoutAssertion(content) {
   return [...content.matchAll(/#\[test\]\s*(?:déclaration|declaration)\s+(?:champ d'application|scope)\s+([\p{L}\p{N}_]+)/gu)]
     .filter((match) => !asserted.has(match[1]))
     .map((match) => ({ scope: match[1], line: content.slice(0, match.index).split('\n').length }));
-}
-
-const IDENTIFIER = '[\\p{L}\\p{N}_]+';
-const baseType = (type) => type.trim().split('.').at(-1);
-
-function codeOnly(content) {
-  let fence = '';
-  let code = false;
-  return content.split(/\r?\n/).map((line) => {
-    const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
-    if (marker && fence && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) { fence = ''; code = false; return ''; }
-    if (marker && !fence) { fence = marker[1]; code = /^catala(?:-metadata)?\s*$/.test(marker[2].trim()); return ''; }
-    return code ? line : '';
-  });
-}
-
-function declarations(content) {
-  const enums = new Map();
-  const structures = new Map();
-  const inputs = [];
-  let current = null;
-  let scope = null;
-  let test = false;
-  codeOnly(content).forEach((line, index) => {
-    if (/#\[test\]/.test(line)) test = true;
-    const declared = line.match(new RegExp(`^\\s*(?:#\\[test\\]\\s*)?(?:déclaration|declaration)\\s+(énumération|enumeration|structure|champ d'application|scope)\\s+(${IDENTIFIER})`, 'u'));
-    if (declared) {
-      current = /^(?:énumération|enumeration)$/.test(declared[1]) ? enums : /^structure$/.test(declared[1]) ? structures : null;
-      if (current) current.set(declared[2], []);
-      scope = current ? null : { name: declared[2], test };
-      current = current && { map: current, name: declared[2] };
-      test = false;
-      return;
-    }
-    if (/^\s*(?:déclaration|declaration|champ d'application|scope)(?![\p{L}\p{N}_])/u.test(line)) { current = null; scope = null; test = false; return; }
-    const member = line.match(new RegExp(`^\\s*(?:--\\s*|(?:donnée|data)\\s+)(${IDENTIFIER})(?:\\s+(?:contenu|content)\\s+(.+?))?\\s*$`, 'u'));
-    if (current && member) current.map.get(current.name).push({ name: member[1], type: member[2] ?? '', line: index + 1 });
-    const input = line.match(new RegExp(`^\\s*(?:entrée|input)\\s+(?:(?:résultat|output)\\s+)?(${IDENTIFIER})\\s+(?:contenu|content)\\s+(.+?)\\s*$`, 'u'));
-    if (scope && !scope.test && input) inputs.push({ scope: scope.name, name: input[1], type: input[2], line: index + 1 });
-  });
-  return { enums, structures, inputs };
-}
-
-export function premiseCases(content) {
-  return declarations(content).enums.get('Prémisse') ?? [];
-}
-
-export function premiseSource(name) {
-  return `okf:/_premises/${name.replace(/(?<=[\p{Ll}\p{N}])(?=\p{Lu})/gu, ' ').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}.md`;
-}
-
-export function premiseValues(content) {
-  return [...content.matchAll(/--\s*valeur\s*:\s*([^\n]+?)\s*\n\s*--\s*preuve\s*:\s*[\p{L}\p{N}_.]*Prémisse\.([\p{L}\p{N}_]+)/gu)]
-    .map((match) => ({ name: match[2], expression: match[1], line: content.slice(0, match.index).split('\n').length }));
-}
-
-export function untypedFacts(files) {
-  const all = files.map((file) => ({ ...file, ...declarations(file.content) }));
-  const enums = new Map(all.flatMap((file) => [...file.enums]));
-  const structures = new Map(all.flatMap((file) => [...file.structures]));
-  const carries = (type) => baseType(type) === 'Prémisse' || (structures.get(baseType(type)) ?? []).some((field) => baseType(field.type) === 'Prémisse');
-  const proven = (type) => (enums.get(baseType(type)) ?? []).some((member) => carries(member.type));
-  return all.flatMap((file) => file.inputs.filter((input) => !proven(input.type)).map((input) => ({ file: file.name, line: input.line, scope: input.scope, variable: input.name, message: `fait sans preuve typée : l'entrée ${input.name} est de type ${input.type}. Déclarez-la de type Fait (Prouvé contenu Prémisse | NonProuvé) ou d'une énumération dont un cas porte une Prémisse.` })));
-}
-
-export function factInputs(files) {
-  return files.flatMap((file) => declarations(file.content).inputs.map((input) => ({ ...input, file: file.name })));
 }

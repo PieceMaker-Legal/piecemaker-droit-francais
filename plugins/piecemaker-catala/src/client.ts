@@ -75,7 +75,6 @@ export function mount(container: HTMLElement, api: Host) {
     const [, file = '', line = '', text = message] = message.match(/^(.*?):(\d+):\s*(.*)$/) ?? [];
     const meaning = /titre manquant/i.test(text) ? 'Titre manquant : cette entrée n’a pas de titre ## texte court.'
       : /règle sans source juridique/i.test(text) ? 'Règle sans source : placez-la sous le titre d’un article ou d’une décision, suivi de l’extrait cité.'
-      : /fait sans preuve typée/i.test(text) ? 'Fait sans preuve : déclarez cette entrée de type Fait, pour qu’une prémisse l’établisse.'
       : text;
     return { meaning, place: file ? `${file}, ligne ${line}` : '' };
   };

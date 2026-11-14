@@ -203,7 +203,7 @@ test('verifier runs every check inside the pack environment and writes the resul
     assert.equal(explanation.passed, true);
     assert.equal(explanation.sources_sha256, report.sources_sha256);
     assert.equal(explanation.scope, 'JeanDupont');
-    assert.deepEqual(report.checks.map((entry) => entry.name), ['documentation', 'typecheck', 'format', 'premisses', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
+    assert.deepEqual(report.checks.map((entry) => entry.name), ['documentation', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
     const proof = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json')));
     assert.deepEqual(proof.scopes.map((entry) => entry.scope), ['Prime', 'AutrePrime']);
     assert.equal(proof.obligations, 2);
@@ -469,7 +469,7 @@ test('independent checks finish despite compilation failure and stale reports ar
     };
     await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => { release(); return { passed: false, status: 'failed', message: 'Citation introuvable', results: [] }; } } });
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
-    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['documentation', 'passed'], ['typecheck', 'failed'], ['format', 'blocked'], ['premisses', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
+    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['documentation', 'passed'], ['typecheck', 'failed'], ['format', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
     assert.equal(report.passed, false);
     assert.ok(!calls.some((call) => ['proof', 'explain', 'runtest'].includes(call.args[0])));
     for (const file of ['preuve.json', 'tests.json', 'explication.json']) assert.equal(fs.existsSync(path.join(directory, 'resultats', file)), false);
@@ -554,16 +554,9 @@ const FACTS = [
   '> Module Prime',
   '',
   '```catala-metadata',
-  'déclaration énumération Prémisse:',
-  '  -- MontantDemande',
-  '',
-  'déclaration énumération Fait:',
-  '  -- Prouvé contenu Prémisse',
-  '  -- NonProuvé',
-  '',
   "déclaration champ d'application Prime:",
   '  ## Montant demandé',
-  '  entrée demande contenu Fait',
+  '  entrée demande contenu argent',
   '  résultat montant contenu argent',
   '```',
   '',
@@ -573,13 +566,13 @@ const FACTS = [
   '',
   '```catala',
   "champ d'application Prime:",
-  '  définition montant égal à si demande sous forme Prouvé alors 10 € sinon 0 €',
+  '  définition montant égal à demande',
   '```',
   '',
 ].join('\n');
-const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  définition calcul.demande égal à Prime.Fait.NonProuvé\n  assertion calcul.montant = 0 €\n```\n";
+const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  définition calcul.demande égal à 0 €\n  assertion calcul.montant = 0 €\n```\n";
 
-test('verifier requires a title, a typed fact, a legal anchor and a complete task', async () => {
+test('verifier requires a title, a legal anchor and a complete task', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const directory = program(dossier, 'prime', { 'test_prime.catala_fr': FACT_TESTS });
@@ -590,13 +583,12 @@ test('verifier requires a title, a typed fact, a legal anchor and a complete tas
     };
     const cases = [
       [FACTS, null],
-      [FACTS.replace('  ## Montant demandé\n', ''), 'prime.catala_fr:12: titre manquant pour cette entrée. Écrivez ## texte court au-dessus.'],
-      [FACTS.replace('## Montant demandé', '## Montant ?'), 'prime.catala_fr:12: titre « Montant ? » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
-      [FACTS.replace('## Montant demandé', '## montant_demande de Jean'), 'prime.catala_fr:12: titre « montant_demande de Jean » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
-      [FACTS.replace('  ## Montant demandé\n', '  ## Montant demandé\n  #[doc="source: okf:/_premises/montant-demande.md"]\n'), 'prime.catala_fr:13: #[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section, la preuve d\'un fait dans un cas de Prémisse.'],
-      [FACTS.replace('entrée demande contenu Fait', 'entrée demande contenu argent'), "prime.catala_fr:13: fait sans preuve typée : l'entrée demande est de type argent. Déclarez-la de type Fait (Prouvé contenu Prémisse | NonProuvé) ou d'une énumération dont un cas porte une Prémisse."],
-      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1'), "prime.catala_fr:23: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
-      [FACTS.replace('« Passage exact. »\n\n', ''), "prime.catala_fr:21: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
+      [FACTS.replace('  ## Montant demandé\n', ''), 'prime.catala_fr:5: titre manquant pour cette entrée. Écrivez ## texte court au-dessus.'],
+      [FACTS.replace('## Montant demandé', '## Montant ?'), 'prime.catala_fr:5: titre « Montant ? » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
+      [FACTS.replace('## Montant demandé', '## montant_demande de Jean'), 'prime.catala_fr:5: titre « montant_demande de Jean » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
+      [FACTS.replace('  ## Montant demandé\n', '  ## Montant demandé\n  #[doc="source: okf:/_premises/montant-demande.md"]\n'), 'prime.catala_fr:6: #[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section.'],
+      [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1'), "prime.catala_fr:16: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
+      [FACTS.replace('« Passage exact. »\n\n', ''), "prime.catala_fr:14: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
       [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Décision fictive | JURITEXT000000000001'), null],
       [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1 | LEGIARTI000000000001\n\n« Passage exact. »\n\n### Montant'), null],
     ];
@@ -618,56 +610,6 @@ test('verifier requires a title, a typed fact, a legal anchor and a complete tas
     assert.equal(faults.length, 5);
     assert.match(faults.join('\n'), /sans nom[\s\S]*type de tâche inconnu : écrivez litigation, transactional\.[\s\S]*date_vigueur absente : écrivez today ou AAAA-MM-JJ\.[\s\S]*« Absent » : aucun champ[\s\S]*sans objectif/);
     assert.deepEqual(await verify(null), ['tache.json:1: tâche absente : créez tache.json avec tache, type, date_vigueur et raisonnements.']);
-  } finally { cleanup(); }
-});
-
-const PREMISE_SOURCE = [
-  '```catala-metadata',
-  'déclaration énumération Prémisse:',
-  '  -- MentionLue',
-  '',
-  'déclaration énumération Fait:',
-  '  -- Prouvé contenu Prémisse',
-  '  -- NonProuvé',
-  '',
-  "déclaration champ d'application Prime:",
-  '  ## Mention lue',
-  '  entrée mention_lue contenu Fait',
-  '  ## Mention morte',
-  '  entrée mention_morte contenu Fait',
-  '  résultat possible contenu booléen',
-  '```',
-  '',
-].join('\n');
-
-function premiseRun(edges) {
-  const { runner } = fakeRun();
-  return async (command, args, options) => {
-    if (args[0] === 'dependency-graph' && args.includes('prime.catala_fr')) return { code: 0, stdout: JSON.stringify({ intra_scopes: { Prime: { nodes: { 3: 'possible', 2: 'mention_morte', 1: 'mention_lue' }, edges } }, inter_scopes: { nodes: { 1: 'Prime' }, edges: [] } }), stderr: '' };
-    return runner(command, args, options);
-  };
-}
-
-test('verifier accepts facts read by a rule', async () => {
-  const { home, dossier, cleanup } = scratch();
-  try {
-    const directory = program(dossier, 'prime', { 'prime.catala_fr': PREMISE_SOURCE });
-    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }, { from: 2, to: 3 }]), python: null, credentials: null } });
-    assert.match(text, /- premisses : ok/);
-    assert.doesNotMatch(text, /Fait sans effet/);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'premisses').passed, true);
-  } finally { cleanup(); }
-});
-
-test('verifier blocks a fact that no rule reads', async () => {
-  const { home, dossier, cleanup } = scratch();
-  try {
-    const directory = program(dossier, 'prime', { 'prime.catala_fr': PREMISE_SOURCE });
-    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: premiseRun([{ from: 1, to: 3 }]), python: null, credentials: null } });
-    assert.match(text, /- premisses : échec/);
-    assert.match(text, /Fait sans effet : Prime\.mention_morte n'est lu par aucune règle\./);
-    assert.doesNotMatch(text, /Prime\.mention_lue/);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).passed, false);
   } finally { cleanup(); }
 });
 
@@ -702,7 +644,7 @@ test('verifier fails a test without assertion, a typecheck warning, and a misspe
   } finally { cleanup(); }
 });
 
-test('the indemnity fixture follows model D and each rule rejects its fault', async () => {
+test('the indemnity fixture passes documentation and each rule rejects its fault', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
     const fixture = path.join(import.meta.dirname, '../../../../../../docs/tests/raisonnement-indemnite-instruction-maj/.piecemaker/catala/indemnite-depart');
@@ -718,7 +660,6 @@ test('the indemnity fixture follows model D and each rule rejects its fault', as
     };
     assert.equal(await errors(source), '');
     assert.match(await errors(source.replace('## Article 2224 | LEGIARTI000019017112', '## Article 2224')), /règle sans source juridique/);
-    assert.match(await errors(source.replace('entrée société_cotée contenu Fait', 'entrée société_cotée contenu booléen')), /fait sans preuve typée : l'entrée société_cotée est de type booléen/);
     assert.match(await errors(source.replace('## Société cotée', '## société_cotée')), /titre « société_cotée » : écrivez 2 à 7 mots/);
     assert.match(await errors(source, { ...task, type: 'contentieux' }), /type de tâche inconnu : écrivez litigation, transactional\./);
   } finally { cleanup(); }

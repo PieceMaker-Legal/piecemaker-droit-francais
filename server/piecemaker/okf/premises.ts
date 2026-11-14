@@ -1,8 +1,3 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
-import { premiseCases, premiseSource, premiseValues } from '../vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
-
 import type { Concept } from './bundle.js';
 import {
   INVOLVES,
@@ -10,8 +5,6 @@ import {
   PARTY_TYPE,
   PREMISE_TYPE,
   STATES,
-  isPremiseId,
-  isoDateOf,
   migratedId,
   readBundle,
   relationsOf,
@@ -20,13 +13,10 @@ import {
 import { graphTypesOf, readOntology, relationNames } from './ontology.js';
 
 export const OKF_SCHEME = 'okf:';
-export type PremisePiece = { resource: string; title: string; citation: string; value: string; origin: string };
+export type PremisePiece = { resource: string; title: string; citation: string; value: string };
 export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[] };
 export type OkfGap = { element: string; manque: string; programmes?: string[] };
 
-const SKIPPED_FOLDERS = new Set(['resultats', '_build', 'node_modules']);
-
-export const isOkfSource = (source: string): boolean => source.toLowerCase().startsWith(OKF_SCHEME);
 export const premiseIdOf = (source: string): string => migratedId(`/${source.slice(OKF_SCHEME.length).replace(/^\/+/, '')}`);
 
 const live = (concept: Concept, relation: string) => (relationsOf(concept.frontmatter)[relation] || []).filter((entry) => !entry.dismissed);
@@ -36,7 +26,7 @@ function evidenceOf(concepts: Concept[], id: string): PremiseEvidence | null {
   if (!premise) return null;
   const pieces = concepts.flatMap((concept) => live(concept, STATES)
     .filter((entry) => entry.target === id)
-    .map((entry) => ({ resource: text(concept.frontmatter.resource), title: text(concept.frontmatter.title), citation: entry.citation, value: entry.value || '', origin: entry.origin })));
+    .map((entry) => ({ resource: text(concept.frontmatter.resource), title: text(concept.frontmatter.title), citation: entry.citation, value: entry.value || '' })));
   return { id, title: text(premise.frontmatter.title), pieces };
 }
 
@@ -44,57 +34,13 @@ export function premiseEvidence(projectPath: string, source: string): PremiseEvi
   return evidenceOf(readBundle(projectPath).filter((concept) => !concept.error), premiseIdOf(source));
 }
 
-function catalaFiles(directory: string): string[] {
-  if (!fs.existsSync(directory)) return [];
-  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const filePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) return SKIPPED_FOLDERS.has(entry.name) || entry.name.startsWith('.') ? [] : catalaFiles(filePath);
-    return entry.isFile() && /\.catala_(?:fr|en|pl)$/.test(entry.name) ? [filePath] : [];
-  });
-}
-
-function catalaSources(projectPath: string): Array<{ place: string; source: string; expression: string }> {
-  return catalaFiles(path.join(projectPath, '.piecemaker', 'catala')).sort().flatMap((filePath) => {
-    const place = path.relative(projectPath, filePath).split(path.sep).join('/');
-    const content = fs.readFileSync(filePath, 'utf8');
-    return [...premiseCases(content), ...premiseValues(content)].map((entry) => ({ place: `${place}:${entry.line}`, source: premiseSource(entry.name), expression: 'expression' in entry ? entry.expression : '' }));
-  });
-}
-
-const NUMBER = /-?\d[\d   ]*(?:[.,]\d+)*/;
-
-function numberOf(value: string): number | null {
-  const digits = value.match(NUMBER)?.[0].replace(/[   ]/g, '');
-  if (!digits) return null;
-  const normalized = digits.includes('.') && digits.includes(',') ? digits.replace(/,/g, '') : digits.replace(',', '.');
-  const number = Number(normalized);
-  return Number.isFinite(number) ? number : null;
-}
-
-export function expectedValue(expression: string): { date: string } | { number: number } | null {
-  const date = expression.match(/^\|(\d{4}-\d{2}-\d{2})\|$/)?.[1];
-  if (date) return { date };
-  if (!/^\$?-?\d[\d   .,]*(?:\s*(?:€|[\p{L}]+))?$/u.test(expression)) return null;
-  const number = numberOf(expression);
-  return number === null ? null : { number };
-}
-
-export function matchesExpected(expected: { date: string } | { number: number }, value: string): boolean {
-  return 'date' in expected ? isoDateOf(value) === expected.date : numberOf(value) === expected.number;
-}
-
-const programOf = (place: string) => place.split('/')[2] ?? '';
-
 export function graphGaps(projectPath: string): OkfGap[] {
   const concepts = readBundle(projectPath).filter((concept) => !concept.error);
   const ontology = readOntology(projectPath);
   const graphTypes = graphTypesOf(projectPath, ontology);
   const premises = concepts.filter((concept) => concept.frontmatter.type === PREMISE_TYPE);
   const gaps: OkfGap[] = [];
-  const sources = catalaSources(projectPath);
-  const citedBy = new Map<string, Set<string>>();
-  for (const { place, source } of sources) if (isOkfSource(source)) citedBy.set(premiseIdOf(source), (citedBy.get(premiseIdOf(source)) ?? new Set()).add(programOf(place)));
-  const report = (element: string, manque: string, programmes = [...(citedBy.get(element) ?? [])].sort()) => gaps.push({ element, manque, ...(programmes.length ? { programmes } : {}) });
+  const report = (element: string, manque: string) => gaps.push({ element, manque });
 
   const linked = new Set<string>();
   const stated = new Set<string>();
@@ -121,21 +67,5 @@ export function graphGaps(projectPath: string): OkfGap[] {
     if (!live(premise, INVOLVES).length) report(premise.id, 'prémisse sans partie concernée (involves)');
   }
 
-  const used = new Set<string>();
-  for (const { place, source, expression } of sources) {
-    if (isOkfSource(source)) {
-      const id = premiseIdOf(source);
-      used.add(id);
-      const evidence = evidenceOf(concepts, id);
-      const expected = expectedValue(expression);
-      const values = evidence?.pieces.map((piece) => piece.value).filter(Boolean) ?? [];
-      if (!evidence) report(place, `Prémisse absente de l'index : ${id}`, [programOf(place)]);
-      else if (!evidence.pieces.length) report(place, `Prémisse sans pièce citée : ${id}`, [programOf(place)]);
-      else if (expected && values.length && !values.some((value) => matchesExpected(expected, value))) report(place, `Valeur du scénario (${expression}) différente de la prémisse (${values.join(' ; ')}) : ${id}`, [programOf(place)]);
-    }
-  }
-  if (sources.length) {
-    for (const premise of premises) if (isPremiseId(premise.id) && !used.has(premise.id)) report(premise.id, 'prémisse citée par aucun programme Catala');
-  }
   return gaps;
 }

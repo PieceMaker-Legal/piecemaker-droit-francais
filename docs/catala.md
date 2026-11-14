@@ -74,7 +74,7 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 
 | Commande | Effet | Résultat |
 | --- | --- | --- |
-| `pm catala verifier --programme <nom> [--au today\|AAAA-MM-JJ]` | mise au format (`catala-format --in-place`), puis typage, faits typés lus par une règle (sinon « Fait sans effet »), tests Clerk/Python, preuves, Catleg, citations PieceMaker, explication | fichiers réécrits, `resultats/verification.json`, `tests.json` |
+| `pm catala verifier --programme <nom> [--au today\|AAAA-MM-JJ]` | mise au format (`catala-format --in-place`), puis typage, tests Clerk/Python, preuves, Catleg, citations PieceMaker, explication | fichiers réécrits, `resultats/verification.json`, `tests.json` |
 | `pm catala formater` | `catala-format --in-place` seul ; absent du skill | fichiers réécrits |
 | `pm catala preuve --scope <Champ> [--fichier F]` | `catala proof` sur un seul champ, sans compilation OCaml ; absent du skill | `resultats/preuve.json` |
 | `pm catala expliquer --programme <nom> --fichier test_prime.catala_fr --scope Exemple` | Graphe des formules et conditions d’une exécution | `resultats/explication.dot`, `explication.json` |
@@ -87,7 +87,7 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 
 Le typage passe `--message-format=gnu` au compilateur : une ligne par erreur, mots-clés français et correction proposée. Un avertissement du compilateur (`[WARNING]`, par exemple une variable inutilisée) fait échouer le typage : il signale souvent une condition oubliée. Le contrôle de documentation refuse un bloc mal ouvert (` ``` catala`, ` ```Catala`, ` ```catala-fr`) : Catala l'ignore sans erreur. Un test sans `assertion` échoue : il réussirait toujours. Le bilan affiche au plus 8 lignes d'erreur sous chaque contrôle en échec, et les tests faux sous la forme `fichier:ligne › Scenario : message`. `verifier` formate les fichiers avant tout contrôle et signale les fichiers réécrits (« reformatés ») ; le contrôle `format` échoue seulement si `catala-format` échoue. Il reste bloqué tant que le typage échoue, pour ne pas répéter les mêmes erreurs. Le skill présente trois groupes : contrôler (`verifier`), comprendre un échec (`executer`, `exceptions`, `expliquer`), écrire (`squelette`).
 
-Le skill renvoie aux pages françaises du livre Catala copiées dans `references/livre/` (CC BY 4.0, attribution dans `references/livre/SOURCE.md`). `references/format.md` donne un modèle vérifié, dont les faits prouvés (énumérations `Prémisse` et `Fait`, structure `MontantProuvé` dans `FaitMontant`). `references/pieges.md` garde seulement les erreurs dont le message ne donne pas la correction (bloc ignoré, `catala-metadata`, cas d'une énumération importée, module et champ de même nom, date de fin de mois, arrondi de l'argent, conflit d'exceptions). Le skill admet que l'agent choisisse la règle qui l'emporte dans un conflit d'exceptions, à condition de justifier ce choix en commentaire `#` et de le signaler à l'avocat. Le site catala-lang.org peut être inaccessible à l'agent.
+Le skill renvoie aux pages françaises du livre Catala copiées dans `references/livre/` (CC BY 4.0, attribution dans `references/livre/SOURCE.md`). `references/format.md` donne un modèle vérifié. `references/pieges.md` garde seulement les erreurs dont le message ne donne pas la correction (bloc ignoré, `catala-metadata`, cas d'une énumération importée, module et champ de même nom, date de fin de mois, arrondi de l'argent, conflit d'exceptions). Le skill admet que l'agent choisisse la règle qui l'emporte dans un conflit d'exceptions, à condition de justifier ce choix en commentaire `#` et de le signaler à l'avocat. Le site catala-lang.org peut être inaccessible à l'agent.
 
 ### Règles du vérifieur
 
@@ -96,14 +96,10 @@ Le code reste du Catala natif, sans attribut propre. `pm catala verifier` renvoi
 | Règle | Message |
 |---|---|
 | 1. Ancrage juridique : toute définition ou règle hors métadonnées et hors tests sous un titre `## … \| LEGIARTI…` (JURITEXT, CETATEXT, CONSTEXT) suivi d'un extrait « » | `règle sans source juridique : placez-la sous un titre ## Article N \| LEGIARTI… ou ## Décision \| JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « ».` |
-| 2. Fait typé : toute `entrée` d'un champ hors test (pas les `contexte`) d'un type dont un cas porte une `Prémisse` | `fait sans preuve typée : l'entrée X est de type T. Déclarez-la de type Fait (Prouvé contenu Prémisse \| NonProuvé) ou d'une énumération dont un cas porte une Prémisse.` |
-| 3. Prémisse trouvée : chaque cas a sa fiche OKF et un lien `states` cité | `Prémisse absente de l’index du dossier.`, `Prémisse sans pièce citée.`, puis `Prémisses non prouvées : A, B.` |
-| 4. Auteur : lien posé par l'avocat (avertissement) | `Prémisse X : lien posé par l’avocat, vérification manuelle requise.` |
-| 5. Valeur : `-- valeur:` du test égale à la valeur de la prémisse | `Valeur du scénario (V) différente de la prémisse (W).` |
-| 6. Forme : titre `##` de 2 à 7 mots, sans `_` ni `?` ; `#[doc]` sans `titre:`, `source:`, `quote:` | `titre « … » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».`, `#[doc] contient « source: » : …` |
-| 7. Tâche : `type` et `date_vigueur` | `type de tâche inconnu : écrivez litigation, transactional.`, `date_vigueur absente : écrivez today ou AAAA-MM-JJ.` |
+| 2. Forme : titre `##` de 2 à 7 mots, sans `_` ni `?` ; `#[doc]` sans `titre:`, `source:`, `quote:` | `titre « … » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».`, `#[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section.` |
+| 3. Tâche : `type` et `date_vigueur` | `type de tâche inconnu : écrivez litigation, transactional.`, `date_vigueur absente : écrivez today ou AAAA-MM-JJ.` |
 
-Les règles 3 à 5 passent par le contrôle des citations du serveur. La fixture `docs/tests/raisonnement-indemnite-instruction-maj/` suit ce modèle ; `catala.test.mjs` et `catala-citation.test.ts` y vérifient chaque règle.
+La fixture `docs/tests/raisonnement-indemnite-instruction-maj/` suit ce modèle ; `catala.test.mjs` y vérifie chaque règle.
 
 
 Les tests passent par `clerk runtest --whole-program`, puis `clerk report --json`. Cette voie conserve le bilan sans compiler de modules OCaml.
@@ -173,7 +169,7 @@ Le graphe reste disponible lorsqu’un scénario réussit, même si une autre v�
 
 Le contrôle des citations utilise les mêmes références que le graphe et les connecteurs PieceMaker existants.
 Les sources officielles passent par le MCP Légifrance et les identifiants PISTE de l’utilisateur.
-Une condition tirée du dossier lit un fait `Prouvé contenu Prémisse.<Cas>`, jamais une pièce. Chaque cas de l'énumération `Prémisse` désigne la fiche `okf:/_premises/<cas en tirets, sans accents>.md` : le contrôle développe la prémisse en ses pièces citées et vérifie chaque citation (`docs/okf.md`). Les pièces passent par le lecteur existant du dossier. Aucun extrait absent ou introuvable ne vaut validation.
+Un fait du dossier est un `contexte` du programme. Un lien `okf:/_premises/<fiche>.md` du programme renvoie à sa prémisse, jamais à une pièce : le contrôle développe la prémisse en ses pièces citées et vérifie chaque citation (`docs/okf.md`). Les pièces passent par le lecteur existant du dossier. Aucun extrait absent ou introuvable ne vaut validation.
 `citations.json` conserve les résultats et les jetons du lecteur interne. Le graphe affiche les erreurs sur leurs références.
 Le lecteur réutilise ces résultats tant que le programme reste inchangé. Aucun contrôle sémantique supplémentaire n’est ajouté.
 La commande CLI joint le serveur local pour ce contrôle ; serveur absent, le bilan signale l’indisponibilité.

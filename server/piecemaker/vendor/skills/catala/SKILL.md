@@ -1,13 +1,13 @@
 ---
 name: catala
-description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — pages du livre Catala, faits prouvés par une pièce, typecheck, format, tests clerk, tests Python, squelette de test, trace d'exécution, arbre des exceptions, preuve d'absence de conflit entre exceptions, explication d’une exécution, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
+description: Écrire et vérifier un programme Catala qui code une règle juridique du dossier (calcul de montant, de délai, de seuil, conditions et exceptions) — pages du livre Catala, typecheck, format, tests clerk, tests Python, squelette de test, trace d'exécution, arbre des exceptions, preuve d'absence de conflit entre exceptions, explication d’une exécution, vigueur des articles cités avec catleg. Use when the user asks for Catala, a formal or executable version of a legal rule, a proof that exceptions do not overlap, or a check that cited articles are still in force.
 ---
 
 # Catala
 
-> **Délégation.** Agent principal : lisez les pièces, puis écrivez vous-même le programme avec ce skill. Confiez ensuite ses prémisses à `premise-maker`, avec le nom du programme et, pour chacune : le cas de l'énumération `Prémisse` et sa fiche `okf:`, la question, le type et l’unité, la valeur attendue, les pièces repérées et le passage Catala qui lit le fait. `premise-maker` confirme, corrige ou déclare le fait absent ; un fait absent reste `NonProuvé`. Une source manque → `research-maker`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
+> **Délégation.** Agent principal : lisez les pièces, puis écrivez vous-même le programme avec ce skill. Confiez ensuite ses prémisses à `premise-maker`, avec le nom du programme et, pour chacune : le chemin `okf:`, la question, le type et l’unité, la valeur attendue, les pièces repérées et le passage Catala qui lit le fait. `premise-maker` confirme, corrige ou déclare le fait absent ; un fait absent est écarté faute de preuve. Une source manque → `research-maker`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
 
-Catala code une règle juridique en programme exécutable. Le pack Catala est installé par l'app de bureau PieceMaker. Lancez chaque outil par `pm catala`, jamais par un chemin direct. `pm catala verifier` contrôle documentation, typage, format, prémisses, tests, preuve, vigueur et citations : ce skill ne répète pas ses règles, suivez ses messages.
+Catala code une règle juridique en programme exécutable. Le pack Catala est installé par l'app de bureau PieceMaker. Lancez chaque outil par `pm catala`, jamais par un chemin direct. `pm catala verifier` contrôle documentation, typage, format, tests, preuve, vigueur et citations : ce skill ne répète pas ses règles, suivez ses messages.
 
 ## Classement
 
@@ -50,7 +50,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 1. Lisez les pièces et les textes. Formulez la question juridique.
 2. Écrivez `tache.json`, puis `clerk.toml` (`[project]`, `name = "<nom>"`).
 3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article titré, son extrait exact, puis son bloc ` ```catala `.
-4. Déclarez l'énumération `Prémisse` et les faits prouvés (`references/format.md`). Confiez les prémisses à `premise-maker`.
+4. Déclarez chaque fait du dossier comme un `contexte` : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur (`references/format.md`). Confiez les prémisses à `premise-maker`.
 5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier ou des faits fictifs.
 6. Lancez `pm catala verifier --programme <nom>` jusqu'à « vérifié », puis `pm okf verify`. Suivez chaque message.
 
@@ -60,7 +60,7 @@ Lisez la page avant d'écrire, pas de mémoire : le site catala-lang.org peut vo
 
 | Besoin ou erreur | Lire |
 |---|---|
-| Fichier complet, prémisses, faits prouvés | `references/format.md` |
+| Fichier complet, faits du dossier | `references/format.md` |
 | Erreur dont le message ne donne pas la correction | `references/pieges.md` |
 | Graphe, titres, carte visée par l'avocat | `references/graphe.md` |
 | Titres, extraits, blocs, mots réservés | `references/livre/5-1-literate-programming.md` |
@@ -78,7 +78,6 @@ Lisez la page avant d'écrire, pas de mémoire : le site catala-lang.org peut vo
 ## Modéliser
 
 - Séparez faits, qualifications, conditions et exceptions. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée et sourcée, pas une entrée.
-- **Faits prouvés.** Un fait du dossier est une `entrée` de type `Fait` : `Prouvé contenu Prémisse` ou `NonProuvé`. Chaque cas de `Prémisse` désigne une fiche OKF que des pièces citées établissent. Une condition n'est remplie que par `fait sous forme Prouvé`.
 - Codez une exception avec `étiquette` et `exception`. Choisir la règle qui l'emporte est une interprétation : justifiez-la en commentaire `#` au-dessus de l'exception et signalez-la à l'avocat.
 - Pour une date de fin de mois ou un montant, choisissez l'arrondi d'après le texte et testez le cas limite.
 - Écrivez les justifications en commentaires `#`. Nommez les identifiants en français, avec les accents. N'inventez aucun extrait, aucune pièce, aucun fait. Si une source manque, signalez-la et recherchez-la.

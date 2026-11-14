@@ -10,30 +10,13 @@ Ce modèle suit la programmation littéraire du livre Catala (`livre/5-1-literat
 # Faits du dossier
 
 ```catala-metadata
-déclaration énumération Prémisse:
-  -- InexecutionGrave
-  -- MiseEnDemeureRecue
-  -- PrixFacture
-
-déclaration énumération Fait:
-  -- Prouvé contenu Prémisse
-  -- NonProuvé
-
-déclaration structure MontantProuvé:
-  donnée valeur contenu argent
-  donnée preuve contenu Prémisse
-
-déclaration énumération FaitMontant:
-  -- MontantÉtabli contenu MontantProuvé
-  -- MontantNonProuvé
-
 déclaration champ d'application ResolutionUnilaterale:
   ## Inexécution grave
-  entrée inexécution_grave contenu Fait
+  contexte inexécution_grave condition
   ## Mise en demeure reçue
-  entrée mise_en_demeure contenu Fait
+  contexte mise_en_demeure condition
   ## Prix facturé
-  entrée prix contenu FaitMontant
+  contexte prix contenu argent
   résultat possible contenu booléen
   résultat restitution contenu argent
 ```
@@ -60,9 +43,7 @@ champ d'application ResolutionUnilaterale:
   ## Vérifier la résolution par notification
   exception base
   définition possible
-  sous condition
-    inexécution_grave sous forme Prouvé
-    et mise_en_demeure sous forme Prouvé
+  sous condition inexécution_grave et mise_en_demeure
   conséquence égal à
     vrai
 ```
@@ -74,12 +55,7 @@ champ d'application ResolutionUnilaterale:
 ```catala
 champ d'application ResolutionUnilaterale:
   ## Calculer la restitution du prix
-  définition restitution égal à
-    si possible alors
-      selon prix sous forme
-      -- MontantÉtabli contenu montant : montant.valeur
-      -- MontantNonProuvé : 0 €
-    sinon 0 €
+  définition restitution égal à si possible alors prix sinon 0 €
 ```
 ````
 
@@ -93,34 +69,25 @@ champ d'application ResolutionUnilaterale:
 ```catala
 #[test]
 déclaration champ d'application TestResolution:
-  résultat calcul contenu Resolution.ResolutionUnilaterale
+  résultat calcul champ d'application Resolution.ResolutionUnilaterale
 
 champ d'application TestResolution:
-  ## Calculer la résolution du dossier
-  définition calcul égal à
-    résultat de Resolution.ResolutionUnilaterale avec {
-      -- inexécution_grave:
-        Resolution.Fait.Prouvé contenu Resolution.Prémisse.InexecutionGrave
-      -- mise_en_demeure:
-        Resolution.Fait.Prouvé contenu Resolution.Prémisse.MiseEnDemeureRecue
-      -- prix:
-        Resolution.FaitMontant.MontantÉtabli contenu Resolution.MontantProuvé {
-          -- valeur: 12 000 €
-          -- preuve: Resolution.Prémisse.PrixFacture
-        }
-    }
+  ## Inexécution grave
+  règle calcul.inexécution_grave rempli
+  ## Mise en demeure reçue
+  règle calcul.mise_en_demeure rempli
+  ## Prix facturé
+  définition calcul.prix égal à 12 000 €
   assertion calcul.possible
   assertion calcul.restitution = 12 000 €
 ```
 ````
 
-## Prémisses
+## Faits du dossier
 
-Chaque cas de l'énumération `Prémisse` désigne une fiche OKF : son nom, découpé en mots, sans accents, en minuscules et en tirets. `InexecutionGrave` désigne `okf:/_premises/inexecution-grave.md`. Confiez ces fiches à `premise-maker`. Il les cherche dans les pièces et les relie par des liens `states` cités.
-
-- Une condition n'est remplie que par une prémisse citée : `fait sous forme Prouvé`. Le typage l'impose.
-- Un fait chiffré (montant, date, durée) porte sa valeur et sa prémisse : une structure (`MontantProuvé`) dans une énumération propre (`FaitMontant`). Dans le test, écrivez `-- valeur:` puis `-- preuve:` sur la ligne suivante : la valeur est comparée à celle de la prémisse.
-- Dans le test, un fait reste `NonProuvé` tant qu'aucune pièce ne le prouve. Nommez le cas par son module : `Resolution.Fait.Prouvé contenu Resolution.Prémisse.InexecutionGrave`.
+- Déclarez chaque fait du dossier comme un `contexte` titré : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur.
+- Une `condition` est fausse tant qu'aucune règle ne la remplit. Dans le test, écrivez `règle calcul.fait rempli` pour un fait établi, `définition calcul.prix égal à …` pour une valeur.
+- Confiez les prémisses à `premise-maker`. Il les cherche dans les pièces et les relie par des liens `states` cités.
 - Gardez les déclarations dans un bloc ` ```catala-metadata ` : un module n'expose que ces blocs.
 
 ## Structure

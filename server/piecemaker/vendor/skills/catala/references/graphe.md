@@ -3,8 +3,8 @@
 1. Formulez la question juridique avant de coder sa réponse.
 2. Décomposez la réponse en qualifications, conditions et exceptions nommées. Gardez les liens dans les expressions Catala.
 3. Une entrée est un fait typé (date, montant, durée, texte d’une clause), jamais une question. La règle le qualifie.
-4. Rattachez chaque fait à sa prémisse : `Prouvé contenu <Prémisse>` (`format.md`, « Prémisses »).
-5. Établissez chaque fait par les pièces. Un fait que les pièces ne prouvent pas vaut `NonProuvé` : il est écarté, faute de preuve, au détriment de la partie qui le supporte (art. 1353 C. civ.). Ne le laissez pas inconnu.
+4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque fait à sa prémisse OKF ; la prémisse porte les pièces et leurs citations.
+5. Établissez chaque fait par les pièces. Un fait que les pièces ne prouvent pas est écarté, faute de preuve, au détriment de la partie qui le supporte (art. 1353 C. civ.). Ne le laissez pas inconnu.
 6. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée, sourcée par le texte ou la jurisprudence, pas une entrée.
 7. Écrivez un scénario `#[test]` du dossier, avec les faits établis. Ajoutez un scénario seulement quand un fait contesté change l’issue.
 8. Ajoutez des assertions aux résultats attendus. Un test réussi peut confirmer une conclusion négative.
@@ -13,11 +13,11 @@
 11. Pour examiner une autre exécution sans entrée, lancez `pm catala expliquer --fichier F --scope S`.
 12. Si la preuve signale un conflit, contrôlez la hiérarchie avec `pm catala exceptions`.
 
-## Titre, source et preuve
+## Titre, source et citation
 
 Suivez le modèle de `format.md`. Le titre `## texte court` au-dessus d'une définition ou d'une entrée nomme la case du graphe. Rédigez-le selon « Style des titres » de `SKILL.md`. Une règle tient sa source de sa position, sous le titre de son article.
 
-Le graphe affiche sous un fait les pièces citées de sa prémisse OKF. Dans le scénario du dossier, fixez la prémisse établie : `-- mise_en_demeure: Resolution.Fait.Prouvé contenu Resolution.Prémisse.MiseEnDemeureRecue`.
+Un fait est un `contexte` du champ (`format.md`, « Faits du dossier »). Dans le scénario du dossier, fixez les faits établis par les pièces : `règle calcul.mise_en_demeure rempli`, `définition calcul.prix égal à 12 000 €`.
 
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées. Gardez les étiquettes et exceptions dans Catala.
 

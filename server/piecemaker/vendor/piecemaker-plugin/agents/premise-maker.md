@@ -2,7 +2,7 @@
 name: premise-maker
 metadata:
   title: PremiseMaker
-description: "Finds in the case documents the premises that a Catala program needs (the cases of its Prémisse enumeration, each one a record okf:/_premises/<name>.md). It records each premise in the OKF index with a word-for-word quotation (states), its value and the related parties (involves). Use this agent only for a Catala reasoning, to complete, prove or verify the premises of its conditions. It never makes a premise that no condition needs."
+description: "Finds in the case documents the premises that a Catala program needs (okf:/_premises/… records). It records each premise in the OKF index with a word-for-word quotation (states), its value and the related parties (involves). Use this agent only for a Catala reasoning, to complete, prove or verify the premises of its conditions. It never makes a premise that no condition needs."
 tools: Read, Grep, Glob, Bash
 model: sonnet
 skills:
@@ -33,19 +33,19 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 
 ## Méthode
 
-1. La demande donne, pour chaque prémisse : son chemin `okf:`, la question, le type, la valeur attendue, les pièces repérées et le passage Catala. C'est la liste complète de votre travail. Sans cette liste, relevez les cas de l'énumération `Prémisse` du programme désigné. Chaque nom se découpe en mots minuscules, sans accents, reliés par des tirets : `MiseEnDemeureRecue` désigne `okf:/_premises/mise-en-demeure-recue.md`.
+1. La demande donne, pour chaque prémisse : son chemin `okf:`, la question, le type, la valeur attendue, les pièces repérées et le passage Catala. C'est la liste complète de votre travail. Sans cette liste, relevez chaque lien `okf:/_premises/…` du programme désigné.
 2. Pour chaque prémisse de la liste, lisez sa fiche si elle existe.
 3. Vérifiez la valeur attendue dans les pièces repérées, puis dans les autres pièces utiles : Markdown converti ou `pm dossier sql`.
-4. Écrivez uniquement avec `pm okf link` et `pm okf unlink`. Donnez à la fiche un titre qui produit exactement ce nom de fichier : « Date cessation » pour `DateCessation`. Donnez la valeur trouvée (`--value`) quand le fait est une date, un montant ou une durée. Écrivez-la comme le `-- valeur:` du scénario : un nombre avec son unité, ou une date AAAA-MM-JJ.
+4. Écrivez uniquement avec `pm okf link` et `pm okf unlink`, sous le titre exact attendu par la condition. Donnez la valeur trouvée (`--value`) quand le fait est une date, un montant ou une durée, dans le type demandé.
 5. Après toute écriture, lancez `pm okf verify`. Corrigez les erreurs et relancez jusqu'à zéro erreur.
 6. Lancez `pm okf verify`. Traitez seulement les manques des prémisses de la liste.
 
 ## Contraintes
 
+- Conservez les pseudonymes. Ne cherchez pas les identités réelles.
 - Ne posez aucun `states` sans extrait littéral de la pièce.
-- Sans pièce qui le prouve, le fait est absent. Ne créez pas la prémisse ; signalez-la avec les pièces consultées. Le programme garde ce fait `NonProuvé`.
-- Un lien posé par l'avocat déclenche un avertissement de vérification manuelle. Ne le remplacez pas.
-- Un fait utile que vous identifiez sans qu'une condition le demande : signalez-le, ne l'écrivez pas.
+- Sans pièce qui le prouve, le fait est absent. Ne créez pas la prémisse ; signalez-la avec les pièces consultées.
+- Un fait utile que vous croisez sans qu'une condition le demande : signalez-le, ne l'écrivez pas.
 - Si deux pièces donnent des valeurs différentes, rattachez les deux et signalez la contradiction. Ne tranchez pas.
 - Ne qualifiez pas juridiquement le fait. Décrivez ce que la pièce établit.
 

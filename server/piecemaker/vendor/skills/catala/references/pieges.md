@@ -7,7 +7,7 @@ Erreurs dont le message ne donne pas la correction. Pour les autres, suivez le m
 | Un bloc de code est ignoré sans erreur | Bloc ouvert autrement que ` ```catala ` ou ` ```catala-metadata ` (espace, majuscule, suffixe) | Ouvrez le bloc exactement ainsi |
 | Erreur de syntaxe sur une ligne de texte | Ligne de texte commençant par `>` | Reformulez : `>` est réservé aux directives (`> Module`, `> Usage de`) |
 | « Type X is private » ou « Could not resolve reference » dans le test | Déclaration dans un bloc ` ```catala ` | Déclarez dans ` ```catala-metadata ` : un module n'expose que ces blocs |
-| « No enum named A found » | Cas d'une énumération d'un autre module écrit `A.Cas` | Écrivez `A.Énumération.Cas` : `Resolution.Fait.NonProuvé` |
+| « No enum named A found » | Cas d'une énumération d'un autre module écrit `A.Cas` | Écrivez `A.Énumération.Cas` : `Resolution.Statut.Résolu` |
 | Tests Python : `'function' object has no attribute …In` | Module et champ portent le même nom | Nommez le champ autrement que le module (`Resolution` / `ResolutionUnilaterale`) |
 | Test ignoré ou erreur sur `#[test]` | Attribut mal placé | Mettez `#[test]` sur la ligne juste avant `déclaration champ d'application` |
 | Erreur de syntaxe sur une entrée nommée `état` | `état` est un mot réservé | Choisissez un autre nom |
