@@ -20,7 +20,7 @@ export function reconcileClaudeHooks(applicationRoot: string, userHome = os.home
 
 type CodexHookResult = { ok: boolean; reason?: string | null };
 type CodexHook = (repoRoot: string, userHome: string) => CodexHookResult;
-type CodexHooksModule = Record<'installCodexLegalSearchHook' | 'codexLegalSearchHookStatus' | 'installCodexSubagentCheckHook' | 'codexSubagentCheckHookStatus' | 'installCodexOntologyGuardHook' | 'codexOntologyGuardHookStatus', CodexHook> & { trustCodexHooks(userHome: string): CodexHookResult };
+type CodexHooksModule = Record<'installCodexLegalSearchHook' | 'codexLegalSearchHookStatus' | 'installCodexSubagentCheckHook' | 'codexSubagentCheckHookStatus' | 'installCodexOntologyGuardHook' | 'codexOntologyGuardHookStatus' | 'installCodexFeatureCheckHook' | 'codexFeatureCheckHookStatus', CodexHook> & { trustCodexHooks(userHome: string): CodexHookResult };
 
 export async function reconcileCodexHooks(applicationRoot: string, userHome = os.homedir()): Promise<{ ok: boolean; skipped?: boolean; reason?: string | null }> {
   if (!fs.existsSync(path.join(userHome, '.codex'))) return { ok: true, skipped: true };
@@ -30,6 +30,7 @@ export async function reconcileCodexHooks(applicationRoot: string, userHome = os
     [hooks.installCodexLegalSearchHook, hooks.codexLegalSearchHookStatus],
     [hooks.installCodexSubagentCheckHook, hooks.codexSubagentCheckHookStatus],
     [hooks.installCodexOntologyGuardHook, hooks.codexOntologyGuardHookStatus],
+    [hooks.installCodexFeatureCheckHook, hooks.codexFeatureCheckHookStatus],
   ]) {
     const installed = install(vendorRoot, userHome);
     if (!installed.ok) return installed;

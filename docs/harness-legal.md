@@ -112,3 +112,84 @@ retiré : `DEPRECATED_HOOKS` de `websocket-server/claude-hooks.cjs`.
 
 Le format exact du bloc `<CITATIONS>` est injecté à chaque tour par
 `server/piecemaker/harness/citation-instructions.ts`.
+
+## Feature centrale : registre et vérification automatique
+
+Un seul registre décrit les fichiers que l'agent écrit dans `.piecemaker/` :
+`server/piecemaker/vendor/piecemaker-plugin/features.json`. Deux hooks le
+lisent, pour tous les clients (Claude, Codex, Vibe, chat Mistral de l'app) :
+
+- **avant l'écriture** (PreToolUse) : `guard-ontologie.mjs` transforme en
+  proposition, ou refuse, l'écriture des features gardées. Le message renvoyé
+  à l'agent est le `motif` du registre ;
+- **après l'écriture** (PostToolUse) : `feature-hook.mjs` lance le
+  vérificateur `pm` de la feature touchée et rend sa sortie à l'agent
+  (40 lignes au plus), avec la consigne de corriger avant de continuer.
+
+Les sous-agents gardent leur propre contrôle de fin : `verify-subagent.mjs`
+(inchangé).
+
+```mermaid
+flowchart LR
+  A[Agent : Write / Edit / apply_patch] --> P{guard-ontologie<br/>PreToolUse}
+  P -- proposition / serveur --> R[Proposition à l'avocat<br/>ou refus + motif]
+  P -- agent --> W[Fichier écrit]
+  W --> F[feature-hook<br/>PostToolUse]
+  F --> V[pm … verifier]
+  V --> C[Erreurs rendues à l'agent]
+  R2[(features.json)] -.-> P
+  R2 -.-> F
+```
+
+### Fonctionnement par feature
+
+| Feature | Fichiers (sous `.piecemaker/`) | Écriture | Avant (PreToolUse) | Après (PostToolUse) | Skill | Délai |
+|---|---|---|---|---|---|---|
+| `ontologie` | `ontologie.json` (dans `~/.piecemaker`) | proposition | devient une proposition (onglet Index › Ontologie) | — | `okf` | — |
+| `arborescence` | `arborescence.json` | proposition | devient une proposition (onglet Index › Classement) | — | `piecemaker` | — |
+| `okf` | `okf/**` | serveur | refusée : `pm okf link` / `unlink` | — (contrôle par `pm okf link`, puis `verify-subagent`) | `okf` | 30 s |
+| `raisonnement` | `raisonnements/<nom>.yaml` | agent | libre | `pm raisonnement verifier --raisonnement <nom>` | `piecemaker` | 60 s |
+| `suivi` | `<nom>-suivi.json`, `suivi.json` | agent | libre | `pm suivi_dossiers verifier --suivi <fichier>` | `piecemaker` | 60 s |
+| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | libre | `pm catala verifier --programme <nom>` | `catala` | 60 s |
+
+Branchements :
+
+| Client | Avant | Après |
+|---|---|---|
+| Claude | `hooks.json` du plugin, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash\|…` | `hooks.json`, matcher `Write\|Edit\|MultiEdit\|NotebookEdit`, 90 s |
+| Codex | `~/.codex/hooks.json`, `^(Bash\|apply_patch)$` | `~/.codex/hooks.json`, `post_tool_use`, `^apply_patch$`, 90 s, approuvé dans `config.toml` |
+| Vibe | `~/.vibe/hooks.toml`, `piecemaker-guard-ontologie` | `~/.vibe/hooks.toml`, `piecemaker-feature-check`, 90 s |
+| Chat Mistral | `guard()` de `mistral-sdk/tools.ts` | `checked()` après Write et Edit, ajouté au résultat de l'outil |
+
+### Durée de chaque vérification
+
+Mesures sur un Mac de 8 Go, dossier fictif (6 pièces, un raisonnement, un
+suivi, un programme Catala).
+
+| Vérificateur | Durée mesurée | Ce qui coûte |
+|---|---|---|
+| `pm raisonnement verifier` | 9,6 à 9,8 s | vérification des sources en ligne |
+| `pm catala verifier` | 21,5 s au premier lancement, 6,0 s ensuite | compilation Catala |
+| `pm okf verify` (cœur, 6 pièces) | 44 ms à froid, 14 ms ensuite | — |
+| `pm okf verify` (aller-retour `pm` + serveur) | 0,25 à 1,5 s | lancement de `pm` |
+| `pm okf verify` (≈ 2 000 documents) | 5,2 s | lecture des fiches |
+| `pm suivi_dossiers verifier` (cœur, sans réseau) | 25 ms à froid, 2 ms ensuite | — |
+
+Limites des mesures :
+
+- la vérification en ligne des citations du suivi n'est pas mesurée ;
+- `pm okf verify` et `pm suivi_dossiers verifier` n'ont pas été mesurés de
+  bout en bout sur un dossier enregistré dans l'app ;
+- le premier `pm catala verifier` dépasse 20 s : le délai de la feature est
+  donc de 60 s, et celui du hook de 90 s.
+
+### Ajouter une feature
+
+1. Ajoutez une entrée dans `features.json` : `nom`, `cible` (expression
+   régulière sur le chemin relatif à `.piecemaker/`, groupe `nom` facultatif),
+   `ecriture`, `skill`, et `motif` (feature gardée) ou `verifier` et `delai`
+   (feature écrite par l'agent). `{nom}` dans `verifier` reçoit le groupe `nom`.
+2. Ajoutez un cas dans `scripts/feature-hook.test.js`.
+
+Aucun hook n'est à modifier. Limite : une écriture par le shell (`Bash`) ne
+déclenche pas la vérification après écriture.

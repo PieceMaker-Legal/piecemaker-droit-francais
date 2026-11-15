@@ -13,7 +13,7 @@ function pmLauncher() {
   return path.join(os.homedir(), '.piecemaker', 'bin', process.platform === 'win32' ? 'pm.cmd' : 'pm');
 }
 
-function runPm(args, cwd) {
+export function runPm(args, cwd, timeoutMs = PM_TIMEOUT_MS) {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
@@ -24,7 +24,7 @@ function runPm(args, cwd) {
       resolve({ code: 1, stdout, stderr: error.message });
       return;
     }
-    const timer = setTimeout(() => child.kill(), PM_TIMEOUT_MS);
+    const timer = setTimeout(() => child.kill(), timeoutMs);
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', (error) => { clearTimeout(timer); resolve({ code: 1, stdout, stderr: error.message }); });

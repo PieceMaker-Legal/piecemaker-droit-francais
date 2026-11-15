@@ -56,6 +56,13 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     return guarded;
   };
 
+  const featureScript = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin/scripts/feature-hook.mjs');
+  const checked = async (toolName: string, input: Record<string, unknown>, done: string) => {
+    const result = await run(process.execPath, [featureScript], JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: toolName, tool_input: input, cwd })).catch(() => '');
+    let context = '';
+    try { context = result.trim() ? JSON.parse(result).hookSpecificOutput?.additionalContext ?? '' : ''; } catch { context = ''; }
+    return context ? `${done}\n\n${context}` : done;
+  };
   const classify = (toolName: string, input: Record<string, unknown>) => run(process.execPath, [classifyScript], JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: toolName, tool_input: input, tool_response: { success: true }, cwd })).catch(() => undefined);
 
   const add = (name: string, description: string, properties: Record<string, unknown>, required: string[], readOnly: boolean, execute: (input: Record<string, unknown>) => Promise<string>) => {
@@ -90,7 +97,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     await guard('Write', { ...input, file_path: file });
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, text(input, 'content'), 'utf8');
-    return 'Fichier enregistré.';
+    return checked('Write', { file_path: file }, 'Fichier enregistré.');
   });
   add('Edit', 'Remplacer un texte présent une seule fois dans un fichier.', { file_path: string, old_string: string, new_string: string }, ['file_path', 'old_string', 'new_string'], false, async input => {
     const file = await target(input);
@@ -100,7 +107,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     const old = text(input, 'old_string');
     if (!old || content.split(old).length !== 2) throw new Error('Le texte à remplacer doit être présent une seule fois.');
     await fs.writeFile(file, content.replace(old, () => text(input, 'new_string')), 'utf8');
-    return 'Modification enregistrée.';
+    return checked('Edit', { file_path: file }, 'Modification enregistrée.');
   });
   add('Bash', 'Exécuter une commande dans le dossier courant (shell Windows ou Unix selon le poste).', { command: string }, ['command'], false, async input => {
     const guarded = await guard('Bash', { command: text(input, 'command') });

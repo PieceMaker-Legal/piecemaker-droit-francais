@@ -3,15 +3,12 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
 import { proposalMessage } from './lib/proposition-edit.mjs';
+import { FEATURES, featureOf } from './lib/features.mjs';
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const KEY_REASON = 'La clé de sceau de l’ontologie (~/.piecemaker/ontologie.cle) n’est accessible qu’au serveur PieceMaker.';
-const GUARDED = [
-  { pattern: /(^|[\\/])\.piecemaker[\\/]ontologie\.json$/, reason: 'L’ontologie des liens (~/.piecemaker/ontologie.json), commune à tous les dossiers, est réglée par l’avocat seul, dans l’onglet Index › Ontologie. Lisez-la avec pm okf ontologie ; pour proposer un changement, modifiez ontologie.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell : la modification devient une proposition, l’avocat décide.' },
-  { pattern: /(^|[\\/])\.piecemaker[\\/]arborescence\.json$/, reason: 'L’arborescence (.piecemaker/arborescence.json) est réglée par l’avocat seul, dans l’onglet Index › Classement. Pour proposer un changement, modifiez arborescence.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell, ou lancez pm dossier arborescence --dossiers : la modification devient une proposition, l’avocat décide.' },
-  { pattern: /(^|[\\/])\.piecemaker[\\/]okf([\\/]|$)/, reason: 'Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).' },
-];
+const OKF_REASON = FEATURES.find((feature) => feature.nom === 'okf').motif;
 const SHELL_KEY = /\.piecemaker[\\/]ontologie\.cle\b|\bontologie\.cle\b/;
 const SHELL_MENTION = /\.piecemaker[\\/](ontologie\.json|arborescence\.json|okf\b)/;
 const READ_COMMANDS = new Set(['cat', 'head', 'tail', 'less', 'more', 'grep', 'egrep', 'fgrep', 'rg', 'ls', 'wc', 'file', 'stat', 'diff', 'sort', 'uniq', 'cut', 'tr', 'jq', 'find', 'echo', 'printf', 'test', 'cd', 'pwd', 'pm', 'true']);
@@ -29,7 +26,7 @@ function resolved(filePath, cwd) {
 }
 
 function guardedReason(absolute) {
-  return GUARDED.find((entry) => entry.pattern.test(absolute))?.reason || null;
+  return featureOf(absolute)?.feature.motif || null;
 }
 
 function readOnlyShell(command) {
@@ -58,7 +55,7 @@ export function ontologyDecision(payload) {
   if (SHELL_KEY.test(command)) return denial(KEY_REASON);
   const mention = command.match(SHELL_MENTION);
   if (!mention || (tool === 'Bash' && readOnlyShell(command))) return null;
-  return denial(guardedReason(`/.piecemaker/${mention[1]}`) || GUARDED[2].reason);
+  return denial(guardedReason(`/.piecemaker/${mention[1]}`) || OKF_REASON);
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

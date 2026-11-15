@@ -1,0 +1,51 @@
+{
+  "features": [
+    {
+      "nom": "ontologie",
+      "cible": "^ontologie\\.json$",
+      "ecriture": "proposition",
+      "skill": "okf",
+      "motif": "L’ontologie des liens (~/.piecemaker/ontologie.json), commune à tous les dossiers, est réglée par l’avocat seul, dans l’onglet Index › Ontologie. Lisez-la avec pm okf ontologie ; pour proposer un changement, modifiez ontologie.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell : la modification devient une proposition, l’avocat décide."
+    },
+    {
+      "nom": "arborescence",
+      "cible": "^arborescence\\.json$",
+      "ecriture": "proposition",
+      "skill": "piecemaker",
+      "motif": "L’arborescence (.piecemaker/arborescence.json) est réglée par l’avocat seul, dans l’onglet Index › Classement. Pour proposer un changement, modifiez arborescence.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell, ou lancez pm dossier arborescence --dossiers : la modification devient une proposition, l’avocat décide."
+    },
+    {
+      "nom": "okf",
+      "cible": "^okf(/|$)",
+      "ecriture": "serveur",
+      "skill": "okf",
+      "motif": "Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).",
+      "verifier": ["okf", "verify"],
+      "delai": 30
+    },
+    {
+      "nom": "raisonnement",
+      "cible": "^raisonnements/(?<nom>[^/]+)\\.yaml$",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["raisonnement", "verifier", "--raisonnement", "{nom}"],
+      "delai": 60
+    },
+    {
+      "nom": "suivi",
+      "cible": "^(?<nom>(?:[^/]+-)?suivi\\.json)$",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["suivi_dossiers", "verifier", "--suivi", "{nom}"],
+      "delai": 60
+    },
+    {
+      "nom": "catala",
+      "cible": "^catala/(?<nom>[^/]+)/[^/]+\\.(catala_fr|toml)$",
+      "ecriture": "agent",
+      "skill": "catala",
+      "verifier": ["catala", "verifier", "--programme", "{nom}"],
+      "delai": 60
+    }
+  ]
+}

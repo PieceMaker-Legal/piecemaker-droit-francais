@@ -188,6 +188,34 @@ export function codexSubagentCheckHookStatus(repoRoot, userHome = os.homedir()) 
   return codexHookGroupStatus(userHome, codexSubagentCheckGroup(repoRoot), isPieceMakerSubagentCheck, 'SubagentStop');
 }
 
+function isPieceMakerFeatureCheck(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return command.includes('feature-hook.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexFeatureCheckGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'feature-hook.mjs');
+  return {
+    matcher: '^apply_patch$',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 90,
+      statusMessage: 'Vérification automatique du fichier PieceMaker modifié',
+    }],
+  };
+}
+
+/** Lance le vérificateur de la feature (features.json) après chaque écriture de l'agent. */
+export function installCodexFeatureCheckHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexFeatureCheckGroup(repoRoot), isPieceMakerFeatureCheck, 'PostToolUse');
+}
+
+export function codexFeatureCheckHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexFeatureCheckGroup(repoRoot), isPieceMakerFeatureCheck, 'PostToolUse');
+}
+
 function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') {
   const loaded = readCodexHooks(userHome, event);
   if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
@@ -221,8 +249,8 @@ function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') 
   }
 }
 
-const PIECEMAKER_HOOKS = [isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck];
-const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', SubagentStop: 'subagent_stop' };
+const PIECEMAKER_HOOKS = [isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerFeatureCheck];
+const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use', SubagentStop: 'subagent_stop' };
 
 function sortedKeys(value) {
   if (Array.isArray(value)) return value.map(sortedKeys);

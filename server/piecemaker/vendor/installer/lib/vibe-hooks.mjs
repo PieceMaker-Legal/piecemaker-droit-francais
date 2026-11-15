@@ -20,6 +20,7 @@ export function vibeHooks(repoRoot) {
     { name: 'piecemaker-guard-legal-search', type: 'pre_tool', match: 're:.*legifrance.*Search_.*', command: plugin('guard-legal-search.mjs'), strict: true, timeout: 30, description: 'Recherches Légifrance réservées à research-maker' },
     { name: 'piecemaker-guard-secrets', type: 'pre_tool', match: tools(`read_file|write_file|edit|search_replace|grep|${SHELL}`), command: command(path.join(repoRoot, 'installer', 'assets', 'claude-hooks', 'piecemaker-guard-secrets.mjs')), strict: true, timeout: 30, description: 'Fichiers sensibles interdits à l’agent' },
     { name: 'piecemaker-classify-ai-documents', type: 'post_tool', match: tools(`write_file|${SHELL}`), command: plugin('classify-ai-documents.mjs'), timeout: 30, description: 'Documents écrits par l’IA classés en espace de travail' },
+    { name: 'piecemaker-feature-check', type: 'post_tool', match: tools('write_file|edit|search_replace'), command: plugin('feature-hook.mjs'), timeout: 90, description: 'Vérification automatique du fichier PieceMaker modifié' },
     { name: 'piecemaker-verify-subagent', type: 'post_tool', match: 'task', command: plugin('verify-subagent.mjs'), timeout: 60, description: 'Vérification du travail du sous-agent PieceMaker' },
   ];
 }
