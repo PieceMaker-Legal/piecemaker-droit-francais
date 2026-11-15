@@ -136,9 +136,11 @@ lisent, pour tous les clients (Claude, Codex, Vibe, chat Mistral de l'app) :
 
 - **avant l'écriture** (PreToolUse) : `guard-ontologie.mjs` transforme en
   proposition, ou refuse, l'écriture des features gardées. Le message renvoyé
-  à l'agent est le `motif` du registre. Il refuse aussi toute écriture dont une
-  ligne ajoutée correspond à une règle `interdit` de la feature : rien n'est
-  écrit, l'agent reçoit le `message` et la ligne refusée ;
+  à l'agent est le `motif` du registre. Pour une feature à `format`, il
+  calcule le fichier tel qu'il serait après l'écriture (Write, Edit,
+  MultiEdit, apply_patch) et le contrôle. Une faute nouvelle bloque
+  l'écriture : rien n'est écrit, l'agent reçoit les fautes avec leur ligne.
+  Une faute déjà présente ne bloque pas, pour laisser l'agent la corriger ;
 - **après l'écriture** (PostToolUse) : `herisson.mjs` lance le
   vérificateur `pm` de la feature touchée et rend sa sortie à l'agent
   (40 lignes au plus), avec la consigne de corriger avant de continuer ;
@@ -213,9 +215,10 @@ Limites des mesures :
    `ecriture`, `skill`, et `motif` (feature gardée) ou `verifier` et `delai`
    (feature écrite par l'agent). `{nom}` dans `verifier` reçoit le groupe `nom`.
    Facultatif :
-   - `interdit` : liste de `{ motif, message }`. `motif` est une expression
-     régulière testée sur chaque ligne écrite ; une ligne qui correspond bloque
-     l'écriture ;
+   - `format` : contrôle du fichier entier avant l'écriture, nommé dans
+     `FORMATS` de `scripts/lib/herisson.mjs`. Seul `catala` existe : il
+     applique aux `.catala_fr` le contrôle de format de `pm catala verifier`
+     (`catala-documentation.mjs`) ;
    - `commande` : expression régulière sur une commande shell, qui lance
      `verifier` dans le dossier courant ;
    - `cite` : avec `commande`, lance `verifier` pour chaque programme
@@ -230,5 +233,6 @@ Limites :
   vérifiée ;
 - une `commande` est vérifiée dans le dossier courant de l'agent, pas dans un
   `--dossier` passé à `pm` ;
-- `interdit` ne voit que les lignes écrites, pas le fichier entier : une
-  faute déjà présente dans le fichier n'est pas signalée.
+- `format` ne contrôle pas une modification qu'il ne sait pas appliquer
+  (texte à remplacer introuvable, `search_replace` de Vibe) : `verifier` la
+  signale après l'écriture.

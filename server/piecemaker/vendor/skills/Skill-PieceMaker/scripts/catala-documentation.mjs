@@ -70,6 +70,7 @@ export function catalaDocumentation(content, { test = false } = {}) {
     block = [];
   };
   const anchoredIds = new Set();
+  let own = [];
   lines.forEach((line, index) => {
     if (!/^#{1,6}\s/.test(line) || !ANCHOR.test(line) || !(lines.slice(index + 1).find((following) => following.trim()) ?? '').trim().startsWith('«')) return;
     for (const id of line.match(CITED) ?? []) anchoredIds.add(id);
@@ -79,11 +80,16 @@ export function catalaDocumentation(content, { test = false } = {}) {
     if (/^#{1,6}\s/.test(line) && WHOLE_TEXT.test(line)) errors.push({ line: index + 1, message: "citez l'article (LEGIARTI ou JORFARTI), pas le texte entier (LEGITEXT ou JORFTEXT)." });
     const inclusion = line.match(/^>\s*(?:Inclusion|Include)\s*:\s*(\S+)/)?.[1];
     if (inclusion && !/^(?:LEGIARTI|JORFARTI)\d+$/.test(inclusion) && (inclusion.startsWith('/') || inclusion.split(/[\\/]/).includes('..'))) errors.push({ line: index + 1, message: `inclusion « ${inclusion} » hors du dossier du programme : placez le fichier dans le programme.` });
-    for (const id of line.match(CITED) ?? []) if (!anchoredIds.has(id)) errors.push({ line: index + 1, message: `${id} cité sans section propre : écrivez ## Article N | ${id} suivi de l'extrait entre « ».` });
     const heading = !fence && line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       const next = lines.slice(index + 1).find((following) => following.trim()) ?? '';
       headings = [...headings.filter((entry) => entry.level < heading[1].length), { level: heading[1].length, anchored: ANCHOR.test(heading[2]) && next.trim().startsWith('«') }];
+      own = heading[2].match(CITED) ?? [];
+      if (own.length > 1) errors.push({ line: index + 1, message: 'une section = une source : ce titre cite plusieurs identifiants. Écrivez une section ## Article N | LEGIARTI… par source, avec son extrait et sa règle.' });
+    }
+    for (const id of line.match(CITED) ?? []) {
+      if (!anchoredIds.has(id)) errors.push({ line: index + 1, message: `${id} cité sans section propre : écrivez ## Article N | ${id} suivi de l'extrait entre « ».` });
+      else if (!own.includes(id) && !inclusion) errors.push({ line: index + 1, message: `${id} cité hors de sa section : une règle = une source. Ne citez ${id} que dans son titre ## Article N | ${id}, jamais dans le texte d'une autre section.` });
     }
     const marker = line.match(/^\s{0,3}(`{3,}|~{3,})(.*)$/);
     if (marker && fence && marker[1][0] === fence[0] && marker[1].length >= fence.length && !marker[2].trim()) {

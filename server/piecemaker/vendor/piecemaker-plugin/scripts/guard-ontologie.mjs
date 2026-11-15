@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
 import { proposalMessage } from './lib/proposition-edit.mjs';
-import { FEATURES, featureOf, forbiddenWrite, writtenTexts } from './lib/herisson.mjs';
+import { FEATURES, featureOf, formatErrors } from './lib/herisson.mjs';
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
@@ -39,20 +39,9 @@ function readOnlyShell(command) {
   });
 }
 
-function forbiddenReason(tool, input, cwd) {
-  for (const { file, text } of writtenTexts(tool, input, cwd)) {
-    const found = featureOf(file.normalize('NFC'));
-    const reason = found && forbiddenWrite(found, text);
-    if (reason) return reason;
-  }
-  return null;
-}
-
 export function ontologyDecision(payload) {
   const tool = String(payload?.tool_name || '');
   const input = payload?.tool_input || {};
-  const forbidden = forbiddenReason(tool, input, payload?.cwd);
-  if (forbidden) return denial(forbidden);
   if (FILE_TOOLS.has(tool) || READ_TOOLS.has(tool)) {
     const target = input.file_path || input.notebook_path || input.path;
     if (!target) return null;
@@ -73,6 +62,8 @@ const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import
 export async function hookDecision(payload, run) {
   const blocked = ontologyDecision(payload);
   if (blocked?.hookSpecificOutput?.permissionDecisionReason === KEY_REASON) return blocked;
+  const refused = await formatErrors(String(payload?.tool_name || ''), payload?.tool_input || {}, payload?.cwd || process.cwd()).catch(() => null);
+  if (refused) return denial(refused);
   try {
     const message = await proposalMessage(payload, run);
     if (message) return denial(message);

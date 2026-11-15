@@ -57,17 +57,28 @@ test('Vibe : le chemin passé dans path est reconnu', async () => {
   assert.deepEqual(touchedFiles({ tool_name: 'Write', cwd: root, tool_input: { path: '.piecemaker/suivi.json' } }), [path.join(root, '.piecemaker', 'suivi.json')]);
 });
 
-test('la garde refuse un titre Catala qui cite plusieurs sources, à l’écriture', async () => {
-  const { ontologyDecision } = await import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mjs')).href);
+test('la garde refuse, avant l’écriture, un programme Catala hors format', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { hookDecision } = await import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mjs')).href);
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-format-'));
+  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
   const file_path = '.piecemaker/catala/indemnite/indemnite.catala_fr';
-  const multiple = '## Articles 1 et 2 | LEGIARTI000000000001 | LEGIARTI000000000002\n\n« Texte fictif. »';
-  const single = '## Article 1 | LEGIARTI000000000001\n\n« Texte fictif. »';
-  const reason = (payload) => ontologyDecision({ cwd: root, ...payload })?.hookSpecificOutput.permissionDecisionReason ?? null;
-  assert.match(reason({ tool_name: 'Write', tool_input: { file_path, content: multiple } }), /Une règle = une source[\s\S]*Ligne refusée : ## Articles 1 et 2/);
-  assert.match(reason({ tool_name: 'Edit', tool_input: { file_path, old_string: 'x', new_string: multiple } }), /Une règle = une source/);
-  assert.match(reason({ tool_name: 'apply_patch', tool_input: { command: `*** Begin Patch\n*** Add File: ${file_path}\n+${multiple.split('\n')[0]}\n*** End Patch` } }), /Une règle = une source/);
-  assert.equal(reason({ tool_name: 'Write', tool_input: { file_path, content: single } }), null);
-  assert.equal(reason({ tool_name: 'Write', tool_input: { file_path: 'notes/sources.md', content: multiple } }), null);
+  const absolute = path.join(dossier, file_path);
+  fs.mkdirSync(path.dirname(absolute), { recursive: true });
+  const section = (n) => `## Article ${n} | LEGIARTI00000000000${n}\n\n« Texte fictif ${n}. »\n`;
+  const valid = `${section(1)}\n${section(2)}`;
+  const grouped = `# Sources\n\n[Article 2](https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000000000002)\n\n${valid}`;
+  const reason = async (tool_name, tool_input) => (await hookDecision({ cwd: dossier, tool_name, tool_input }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
+  fs.writeFileSync(absolute, valid);
+  assert.match(await reason('Write', { file_path, content: grouped }), /Hérisson[\s\S]*indemnite\.catala_fr:3: LEGIARTI000000000002 cité hors de sa section/);
+  assert.match(await reason('Write', { file_path, content: '## Articles 1 et 2 | LEGIARTI000000000001 | LEGIARTI000000000002\n\n« Texte fictif. »\n' }), /une section = une source/);
+  assert.match(await reason('Edit', { file_path, old_string: '« Texte fictif 1. »', new_string: '« Texte fictif 1. » Voir LEGIARTI000000000002.' }), /cité hors de sa section/);
+  assert.match(await reason('apply_patch', { command: `*** Begin Patch\n*** Update File: ${file_path}\n@@\n ## Article 1 | LEGIARTI000000000001\n+Voir LEGIARTI000000000002.\n*** End Patch` }), /cité hors de sa section/);
+  assert.equal(await reason('Write', { file_path, content: valid }), null);
+  assert.equal(await reason('Write', { file_path: 'notes/sources.md', content: grouped }), null);
+  fs.writeFileSync(absolute, grouped);
+  assert.equal(await reason('Edit', { file_path, old_string: '« Texte fictif 1. »', new_string: '« Texte fictif 1 corrigé. »' }), null);
 });
 
 test('une commande pm okf link vérifie l’index, et les programmes Catala qui citent une prémisse', async (t) => {

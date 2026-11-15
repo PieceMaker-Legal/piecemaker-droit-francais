@@ -133,6 +133,6 @@ champ d'application TestResolution:
 - Un article, une section : son titre, l'extrait appliqué entre « », puis le texte intégral de l'article, recopié mot pour mot, NOTA compris, puis ses blocs de code. N'en inventez aucun mot.
 - Prenez la version en vigueur à la date retenue (`date_vigueur`). `pm catala verifier` compare le numéro, la vigueur et le texte intégral au texte officiel.
 - Placez chaque bloc ` ```catala ` sous l'article qui le fonde, jamais sous un sous-titre sans source. Un même champ peut être défini par plusieurs blocs, chacun sous son article.
-- Citez l'article (`LEGIARTI`, `JORFARTI`), jamais le texte entier (`LEGITEXT`, `JORFTEXT`). Tout identifiant cité ailleurs dans le fichier a sa propre section.
+- Citez l'article (`LEGIARTI`, `JORFARTI`), jamais le texte entier (`LEGITEXT`, `JORFTEXT`). Une section = une source : un identifiant n'apparaît que dans le titre de sa section, jamais dans le texte d'une autre section ni dans une liste de sources. Le Hérisson refuse l'écriture sinon.
 - Une étiquette qui nomme un article porte aussi son texte : `article_1224_code_civil`, pas `article_1224`.
 - Écrivez les justifications en commentaires `#` au-dessus de la règle, dont l'ordre choisi entre une exception et sa règle de base.
