@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -10,6 +11,20 @@ import { locateSourcePassages } from './harness/source-passages.js';
 import { LAWYER_ACTOR } from './okf/bundle.js';
 import { expectedValue, matchesExpected, premiseEvidence } from './okf/premises.js';
 import { scenarioFacts } from './vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
+
+type Validated = { token: string; title: string; verified: true; status: 'passed'; message: string; recours?: Array<{ id: string; date: string; juridiction: string }>; mention?: string };
+
+const validatedFile = (cwd: string) => path.join(cwd, '.piecemaker', 'catala', 'citations-validees.json');
+
+function readValidated(cwd: string): Record<string, Validated> {
+  try { return JSON.parse(fs.readFileSync(validatedFile(cwd), 'utf8')); } catch { return {}; }
+}
+
+function writeValidated(cwd: string, entries: Record<string, Validated>) {
+  const file = validatedFile(cwd);
+  const temporary = `${file}.${process.pid}.tmp`;
+  try { fs.writeFileSync(temporary, `${JSON.stringify(entries, null, 2)}\n`); fs.renameSync(temporary, file); } catch { fs.rmSync(temporary, { force: true }); }
+}
 
 export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
   const appeals = (details: string[] = []) => details.flatMap((line) => { const found = /^Recours (\S+) du (\S+) \((.*?)\)/.exec(line); return found ? [{ id: found[1], date: found[2], juridiction: found[3] }] : []; });
@@ -50,6 +65,8 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
     },
     async verify(cwd: string, files: Array<{ nom: string; chemin: string; contenu: string }>) {
       const results = [];
+      const validated = readValidated(cwd);
+      let learned = false;
       for (const ref of entries(files)) {
         try {
           if (!ref.target) { results.push({ ...ref, verified: false, status: 'missing', message: 'Lien de source absent.' }); continue; }
@@ -82,9 +99,15 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
             if (!id.startsWith(path.resolve(cwd) + path.sep)) throw new Error('Pièce hors du dossier.');
           }
           const file = files.find((file) => file.chemin === ref.origin)!;
-          results.push({ ...ref, id, ...await inspect(cwd, id, ref.quote, file.contenu) });
+          const key = JSON.stringify([id, ref.quote]);
+          const known = !path.isAbsolute(id) && validated[key];
+          if (known && await store.read(known.token)) { results.push({ ...ref, id, ...known }); continue; }
+          const inspected = await inspect(cwd, id, ref.quote, file.contenu);
+          if (!path.isAbsolute(id) && inspected.verified && !inspected.correction) { validated[key] = { ...inspected, verified: true, status: 'passed' }; learned = true; }
+          results.push({ ...ref, id, ...inspected });
         } catch (error) { results.push({ ...ref, verified: false, status: 'failed', message: error instanceof Error ? error.message : String(error) }); }
       }
+      if (learned) writeValidated(cwd, validated);
       const passed = results.length > 0 && results.every((entry) => entry.verified);
       const warnings = results.flatMap((entry) => 'warning' in entry && entry.warning ? [entry.warning] : []);
       return { passed, status: passed ? 'passed' : results.some((entry) => entry.status === 'failed') ? 'failed' : 'missing', message: results.length ? `${results.filter((entry) => entry.verified).length}/${results.length} citation(s) vérifiée(s).` : 'Aucune citation déclarée.', results, warnings };

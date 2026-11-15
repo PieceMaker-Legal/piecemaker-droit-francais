@@ -231,3 +231,22 @@ test('the connector returns the official wording when only spaces or punctuation
   assert.equal(match(text, 'Le salarié perçoit une prime sauf faute grave'), 'Le salarié perçoit une prime, sauf faute grave');
   assert.equal(match(text, 'Le salarié perçoit une indemnité, sauf faute grave.'), null);
 });
+
+test('a Légifrance citation already validated is reused without querying the source again, a failed one is checked again', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-validees-'));
+  try {
+    await mkdir(path.join(home, '.piecemaker', 'catala'), { recursive: true });
+    const store = createCitationStore(home);
+    const queried: string[] = [];
+    const service = createCatalaCitation({ source: async (_cwd, id) => { queried.push(id); return { kind: 'texte', title: 'Article fictif', text: 'Extrait exact.' }; }, match: (text, quote) => text.includes(quote) ? quote : null }, store);
+    const files = [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu: '## Article fictif | LEGIARTI000000000001\n« Extrait exact. »\n\n## Autre article | LEGIARTI000000000002\n« Extrait inventé. »' }];
+    const first = await service.verify(home, files);
+    const second = await service.verify(home, files);
+    assert.deepEqual(queried, ['LEGIARTI000000000001', 'LEGIARTI000000000002', 'LEGIARTI000000000002']);
+    assert.deepEqual(second.results.map((entry) => [entry.status, 'token' in entry && entry.token]), first.results.map((entry) => [entry.status, 'token' in entry && entry.token]));
+    assert.equal(second.results[0].verified, true);
+    await rm(path.join(home, 'citation-sources'), { recursive: true, force: true });
+    await service.verify(home, files);
+    assert.equal(queried.filter((id) => id === 'LEGIARTI000000000001').length, 2);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});

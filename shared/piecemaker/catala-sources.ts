@@ -1,5 +1,11 @@
 import { catalaDocumentation } from '../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
 
+let documented: { content: string; entries: ReturnType<typeof catalaDocumentation>['entries'] } | undefined;
+const documentedEntries = (content: string) => {
+  if (documented?.content !== content) documented = { content, entries: catalaDocumentation(content).entries.filter((entry) => entry.hasDoc) };
+  return documented.entries;
+};
+
 export function sourceContext(source: string, files: Array<{ nom: string; chemin: string; contenu?: string }>, wholeDocument = false): { text: string; references: Array<{ label: string; target: string; kind: string; origin: string; quote: string }> } {
   let location: URL;
   try { location = new URL(source); } catch { return { text: '', references: [] }; }
@@ -9,7 +15,7 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
   const file = matches.length === 1 ? matches[0] : undefined;
   const line = Number(location.hash.match(/^#L(\d+)/)?.[1]);
   if (!file?.contenu || (!line && !wholeDocument)) return { text: '', references: [] };
-  const documentation = catalaDocumentation(file.contenu).entries.filter((entry) => entry.hasDoc);
+  const documentation = documentedEntries(file.contenu);
   const annotated = documentation.find((entry) => entry.startLine <= line && line <= entry.endLine);
   const documentContext = (text: string) => sourceContext('https://catala.local/doc.md', [{ nom: 'doc.md', chemin: file.chemin, contenu: text }], true);
   if (!wholeDocument && annotated) return documentContext(annotated.doc);
