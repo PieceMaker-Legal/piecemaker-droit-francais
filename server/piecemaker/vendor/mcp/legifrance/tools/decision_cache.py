@@ -9,15 +9,15 @@ from typing import Any, Callable, Dict, Optional, Tuple
 ID_VALIDE = re.compile(r"[A-Za-z0-9_-]{1,80}")
 
 
-def _fichier(identifiant: str) -> Optional[Path]:
+def _fichier(identifiant: str, dossier: str = "decisions") -> Optional[Path]:
     if not ID_VALIDE.fullmatch(identifiant or ""):
         return None
     racine = os.environ.get("PIECEMAKER_HOME") or str(Path.home() / ".piecemaker")
-    return Path(racine) / "decisions" / f"{identifiant}.json"
+    return Path(racine) / dossier / f"{identifiant}.json"
 
 
-def _lire(identifiant: str) -> Dict[str, Any]:
-    fichier = _fichier(identifiant)
+def _lire(identifiant: str, dossier: str = "decisions") -> Dict[str, Any]:
+    fichier = _fichier(identifiant, dossier)
     if fichier is None:
         return {}
     try:
@@ -27,8 +27,8 @@ def _lire(identifiant: str) -> Dict[str, Any]:
     return entree if isinstance(entree, dict) else {}
 
 
-def _ecrire(identifiant: str, entree: Dict[str, Any]) -> None:
-    fichier = _fichier(identifiant)
+def _ecrire(identifiant: str, entree: Dict[str, Any], dossier: str = "decisions") -> None:
+    fichier = _fichier(identifiant, dossier)
     if fichier is None:
         return
     temporaire = None
@@ -64,6 +64,33 @@ def obtenir(
             "at": datetime.now(timezone.utc).isoformat(),
             "reponse": reponse,
         })
+    return reponse
+
+
+def _version_close(reponse: Dict[str, Any]) -> bool:
+    fin = (reponse.get("article") or {}).get("dateFin")
+    return isinstance(fin, (int, float)) and fin < datetime.now(timezone.utc).timestamp() * 1000
+
+
+def obtenir_article(identifiant: str, telecharger: Callable[[], Dict[str, Any]]) -> Dict[str, Any]:
+    entree = _lire(identifiant, "articles")
+    en_cache = entree.get("reponse")
+    if isinstance(en_cache, dict) and (_version_close(en_cache) or str(entree.get("at", "")).startswith(date.today().isoformat())):
+        return en_cache
+    reponse = telecharger()
+    article = reponse.get("article") if isinstance(reponse, dict) else None
+    texte = article.get("texte") if isinstance(article, dict) else None
+    if isinstance(texte, str) and texte.strip():
+        _ecrire(identifiant, {
+            "kind": "legifrance-article",
+            "id": identifiant,
+            "titre": str(article.get("num") or ""),
+            "texte": texte,
+            "caracteres": len(texte),
+            "source": "mcp-legifrance",
+            "at": date.today().isoformat(),
+            "reponse": reponse,
+        }, "articles")
     return reponse
 
 

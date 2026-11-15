@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import { cachedArticle, keepArticle } from './article-cache.mjs';
 import { catalaDocumentation, testsWithoutAssertion } from './catala-documentation.mjs';
 
 export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'exec'];
@@ -671,9 +672,12 @@ async function catleg(context, program, flags) {
     if (!checked.length) messages.push('Aucun article contrôlé : aucun titre d’article reconnu.');
     const versions = [];
     for (const id of checked) {
-      const response = await context.run(python, ['-I', '-c', 'import sys; from catleg.catleg import main; sys.argv[0]="catleg"; main()', 'lf', 'article', id], { cwd: program.directory, env: { ...context.env, ...credentials } });
+      const cached = cachedArticle(context.env, context.homeDir, id);
+      const response = cached ? { code: 0, stdout: JSON.stringify(cached) } : await context.run(python, ['-I', '-c', 'import sys; from catleg.catleg import main; sys.argv[0]="catleg"; main()', 'lf', 'article', id], { cwd: program.directory, env: { ...context.env, ...credentials } });
       try {
-        const article = JSON.parse(response.stdout).article;
+        const reply = JSON.parse(response.stdout);
+        if (!cached && response.code === 0) keepArticle(context.env, context.homeDir, id, reply);
+        const article = reply.article;
         const official = (value) => typeof value === 'number' ? new Date(value).toISOString().slice(0, 10) : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
         const debut = official(article?.dateDebut), fin = official(article?.dateFin);
         if (response.code !== 0 || article?.id !== id || !debut || !fin) throw new Error('Période officielle indisponible');
@@ -709,6 +713,7 @@ export async function runCatala({ commande, cwd, programme, flags = {}, args = [
   const context = {
     ...found,
     env,
+    homeDir,
     platform: deps.platform || process.platform,
     run: deps.run || runProcess,
     now: deps.now || (() => new Date().toISOString()),

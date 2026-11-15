@@ -15,6 +15,9 @@ from tools.legifrance_client import LegifranceClient
 LEGIFRANCE_ID = "JURITEXT000099990001"
 JUDILIBRE_ID = "0123456789abcdef01234567"
 REPONSE_LEGIFRANCE = {"text": {"titre": "Cour de cassation, 12 mars 2024, 22-10.001", "texte": "Texte fictif."}}
+ARTICLE_ID = "LEGIARTI000099990001"
+ARTICLE_CLOS = {"article": {"num": "1", "texte": "Texte d'article fictif.", "dateDebut": 1262304000000, "dateFin": 1577836800000}}
+ARTICLE_EN_VIGUEUR = {"article": {"num": "1", "texte": "Texte d'article fictif.", "dateDebut": 1577836800000, "dateFin": 32472144000000}}
 REPONSE_JUDILIBRE = {"id": JUDILIBRE_ID, "location": "Cour de cassation", "decision_date": "2024-03-12", "text": "Texte Judilibre fictif."}
 
 
@@ -78,6 +81,38 @@ class CacheDecisions(unittest.TestCase):
         with mock.patch.object(LegifranceClient, "_request", return_value=REPONSE_LEGIFRANCE):
             self.client.get_decision_text("../evasion")
         self.assertFalse(self.decisions.exists())
+
+    def test_un_article_en_cache_ne_sollicite_pas_l_api(self):
+        with mock.patch.object(LegifranceClient, "_request", return_value=ARTICLE_CLOS) as requete:
+            self.client.get_article(ARTICLE_ID)
+            self.assertEqual(self.client.get_article(ARTICLE_ID), ARTICLE_CLOS)
+        self.assertEqual(requete.call_count, 1)
+        entree = json.loads((self.decisions.parent / "articles" / f"{ARTICLE_ID}.json").read_text(encoding="utf-8"))
+        self.assertEqual(entree["reponse"], ARTICLE_CLOS)
+
+    def test_une_version_close_reste_en_cache_sans_expiration(self):
+        articles = self.decisions.parent / "articles"
+        articles.mkdir(parents=True)
+        (articles / f"{ARTICLE_ID}.json").write_text(json.dumps({"at": "2020-01-01", "reponse": ARTICLE_CLOS}), encoding="utf-8")
+        with mock.patch.object(LegifranceClient, "_request") as requete:
+            self.assertEqual(self.client.get_article(ARTICLE_ID), ARTICLE_CLOS)
+        requete.assert_not_called()
+
+    def test_une_version_en_vigueur_est_relue_le_lendemain(self):
+        articles = self.decisions.parent / "articles"
+        articles.mkdir(parents=True)
+        (articles / f"{ARTICLE_ID}.json").write_text(json.dumps({"at": "2020-01-01", "reponse": ARTICLE_EN_VIGUEUR}), encoding="utf-8")
+        with mock.patch.object(LegifranceClient, "_request", return_value=ARTICLE_EN_VIGUEUR) as requete:
+            self.client.get_article(ARTICLE_ID)
+            self.client.get_article(ARTICLE_ID)
+        self.assertEqual(requete.call_count, 1)
+
+    def test_un_article_sans_texte_n_est_pas_garde(self):
+        with mock.patch.object(LegifranceClient, "_request", return_value={"article": {"texte": ""}}) as requete:
+            self.client.get_article(ARTICLE_ID)
+            self.client.get_article(ARTICLE_ID)
+        self.assertEqual(requete.call_count, 2)
+        self.assertFalse((self.decisions.parent / "articles").exists())
 
     def test_le_controle_historique_n_est_calcule_qu_une_fois_par_jour(self):
         with mock.patch.object(LegifranceClient, "_request", return_value=REPONSE_LEGIFRANCE):

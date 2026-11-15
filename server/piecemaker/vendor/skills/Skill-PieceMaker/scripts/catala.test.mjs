@@ -303,6 +303,26 @@ test('catleg checks only identifiers cited in an article title, not in a doc att
   } finally { cleanup(); }
 });
 
+test('catleg reads a closed article version from the local cache and downloads a missing one once', async () => {
+  const { dossier, deps, home, cleanup } = catlegScenario({ 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n\n## Article fictif | LEGIARTI000000000002\n' });
+  try {
+    const reply = (id) => ({ article: { id, num: 'fictif', texte: 'Texte fictif.', dateDebut: Date.UTC(2020, 0, 1), dateFin: Date.UTC(2025, 0, 1) } });
+    const articles = path.join(home, 'articles');
+    fs.mkdirSync(articles, { recursive: true });
+    fs.writeFileSync(path.join(articles, 'LEGIARTI000000000001.json'), JSON.stringify({ at: '2020-01-01', reponse: reply('LEGIARTI000000000001') }));
+    const asked = [];
+    const run = async (command, args) => {
+      if (!args.includes('lf')) return { code: 0, stdout: 'PIECEMAKER_ARTICLES=[]\n', stderr: '' };
+      asked.push(args.at(-1));
+      return { code: 0, stdout: JSON.stringify(reply(args.at(-1))), stderr: '' };
+    };
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2024-06-01' }, deps: { ...deps, run } });
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2024-06-01' }, deps: { ...deps, run } });
+    assert.deepEqual(asked, ['LEGIARTI000000000002']);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(articles, 'LEGIARTI000000000002.json'), 'utf8')).reponse, reply('LEGIARTI000000000002'));
+  } finally { cleanup(); }
+});
+
 test('catleg names the missing module when the shared Python lacks catleg', async () => {
   const { dossier, deps, cleanup } = catlegScenario({ 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n' });
   try {

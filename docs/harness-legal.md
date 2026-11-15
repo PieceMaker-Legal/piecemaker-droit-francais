@@ -28,7 +28,20 @@ Deux points de branchement distincts :
   Judilibre `/decision`, sans expiration, jamais les erreurs ni les textes vides.
   Une entrée sans réponse brute est retéléchargée puis remplacée. Le contrôle
   d'historique de `consulter_decision` y est gardé pour la journée. Les
-  recherches et les articles restent en direct : leur résultat peut changer.
+  recherches restent en direct : leur résultat peut changer.
+- **Cache des articles** `~/.piecemaker/articles/<id>.json` — même format et
+  mêmes règles : réponse brute de `/consult/getArticle`, écriture atomique,
+  jamais les erreurs ni les textes vides. Écrit par `decision_cache.py`
+  (`consulter_article`) et par `article-cache.mjs` (`pm catala catleg`, appel
+  `catleg lf article`). Un identifiant `LEGIARTI`/`JORFARTI` désigne une
+  version : son texte ne change pas, mais sa date de fin, si. Une version close
+  (`dateFin` passée) est gardée sans expiration ; une version sans fin publiée
+  ou à fin future n'est réutilisée que le jour du téléchargement. Aucune
+  réponse « en vigueur à la date X » n'est mise en cache. Les vérificateurs
+  (`pm raisonnement verifier`, citations du suivi et de `pm catala verifier`)
+  passent par `consulter_article` et `consulter_decision` du MCP : ils lisent
+  donc ces caches avant tout appel PISTE. `catleg check-expiry` et `catleg
+  diff` restent en direct (code catleg non modifié).
 - `server/piecemaker/harness/decisions.cjs` — extrait le texte intégral et le
   titre d'un résultat `consulter_decision` ou `consulter_article`.
 - `server/piecemaker/harness/citation-turn.ts` — comportement de Mike : texte
@@ -177,6 +190,7 @@ Catala).
 | `pm okf verify` (aller-retour `pm` + serveur) | 0,25 à 1,5 s | lancement de `pm` |
 | `pm okf verify` (≈ 2 000 documents) | 5,2 s | lecture des fiches |
 | `pm suivi_dossiers verifier` (cœur, sans réseau) | 25 ms à froid, 2 ms ensuite | — |
+| Lecture d'une source par le MCP Légifrance (par source vérifiée) | article : 0,55 à 0,70 s en ligne, 0,23 à 0,57 s en cache ; décision : 4,1 s au premier contrôle du jour, 1,1 s en cache | lancement du processus MCP (Node + Python) à chaque source |
 
 Limites des mesures :
 
