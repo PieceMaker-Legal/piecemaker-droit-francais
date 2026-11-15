@@ -49,7 +49,7 @@ flowchart LR
 | `okf` | `okf/**` | serveur | refusée : `pm okf link` / `unlink` | après `pm okf link` ou `unlink` : `pm okf verify` (erreurs, contradictions entre valeurs d'une prémisse, manques) | `okf` | 30 s |
 | `suivi` | `<nom>-suivi.json`, `suivi.json` | agent | libre | `pm suivi_dossiers verifier --suivi <fichier>` | `piecemaker` | 60 s |
 | `memoire` | `memoires/<nom>.md` (mémoire projet, règle 4°) | agent | libre | `pm memoire verifier --memoire <nom>` : pas de frontmatter, un acte du même nom (voir [suivi-dossier.md](suivi-dossier.md)) | `piecemaker` | 10 s |
-| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si l'écriture ajoute une faute de format (`.catala_fr` seulement) | `pm catala verifier --programme <nom>` ; aussi après `pm okf link` ou `unlink` avec `states` ou `involves`, pour chaque programme qui cite une prémisse `okf:/_premises/` | `catala` | 60 s |
+| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si l'écriture ajoute une faute de format (`.catala_fr` seulement) ou une erreur de compilation | `pm catala verifier --programme <nom>` ; aussi après `pm okf link` ou `unlink` avec `states` ou `involves`, pour chaque programme qui cite une prémisse `okf:/_premises/` | `catala` | 60 s |
 | `revue` | aucun fichier : brouillon de revue tabulaire | agent | libre | après `pm tabular_review preparer` ou `lancer` : `pm tabular_review verifier` (recherches en erreur ou à compléter) | `piecemaker` | 30 s |
 
 ## Messages renvoyés à l'agent
@@ -68,7 +68,7 @@ est noté `⏎`.
 | `arborescence` | PreToolUse | écriture par le shell | `L’arborescence (.piecemaker/arborescence.json) est réglée par l’avocat seul, dans l’onglet Index › Classement. Pour proposer un changement, modifiez arborescence.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell, ou lancez pm dossier arborescence --dossiers : la modification devient une proposition, l’avocat décide.` |
 | `ontologie` | PreToolUse | accès à la clé de sceau `ontologie.cle` | `La clé de sceau de l’ontologie (~/.piecemaker/ontologie.cle) n’est accessible qu’au serveur PieceMaker.` |
 | `okf` | PreToolUse | toute écriture directe | `Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).` |
-| `catala` | PreToolUse | faute de format nouvelle | `Écriture refusée par le Hérisson : le programme ne respecte pas le format Catala.⏎<fichier>:<ligne>: <faute>⏎…⏎Corrigez puis réécrivez. Voir le skill catala (references/format.md).` — 10 fautes au plus, puis `… <N> erreur(s) de plus.` |
+| `catala` | PreToolUse | faute de format ou erreur de compilation nouvelle | `Écriture refusée par le Hérisson : le programme ne respecte pas le format Catala ou ne compile pas.⏎<fichier>:<ligne>: <faute>⏎…⏎Corrigez puis réécrivez. Voir le skill catala (references/format.md).` — 10 fautes au plus, puis `… <N> erreur(s) de plus.` Une erreur de compilation s'écrit `<fichier>:<ligne>: compilation : <message du compilateur>` ; `<fichier>` peut être un autre fichier du programme, par exemple le test qui utilise un champ renommé. |
 | `revue` | PostToolUse | recherche bloquée (sortie de `pm tabular_review verifier`) | `Recherche « <nom> » : bloquée → pm tabular_review lister (sous-agent deep-research-maker)`, dans le message de vérification ci-dessous |
 | `okf`, `suivi`, `catala`, `revue` | PostToolUse | le vérificateur rend une sortie | `Vérification automatique (<feature>) : pm <arguments>⏎<sortie de pm>⏎⏎Corrigez les erreurs signalées avant de continuer.` — 40 lignes de sortie au plus, puis `… <N> ligne(s) de plus.` |
 | `okf`, `suivi`, `catala`, `revue` | PostToolUse | sortie vide | aucun message |
@@ -117,6 +117,7 @@ Catala).
 | Vérificateur | Durée mesurée | Ce qui coûte |
 |---|---|---|
 | `pm catala verifier` | 21,5 s au premier lancement, 6,0 s ensuite | compilation Catala |
+| Garde Catala avant l'écriture (format et `clerk typecheck`) | 1,5 s pour une écriture acceptée, 3,0 à 3,3 s pour une écriture refusée | une compilation par état : après l'écriture, puis avant si elle échoue |
 | `pm okf verify` (cœur, 6 pièces) | 44 ms à froid, 14 ms ensuite | — |
 | `pm okf verify` (aller-retour `pm` + serveur) | 0,25 à 1,5 s | lancement de `pm` |
 | `pm okf verify` (≈ 2 000 documents) | 5,2 s | lecture des fiches |
@@ -130,7 +131,11 @@ Limites des mesures :
 - `pm okf verify` et `pm suivi_dossiers verifier` n'ont pas été mesurés de
   bout en bout sur un dossier enregistré dans l'app ;
 - le premier `pm catala verifier` dépasse 20 s : le délai de la feature est
-  donc de 60 s, et celui du hook de 90 s.
+  donc de 60 s, et celui du hook de 90 s ;
+- la garde compile en 1,5 s quand le pack est déjà chaud ; une première
+  compilation plus longue que 10 s laisse passer l'écriture sans contrôle de
+  compilation. Au pire, deux compilations de 10 s restent sous les 30 s de
+  `runHook` et des hooks Codex et Vibe.
 
 ## Ajouter une feature
 
@@ -142,7 +147,14 @@ Limites des mesures :
    - `format` : contrôle du fichier entier avant l'écriture, nommé dans
      `FORMATS` de `scripts/lib/herisson.mjs`. Seul `catala` existe : il
      applique aux `.catala_fr` le contrôle de format de `pm catala verifier`
-     (`catala-documentation.mjs`) ;
+     (`catala-documentation.mjs`), puis, si le dossier du programme contient
+     `clerk.toml`, `clerk typecheck` sur une copie du programme où le fichier
+     porte le texte écrit (`typecheckErrors` de `catala.mjs`, 10 s au plus).
+     Seules les erreurs absentes de l'état actuel sont refusées, comparées par
+     message, sans ligne ni chemin. Un module manquant
+     (`Required module not found`) est ignoré : un programme en plusieurs
+     fichiers s'écrit fichier par fichier. Sans pack, après 10 s ou si le
+     compilateur plante sans ligne `[ERROR]`, l'écriture passe ;
    - `commande` : expression régulière sur une commande shell, qui lance
      `verifier` dans le dossier courant ;
    - `cite` : avec `commande`, lance `verifier` pour chaque programme
@@ -160,4 +172,9 @@ Limites :
   `--dossier` passé à `pm` ;
 - `format` ne contrôle pas une modification qu'il ne sait pas appliquer
   (texte à remplacer introuvable, `search_replace` de Vibe) : `verifier` la
-  signale après l'écriture.
+  signale après l'écriture ;
+- la compilation avant l'écriture ne voit que les erreurs de typage
+  (`clerk typecheck`), pas les tests ni les preuves ; une erreur déjà
+  présente avec le même message, ailleurs dans le programme, laisse passer
+  la nouvelle ; un processus enfant du compilateur peut survivre au délai de
+  10 s.

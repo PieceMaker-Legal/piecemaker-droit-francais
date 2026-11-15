@@ -24,9 +24,10 @@ export function verifierArgs(found) {
 
 const PATCH_SECTION = /^\*\*\* (Add|Update|Delete) File: (.+)$/;
 const FORMATS = {
-  catala: async (file, content) => file.endsWith('.catala_fr')
-    ? (await import('../../../skills/Skill-PieceMaker/scripts/catala-documentation.mjs')).catalaDocumentation(content, { test: /^test_/.test(path.basename(file)) }).errors
-    : [],
+  catala: async (file, content) => [
+    ...(file.endsWith('.catala_fr') ? (await import('../../../skills/Skill-PieceMaker/scripts/catala-documentation.mjs')).catalaDocumentation(content, { test: /^test_/.test(path.basename(file)) }).errors : []),
+    ...(await (await import('../../../skills/Skill-PieceMaker/scripts/catala.mjs')).typecheckErrors(path.dirname(file), file, content)).map((error) => ({ line: error.line, where: error.file === path.basename(file) ? undefined : `${error.file}:${error.line}`, message: `compilation : ${error.message}` })),
+  ],
 };
 
 const current = (file) => { try { return fs.readFileSync(file, 'utf8'); } catch { return ''; } };
@@ -82,13 +83,15 @@ export async function formatErrors(tool, input, cwd) {
     const found = featureOf(file.normalize('NFC'));
     const check = FORMATS[found?.feature.format];
     if (!check || typeof after !== 'string') continue;
+    const errors = await check(file, after);
+    if (!errors.length) continue;
     const known = new Map();
     for (const error of await check(file, current(file))) known.set(error.message, (known.get(error.message) ?? 0) + 1);
-    for (const error of await check(file, after)) {
+    for (const error of errors) {
       if (known.get(error.message)) known.set(error.message, known.get(error.message) - 1);
-      else refused.push(`${path.basename(file)}:${error.line}: ${error.message}`);
+      else refused.push(`${error.where ?? `${path.basename(file)}:${error.line}`}: ${error.message}`);
     }
   }
   if (!refused.length) return null;
-  return ['Écriture refusée par le Hérisson : le programme ne respecte pas le format Catala.', ...refused.slice(0, 10), ...(refused.length > 10 ? [`… ${refused.length - 10} erreur(s) de plus.`] : []), 'Corrigez puis réécrivez. Voir le skill catala (references/format.md).'].join('\n');
+  return ['Écriture refusée par le Hérisson : le programme ne respecte pas le format Catala ou ne compile pas.', ...refused.slice(0, 10), ...(refused.length > 10 ? [`… ${refused.length - 10} erreur(s) de plus.`] : []), 'Corrigez puis réécrivez. Voir le skill catala (references/format.md).'].join('\n');
 }

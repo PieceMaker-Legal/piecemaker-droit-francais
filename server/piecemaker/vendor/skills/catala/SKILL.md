@@ -49,7 +49,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 
 1. Lisez les pièces et les textes. Formulez la question juridique.
 2. Écrivez `tache.json`, puis `clerk.toml` (`[project]`, `name = "<nom>"`).
-3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article sous son propre titre, son extrait exact, son texte intégral, puis ses blocs ` ```catala `.
+3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article sous son propre titre, son extrait exact, son texte intégral, puis ses blocs ` ```catala `. Ajoutez chaque section source par `pm catala section`, puis écrivez son bloc dessous.
 4. Déclarez chaque fait du dossier comme un `contexte` : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur (`references/format.md`). Confiez les prémisses à `premise-maker`.
 5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier, chacun sous `## okf:/_premises/<fiche>.md`.
 6. Lancez `pm catala verifier --programme <nom>` jusqu'à « vérifié », puis `pm okf verify`. Suivez chaque message.
@@ -97,6 +97,8 @@ Le titre `##` nomme la case du graphe. L’avocat le lit sans le code. `verifier
 ## Commandes
 
 - `pm catala verifier --programme <nom>` formate les fichiers puis lance tous les contrôles. Relisez un fichier « reformaté » avant de le modifier. Corrigez d'abord la compilation : elle bloque les autres contrôles.
+- `pm catala section --programme <nom> --fichier <f>.catala_fr --source <LEGIARTI…|JURITEXT…> --extrait "…" [--titre "Article 1224"]` : ajoute à la fin du fichier le titre, l'extrait et le texte officiel. Lisez d'abord la source avec `consulter_article` ou `consulter_decision` (MCP legifrance). Un extrait qui n'est pas mot pour mot est refusé : recopiez-le du texte officiel.
+- Le Hérisson compile le programme avant chaque écriture : une erreur de compilation nouvelle bloque l'écriture. Corrigez la ligne citée, puis réécrivez.
 - `pm catala executer --scope <Scenario> [--fichier F]` : trace d'un test qui échoue. Filtrez le journal avec `grep "≔.*<identifiant>" .piecemaker/catala/<nom>/resultats/execution.log`.
 - `pm catala exceptions --scope <Champ> --variable <v>` : arbre des exceptions, pour un conflit signalé par la preuve (lisez `resultats/preuve.log`).
 - `pm catala expliquer --scope <Scenario> [--fichier F]` : graphe d'un autre scénario sans entrées.

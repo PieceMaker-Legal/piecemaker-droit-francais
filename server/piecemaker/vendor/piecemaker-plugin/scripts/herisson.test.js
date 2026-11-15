@@ -91,6 +91,39 @@ test('la garde refuse, avant l’écriture, un programme Catala hors format', as
   assert.equal(await reason('Edit', { file_path, old_string: '« Texte fictif 1. »', new_string: '« Texte fictif 1 corrigé. »' }), null);
 });
 
+test('la garde refuse une erreur de compilation nouvelle, garde les erreurs déjà présentes et laisse passer sans pack', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { hookDecision } = await import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mjs')).href);
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-compilation-'));
+  const previous = process.env.PIECEMAKER_COMPONENTS_HOME;
+  t.after(() => {
+    if (previous === undefined) delete process.env.PIECEMAKER_COMPONENTS_HOME;
+    else process.env.PIECEMAKER_COMPONENTS_HOME = previous;
+    fs.rmSync(dossier, { recursive: true, force: true });
+  });
+  const bin = path.join(dossier, 'pack', 'bin');
+  fs.mkdirSync(bin, { recursive: true });
+  fs.writeFileSync(path.join(bin, 'catala'), '');
+  fs.writeFileSync(path.join(bin, 'clerk'), `#!${process.execPath}\nconst fs = require('node:fs');\nconst errors = fs.readdirSync('.').filter((file) => file.endsWith('.catala_fr')).flatMap((file) => fs.readFileSync(file, 'utf8').split('\\n').flatMap((line, index) => (line.match(/inconnu_\\w+/g) || []).map((word) => \`\${file}:\${index + 1}.1-5: [ERROR] Unknown identifier \${word}\`)));\nconsole.log(errors.join('\\n'));\nprocess.exit(errors.length ? 123 : 0);\n`, { mode: 0o755 });
+  fs.mkdirSync(path.join(dossier, 'pack', 'catala'));
+  fs.writeFileSync(path.join(dossier, 'pack', 'catala', 'pack.json'), JSON.stringify({ bin: { catala: path.join(bin, 'catala'), clerk: path.join(bin, 'clerk') }, path: [bin] }));
+  const directory = path.join(dossier, '.piecemaker', 'catala', 'prime');
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, 'clerk.toml'), '[project]\nname = "prime"\n');
+  fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '> Module Prime\n');
+  fs.writeFileSync(path.join(directory, 'autre.catala_fr'), '> Module Autre\n\ninconnu_ancien\n');
+  const file_path = '.piecemaker/catala/prime/prime.catala_fr';
+  const reason = async (content) => (await hookDecision({ cwd: dossier, tool_name: 'Write', tool_input: { file_path, content } }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
+  process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'pack');
+  assert.equal(await reason('> Module Prime\n\nTexte fictif.\n'), null);
+  assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), 'Écriture refusée par le Hérisson : le programme ne respecte pas le format Catala ou ne compile pas.\nprime.catala_fr:3: compilation : Unknown identifier inconnu_nouveau\nCorrigez puis réécrivez. Voir le skill catala (references/format.md).');
+  fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '> Module Prime\n\ninconnu_present\n');
+  assert.equal(await reason('> Module Prime\n\nTexte.\n\ninconnu_present\n'), null);
+  process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'absent');
+  assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), null);
+});
+
 test('une commande pm okf link vérifie l’index, et les programmes Catala qui citent une prémisse', async (t) => {
   const fs = require('node:fs');
   const os = require('node:os');

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, runCatala, selectProgram, sharedPython, toolCommand } from './catala.mjs';
+import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, runCatala, selectProgram, sharedPython, toolCommand, typecheckErrors } from './catala.mjs';
 import { catalaDocumentation } from './catala-documentation.mjs';
 import { run } from './pm.mjs';
 
@@ -829,5 +829,59 @@ test('verifier rewrites a corrected citation once in the program file', async ()
     assert.equal(fs.readFileSync(file, 'utf8').match(/Complété/g).length, 1);
     assert.equal(fs.readFileSync(file, 'utf8').match(/Passage exact\./g).length, 2);
     assert.equal(fs.readFileSync(outside, 'utf8'), '« Passage exact. »');
+  } finally { cleanup(); }
+});
+
+test('section appends a verified source section that keeps the documentation valid', async () => {
+  const { dossier, home, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime', { 'prime.catala_fr': MODULE });
+    fs.mkdirSync(path.join(home, 'articles'), { recursive: true });
+    fs.mkdirSync(path.join(home, 'decisions'), { recursive: true });
+    const long = 'Le débiteur fictif doit payer la prime convenue dans un délai raisonnable fixé par le contrat conclu entre Jean Dupont et la Société Exemple SAS.';
+    fs.writeFileSync(path.join(home, 'articles', 'LEGIARTI000000000001.json'), JSON.stringify({ at: '2020-01-01', reponse: { article: { id: 'LEGIARTI000000000001', num: '1', texte: long, texteHtml: `<p>${long}</p><p></p><p>Second alin&#233;a&nbsp;fictif.</p>`, nota: 'Note fictive.', dateDebut: Date.UTC(2020, 0, 1), dateFin: Date.UTC(2021, 0, 1) } } }));
+    fs.writeFileSync(path.join(home, 'decisions', 'JURITEXT000000000001.json'), JSON.stringify({ titre: 'Cour de cassation, 1er janvier 2024, n° 00-00.000', texte: 'Attendu que la prime est due &amp; exigible.' }));
+    const deps = { env: { PIECEMAKER_HOME: home }, homeDir: home, python: null, credentials: null };
+    const section = (flags) => runCatala({ commande: 'section', cwd: dossier, flags: { fichier: 'prime.catala_fr', ...flags }, deps });
+    const file = path.join(directory, 'prime.catala_fr');
+    const lines = MODULE.split('\n').length + 1;
+    assert.equal(await section({ source: 'LEGIARTI000000000001', extrait: 'doit  payer la prime convenue' }), `Section ajoutée : .piecemaker/catala/prime/prime.catala_fr:${lines} (Article 1 | LEGIARTI000000000001). Écrivez ensuite son bloc \`\`\`catala sous le texte.`);
+    assert.match(await section({ source: 'JURITEXT000000000001', extrait: 'la prime est due & exigible', titre: 'Cass. fictive' }), /prime\.catala_fr:\d+ \(Cass\. fictive \| JURITEXT000000000001\)/);
+    const content = fs.readFileSync(file, 'utf8');
+    assert.ok(content.includes('## Article 1 | LEGIARTI000000000001\n\n« doit payer la prime convenue »\n\nLe débiteur fictif doit payer la prime convenue dans un délai raisonnable fixé\npar le contrat conclu entre Jean Dupont et la Société Exemple SAS.\n\nSecond alinéa fictif.\n\nNOTA :\n\nNote fictive.\n\n## Cass. fictive | JURITEXT000000000001\n'));
+    assert.ok(content.split('\n').every((line) => line.length <= 80));
+    assert.deepEqual(catalaDocumentation(content).errors, []);
+    await assert.rejects(() => section({ source: 'LEGIARTI000000000001', extrait: 'la prime est inventée' }), /Extrait absent du texte de LEGIARTI000000000001/);
+    await assert.rejects(() => section({ source: 'LEGIARTI000000000002', extrait: 'prime' }), /absent du cache local : lisez l'article avec consulter_article/);
+    await assert.rejects(() => section({ source: 'JURITEXT000000000002', extrait: 'prime' }), /lisez la décision avec consulter_decision/);
+    await assert.rejects(() => section({ source: 'ARTICLE1', extrait: 'prime' }), TypeError);
+    await assert.rejects(() => section({ source: 'LEGIARTI000000000001', extrait: 'prime', fichier: '../autre.catala_fr' }), /dans \.piecemaker\/catala\/prime\//);
+    await assert.rejects(() => section({ source: 'LEGIARTI000000000001', extrait: 'prime', fichier: 'resultats/a.catala_fr' }), TypeError);
+    await assert.rejects(() => section({ source: 'LEGIARTI000000000001', extrait: 'prime', titre: 'A | B' }), /sans « \| »/);
+    assert.equal(fs.readFileSync(file, 'utf8'), content);
+    await section({ source: 'LEGIARTI000000000001', extrait: 'prime', fichier: 'nouveau.catala_fr' });
+    assert.match(fs.readFileSync(path.join(directory, 'nouveau.catala_fr'), 'utf8'), /^## Article 1 \| LEGIARTI000000000001\n\n« prime »\n/);
+  } finally { cleanup(); }
+});
+
+test('typecheckErrors compiles a copy with the written content and keeps only real compiler errors', async () => {
+  const { dossier, home, cleanup } = scratch();
+  try {
+    const directory = program(dossier, 'prime');
+    fs.mkdirSync(path.join(directory, 'resultats'));
+    const file = path.join(directory, 'prime.catala_fr');
+    const seen = [];
+    const run = async (command, args, options) => {
+      seen.push({ tool: path.basename(command), args, copied: fs.readdirSync(options.cwd).sort(), content: fs.readFileSync(path.join(options.cwd, 'prime.catala_fr'), 'utf8'), timeout: options.timeout });
+      if (seen.at(-1).content === 'crash') return { code: 2, stdout: '', stderr: 'Fatal error' };
+      return { code: 123, stdout: '', stderr: 'prime.catala_fr:3.5-9: [ERROR] 1/2: Unknown identifier "x"\ntest_prime.catala_fr:1.1-15: [ERROR] Required module not found: Absent\n' };
+    };
+    const options = { env: { PIECEMAKER_COMPONENTS_HOME: home }, homeDir: home, run, timeout: 5 };
+    assert.deepEqual(await typecheckErrors(directory, file, 'nouveau', { env: {}, homeDir: dossier, run }), []);
+    assert.deepEqual(seen, []);
+    assert.deepEqual(await typecheckErrors(directory, file, 'nouveau', options), [{ file: 'prime.catala_fr', line: 3, message: 'Unknown identifier "x"' }]);
+    assert.deepEqual(seen[0], { tool: 'clerk', args: ['typecheck', '--color=never', '--catala-opts=--check-invariants', '--catala-opts=--message-format=gnu'], copied: ['clerk.toml', 'prime.catala_fr', 'tache.json', 'test_prime.catala_fr'], content: 'nouveau', timeout: 5 });
+    assert.deepEqual(await typecheckErrors(directory, file, 'crash', options), []);
+    assert.equal(fs.readFileSync(file, 'utf8'), MODULE);
   } finally { cleanup(); }
 });

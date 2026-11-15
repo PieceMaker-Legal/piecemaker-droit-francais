@@ -1,13 +1,14 @@
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 
-import { cachedArticle, keepArticle } from './article-cache.mjs';
+import { cachedArticle, cachedDecision, keepArticle } from './article-cache.mjs';
 import { catalaDocumentation, testsWithoutAssertion } from './catala-documentation.mjs';
 
-export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'exec'];
+export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'section', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
 const NAME = /^[\p{Ll}\p{N}][\p{Ll}\p{N}-]*$/u;
 const NAME_SHAPE = 'minuscules, chiffres et tirets (ex. prime-anciennete)';
@@ -16,6 +17,9 @@ const SOURCE = /\.catala_(?:fr|en|pl)$/;
 const PYTHON_PACKAGE = 'pm_python';
 const PROOF_OK ='No errors found during the proof mode run.';
 const PROOF_OBLIGATION = 'This verification condition was generated';
+const TYPECHECK = ['typecheck', '--color=never', '--catala-opts=--check-invariants', '--catala-opts=--message-format=gnu'];
+const COMPILER_ERROR = /^(.+?):(\d+)\.[\d.-]+: \[ERROR\] (?:\d+\/\d+: )?(.+)$/;
+const { verifyQuoteAgainstSource } = createRequire(import.meta.url)('../../../piecemaker-plugin/scripts/lib/verify-citations.cjs');
 
 export function catalaHomes(env = process.env, homeDir = os.homedir()) {
   return [...new Set([env.PIECEMAKER_COMPONENTS_HOME, env.PIECEMAKER_HOME, path.join(homeDir, '.piecemaker')].filter(Boolean))];
@@ -159,9 +163,9 @@ export function packEnv(pack, env = process.env) {
   return { ...env, ...pack.env, PATH: [...(pack.path || []), env.PATH || ''].join(path.delimiter) };
 }
 
-export function runProcess(command, args, { cwd, env, inherit = false, input } = {}) {
+export function runProcess(command, args, { cwd, env, inherit = false, input, timeout } = {}) {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd, env, windowsHide: true, stdio: inherit ? 'inherit' : [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
+    const child = spawn(command, args, { cwd, env, timeout, windowsHide: true, stdio: inherit ? 'inherit' : [input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
     if (input !== undefined) child.stdin.end(input);
     let stdout = '';
     let stderr = '';
@@ -192,6 +196,27 @@ function writeResult(directory, file, content) {
 export function compilerErrors(output, limit = 8) {
   const lines = [...new Set(output.split('\n').map((line) => line.trim()).filter((line) => /\[(?:ERROR|WARNING)\]/.test(line)).map((line) => line.replace(/\[(ERROR|WARNING)\] \d+\/\d+: /, '[$1] ')))];
   return lines.length > limit ? [...lines.slice(0, limit), `… ${lines.length - limit} autre(s) ligne(s) dans le journal.`] : lines;
+}
+
+export async function typecheckErrors(directory, file, content, { env = process.env, homeDir = os.homedir(), run = runProcess, timeout = 10000 } = {}) {
+  const { pack } = findCatalaPack({ env, homeDir });
+  if (!pack?.bin?.clerk || !fs.existsSync(path.join(directory, 'clerk.toml'))) return [];
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-catala-typecheck-'));
+  try {
+    fs.cpSync(directory, work, { recursive: true, filter: (source) => !IGNORED.has(path.basename(source)) });
+    const copy = path.join(work, path.relative(directory, file));
+    fs.mkdirSync(path.dirname(copy), { recursive: true });
+    fs.writeFileSync(copy, content);
+    const { command, args } = toolCommand(pack, 'clerk', TYPECHECK, process.platform, env);
+    const result = await run(command, args, { cwd: work, env: packEnv(pack, env), timeout });
+    if (result.code === 0) return [];
+    const lines = new Set(`${result.stdout}${result.stderr}`.split('\n').map((line) => line.trim()));
+    return [...lines].map((line) => line.match(COMPILER_ERROR)).filter((match) => match && !/^Required module not found/.test(match[3])).map(([, name, line, message]) => ({ file: name, line: Number(line), message }));
+  } catch {
+    return [];
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
 }
 
 async function check(context, directory, name, tool, args, judge = (result) => result.code === 0, input) {
@@ -310,7 +335,7 @@ async function verifier(context, program, flags = {}) {
   const execution = async () => {
     const typed = await record('typecheck', 'clerk typecheck', async () => {
       if (!context.pack) return missing('Pack Catala absent.');
-      const { entry, result } = await check(context, program.directory, 'typecheck', 'clerk', ['typecheck', '--color=never', '--catala-opts=--check-invariants', '--catala-opts=--message-format=gnu'], (outcome) => outcome.code === 0 && !/\[WARNING\]/.test(`${outcome.stdout}${outcome.stderr}`));
+      const { entry, result } = await check(context, program.directory, 'typecheck', 'clerk', TYPECHECK, (outcome) => outcome.code === 0 && !/\[WARNING\]/.test(`${outcome.stdout}${outcome.stderr}`));
       return entry.passed ? entry : { ...entry, errors: compilerErrors(`${result.stdout}${result.stderr}`) };
     });
     await record('format', 'catala-format', async () => {
@@ -643,6 +668,14 @@ async function wholeText(context, program, file, content, credentials) {
   }
 }
 
+async function articleResponse(context, cwd, id) {
+  const cached = cachedArticle(context.env, context.homeDir, id);
+  if (cached) return { code: 0, stdout: JSON.stringify(cached) };
+  const response = await context.run(context.python, ['-I', '-c', 'import sys; from catleg.catleg import main; sys.argv[0]="catleg"; main()', 'lf', 'article', id], { cwd, env: { ...context.env, ...context.credentials } });
+  try { if (response.code === 0) keepArticle(context.env, context.homeDir, id, JSON.parse(response.stdout)); } catch {}
+  return response;
+}
+
 async function catleg(context, program, flags) {
   const python = context.python;
   if (!python) throw new Error('Python partagé de PieceMaker introuvable (config.json › pythonPath).');
@@ -672,11 +705,9 @@ async function catleg(context, program, flags) {
     if (!checked.length) messages.push('Aucun article contrôlé : aucun titre d’article reconnu.');
     const versions = [];
     for (const id of checked) {
-      const cached = cachedArticle(context.env, context.homeDir, id);
-      const response = cached ? { code: 0, stdout: JSON.stringify(cached) } : await context.run(python, ['-I', '-c', 'import sys; from catleg.catleg import main; sys.argv[0]="catleg"; main()', 'lf', 'article', id], { cwd: program.directory, env: { ...context.env, ...credentials } });
+      const response = await articleResponse(context, program.directory, id);
       try {
         const reply = JSON.parse(response.stdout);
-        if (!cached && response.code === 0) keepArticle(context.env, context.homeDir, id, reply);
         const article = reply.article;
         const official = (value) => typeof value === 'number' ? new Date(value).toISOString().slice(0, 10) : typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value) ? value.slice(0, 10) : null;
         const debut = official(article?.dateDebut), fin = official(article?.dateFin);
@@ -706,6 +737,54 @@ async function catleg(context, program, flags) {
   return [`catleg (vigueur au ${dates.join(', ')}, ${origineLibelle}) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
 }
 
+const SECTION_SOURCE = /^(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d{12}$/;
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const plainText = (value) => value.replace(/<br\s*\/?>|<\/p>|<\/div>/gi, '\n').replace(/<[^>]*>/g, '').replace(/&(?:#(\d+)|#x([\da-f]+)|(\w+));/gi, (entity, decimal, hex, name) => decimal ? String.fromCodePoint(Number(decimal)) : hex ? String.fromCodePoint(parseInt(hex, 16)) : ENTITIES[name.toLowerCase()] ?? entity);
+const paragraphs = (html, text) => plainText(html || text || '').split('\n').map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean);
+const wrapped = (paragraph) => paragraph.split(' ').reduce((lines, word) => {
+  if (lines.length && `${lines.at(-1)} ${word}`.length <= 80) lines[lines.length - 1] += ` ${word}`;
+  else lines.push(word);
+  return lines;
+}, []).join('\n');
+
+async function officialSource(context, cwd, id) {
+  if (/^(?:LEGIARTI|JORFARTI)/.test(id)) {
+    if (!cachedArticle(context.env, context.homeDir, id) && (!context.python || !context.credentials)) throw new Error(`${id} absent du cache local : lisez l'article avec consulter_article (MCP legifrance), puis relancez.`);
+    const response = await articleResponse(context, cwd, id);
+    let article;
+    try { article = JSON.parse(response.stdout).article; } catch {}
+    if (response.code !== 0 || article?.id !== id || !article?.texte) throw new Error(`${id} introuvable sur Légifrance : vérifiez l'identifiant ou lisez l'article avec consulter_article (MCP legifrance).`);
+    const nota = paragraphs(article.notaHtml, article.nota);
+    return { titre: article.num ? `Article ${article.num}` : '', paragraphes: [...paragraphs(article.texteHtml, article.texte), ...(nota.length ? ['NOTA :', ...nota] : [])] };
+  }
+  const entry = cachedDecision(context.env, context.homeDir, id);
+  if (!entry) throw new Error(`${id} absent du cache local : lisez la décision avec consulter_decision (MCP legifrance), puis relancez.`);
+  return { titre: entry.titre, paragraphes: paragraphs(entry.reponse?.text?.texteHtml, entry.texte) };
+}
+
+async function section(context, program, flags) {
+  const id = typeof flags.source === 'string' ? flags.source.trim() : '';
+  if (!SECTION_SOURCE.test(id)) throw new TypeError('Indiquez --source LEGIARTI…, JORFARTI…, JURITEXT…, CETATEXT… ou CONSTEXT… : le préfixe suivi de 12 chiffres.');
+  const extrait = typeof flags.extrait === 'string' ? flags.extrait.replace(/\s+/g, ' ').replace(/^[\s«]+|[\s»]+$/g, '') : '';
+  if (!extrait) throw new TypeError('Indiquez --extrait "passage appliqué, recopié mot pour mot".');
+  const target = path.resolve(program.directory, typeof flags.fichier === 'string' ? flags.fichier : '');
+  const relative = path.relative(program.directory, target);
+  const parts = relative.split(path.sep);
+  if (!SOURCE.test(target) || path.isAbsolute(relative) || parts.some((part) => part === '..' || IGNORED.has(part) || part.startsWith('.'))) throw new TypeError(`Indiquez --fichier <nom>.catala_fr, dans .piecemaker/catala/${program.name}/ (hors resultats/).`);
+  const source = await officialSource(context, program.directory, id);
+  const titre = (typeof flags.titre === 'string' ? flags.titre : source.titre || '').replace(/\s+/g, ' ').trim();
+  if (!titre || titre.includes('|')) throw new TypeError('Indiquez --titre "…", sans « | » : "Article 1224" ou "Cass. civ. 3e, 1er janvier 2024, n° 00-00.000".');
+  const found = verifyQuoteAgainstSource(source.paragraphes.join('\n'), extrait);
+  if (!found.verified) throw new Error(`Extrait absent du texte de ${id} : recopiez-le mot pour mot depuis le texte officiel, ou marquez une coupure par « … ».`);
+  const quote = (found.source_excerpt ?? extrait).replace(/\s+/g, ' ');
+  const before = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : '';
+  const head = before.trim() ? `${before.replace(/\s*$/, '')}\n\n` : '';
+  const line = head ? head.split('\n').length : 1;
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.writeFileSync(target, `${head}## ${titre} | ${id}\n\n« ${quote} »\n\n${source.paragraphes.map(wrapped).join('\n\n')}\n`);
+  return `Section ajoutée : .piecemaker/catala/${program.name}/${parts.join('/')}:${line} (${titre} | ${id}).${quote === extrait ? '' : ' Extrait aligné sur le texte officiel.'} Écrivez ensuite son bloc \`\`\`catala sous le texte.`;
+}
+
 export async function runCatala({ commande, cwd, programme, flags = {}, args = [], deps = {} }) {
   const env = deps.env || process.env;
   const homeDir = deps.homeDir || os.homedir();
@@ -733,6 +812,7 @@ export async function runCatala({ commande, cwd, programme, flags = {}, args = [
     }).join('\n');
   }
   if (commande === 'verifier') { const program = selectProgram(cwd, programme); return verifier(context, { ...program, root: cwd }, flags); }
+  if (commande === 'section') return section(context, selectProgram(cwd, programme), flags);
   const pack = requirePack(context);
   if (commande === 'exec') {
     const [tool, ...rest] = args;

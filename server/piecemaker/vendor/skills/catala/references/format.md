@@ -130,7 +130,7 @@ champ d'application TestResolution:
 ## Structure
 
 - Reproduisez la hiérarchie du texte par les titres Markdown : `# Code civil`, puis `## Article 1224 | LEGIARTI…`. Pour une décision : `## Cass. civ. 3e, 1er janvier 2024, n° 00-00.000 | JURITEXT…`.
-- Un article, une section : son titre, l'extrait appliqué entre « », puis le texte intégral de l'article, recopié mot pour mot, NOTA compris, puis ses blocs de code. N'en inventez aucun mot.
+- Un article, une section : son titre, l'extrait appliqué entre « », puis le texte intégral de l'article, recopié mot pour mot, NOTA compris, puis ses blocs de code. N'en inventez aucun mot. `pm catala section` écrit le titre, l'extrait vérifié et le texte officiel.
 - Prenez la version en vigueur à la date retenue (`date_vigueur`). `pm catala verifier` compare le numéro, la vigueur et le texte intégral au texte officiel.
 - Placez chaque bloc ` ```catala ` sous l'article qui le fonde, jamais sous un sous-titre sans source. Un même champ peut être défini par plusieurs blocs, chacun sous son article.
 - Citez l'article (`LEGIARTI`, `JORFARTI`), jamais le texte entier (`LEGITEXT`, `JORFTEXT`). Une section = une source : un identifiant n'apparaît que dans le titre de sa section, jamais dans le texte d'une autre section ni dans une liste de sources. Le Hérisson refuse l'écriture sinon.

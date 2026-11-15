@@ -490,3 +490,11 @@ test('memoire verifier refuse le frontmatter et exige un acte du même nom', asy
   await assert.rejects(() => verify('--memoire'), /--memoire/);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
+
+test('pm catala section transmet fichier, source, extrait et titre au wrapper Catala', async () => {
+  const seen = [];
+  const deps = { catalaFn: async (input) => { seen.push(input); return 'Section ajoutée'; }, catalaUpdated: async () => { throw new Error('volet'); } };
+  assert.equal(await run(['catala', 'section', '--fichier', 'prime.catala_fr', '--source', 'LEGIARTI000000000001', '--extrait', 'Texte fictif', '--titre', 'Article 1', '--dossier', '/tmp/dossier'], { deps }), 'Section ajoutée');
+  assert.deepEqual(seen[0].flags, { fichier: 'prime.catala_fr', source: 'LEGIARTI000000000001', extrait: 'Texte fictif', titre: 'Article 1', dossier: '/tmp/dossier' });
+  assert.match((await run(['--help'], { deps })) ?? '', /catala section --fichier F --source ID --extrait/);
+});

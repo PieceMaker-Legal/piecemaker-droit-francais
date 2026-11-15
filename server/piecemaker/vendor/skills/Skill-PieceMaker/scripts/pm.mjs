@@ -123,6 +123,9 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       squelette de test Catala, entrées à leur valeur par défaut
   catala catleg [--au today|AAAA-MM-JJ] [--fichier F] [--programme NOM]
       vigueur des articles à la date --au, sinon date_vigueur de tache.json ; sans date : erreur
+  catala section --fichier F --source ID --extrait "…" [--titre "Article 1224"] [--programme NOM]
+      ajoute au fichier la section ## titre | ID, l'extrait vérifié mot pour mot et le texte officiel
+      (cache local ; ID : LEGIARTI, JORFARTI, JURITEXT, CETATEXT ou CONSTEXT)
   catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 

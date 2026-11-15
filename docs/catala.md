@@ -82,6 +82,7 @@ Un programme vit dans `.piecemaker/catala/<nom>/` : un dossier avec `clerk.toml`
 | `pm catala executer --scope <Scenario> [--fichier F]` | `catala interpret --whole-program --trace --stdlib` | trace en sortie (200 lignes), `resultats/execution.log` |
 | `pm catala exceptions --scope <Champ> --variable <v> [--fichier F]` | `catala exceptions` | arbre en sortie, `resultats/exceptions.log` |
 | `pm catala catleg [--au today\|AAAA-MM-JJ] [--fichier F]` | vigueur des articles cités, identifiants PISTE de PieceMaker ; absent du skill | `resultats/catleg.json` |
+| `pm catala section --fichier F --source <ID> --extrait "…" [--titre "Article 1224"]` | ajoute à la fin du fichier `## <titre> \| <ID>`, l'extrait « » vérifié mot pour mot (normalisation des citations du Harness) et le texte officiel coupé à 80 colonnes ; titre par défaut : numéro de l'article en cache, titre de la décision ; texte lu dans le cache local (`articles/`, `decisions/`), article absent téléchargé par catleg s'il y a Python et identifiants PISTE ; aucun bloc ```` ```catala ```` | fichier complété, ligne de la section en sortie |
 | `pm catala lister` / `env` | programmes et dernier bilan / pack, état, Python | sortie |
 | `pm catala exec <outil> -- <args>` | lance un outil du pack (LSP, DAP, autres) | code de sortie |
 
