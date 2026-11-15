@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+import { REVIEW_FOLDER, documentTitleCell } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 import type { Review } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
 import { premiseId, squash, text } from './bundle.js';
@@ -25,20 +25,21 @@ function readReviews(projectPath: string): Review[] {
     .sort((left, right) => text(left.updatedAt).localeCompare(text(right.updatedAt)));
 }
 
-export function documentMetadataFromReviews(projectPath: string): Map<string, { title?: string; nature?: string }> {
-  const metadata = new Map<string, { title?: string; nature?: string }>();
+export function documentMetadataFromReviews(projectPath: string): Map<string, { title?: string; titleCitation?: string; nature?: string }> {
+  const metadata = new Map<string, { title?: string; titleCitation?: string; nature?: string }>();
   for (const review of readReviews(projectPath)) {
     if (review.category === 'recherche-juridique') continue;
     const named = (names: string[]) => names.map((name) => review.columns.find((column) => text(column?.name).trim().toLocaleLowerCase('fr').normalize('NFC') === name)).find(Boolean);
-    const titleColumn = named(['titre', 'intitulé', 'titre du document', 'événement']);
     const natureColumn = named(['nature', 'type de document', 'type de pièce', 'type']);
     for (const row of review.rows) {
-      const title = titleColumn && text(review.cells?.[row.id]?.[titleColumn.index]?.summary);
+      const titleCell = documentTitleCell(review, row);
+      const title = text(titleCell?.summary);
+      const titleCitation = text(titleCell?.citations?.find((citation) => citation.verified)?.quote);
       const nature = natureColumn && text(review.cells?.[row.id]?.[natureColumn.index]?.summary);
       for (const source of [row.piece, ...(row.documents || []).map((document) => document.source)]) {
         if (!source) continue;
         const resource = path.relative(projectPath, path.resolve(projectPath, source)).normalize('NFC');
-        metadata.set(resource, { ...metadata.get(resource), ...(title ? { title } : {}), ...(nature ? { nature } : {}) });
+        metadata.set(resource, { ...metadata.get(resource), ...(title ? { title, titleCitation } : {}), ...(nature ? { nature } : {}) });
       }
     }
   }

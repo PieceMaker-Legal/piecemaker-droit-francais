@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 import type { Cell, CellCitation, CitationSource, ReviewColumn, TextRange } from '../shared.js';
-import { citationIssue } from '../shared.js';
+import { citationIssue, DOCUMENT_TITLE_INDEX, documentTitleCell } from '../shared.js';
 import { assertReviewFile, documentPath, isInside, reviewDirectory, UserError } from './paths.js';
 import { readReview } from './reviews.js';
 
@@ -134,7 +134,7 @@ export function citationSource(project: string, file: string, rowId: string, col
   assertReviewFile(project, file);
   const review = readReview(project, file);
   const row = review.rows.find((entry) => entry.id === rowId);
-  const citation = review.cells[rowId]?.[String(column)]?.citations?.[number];
+  const citation = (column === DOCUMENT_TITLE_INDEX && row ? documentTitleCell(review, row) : review.cells[rowId]?.[String(column)])?.citations?.[number];
   if (!row || !citation) throw new UserError('Citation introuvable.');
   const document = row.documents.find((entry) => sameDocument(entry.source, citation.document)) ?? row.documents[0];
   if (!document) throw new UserError('Document source introuvable.');

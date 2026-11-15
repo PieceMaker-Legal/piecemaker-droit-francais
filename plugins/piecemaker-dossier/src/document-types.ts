@@ -20,14 +20,17 @@ export const DOCUMENT_ICONS: Record<string, { label: string; paths: string }> = 
 };
 
 export const DEFAULT_DOCUMENT_TYPES: DocumentType[] = [
-  ['assignation', 'scroll'], ['conclusions', 'scroll'], ['requête', 'scroll'],
-  ['courrier', 'mail'], ['courriel', 'at'], ['mise en demeure', 'alert'],
-  ['contrat', 'pen'], ['facture', 'receipt'], ['devis', 'calculator'],
-  ['attestation', 'badge'], ['jugement', 'scale'], ['arrêt', 'scale'],
-  ['ordonnance', 'scale'], ['procès-verbal', 'list'], ['constat', 'search'],
-  ['expertise', 'search'], ['statuts de société', 'building'], ['extrait Kbis', 'building'],
+  ['acte de procédure', 'scroll'], ['courrier', 'mail'], ['courriel', 'at'],
+  ['mise en demeure', 'file'], ['contrat', 'pen'], ['facture', 'receipt'],
+  ['devis', 'calculator'], ['attestation', 'badge'], ['décision judiciaire', 'scale'],
+  ['procès-verbal', 'list'], ['constat', 'search'], ['expertise', 'search'],
+  ['statuts de société', 'building'], ['extrait Kbis', 'building'],
   ['relevé bancaire', 'bank'], ['acte notarié', 'pen'], ['bordereau de pièces', 'list'],
 ].map(([name, icon]) => ({ name, icon }));
+
+export function documentTypeNames(types = DEFAULT_DOCUMENT_TYPES): string[] {
+  return [...new Set([...types.map((type) => type.name), 'indéterminé'])];
+}
 
 export function documentIcon(name: string, types = DEFAULT_DOCUMENT_TYPES): string {
   const normalized = name.trim().toLocaleLowerCase('fr');

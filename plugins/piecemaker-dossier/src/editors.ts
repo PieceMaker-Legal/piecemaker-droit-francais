@@ -1,4 +1,4 @@
-import { aliasEditorMarkup, citationListMarkup, companySearchResultMarkup, documentResource, entityKinds, escapeHtml, kindLabels, natureOptionsMarkup, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
+import { aliasEditorMarkup, citationListMarkup, companySearchResultMarkup, documentResource, documentTitle, entityKinds, escapeHtml, kindLabels, natureOptionsMarkup, nodeVariants, parseAliases, proposedPieceName, textValue, dateFor } from './views.js';
 import { knowledgeApi } from './api.js';
 import { premiseStatements, premises, okfApi, partyPremises } from './okf.js';
 import type { CompanySearchResult } from './api.js';
@@ -596,7 +596,7 @@ export function documentEditor(root: HTMLElement, data: ViewData, node: Knowledg
       <h2 class="pmd-sr-only">Corriger les métadonnées de la pièce</h2>
       <div class="pmd-document-dialog-body">
         <div class="pmd-document-preview-pane">
-          <div class="pmd-document-preview-header"><span class="pmd-document-file-icon" aria-hidden="true">▤</span><p class="pmd-document-file-name">${escapeHtml(node.label)}</p></div>
+          <div class="pmd-document-preview-header"><span class="pmd-document-file-icon" aria-hidden="true">▤</span><p class="pmd-document-file-name">${escapeHtml(documentTitle(node, data.okf, projectPath))}</p></div>
           <div class="pmd-document-preview" data-document-preview><p class="pmd-document-muted">Chargement de la pièce…</p></div>
         </div>
         <form class="pmd-document-form" data-document-form>

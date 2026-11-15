@@ -527,6 +527,15 @@ test('le titre descriptif de la revue et sa nature arrivent dans le graphe sans 
   assert.equal(fs.readFileSync(conceptFile(projectPath, `/${CONTRACT}.md`), 'utf8'), before);
   const snapshot = { projectId: 'p', nodes: [{ id: 'document:1', kind: 'document', label: 'Contrat.pdf', data: { path: path.join(projectPath, CONTRACT) }, aliases: [], date: null }], citations: [], links: [], mappings: [] };
   assert.equal(documentsFromSnapshot(projectPath, snapshot as never)[0].title, 'Convention de prestation');
+  const reviewFile = path.join(directory, 'index.json');
+  const review = JSON.parse(fs.readFileSync(reviewFile, 'utf8'));
+  review.rows[0].title = { summary: 'Contrat de prestation', citations: [{ quote: 'Contrat de prestation conclu', verified: true }] };
+  review.columns = review.columns.filter((entry: { index: number }) => entry.index !== 0);
+  delete review.cells.r1[0];
+  fs.writeFileSync(reviewFile, JSON.stringify(review));
+  const refreshed = backendOf(projectPath, markdownOf).read('p').fiches.find((fiche) => fiche.resource === CONTRACT);
+  assert.equal(refreshed?.title, 'Contrat de prestation');
+  assert.equal(refreshed?.titleCitation, 'Contrat de prestation conclu');
 });
 
 test('le catalogue conserve ses icônes à une sauvegarde des relations et détecte une altération', () => {

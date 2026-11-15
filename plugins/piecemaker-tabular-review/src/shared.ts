@@ -108,6 +108,7 @@ export type RowStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled';
 export type ReviewRow = {
   id: string;
   label: string;
+  title?: Cell;
   documents: ReviewDocument[];
   status: RowStatus;
   mode?: 'inline' | 'path';
@@ -601,4 +602,20 @@ export function researchCriteria(filters: ResearchFilters): string[] {
   if (filters.dateDebut || filters.dateFin) criteria.push(`Période : ${filters.dateDebut || '…'} → ${filters.dateFin || '…'}`);
   if (filters.dispositifOnly) criteria.push('Recherche dans le dispositif uniquement');
   return criteria;
+}
+
+export const DOCUMENT_TITLE_INDEX = -1;
+
+export function isDocumentTypeColumn(column: Pick<TemplateColumn, 'name'>): boolean {
+  return ['nature', 'type de pièce', 'type de document'].includes(column.name.trim().toLocaleLowerCase('fr'));
+}
+
+export function documentTitleCell(review: Pick<Review, 'columns' | 'cells'>, row: ReviewRow): Cell | undefined {
+  const column = review.columns.find((entry) => typeof entry?.name === 'string' && ['titre', 'intitulé', 'titre du document', 'nom du document'].includes(entry.name.trim().toLocaleLowerCase('fr')));
+  const cell = row.title || (column ? review.cells[row.id]?.[column.index] : undefined);
+  return cell && isCellFilled(cell) && citationRequired(cell) ? cell : undefined;
+}
+
+export function documentTitle(review: Pick<Review, 'columns' | 'cells'>, row: ReviewRow): string {
+  return documentTitleCell(review, row)?.summary.trim() || row.label;
 }

@@ -1,4 +1,4 @@
-import { DEFAULT_DOCUMENT_TYPES, iconSvg } from './document-types.js';
+import { DEFAULT_DOCUMENT_TYPES, documentTypeNames, iconSvg } from './document-types.js';
 import type { DocumentType } from './document-types.js';
 import { NODE_KINDS } from './types.js';
 import { nodePosition } from './party-codes.js';
@@ -266,7 +266,7 @@ export function mappingView(data: ViewData, mappingValidated: string | null = nu
 export const CUSTOM_NATURE = '__piecemaker_custom_nature__';
 
 export function natureOptionsMarkup(nature: string, types: DocumentType[] = DEFAULT_DOCUMENT_TYPES): string {
-  return [...new Set([nature, ...types.map((type) => type.name)].filter(Boolean))]
+  return [...new Set([nature, ...documentTypeNames(types)].filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, 'fr', { sensitivity: 'base' }))
     .map((value) => `<option value="${escapeHtml(value)}" ${value === nature ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
 }
@@ -319,6 +319,10 @@ export function documentResource(node: KnowledgeNode, projectPath: string): stri
   return folder ? `${folder}/${name}` : name;
 }
 
+export function documentTitle(node: KnowledgeNode, okf: OkfIndex | null | undefined, projectPath: string): string {
+  return okf?.fiches.find((fiche) => fiche.resource === documentResource(node, projectPath))?.title || textValue(node.data.title) || textValue(node.data.titre) || node.label;
+}
+
 export function linksMarkup(okf: OkfIndex | null, resource: string): string {
   return ficheLinks(okf, resource).map((link) => `<span class="pmd-badge" title="${escapeHtml(link.citation)}">${escapeHtml(`${link.label} ${link.title}`)}</span>`).join('');
 }
@@ -332,7 +336,8 @@ function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<str
   const fields = chronologyFields(node);
   const fieldCells = fieldLabels.map((label) => `<td>${escapeHtml(fields.find((field) => field.label === label)?.value ?? '')}</td>`).join('');
   const nature = textValue(node.data.nature);
-  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}" data-chat-pick="${escapeHtml(node.label)}" data-chat-kind="Document" data-chat-file="${escapeHtml(documentResource(node, projectPath))}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td><td><div class="pmd-badges" data-okf-links="${escapeHtml(documentResource(node, projectPath))}">${linksMarkup(okf, documentResource(node, projectPath))}</div></td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
+  const title = documentTitle(node, okf, projectPath);
+  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}" data-chat-pick="${escapeHtml(title)}" data-chat-kind="Document" data-chat-file="${escapeHtml(documentResource(node, projectPath))}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(title)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td><td><div class="pmd-badges" data-okf-links="${escapeHtml(documentResource(node, projectPath))}">${linksMarkup(okf, documentResource(node, projectPath))}</div></td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
 }
 
 export type ChronologySort = { column: 'document' | 'date' | 'classification'; direction: 'ascending' | 'descending' };
@@ -379,7 +384,7 @@ export function proposalBanner(proposals?: PendingProposals): string {
 }
 
 export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }, view: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null }): string {
-  const value = (node: KnowledgeNode) => sort.column === 'date' ? dateFor(node) : sort.column === 'classification' ? chronologyFolder(node, projectPath) : node.label;
+  const value = (node: KnowledgeNode) => sort.column === 'date' ? dateFor(node) : sort.column === 'classification' ? chronologyFolder(node, projectPath) : documentTitle(node, data.okf, projectPath);
   const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
   const documents = data.graph.nodes.filter((node) => node.kind === 'document').sort((left, right) => {
     const a = value(left);

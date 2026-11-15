@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import type { ClassificationFolder, Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
-import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, INDEX_MODEL, INDEX_TEMPLATE_NAME, isCaseIndex, LEGACY_INDEX_NAME, reviewCategory } from '../shared.js';
+import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, documentTitle, hasActions, INDEX_MODEL, INDEX_TEMPLATE_NAME, isCaseIndex, LEGACY_INDEX_NAME, reviewCategory } from '../shared.js';
 import { addClassification, proposeClassification, readClassification, readClassificationProposal } from './classification.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
@@ -167,7 +167,7 @@ function readOut(project: string, file: string, launchers: AssistantLaunchers) {
     colonnes: review.columns.map((column) => ({ colonne: column.index, ...question(column), ...(column.action ? { action: column.action } : {}) })),
     lignes: review.rows.map((row) => ({
       ligne: row.id,
-      document: row.label,
+      document: documentTitle(review, row),
       sources: row.documents.map((document) => document.source),
       statut: row.status,
       ...(row.piece ? { piece: row.piece } : {}),

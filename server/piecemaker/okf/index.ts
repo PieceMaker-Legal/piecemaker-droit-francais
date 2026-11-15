@@ -89,6 +89,7 @@ export function createOkfBackend(options: OkfOptions) {
           id: concept.id,
           type: text(concept.frontmatter.type),
           title: metadata.get(resource)?.title || text(concept.frontmatter.title),
+          titleCitation: metadata.get(resource)?.titleCitation || '',
           description: text(concept.frontmatter.description),
           resource,
           date: text(concept.frontmatter.date),

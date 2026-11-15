@@ -1,14 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { readOntology } from '../../../../server/piecemaker/okf/ontology.js';
+
 import type { Cell, Review, ReviewColumn, ReviewRow } from '../shared.js';
-import { emptyColumns, MAX_CITATION_CORRECTIONS } from '../shared.js';
+import { emptyColumns, MAX_CITATION_CORRECTIONS, DOCUMENT_TITLE_INDEX, citationIssue, citationRequired, reviewCategory, isDocumentTypeColumn } from '../shared.js';
 import type { CitationDocument } from './citations.js';
 import { citationProblems, correctionPrompt, verifyCells } from './citations.js';
 import { documentPath, reviewDirectory } from './paths.js';
 import { missingCell, parseCells, reviewNote, systemPrompt, userPrompt } from './prompt.js';
 import type { PromptDocument } from './prompt.js';
 import { readReview, reviewKey, updateReview } from './reviews.js';
+import { alignDocumentTypes } from './templates.js';
 import type { Conversation } from './sessions.js';
 import { openSession } from './sessions.js';
 
@@ -89,7 +92,9 @@ async function runRow(job: Job, task: RowTask): Promise<void> {
     });
     return;
   }
-  const columns = review.columns.filter((column) => targets.includes(column.index));
+  const columns = alignDocumentTypes(review.columns.filter((column) => targets.includes(column.index)), readOntology(job.project).documentTypes);
+  const withTitle = reviewCategory(review) !== 'recherche-juridique' && row.documents.length === 1 && !row.title;
+  const requested = withTitle ? [{ index: DOCUMENT_TITLE_INDEX, name: 'Nom du document', format: 'text' as const, prompt: 'Donne un titre court qui identifie la nature précise et l’objet du document. Reprends son intitulé s’il existe. Justifie ce titre par une citation du document. Ne reprends pas le nom du fichier et n’invente aucune information. Si aucun titre ne peut être établi, réponds « Non trouvé ».' }, ...columns] : columns;
   const mode = rowMode(row);
   await updateReview(job.project, job.file, (current) => {
     const target = current.rows.find((entry) => entry.id === rowId);
@@ -108,13 +113,19 @@ async function runRow(job: Job, task: RowTask): Promise<void> {
       environment: job.environment,
       signal: job.controller.signal,
     });
-    const first = userPrompt(row.label, promptDocuments(documents, job.project, row, mode), columns, reviewNote(review));
-    const { cells: parsed, corrections } = await askWithCorrections(job, rowId, session, first, columns, documents);
+    const first = userPrompt(row.label, promptDocuments(documents, job.project, row, mode), requested, reviewNote(review));
+    const { cells: parsed, corrections } = await askWithCorrections(job, rowId, session, first, requested, documents);
     await updateReview(job.project, job.file, (current) => {
       const target = current.rows.find((entry) => entry.id === rowId);
       if (!target) return;
       const cells = { ...current.cells[rowId] };
-      for (const column of columns) cells[String(column.index)] = parsed.get(column.index) ?? missingCell();
+      const title = parsed.get(DOCUMENT_TITLE_INDEX);
+      if (title && citationRequired(title) && !citationIssue(title)) target.title = title;
+      for (const column of columns) {
+        const cell = parsed.get(column.index) ?? missingCell();
+        if (isDocumentTypeColumn(column)) cell.summary = column.tags?.find((tag) => tag.toLocaleLowerCase('fr') === cell.summary.toLocaleLowerCase('fr').trim()) || 'indéterminé';
+        cells[String(column.index)] = cell;
+      }
       current.cells[rowId] = cells;
       Object.assign(target, { status: 'done', finishedAt: new Date().toISOString(), error: undefined, corrections: corrections || undefined });
     });

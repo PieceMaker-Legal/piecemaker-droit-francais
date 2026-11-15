@@ -23,6 +23,17 @@ describe('index OKF', () => {
     expect(elements[2].data).toMatchObject({ source: '/Pièces/Courrier.pdf.md', target: '/Pièces/Contrat.pdf.md' });
   });
 
+  it('utilise le titre descriptif dans la première colonne et la fiche, sans renommer la source', () => {
+    const node = { id: 'document:1', kind: 'document' as const, label: 'Contrat.pdf', aliases: [], data: { path: '/dossier/Pièces/Contrat.pdf' }, date: null };
+    const named = { ...index, fiches: index.fiches.map((entry) => entry.resource === 'Pièces/Contrat.pdf' ? { ...entry, title: 'Convention de prestation', titleCitation: 'La présente convention' } : entry) };
+    const html = chronologyView({ graph: { nodes: [node], links: [] } as never, okf: named }, '/dossier');
+    expect(html).toContain('class="pmd-card-title">Convention de prestation</span>');
+    expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('class="pmd-fact-title">Convention de prestation</h2>');
+    expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('La présente convention');
+    expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('data-open-file="Pièces/Contrat.pdf"');
+    expect(chronologyView({ graph: { nodes: [node], links: [] } as never }, '/dossier')).toContain('class="pmd-card-title">Contrat.pdf</span>');
+  });
+
   it('les liens se lisent dans les deux sens', () => {
     expect(ficheLinks(index, 'Pièces/Courrier.pdf')).toEqual([{ label: 'se réfère à →', title: 'Contrat', citation: 'Nous faisons suite au contrat.' }]);
     expect(ficheLinks(index, 'Pièces/Contrat.pdf')).toEqual([{ label: '← visé par', title: 'Courrier', citation: 'Nous faisons suite au contrat.' }]);

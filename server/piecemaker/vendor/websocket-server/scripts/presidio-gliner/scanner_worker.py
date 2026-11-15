@@ -198,12 +198,12 @@ DOC_META_ENABLED = os.environ.get("PIECEMAKER_DOC_META", "1").lower() not in ("0
 DOC_META_HEADER_WORDS = int(os.environ.get("PIECEMAKER_DOC_META_WORDS", "400"))
 
 NATURE_LABELS = [
-    "assignation", "conclusions", "requête", "courrier", "courriel",
-    "mise en demeure", "contrat", "facture", "devis", "attestation",
-    "jugement", "arrêt", "ordonnance", "procès-verbal", "constat",
-    "expertise", "statuts de société", "extrait Kbis", "relevé bancaire",
-    "acte notarié", "bordereau de pièces", "autre",
+    "acte de procédure", "courrier", "courriel", "mise en demeure", "contrat",
+    "facture", "devis", "attestation", "décision judiciaire", "procès-verbal",
+    "constat", "expertise", "statuts de société", "extrait Kbis", "relevé bancaire",
+    "acte notarié", "bordereau de pièces", "indéterminé",
 ]
+
 
 def _document_header(text: str, max_words: int = DOC_META_HEADER_WORDS) -> str:
     words = text.split()
@@ -244,7 +244,7 @@ def extract_document_meta(text: str, detections: List[Detection] = ()) -> Dict:
     the scan payload is always well-formed.
     """
     meta = {
-        "nature": None, "nature_confidence": None,
+        "nature": "indéterminé", "nature_confidence": None,
         "doc_date": None, "doc_date_iso": None, "juridiction": None,
     }
     if not DOC_META_ENABLED or _gliner_model is None:
@@ -263,12 +263,12 @@ def extract_document_meta(text: str, detections: List[Detection] = ()) -> Dict:
         )
         nature = classified.get("nature_document")
         if isinstance(nature, dict):
-            meta["nature"] = nature.get("label")
+            meta["nature"] = nature.get("label") if nature.get("label") in NATURE_LABELS else "indéterminé"
             confidence = nature.get("confidence")
             if isinstance(confidence, (int, float)):
                 meta["nature_confidence"] = round(float(confidence), 3)
         elif isinstance(nature, str):
-            meta["nature"] = nature
+            meta["nature"] = nature if nature in NATURE_LABELS else "indéterminé"
     except Exception as exc:  # noqa: BLE001
         _log(f"document nature classification skipped: {exc}")
     try:

@@ -107,6 +107,7 @@ export function ficheCardMarkup(index: OkfIndex, ficheId: string): string {
   const file = fiche.type === PREMISE_TYPE || fiche.type === PARTY_TYPE ? ficheFile(fiche) : fiche.resource;
   return `<aside class="pmd-okf-detail" tabindex="-1" data-okf-detail="${escapeText(fiche.id)}" aria-label="${escapeText(fiche.title)}"${chatAttributes(fiche.title, body.kind, `Fiche OKF : ${ficheFile(fiche)}`, { fichier: file })}>
     <header class="pmd-fact-head"><h2 class="pmd-fact-title">${escapeText(fiche.title)}</h2><button type="button" class="pmd-icon-button" data-detail-close aria-label="Fermer" title="Fermer (Échap)">×</button></header>
+    ${quote(fiche.titleCitation || '')}
     ${body.meta ? `<p class="pmd-fact-meta">${escapeText(body.meta)}</p>` : ''}
     ${signature('Créée', fiche.generated?.by, fiche.generated?.at) ? `<p class="pmd-fact-meta pmd-fact-signature">${signature('Créée', fiche.generated?.by, fiche.generated?.at)}</p>` : ''}
     <div class="pmd-fact-actions">${body.actions}</div>

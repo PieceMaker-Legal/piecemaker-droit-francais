@@ -39,6 +39,19 @@ describe('analyse de l’Index dans Dossier', () => {
     await vi.waitFor(() => expect(root.querySelectorAll('[data-column-title]')).toHaveLength(2));
   });
 
+  it('affiche le titre dans la première cellule, avec le nom source comme secours', async () => {
+    const project = '/dossier-exemple';
+    const title = { summary: 'Convention de prestation', flag: 'grey' as const, reasoning: '', citations: [{ document: 'piece.md', quote: 'Convention de prestation', verified: true }] };
+    const review: Review = { version: 1, title: 'Index', templateName: 'Index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [{ id: 'r1', label: 'source.pdf', title, documents: [], status: 'done' }, { id: 'r2', label: 'annexe.pdf', documents: [], status: 'done' }], cells: {} };
+    const rpc = vi.fn(async (_method: string, path: string) => path === '/assistant' ? { fichier: 'index.json' } : { project, file: 'index.json', status: 'done', review });
+    mount(root, { context: { theme: 'light', project: { name: 'Exemple', path: project }, session: null }, rpc, onContextChange: () => () => {} }, { project, onBack: vi.fn() });
+    await vi.waitFor(() => expect(root.querySelectorAll('[data-title-row]')).toHaveLength(2));
+    expect(root.querySelector('[data-title-row="r1"] .ptr-row-label')!.textContent).toBe('Convention de prestation');
+    expect(root.querySelector('[data-title-row="r2"] .ptr-row-label')!.textContent).toBe('annexe.pdf');
+    expect(root.querySelectorAll('[data-column-title]')).toHaveLength(1);
+    expect(root.querySelector('[data-title-row="r1"] [data-citation]')).not.toBeNull();
+  });
+
   it('reprend le projet existant dans Dossier et revient à l’Index sans ouvrir l’historique', async () => {
     const back = vi.fn();
     const focus = vi.fn();
