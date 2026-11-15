@@ -61,3 +61,17 @@ Recherche toi-même, avec les outils Légifrance, le texte, la décision ou la c
 - `parties` : `[{ name, role, entityType, aliases }]`. `role` : `client`, `adverse`, `related`, `co-party`, `insurer`, `opposing-counsel`, `witness` ou `other`. `entityType` : `person` ou `organisation`.
 - `nextStep` : `{ text, due }`. `links` : `[{ label, url }]`, en https, adresses données par la source.
 - Une valeur `responsible` qui commence par `user:` désigne un confrère : ne l'affiche pas et ne la change pas.
+
+## Mémoire projet
+
+Un projet est un acte précis (jeu de conclusions, contrat…). `<nom>` le désigne partout : raisonnement `.piecemaker/raisonnements/<nom>.yaml`, programme `.piecemaker/catala/<nom>/`, suivi `.piecemaker/<nom>-suivi.json`, carte du tableau, mémoire `.piecemaker/memoires/<nom>.md`. Chaque information a une seule place :
+
+| Information | Où | Qui l'écrit |
+| --- | --- | --- |
+| Récit : décisions, consignes de l'avocat, travail fait et à faire | `.piecemaker/memoires/<nom>.md`, Markdown sans frontmatter | l'agent |
+| Échéances et dates qui les font courir, prochaine action | `.piecemaker/<nom>-suivi.json` (`echeances`, `evenements`, `matter.nextStep`) | l'agent |
+| Étape en cours, document à produire (type, modèle) | `.piecemaker/etapes.json`, montré par `pm check` (`5.x <nom> (<étape>)`) | l'avocat, sur le tableau de l'onglet Suivi des dossiers |
+
+Le chemin de la mémoire découle de `<nom>` ; sa date de mise à jour est la date de modification du fichier (`ls -l`), `.piecemaker/` étant hors de l'historique Git du dossier. Ne recopie ni échéance, ni étape, ni modèle dans la mémoire.
+
+`pm memoire verifier --memoire <nom>` (après chaque écriture, le Hérisson la lance seul) refuse un frontmatter et signale une mémoire dont aucun raisonnement, programme, suivi ni carte ne porte le nom. Une mémoire tenue ailleurs ou avec un frontmatter : reporte ses échéances dans le suivi, puis garde son récit seul dans `.piecemaker/memoires/<nom>.md`.

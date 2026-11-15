@@ -79,6 +79,15 @@ test('updates the old suivi rule in an existing AGENTS.md and nothing else', () 
   assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n`);
 }));
 
+test('replaces the old project memory rule, which kept deadlines and stage in a frontmatter', () => withProject(async (root) => {
+  const oldRule = '4° Suivi projets: Pour chaque projet demandé par l’utilisateur, crée puis maintiens un fichier Markdown servant de mémoire. Un projet correspond à un acte précis et identifié : jeu de conclusions, contrat, etc. Référence sa mémoire dans ce document avec son chemin et sa date de dernière mise à jour. Son frontmatter YAML indique le template utilisé, les échéances et l’étape en cours.';
+  await writeFile(path.join(root, 'AGENTS.md'), `Ma règle\r\n${oldRule}\r\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  const rule = agentInstructionsTemplate().split('\n').find((line) => line.startsWith('4° '));
+  assert.match(rule ?? '', /\.piecemaker\/memoires\/<nom>\.md.*sans frontmatter.*pm memoire verifier/);
+  assert.equal(await read(root, 'AGENTS.md'), `Ma règle\r\n${rule}\r\n`);
+}));
+
 test('adds the tools rule once to an AGENTS.md written from the template and keeps custom lines', () => withProject(async (root) => {
   const template = agentInstructionsTemplate();
   const withoutToolsRule = template.slice(0, template.indexOf('\n6° Outils:'));

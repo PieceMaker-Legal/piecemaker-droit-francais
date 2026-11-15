@@ -8,12 +8,12 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CATALA_COMMANDS, listPrograms, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'okf'];
+const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
 const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'fichier'];
 const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
-const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
+const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
@@ -25,6 +25,7 @@ const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|del
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
 const SUIVI_FILES = /^(?:(.+)-)?suivi\.json$/;
+const MEMOIRES_DIR = '.piecemaker/memoires';
 const ETAPE_LABELS = { preparation: 'préparation', raisonnement: 'raisonnement', redaction: 'rédaction', finalisation: 'finalisation', attente: 'en attente de tiers', clos: 'clos' };
 const URGENT_DEADLINE = /— (DÉPASSÉE|AUJOURD’HUI|date à établir)/;
 
@@ -74,6 +75,10 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       lit un document du Matter board (ex. projects/cabinet/requests)
   suivi_dossiers ecrire <chemin> --json '{...}'
       écrit un document du Matter board
+
+  memoire verifier [--memoire NOM]
+      mémoire d'un projet : .piecemaker/memoires/NOM.md, récit sans frontmatter,
+      nommée comme son acte ; sans --memoire : toutes ; rien si tout est conforme
 
   okf verify
       index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
@@ -696,6 +701,7 @@ async function tabularReview(api, positional, flags, resolved) {
   const action = positional[1];
   if (!REVIEW_ACTIONS.includes(action)) usage('tabular_review attend une action connue.');
   const project = path.resolve(resolved);
+  if (action === 'verifier') return (await researchPoints(api, project)).filter((entry) => !entry.ok).map((entry) => entry.texte).join('\n');
   await api.refuseIndex(api.tabularFn, project, { fichier: flags.fichier, projet: flags.projet });
   const result = await api.tabularFn({ ...reviewInput(flags), action, project });
   const text = JSON.stringify(result);
@@ -779,6 +785,27 @@ async function suiviDossiers(api, positional, flags, resolved) {
   return api.suiviFn({ commande, chemin, donnees, cwd });
 }
 
+function memoire(positional, flags, resolved) {
+  if (positional[1] !== 'verifier') usage('memoire attend verifier.');
+  if (flags.memoire === true) usage('Indiquez une valeur pour --memoire.');
+  const folder = path.resolve(resolved);
+  const directory = path.join(folder, MEMOIRES_DIR);
+  let noms = flags.memoire ? [String(flags.memoire)] : [];
+  if (!flags.memoire) { try { noms = fs.readdirSync(directory).filter((entry) => entry.endsWith('.md')).map((entry) => entry.slice(0, -3)).sort(); } catch {} }
+  let etapes = {};
+  try { etapes = JSON.parse(fs.readFileSync(path.join(folder, '.piecemaker', 'etapes.json'), 'utf8')); } catch {}
+  const acte = (nom) => Boolean(etapes.raisonnements?.[nom]) || [`raisonnements/${nom}.yaml`, `catala/${nom}`, `${nom}-suivi.json`].some((relative) => fs.existsSync(path.join(folder, '.piecemaker', relative)));
+  return noms.flatMap((nom) => {
+    const fichier = `${MEMOIRES_DIR}/${nom}.md`;
+    let texte;
+    try { texte = fs.readFileSync(path.join(directory, `${nom}.md`), 'utf8'); } catch { return [`${fichier} : introuvable.`]; }
+    return [
+      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans .piecemaker/${nom}-suivi.json ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
+      ...(acte(nom) ? [] : [`${fichier} : manque : aucun raisonnement, programme Catala, suivi ni carte du tableau ne s’appelle ${nom}. Nommez la mémoire comme son acte.`]),
+    ];
+  }).join('\n');
+}
+
 async function catala(api, positional, flags, resolved) {
   const [, commande, ...args] = positional;
   if (!CATALA_COMMANDS.includes(commande)) usage(`catala attend ${CATALA_COMMANDS.join(', ')}.`);
@@ -816,6 +843,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (tool === 'suivi_dossiers') return suiviDossiers(api, positional, flags, resolved);
   if (tool === 'catala') return catala(api, positional, flags, resolved);
   if (tool === 'okf') return okf(api, positional, flags, resolved);
+  if (tool === 'memoire') return memoire(positional, flags, resolved);
 
   if (tool === 'bordereau') {
     const pieces = positional.slice(1);

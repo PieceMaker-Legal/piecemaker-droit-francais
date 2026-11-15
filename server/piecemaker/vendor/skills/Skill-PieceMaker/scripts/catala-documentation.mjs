@@ -27,7 +27,13 @@ export function catalaDocumentation(content, { test = false } = {}) {
     let meta = {};
     let pendingLine = 0;
     let previous;
-    const lineAt = (offset) => startLine + text.slice(0, offset).split('\n').length;
+    let counted = 0;
+    let newlines = 0;
+    const lineAt = (offset) => {
+      if (offset < counted) { counted = 0; newlines = 0; }
+      for (; counted < offset; counted++) if (text.charCodeAt(counted) === 10) newlines++;
+      return startLine + newlines + 1;
+    };
     for (const token of text.matchAll(tokens)) {
       if (token[1] !== undefined || token[2] !== undefined) {
         if (previous) previous.endLine = lineAt(token.index) - 1;

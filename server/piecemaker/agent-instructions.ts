@@ -33,6 +33,8 @@ const OLD_SUIVI_RULES = [
   '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.yaml, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans l’onglet Échéances.',
   '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.json, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans le Matter board de l’onglet Échéances.',
 ];
+const MEMORY_RULE = '4° Suivi projets: Pour chaque projet demandé par l’utilisateur, crée puis maintiens sa mémoire, .piecemaker/memoires/<nom>.md. Un projet correspond à un acte précis et identifié : jeu de conclusions, contrat, etc. ; <nom> est celui de son raisonnement et de son suivi. La mémoire garde le récit en Markdown, sans frontmatter : décisions, consignes de l’avocat, travail fait et à faire. Les échéances vont dans le suivi (5°). L’étape en cours et le document à produire sont réglés par l’avocat sur le tableau de l’onglet Suivi des dossiers ; lis-les avec pm check. Une mémoire tenue ailleurs : déplace son récit ici et ses échéances dans le suivi. pm memoire verifier la contrôle (voir la skill piecemaker).';
+const OLD_MEMORY_RULE = '4° Suivi projets: Pour chaque projet demandé par l’utilisateur, crée puis maintiens un fichier Markdown servant de mémoire. Un projet correspond à un acte précis et identifié : jeu de conclusions, contrat, etc. Référence sa mémoire dans ce document avec son chemin et sa date de dernière mise à jour. Son frontmatter YAML indique le template utilisé, les échéances et l’étape en cours.';
 const GENERAL_RULE = '2° Instructions générales: Au début de chaque session, lis ~/.piecemaker/custom/perso.md. Ce fichier, hors dépôt, contient les instructions générales de l’utilisateur et ses méthodes de travail. S’il manque, propose de le créer ; il commence toujours par la mention « Pour remplir ce document, lire @cold-start-interview.md ». Maintiens-le lorsque l’utilisateur précise ou modifie une consigne générale. 200 lignes max, synthétique.';
 const OLD_GENERAL_RULE = '2° Instructions générales: Au début de chaque session, lis ~/.piecemaker/custom/perso.md. Ce fichier, hors dépôt, contient les instructions générales de l’utilisateur, son arborescence habituelle dans ses dossiers, ses méthodes de travail. S’il manque, propose de le créer ; il commence toujours par la mention « Pour remplir ce document, lire @cold-start-interview.md ». Maintiens-le lorsque l’utilisateur précise ou modifie une consigne générale. 200 lignes max, synthétique.';
 const TREE_RULE = '3° Arborescence: Respecte l’arborescence du dossier, enregistrée dans .piecemaker/arborescence.json : l’avocat la règle dans l’index du dossier, tu la lis dans ce fichier ; pour proposer un changement, modifie ce fichier avec l’outil Edit ou Write, jamais par le shell : le hook en fait une proposition, seul l’avocat l’accepte (voir la skill piecemaker). Un « / » dans un nom crée un sous-dossier. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
@@ -61,6 +63,7 @@ const TOOLS_RULE_LINES = [
 const RULE_UPDATES = new Map([
   ...OLD_SUIVI_RULES.map((rule): [string, string] => [rule, SUIVI_RULE]),
   [OLD_GENERAL_RULE, GENERAL_RULE],
+  [OLD_MEMORY_RULE, MEMORY_RULE],
   [OLD_TREE_RULE, TREE_RULE],
   [OLD_DELEGATION_LINE, DELEGATION_LINE],
   [PREVIOUS_DELEGATION_LINE, DELEGATION_LINE],
@@ -76,7 +79,7 @@ export function agentInstructionsTemplate(): string {
   '1° Anonymisation: Les entités sensibles sont pseudonymisées automatiquement à la lecture et dépseudonymisées à l’écriture. Conserve les pseudonymes fournis ; ne cherche pas à retrouver les identités réelles. Ne jamais ouvrir un dossier non anonymisé sans autorisation préalable',
   GENERAL_RULE,
   TREE_RULE,
-  '4° Suivi projets: Pour chaque projet demandé par l’utilisateur, crée puis maintiens un fichier Markdown servant de mémoire. Un projet correspond à un acte précis et identifié : jeu de conclusions, contrat, etc. Référence sa mémoire dans ce document avec son chemin et sa date de dernière mise à jour. Son frontmatter YAML indique le template utilisé, les échéances et l’étape en cours.',
+  MEMORY_RULE,
   SUIVI_RULE,
   ...TOOLS_RULE_LINES,
 ].join('\n');

@@ -272,6 +272,15 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
+test('tabular_review verifier signale seulement les recherches bloquées', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-revue-'));
+  const projets = [{ projet: 'p1', nom: 'Rupture fictive', mode: 'recherche', a_completer: ['questions'] }, { projet: 'p2', nom: 'Autre', mode: 'recherche' }, { projet: 'p3', nom: 'Index', index: true }];
+  const verify = (liste) => run(['tabular_review', 'verifier', '--dossier', dossier], { deps: { tabularFn: async () => ({ analyses: [], projets: liste }) } });
+  assert.equal(await verify(projets), 'Recherche « Rupture fictive » : bloquée → pm tabular_review lister (sous-agent deep-research-maker)');
+  assert.equal(await verify(projets.slice(1)), '');
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
 test('check sur un dossier à jour ne signale rien', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-check-'));
   const deps = {
@@ -461,5 +470,23 @@ test('okf types propose la liste complète à l’avocat', async () => {
   assert.deepEqual(calls, [{ action: 'proposer', folder: path.resolve(dossier), ontologie: { documentTypes } }]);
   assert.match(result, /Proposition enregistrée \(1 type\(s\) de documents\)/);
   assert.equal(await run(['okf', 'types', '--json', '[]'], { cwd: dossier, deps: { okfFn: async () => ({ motif: '', date: '' }) } }), 'Aucun changement par rapport à l’ontologie actuelle : aucune proposition en attente.');
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('memoire verifier refuse le frontmatter et exige un acte du même nom', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-memoire-'));
+  const write = (relative, content) => { fs.mkdirSync(path.dirname(path.join(dossier, relative)), { recursive: true }); fs.writeFileSync(path.join(dossier, relative), content); };
+  const verify = (...args) => run(['memoire', 'verifier', ...args, '--dossier', dossier], { deps: {} });
+  write('.piecemaker/memoires/appel.md', '# Appel Jean Dupont\n\nL’avocat veut contester la date de signification.\n');
+  write('.piecemaker/appel-suivi.json', '{}');
+  write('.piecemaker/memoires/bail.md', '---\nechéances: []\n---\n# Bail Société Exemple SAS\n');
+  write('.piecemaker/etapes.json', JSON.stringify({ raisonnements: { bail: { etape: 'redaction' } } }));
+  write('.piecemaker/memoires/divers.md', 'Notes.\n');
+  assert.equal(await verify('--memoire', 'appel'), '');
+  assert.match(await verify('--memoire', 'bail'), /^\.piecemaker\/memoires\/bail\.md:1: erreur : pas de frontmatter\. Les échéances vont dans \.piecemaker\/bail-suivi\.json/);
+  assert.equal((await verify()).split('\n').length, 2);
+  assert.match(await verify(), /divers\.md : manque : aucun raisonnement, programme Catala, suivi ni carte du tableau ne s’appelle divers/);
+  assert.equal(await verify('--memoire', 'absente'), '.piecemaker/memoires/absente.md : introuvable.');
+  await assert.rejects(() => verify('--memoire'), /--memoire/);
   fs.rmSync(dossier, { recursive: true, force: true });
 });

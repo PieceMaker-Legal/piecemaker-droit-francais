@@ -9,6 +9,7 @@ pm tabular_review lancer --projet ID [--ia claude|codex|mistral] [--modele-ia TE
 pm tabular_review lire --fichier analyse.json
 pm tabular_review colonnes --fichier analyse.json --questions JSON
 pm tabular_review relancer --fichier analyse.json
+pm tabular_review verifier
 ```
 
 `--questions` JSON : `[{nom, consigne, format, etiquettes}]`. `format` : `text` `list` `date` `amount` `yes_no` `tags`.

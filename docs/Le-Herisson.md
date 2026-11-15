@@ -48,7 +48,9 @@ flowchart LR
 | `arborescence` | `arborescence.json` | proposition | devient une proposition (onglet Index › Classement) | — | `piecemaker` | — |
 | `okf` | `okf/**` | serveur | refusée : `pm okf link` / `unlink` | après `pm okf link` ou `unlink` : `pm okf verify` (erreurs, contradictions entre valeurs d'une prémisse, manques) | `okf` | 30 s |
 | `suivi` | `<nom>-suivi.json`, `suivi.json` | agent | libre | `pm suivi_dossiers verifier --suivi <fichier>` | `piecemaker` | 60 s |
+| `memoire` | `memoires/<nom>.md` (mémoire projet, règle 4°) | agent | libre | `pm memoire verifier --memoire <nom>` : pas de frontmatter, un acte du même nom (voir [suivi-dossier.md](suivi-dossier.md)) | `piecemaker` | 10 s |
 | `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si l'écriture ajoute une faute de format (`.catala_fr` seulement) | `pm catala verifier --programme <nom>` ; aussi après `pm okf link` ou `unlink` avec `states` ou `involves`, pour chaque programme qui cite une prémisse `okf:/_premises/` | `catala` | 60 s |
+| `revue` | aucun fichier : brouillon de revue tabulaire | agent | libre | après `pm tabular_review preparer` ou `lancer` : `pm tabular_review verifier` (recherches en erreur ou à compléter) | `piecemaker` | 30 s |
 
 ## Messages renvoyés à l'agent
 
@@ -67,8 +69,12 @@ est noté `⏎`.
 | `ontologie` | PreToolUse | accès à la clé de sceau `ontologie.cle` | `La clé de sceau de l’ontologie (~/.piecemaker/ontologie.cle) n’est accessible qu’au serveur PieceMaker.` |
 | `okf` | PreToolUse | toute écriture directe | `Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).` |
 | `catala` | PreToolUse | faute de format nouvelle | `Écriture refusée par le Hérisson : le programme ne respecte pas le format Catala.⏎<fichier>:<ligne>: <faute>⏎…⏎Corrigez puis réécrivez. Voir le skill catala (references/format.md).` — 10 fautes au plus, puis `… <N> erreur(s) de plus.` |
-| `okf`, `suivi`, `catala` | PostToolUse | le vérificateur rend une sortie | `Vérification automatique (<feature>) : pm <arguments>⏎<sortie de pm>⏎⏎Corrigez les erreurs signalées avant de continuer.` — 40 lignes de sortie au plus, puis `… <N> ligne(s) de plus.` |
-| `okf`, `suivi`, `catala` | PostToolUse | sortie vide | aucun message |
+| `revue` | PostToolUse | recherche bloquée (sortie de `pm tabular_review verifier`) | `Recherche « <nom> » : bloquée → pm tabular_review lister (sous-agent deep-research-maker)`, dans le message de vérification ci-dessous |
+| `okf`, `suivi`, `catala`, `revue` | PostToolUse | le vérificateur rend une sortie | `Vérification automatique (<feature>) : pm <arguments>⏎<sortie de pm>⏎⏎Corrigez les erreurs signalées avant de continuer.` — 40 lignes de sortie au plus, puis `… <N> ligne(s) de plus.` |
+| `okf`, `suivi`, `catala`, `revue` | PostToolUse | sortie vide | aucun message |
+| `memoire` | PostToolUse | frontmatter (sortie de `pm memoire verifier`, dans le message de vérification ci-dessus) | `.piecemaker/memoires/<nom>.md:1: erreur : pas de frontmatter. Les échéances vont dans .piecemaker/<nom>-suivi.json ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.` |
+| `memoire` | PostToolUse | aucun acte du même nom (idem) | `.piecemaker/memoires/<nom>.md : manque : aucun raisonnement, programme Catala, suivi ni carte du tableau ne s’appelle <nom>. Nommez la mémoire comme son acte.` |
+| `memoire` | PostToolUse | mémoire conforme | aucun message |
 
 Fautes de format Catala (`<faute>` ci-dessus), données par
 `catala-documentation.mjs` :
@@ -115,6 +121,7 @@ Catala).
 | `pm okf verify` (aller-retour `pm` + serveur) | 0,25 à 1,5 s | lancement de `pm` |
 | `pm okf verify` (≈ 2 000 documents) | 5,2 s | lecture des fiches |
 | `pm suivi_dossiers verifier` (cœur, sans réseau) | 25 ms à froid, 2 ms ensuite | — |
+| `pm memoire verifier` (local, sans serveur) | 0,7 ms à froid, 0,2 ms ensuite ; 0,07 à 0,08 s avec le lancement de `pm` | lancement de `pm` |
 | Lecture d'une source par le MCP Légifrance (par source vérifiée) | article : 0,55 à 0,70 s en ligne, 0,23 à 0,57 s en cache ; décision : 4,1 s au premier contrôle du jour, 1,1 s en cache | lancement du processus MCP (Node + Python) à chaque source |
 
 Limites des mesures :

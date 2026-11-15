@@ -34,6 +34,16 @@ test('une écriture de suivi lance son vérificateur et rend le résultat à l�
   assert.match(report.hookSpecificOutput.additionalContext, /Vérification automatique \(suivi\)[\s\S]*échéance sans source/);
 });
 
+test('une écriture de mémoire projet lance pm memoire verifier', async () => {
+  const { featureReport } = await load();
+  const { featureOf } = await loadFeatures();
+  assert.equal(featureOf(path.join(root, '.piecemaker', 'memoires', 'sous', 'appel.md')), null);
+  const pm = fakePm('.piecemaker/memoires/appel.md:1: erreur : pas de frontmatter.');
+  const report = await featureReport({ tool_name: 'Edit', cwd: root, tool_input: { file_path: '.piecemaker/memoires/appel.md' } }, { run: pm.run });
+  assert.deepEqual(pm.calls, [{ args: `memoire verifier --memoire appel --dossier ${root}`, cwd: root, timeoutMs: 10000 }]);
+  assert.match(report.hookSpecificOutput.additionalContext, /Vérification automatique \(memoire\)[\s\S]*pas de frontmatter/);
+});
+
 test('un apply_patch Codex vérifie chaque feature touchée une seule fois', async () => {
   const { featureReport } = await load();
   const pm = fakePm('Programme indemnite : à corriger.');
@@ -95,4 +105,16 @@ test('une commande pm okf link vérifie l’index, et les programmes Catala qui 
   assert.deepEqual(await link('pm okf link pieces/a.md states "Date de départ" --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`, `catala verifier --programme cite --dossier ${dossier}`]);
   assert.deepEqual(await link('pm okf link pieces/a.md amends pieces/b.md --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`]);
   assert.deepEqual(await link('pm okf verify'), []);
+});
+
+test('une commande pm tabular_review preparer ou lancer vérifie le brouillon', async () => {
+  const { featureReport } = await load();
+  const dossier = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-'));
+  require('node:fs').mkdirSync(path.join(dossier, '.piecemaker'));
+  const review = (command) => { const pm = fakePm('Recherche « Rupture fictive » : bloquée'); return featureReport({ tool_name: 'Bash', cwd: dossier, tool_input: { command } }, { run: pm.run }).then((report) => ({ calls: pm.calls.map((call) => call.args), report })); };
+  const prepared = await review('pm tabular_review preparer --mode recherche --nom "Rupture fictive"');
+  assert.deepEqual(prepared.calls, [`tabular_review verifier --dossier ${dossier}`]);
+  assert.match(prepared.report.hookSpecificOutput.additionalContext, /Vérification automatique \(revue\) : pm tabular_review verifier/);
+  assert.deepEqual((await review('pm tabular_review lancer --projet p1')).calls, [`tabular_review verifier --dossier ${dossier}`]);
+  assert.deepEqual((await review('pm tabular_review lister')).calls, []);
 });

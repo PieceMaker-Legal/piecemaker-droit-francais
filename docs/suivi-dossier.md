@@ -2,6 +2,38 @@
 
 Le suivi relève les étapes d'un dossier qu'il ne faut pas manquer. Il se distingue du raisonnement : le raisonnement réfléchit dans un acte (`.piecemaker/raisonnements/<nom>.yaml`, plusieurs par dossier), le suivi liste les dates qui comptent pour le dossier (`.piecemaker/<nom>-suivi.json`, un fichier par acte ou procédure suivi, `suivi.json` reste valide). Ce n'est pas une chronologie : n'y entrent que les actes à valeur procédurale (contentieux) et les dates liées à la validité du contrat (contrat), avec les échéances qui en découlent.
 
+## Mémoire projet, suivi et étapes : une place par information
+
+La règle 4° de l'`AGENTS.md` livré dans chaque dossier (`server/piecemaker/agent-instructions.ts`) fait tenir à l'agent une mémoire par projet. Un projet est un acte précis ; son `<nom>` est la clé commune du raisonnement, du programme Catala, du suivi, de la carte du tableau et de la mémoire.
+
+| Information | Source unique | Écrite par | Lue par |
+|---|---|---|---|
+| Récit (décisions, consignes, travail fait et à faire) | `.piecemaker/memoires/<nom>.md`, Markdown sans frontmatter | l'agent | l'agent |
+| Échéances, événements, prochaine action | `.piecemaker/<nom>-suivi.json` | l'agent, le Matter board | `pm suivi_dossiers`, Matter board, tableau (`nextAction`) |
+| Étape en cours, document à produire (type → skill et modèle de `types-documents.json`) | `.piecemaker/etapes.json` (`raisonnements.<nom>`) | l'avocat, sur le tableau (`etapes.ts`) | tableau, `pm check` |
+| Chemin de la mémoire | déduit de `<nom>` | — | — |
+| Date de mise à jour de la mémoire | date de modification du fichier (`.piecemaker/` est hors de l'historique Git du dossier) | le système de fichiers | `ls -l` |
+
+```mermaid
+flowchart LR
+  N["&lt;nom&gt;"] --> M["memoires/&lt;nom&gt;.md<br/>récit"]
+  N --> S["&lt;nom&gt;-suivi.json<br/>échéances"]
+  N --> E["etapes.json<br/>étape, document"]
+  N --> R["raisonnements/&lt;nom&gt;.yaml"]
+```
+
+L'ancienne règle 4° (mémoire libre, référencée dans l'`AGENTS.md`, frontmatter avec template, échéances et étape) est remplacée dans chaque `AGENTS.md` au démarrage, si la ligne n'a pas été modifiée. Une mémoire existante n'est pas migrée par le code : son emplacement et son format étaient libres. `pm memoire verifier` refuse le frontmatter et dit où reporter chaque donnée ; l'agent déplace le récit dans `.piecemaker/memoires/<nom>.md`.
+
+`pm memoire verifier [--memoire NOM]` (local, sans serveur) signale :
+
+- erreur : `<fichier>:1: erreur : pas de frontmatter. …` ;
+- manque : aucun raisonnement, programme Catala, suivi ni carte du tableau ne porte ce nom ;
+- `--memoire` sur un fichier absent : `introuvable`.
+
+Une mémoire conforme ne produit aucune sortie. Le Hérisson lance la vérification après chaque écriture (feature `memoire`, `docs/Le-Herisson.md`).
+
+`matter.stage` du suivi reste la phase libre affichée par le Matter board ; l'étape du travail est celle d'`etapes.json`.
+
 ## Fichier
 
 JSON : `{ matter, evenements, echeances }`. Une faute de syntaxe ressort à sa ligne. Les clés inconnues ou mal placées sont refusées dans `evenements` et `echeances`.

@@ -33,6 +33,14 @@
       "delai": 60
     },
     {
+      "nom": "memoire",
+      "cible": "^memoires/(?<nom>[^/]+)\\.md$",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["memoire", "verifier", "--memoire", "{nom}"],
+      "delai": 10
+    },
+    {
       "nom": "catala",
       "cible": "^catala/(?<nom>[^/]+)/[^/]+\\.(catala_fr|toml)$",
       "ecriture": "agent",
@@ -42,6 +50,15 @@
       "cite": "okf:/_premises/",
       "format": "catala",
       "delai": 60
+    },
+    {
+      "nom": "revue",
+      "cible": "^(?!)",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["tabular_review", "verifier"],
+      "commande": "\\bpm tabular_review (preparer|lancer)\\b",
+      "delai": 30
     }
   ]
 }
