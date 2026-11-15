@@ -31,14 +31,17 @@ export type Link = { source: string; relation: string; target: string };
 
 function load(projectPath: string, id: string, role: string) {
   const filePath = conceptFile(projectPath, id);
-  if (!fs.existsSync(filePath)) throw new TypeError(`${role} : aucune fiche ${id}.`);
+  if (!fs.existsSync(filePath)) throw new TypeError(`${role} : aucune fiche ${id}. Vérifier le chemin : les fiches sont listées dans .piecemaker/okf/index.md.`);
   return { id, filePath, ...parseConcept(fs.readFileSync(filePath, 'utf8')) };
 }
 
-function documentId(resource: unknown, role: string): string {
-  const name = text(resource).replace(/^\/+/, '');
-  if (!name) throw new TypeError(`${role} : donner le chemin du document depuis la racine du dossier.`);
-  return conceptId(name);
+function documentId(projectPath: string, resource: unknown, role: string): string {
+  const given = text(resource).replace(/^\/+/, '');
+  if (!given) throw new TypeError(`${role} : donner le chemin du document depuis la racine du dossier.`);
+  for (let name = given; ; name = name.slice(0, -3)) {
+    if (fs.existsSync(conceptFile(projectPath, conceptId(name)))) return conceptId(name);
+    if (!name.endsWith('.md')) return conceptId(given);
+  }
 }
 
 function loadDocument(projectPath: string, id: string, role: string) {
@@ -56,9 +59,9 @@ function relationName(value: unknown, ontology: Ontology | null): string {
   return name;
 }
 
-function endpoints(name: string, input: LinkInput): { source: string; target: string } {
+function endpoints(projectPath: string, name: string, input: LinkInput): { source: string; target: string } {
   if (name === INVOLVES) return { source: premiseId(text(input.source)), target: partyId(text(input.target)) };
-  return { source: documentId(input.source, 'source'), target: name === STATES ? premiseId(text(input.target)) : documentId(input.target, 'cible') };
+  return { source: documentId(projectPath, input.source, 'source'), target: name === STATES ? premiseId(text(input.target)) : documentId(projectPath, input.target, 'cible') };
 }
 
 function save(concept: { filePath: string; frontmatter: Record<string, unknown>; body: string }, relations: ReturnType<typeof relationsOf>): void {
@@ -71,7 +74,7 @@ function save(concept: { filePath: string; frontmatter: Record<string, unknown>;
 export function addLink(projectPath: string, input: LinkInput, markdownOf: MarkdownOf, origin = AGENT_ACTOR, now = new Date().toISOString()): Link {
   const ontology = readOntology(projectPath);
   const name = relationName(input.relation, ontology);
-  const ids = endpoints(name, input);
+  const ids = endpoints(projectPath, name, input);
   const source = name === INVOLVES ? load(projectPath, ids.source, 'source') : loadDocument(projectPath, ids.source, 'source');
   const citation = squash(text(input.citation));
   const value = squash(text(input.value));
@@ -111,7 +114,7 @@ export function addLink(projectPath: string, input: LinkInput, markdownOf: Markd
 
 export function removeLink(projectPath: string, input: LinkInput): Link {
   const name = relationName(input.relation, null);
-  const ids = endpoints(name, input);
+  const ids = endpoints(projectPath, name, input);
   const source = name === INVOLVES ? load(projectPath, ids.source, 'source') : loadDocument(projectPath, ids.source, 'source');
   const relations = relationsOf(source.frontmatter);
   const entry = (relations[name] || []).find((candidate) => candidate.target === ids.target && !candidate.dismissed);

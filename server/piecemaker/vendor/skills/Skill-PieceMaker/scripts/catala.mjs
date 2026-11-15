@@ -17,6 +17,7 @@ const SOURCE = /\.catala_(?:fr|en|pl)$/;
 const PYTHON_PACKAGE = 'pm_python';
 const PROOF_OK ='No errors found during the proof mode run.';
 const PROOF_OBLIGATION = 'This verification condition was generated';
+const Z3_UNTRANSLATED = /^\[([^\]]+)\] The translation to Z3 failed:\s*(?:\[Z3 encoding\]\s*)?(.*)$/;
 const TYPECHECK = ['typecheck', '--color=never', '--catala-opts=--check-invariants', '--catala-opts=--message-format=gnu'];
 const COMPILER_ERROR = /^(.+?):(\d+)\.[\d.-]+: \[ERROR\] (?:\d+\/\d+: )?(.+)$/;
 const { verifyQuoteAgainstSource } = createRequire(import.meta.url)('../../../piecemaker-plugin/scripts/lib/verify-citations.cjs');
@@ -381,10 +382,11 @@ async function verifier(context, program, flags = {}) {
           }
         } catch (error) { reports.push({ fichier: file, scope: '', passed: false, checks: [], obligations: 0, conflits: 0, error: error.message }); logs.push(`${file}: ${error.message}`); }
       }
-      const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: 'Fichiers métier', scope: `${reports.length} champ(s)`, passed: reports.length > 0 && reports.every((item) => item.passed), obligations: reports.reduce((n, item) => n + item.obligations, 0), conflits: reports.reduce((n, item) => n + item.conflits, 0), checks: reports.flatMap((item) => item.checks), scopes: reports, sources_sha256: digest };
+      const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: 'Fichiers métier', scope: `${reports.length} champ(s)`, passed: reports.length > 0 && reports.every((item) => item.passed), obligations: reports.reduce((n, item) => n + item.obligations, 0), conflits: reports.reduce((n, item) => n + item.conflits, 0), non_couvertes: reports.reduce((n, item) => n + (item.non_couvertes ?? 0), 0), checks: reports.flatMap((item) => item.checks), scopes: reports, sources_sha256: digest };
       writeResult(program.directory, 'preuve.json', report);
       writeResult(program.directory, 'preuve.log', logs.join('\n'));
-      return { passed: report.passed, ...(!reports.length ? missing('Aucun champ métier à prouver.') : {}) };
+      const failures = reports.filter((item) => !item.passed).map((item) => `${item.fichier}${item.scope ? ` › ${item.scope}` : ''} : ${item.error ?? item.checks[0].message}`);
+      return { passed: report.passed, message: failures.join(' · ') || reports.map((item) => item.checks[0].message).filter(Boolean).join(' '), ...(!reports.length ? missing('Aucun champ métier à prouver.') : {}) };
     });
     await record('explication', 'catala explain', async () => {
       if (!typed.passed) return blocked('Compilation non validée.');
@@ -457,6 +459,21 @@ function defaultProofFile(program) {
   return files[0];
 }
 
+function proofWarnings(output) {
+  const blocks = [];
+  let open = null;
+  for (const line of output.split('\n')) {
+    if (line.includes('[WARNING]')) blocks.push(open = [line.replace(/^.*\[WARNING\][─\s]*/, '')]);
+    else if (open && /^\s*│/.test(line)) open.push(line.replace(/^\s*│\s*/, ''));
+    else open = null;
+  }
+  return blocks.map((block) => block.filter(Boolean).join(' '));
+}
+
+function uncoveredNote(variables) {
+  return variables.length ? `${variables.length} variable(s) non couverte(s) par Z3 : ${variables.join(', ')}. Les autres obligations sont prouvées.` : '';
+}
+
 async function preuve(context, program, flags) {
   if (!context.pack.proof) throw new Error('La preuve n’est pas disponible dans ce pack Catala.');
   if (flags.whole_program) throw new TypeError('Preuve --whole-program refusée : Catala 1.3 peut masquer des conflits dans ce mode.');
@@ -464,11 +481,18 @@ async function preuve(context, program, flags) {
   const file = flags.fichier && flags.fichier !== true ? String(flags.fichier) : defaultProofFile(program);
   const started = context.now();
   const args = ['proof', '--debug', '--color=never', '-I', '.', file, '-s', String(flags.scope)];
-  const { entry, result } = await check(context, program.directory, 'preuve', 'catala', args, (outcome) => outcome.code === 0 && outcome.stdout.includes(PROOF_OK) && `${outcome.stdout}${outcome.stderr}`.includes(PROOF_OBLIGATION) && !/\[WARNING\]/.test(`${outcome.stdout}${outcome.stderr}`));
+  const { entry, result } = await check(context, program.directory, 'preuve', 'catala', args);
   const output = `${result.stdout}${result.stderr}`;
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed, obligations: output.split(PROOF_OBLIGATION).length - 1, conflits: (output.match(/At least two exceptions overlap/g) || []).length, checks: [entry] };
+  const obligations = output.split(PROOF_OBLIGATION).length - 1;
+  const warnings = proofWarnings(output);
+  const uncovered = warnings.map((warning) => warning.match(Z3_UNTRANSLATED)).filter(Boolean).map(([, variable, reason]) => `${variable}${reason ? ` (${reason})` : ''}`);
+  const failures = [...warnings.filter((warning) => !Z3_UNTRANSLATED.test(warning)), ...(obligations ? [] : ['aucune obligation produite'])];
+  if (!failures.length && !(result.code === 0 && result.stdout.includes(PROOF_OK))) failures.push(`catala proof a échoué (code ${result.code}) : lisez resultats/preuve.log`);
+  entry.passed = !failures.length;
+  entry.message = failures.join(' ; ') || uncoveredNote(uncovered);
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed, obligations, conflits: (output.match(/At least two exceptions overlap/g) || []).length, non_couvertes: uncovered.length, checks: [entry] };
   writeResult(program.directory, 'preuve.json', report);
-  return `Preuve ${file} › ${flags.scope} : ${entry.passed ? 'aucune erreur sur les obligations produites' : 'erreurs, avertissements ou aucune obligation produite'}.\n${output.trim()}\nDétail : .piecemaker/catala/${program.name}/resultats/preuve.json`;
+  return `Preuve ${file} › ${flags.scope} : ${entry.passed ? `aucune erreur sur les obligations produites.${entry.message ? ` ${entry.message}` : ''}` : `échec — ${entry.message}.`}\n${output.trim()}\nDétail : .piecemaker/catala/${program.name}/resultats/preuve.json`;
 }
 
 async function expliquer(context, program, flags) {

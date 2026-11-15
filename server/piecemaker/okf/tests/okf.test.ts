@@ -92,6 +92,8 @@ test('un lien ajouté est contrôlé, conservé à la reconstruction et suit un 
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Phrase absente.' }, markdownOf), /citation introuvable/);
   assert.throws(() => addLink(projectPath, { source: DRAFT, relation: 'amends', target: CONTRACT, citation: MARKDOWN[DRAFT] }, markdownOf), /L'ontologie admet amends depuis : Pièces/);
   assert.throws(() => addLink(projectPath, { source: LETTER, relation: 'annule', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /relation hors ontologie/);
+  assert.throws(() => addLink(projectPath, { source: 'Pièces/Absent.pdf.md', relation: 'amends', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf), /source : aucune fiche \/Pièces\/Absent\.pdf\.md\.md\. Vérifier le chemin : les fiches sont listées dans/);
+  assert.deepEqual(addLink(projectPath, { source: `${LETTER}.md.md`, relation: 'amends', target: `${CONTRACT}.md`, citation: 'Il est résilié.' }, markdownOf, undefined, AT), { source: `/${LETTER}.md`, relation: 'amends', target: `/${CONTRACT}.md` });
   addLink(projectPath, { source: LETTER, relation: 'amends', target: CONTRACT, citation: 'Il est résilié.' }, markdownOf, undefined, AT);
 
   const moved = 'Pièces/Contrat signé.pdf';
@@ -130,7 +132,7 @@ test('la vérification signale types, cibles, citations et documents sans fiche'
     `/${LETTER}.md | relation hors ontologie : annule (relations admises : amends, responds-to, refers-to, supersedes, states, mentions)`,
     `/${LETTER}.md | annule → /Pièces/Absent.pdf.md : cible absente du dossier`,
     `/${LETTER}.md | refers-to → /${CONTRACT}.md : citation introuvable dans le document`,
-    '/Pièces/Premiseure.pdf.md | document sans fiche : relancer l\'analyse du dossier',
+    '/Pièces/Premiseure.pdf.md | document sans fiche : lancer pm dossier conversion, qui convertit puis analyse le dossier et écrit les fiches',
   ]);
   assert.equal(readBundle(projectPath).length, 4);
 });

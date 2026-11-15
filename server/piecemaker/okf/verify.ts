@@ -115,7 +115,7 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
   }
 
   for (const resource of input.resources) {
-    if (!typeById.has(conceptId(resource))) errors.push({ fiche: conceptId(resource), erreur: 'document sans fiche : relancer l\'analyse du dossier' });
+    if (!typeById.has(conceptId(resource))) errors.push({ fiche: conceptId(resource), erreur: 'document sans fiche : lancer pm dossier conversion, qui convertit puis analyse le dossier et écrit les fiches' });
   }
   return [...errors, ...indexErrors(projectPath, concepts.map((concept) => concept.id))];
 }

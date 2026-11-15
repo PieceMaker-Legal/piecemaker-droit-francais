@@ -107,7 +107,7 @@ Les tests passent par `clerk runtest --whole-program`, puis `clerk report --json
 
 `verification.json` : `started_utc`, `finished_utc`, `programme`, `passed`, `sources_sha256`, `checks[]` (`name`, `command`, `exit_code`, `seconds`, `passed`, `status`, `message`, `files`). Un journal `resultats/<contrôle>.log` par contrôle. `preuve.json` ajoute `fichier`, `scope`, `conflits`. `catleg.json` : `date_controle`, `passed`, `fichiers[]` (`fichier`, `exit_code`, `passed`, `messages`).
 
-Une preuve réussit si `catala proof --debug` produit au moins une obligation, sort à 0, écrit « No errors found » et aucun `[WARNING]` : un chevauchement d'exceptions sort aussi à 0.
+Une preuve réussit si `catala proof --debug` produit au moins une obligation, sort à 0, écrit « No errors found » et aucun `[WARNING]` autre que « The translation to Z3 failed » : un chevauchement d'exceptions sort aussi à 0. Une variable que Z3 ne sait pas traduire n'est pas un échec : le contrôle la nomme (« variable(s) non couverte(s) par Z3 ») et `preuve.json` la compte (`non_couvertes`). Tout échec de preuve porte son motif dans le bilan : champ, texte de l'avertissement ou « aucune obligation produite ».
 
 ## Limites
 

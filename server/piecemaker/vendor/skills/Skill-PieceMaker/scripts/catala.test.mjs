@@ -265,6 +265,15 @@ test('a proof with an overlap warning fails and a pack without proof refuses it'
     const checked = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json'), 'utf8'));
     assert.equal(checked.passed, true);
     assert.equal(checked.obligations, 1);
+    const untranslated = fakeRun({ proofOutput: 'This verification condition was generated\nNo errors found during the proof mode run.\n┌─[WARNING]─\n│  [Prime.montant] The translation to Z3 failed:\n│  [Z3 encoding] ErrorOnEmpty unsupported\n└─\n' });
+    assert.match(await runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime' }, deps: { ...deps, run: untranslated.runner } }), /1 variable\(s\) non couverte\(s\) par Z3 : Prime\.montant \(ErrorOnEmpty unsupported\)\. Les autres obligations sont prouvées\./);
+    const uncovered = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json'), 'utf8'));
+    assert.equal(uncovered.passed, true);
+    assert.equal(uncovered.non_couvertes, 1);
+    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: {}, deps: { ...deps, run: untranslated.runner } }), /- preuve : ok — 1 variable\(s\) non couverte\(s\) par Z3 : Prime\.montant/);
+    const overlap = fakeRun({ proofOutput: 'This verification condition was generated\n┌─[WARNING]─\n│  At least two exceptions overlap for this variable\n└─\n' });
+    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: {}, deps: { ...deps, run: overlap.runner } }), /- preuve : échec — prime\.catala_fr › Prime : At least two exceptions overlap for this variable/);
+    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: {}, deps: { ...deps, run: emptyProof.runner } }), /- preuve : échec — prime\.catala_fr › Prime : aucune obligation produite/);
     await assert.rejects(() => runCatala({ commande: 'preuve', cwd: dossier, flags: {}, deps }), /--scope/);
     await assert.rejects(() => runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime', whole_program: true }, deps }), /masquer des conflits/);
     fs.writeFileSync(path.join(home, 'catala', 'pack.json'), JSON.stringify({ ...pack, proof: false }));

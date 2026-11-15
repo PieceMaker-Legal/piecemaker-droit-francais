@@ -247,7 +247,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
   const text = await run(['check', '--dossier', dossier], { deps });
   assert.deepEqual(calls, [{ action: 'verify', folder: dossier }]);
   assert.equal(text, [
-    'Dossier : 7 point(s) à traiter.',
+    'Dossier : 8 point(s) à traiter.',
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
@@ -255,7 +255,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '5° Raisonnement',
     '  5.A bail',
     '    5.A.1 Catala : valide',
-    '    5.A.2 Prémisses : valide',
+    '    5.A.2 Prémisses : aucune → sous-agent premise-maker',
     '  5.B rupture (rédaction)',
     '    5.B.1 Catala : jamais vérifié → pm catala verifier --programme rupture',
     '    5.B.2 Prémisses : 1 manque(s) → pm okf verify (sous-agent premise-maker)',
@@ -267,6 +267,9 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '7° Suivi suivi.json : valide',
   ].join('\n'));
   assert.doesNotMatch(text, /ancien|yaml/i);
+  write('.piecemaker/catala/bail/bail.catala_fr', '## okf:/_premises/date-du-bail.md\n');
+  write('.piecemaker/okf/_premises/date-du-bail.md', '');
+  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses : valide/);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
   await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });

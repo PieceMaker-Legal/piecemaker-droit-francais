@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { CATALA_COMMANDS, listPrograms, runCatala } from './catala.mjs';
+import { CATALA_COMMANDS, listPrograms, runCatala, sourceFiles } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
@@ -591,6 +591,13 @@ function catalaState(folder, name) {
   return `${(report.checks ?? []).filter((entry) => !entry.passed).length || 1} contrôle(s) en échec`;
 }
 
+function attachedPremises(folder, name) {
+  const directory = path.join(folder, '.piecemaker', 'catala', name);
+  return sourceFiles(directory)
+    .flatMap((file) => [...fs.readFileSync(path.join(directory, file), 'utf8').matchAll(/okf:\/(_premises\/\S+\.md)/g)])
+    .filter((cited) => fs.existsSync(path.join(folder, '.piecemaker', 'okf', cited[1]))).length;
+}
+
 async function suiviState(api, folder, suivi) {
   let text;
   try { text = String(await api.suiviFn({ commande: 'verifier', cwd: folder, suivi })); } catch { return 'vérification impossible'; }
@@ -630,7 +637,8 @@ async function reasoningPoints(api, folder, manques) {
     if (programs.includes(nom)) {
       add('Catala', catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
       const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
-      add('Prémisses', gaps ? `${gaps} manque(s)` : '', 'pm okf verify (sous-agent premise-maker)');
+      if (gaps || attachedPremises(folder, nom)) add('Prémisses', gaps ? `${gaps} manque(s)` : '', 'pm okf verify (sous-agent premise-maker)');
+      else add('Prémisses', 'aucune', 'sous-agent premise-maker');
     } else add('Catala', 'programme à écrire', 'skill catala');
     for (const document of suite?.documents ?? []) {
       const state = documentState(folder, document);
