@@ -382,7 +382,7 @@ async function verifier(context, program, flags = {}) {
           }
         } catch (error) { reports.push({ fichier: file, scope: '', passed: false, checks: [], obligations: 0, conflits: 0, error: error.message }); logs.push(`${file}: ${error.message}`); }
       }
-      const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: 'Fichiers métier', scope: `${reports.length} champ(s)`, passed: reports.length > 0 && reports.every((item) => item.passed), obligations: reports.reduce((n, item) => n + item.obligations, 0), conflits: reports.reduce((n, item) => n + item.conflits, 0), non_couvertes: reports.reduce((n, item) => n + (item.non_couvertes ?? 0), 0), checks: reports.flatMap((item) => item.checks), scopes: reports, sources_sha256: digest };
+      const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: 'Fichiers métier', scope: `${reports.length} champ(s)`, passed: reports.length > 0 && reports.every((item) => item.passed), obligations: reports.reduce((n, item) => n + item.obligations, 0), conflits: reports.reduce((n, item) => n + item.conflits, 0), vides: reports.reduce((n, item) => n + (item.vides ?? 0), 0), non_couvertes: reports.reduce((n, item) => n + (item.non_couvertes ?? 0), 0), checks: reports.flatMap((item) => item.checks), scopes: reports, sources_sha256: digest };
       writeResult(program.directory, 'preuve.json', report);
       writeResult(program.directory, 'preuve.log', logs.join('\n'));
       const failures = reports.filter((item) => !item.passed).map((item) => `${item.fichier}${item.scope ? ` › ${item.scope}` : ''} : ${item.error ?? item.checks[0].message}`);
@@ -463,11 +463,16 @@ function proofWarnings(output) {
   const blocks = [];
   let open = null;
   for (const line of output.split('\n')) {
-    if (line.includes('[WARNING]')) blocks.push(open = [line.replace(/^.*\[WARNING\][─\s]*/, '')]);
-    else if (open && /^\s*│/.test(line)) open.push(line.replace(/^\s*│\s*/, ''));
-    else open = null;
+    if (line.includes('[WARNING]')) blocks.push(open = [`│  ${line.replace(/^.*\[WARNING\][─\s]*/, '')}`]);
+    else if (/^\s*└─/.test(line)) open = null;
+    else if (open) open.push(line);
   }
-  return blocks.map((block) => block.filter(Boolean).join(' '));
+  return blocks.map((block) => {
+    const text = block.map((line) => line.match(/^\s*│ {2}(\S.*)$/)?.[1]).filter(Boolean).join(' ').replace(/:$/, '');
+    const place = block.join('\n').match(/─➤ (\S+?):(\d+)\./);
+    const example = block.map((line) => line.match(/^\s*--> (.*)$/)?.[1]).filter(Boolean).map((value) => value.replace(' : ', ' = '));
+    return `${text}${place ? ` (${place[1]}, ligne ${place[2]})` : ''}${example.length ? ` — contre-exemple : ${example.join(', ')}` : ''}`;
+  });
 }
 
 function uncoveredNote(variables) {
@@ -487,10 +492,10 @@ async function preuve(context, program, flags) {
   const warnings = proofWarnings(output);
   const uncovered = warnings.map((warning) => warning.match(Z3_UNTRANSLATED)).filter(Boolean).map(([, variable, reason]) => `${variable}${reason ? ` (${reason})` : ''}`);
   const failures = [...warnings.filter((warning) => !Z3_UNTRANSLATED.test(warning)), ...(obligations ? [] : ['aucune obligation produite'])];
-  if (!failures.length && !(result.code === 0 && result.stdout.includes(PROOF_OK))) failures.push(`catala proof a échoué (code ${result.code}) : lisez resultats/preuve.log`);
+  if (!failures.length && !(result.code === 0 && (uncovered.length || result.stdout.includes(PROOF_OK)))) failures.push(`catala proof a échoué (code ${result.code}) : lisez resultats/preuve.log`);
   entry.passed = !failures.length;
   entry.message = failures.join(' ; ') || uncoveredNote(uncovered);
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed, obligations, conflits: (output.match(/At least two exceptions overlap/g) || []).length, non_couvertes: uncovered.length, checks: [entry] };
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, fichier: file, scope: String(flags.scope), passed: entry.passed, obligations, conflits: (output.match(/At least two exceptions overlap/g) || []).length, vides: (output.match(/This variable might return an empty error/g) || []).length, non_couvertes: uncovered.length, checks: [entry] };
   writeResult(program.directory, 'preuve.json', report);
   return `Preuve ${file} › ${flags.scope} : ${entry.passed ? `aucune erreur sur les obligations produites.${entry.message ? ` ${entry.message}` : ''}` : `échec — ${entry.message}.`}\n${output.trim()}\nDétail : .piecemaker/catala/${program.name}/resultats/preuve.json`;
 }
