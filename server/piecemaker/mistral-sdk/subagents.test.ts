@@ -11,7 +11,7 @@ const allow = async (_tool: unknown, input: Record<string, unknown>) => input;
 
 function toolbox(calls: string[]) {
   const tool = (name: string, readOnly = true) => [name, { name, readOnly, definition: definition(name), execute: async (input: Record<string, unknown>) => { calls.push(`${name}:${JSON.stringify(input)}`); return `résultat ${name}`; } }] as const;
-  return { instructions: 'Skills disponibles', close: async () => {}, tools: new Map([
+  return { instructions: 'Skills disponibles', close: async () => {}, turnEnd: async () => '', tools: new Map([
     tool('mcp__legifrance__Search_Jurisprudence'), tool('mcp__legifrance__consulter_article'), tool('Read'), tool('Write', false), tool('Bash', false),
   ]) };
 }

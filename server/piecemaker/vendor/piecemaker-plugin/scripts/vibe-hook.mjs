@@ -39,7 +39,7 @@ export function claudePayload(payload) {
   const input = payload.tool_input || {};
   const post = payload.hook_event_name === 'post_tool';
   return {
-    hook_event_name: post ? 'PostToolUse' : 'PreToolUse',
+    hook_event_name: payload.hook_event_name === 'post_agent' ? 'Stop' : post ? 'PostToolUse' : 'PreToolUse',
     session_id: payload.session_id,
     transcript_path: payload.transcript_path,
     cwd: payload.cwd,
@@ -54,6 +54,7 @@ export function vibeResponse(stdout, code, stderr) {
   if (code === 2) return { decision: 'deny', reason: String(stderr || '').trim() || 'Refusé par PieceMaker.' };
   let output;
   try { output = JSON.parse(stdout); } catch { return null; }
+  if (output?.decision === 'block') return { decision: 'deny', reason: output.reason || '' };
   const specific = output?.hookSpecificOutput || {};
   if (specific.permissionDecision === 'deny') return { decision: 'deny', reason: specific.permissionDecisionReason || output.systemMessage || '' };
   if (specific.updatedInput) return { hook_specific_output: { tool_input: specific.updatedInput } };

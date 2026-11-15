@@ -24,9 +24,9 @@ async function setup(t: TestContext) {
   return { home, history: createMistralHistory(home) };
 }
 
-function fixtureTools(execute: (input: Record<string, unknown>) => Promise<string>, readOnly = true) {
+function fixtureTools(execute: (input: Record<string, unknown>) => Promise<string>, readOnly = true, turnEnd = async () => '') {
   return (async () => ({
-    instructions: 'Skills disponibles : fictitious-skill', close: async () => {},
+    instructions: 'Skills disponibles : fictitious-skill', close: async () => {}, turnEnd,
     tools: new Map([['probe', { name: 'probe', readOnly, execute, definition: { type: 'function' as const, function: { name: 'probe', parameters: { type: 'object' } } } }]]),
   })) satisfies typeof createMistralTools;
 }
@@ -62,6 +62,18 @@ test('streamed tool fragments execute once and persisted history resumes after a
   assert.ok(JSON.stringify(requests.at(-1)).includes('Vérifier alpha'));
   await assert.rejects(createMistralSdkRuntime(history, async () => [], home, auth, tools).run('autre utilisateur', { sessionId: 'mistral-sdk-example' }, { ...writer, userId: 2 }, context), /autre utilisateur/);
   assert.equal((await history.load('mistral-sdk-example'))?.userId, 1);
+});
+
+test('the turn goes on once when the turn-end report still lists errors', async t => {
+  const { home, history } = await setup(t);
+  const requests: unknown[] = [];
+  const reports = ['Fin de tour suspendue par le Hérisson : 1 vérification(s)'];
+  const tools = fixtureTools(async () => '', true, async () => reports.shift() ?? '');
+  const auth = fixtureClient([[{ content: 'Terminé.' }], [{ content: 'Corrigé.' }]], requests);
+  await createMistralSdkRuntime(history, async () => [], home, auth, tools).run('Écrire le suivi', { sessionId: 'mistral-sdk-fin-de-tour' }, { userId: 1, send() {} } as never, context);
+  assert.equal(requests.length, 2);
+  assert.ok(JSON.stringify(requests[1]).includes('Fin de tour suspendue par le Hérisson'));
+  assert.equal((await history.load('mistral-sdk-fin-de-tour'))?.transcript.at(-1)?.content, 'Corrigé.');
 });
 
 test('a fork copies the whole conversation and answers apart from its source', async t => {

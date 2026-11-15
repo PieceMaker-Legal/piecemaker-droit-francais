@@ -216,6 +216,19 @@ export function codexHerissonHookStatus(repoRoot, userHome = os.homedir()) {
   return codexHookGroupStatus(userHome, codexHerissonGroup(repoRoot), isPieceMakerHerisson, 'PostToolUse');
 }
 
+function codexHerissonTurnEndGroup(repoRoot) {
+  const [hook] = codexHerissonGroup(repoRoot).hooks;
+  return { hooks: [{ ...hook, statusMessage: 'Le Hérisson : erreurs restantes en fin de tour' }] };
+}
+
+export function installCodexHerissonTurnEndHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexHerissonTurnEndGroup(repoRoot), isPieceMakerHerisson, 'Stop');
+}
+
+export function codexHerissonTurnEndHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexHerissonTurnEndGroup(repoRoot), isPieceMakerHerisson, 'Stop');
+}
+
 function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') {
   const loaded = readCodexHooks(userHome, event);
   if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
@@ -250,7 +263,7 @@ function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') 
 }
 
 const PIECEMAKER_HOOKS = [isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerHerisson];
-const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use', SubagentStop: 'subagent_stop' };
+const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use', SubagentStop: 'subagent_stop', Stop: 'stop' };
 
 function sortedKeys(value) {
   if (Array.isArray(value)) return value.map(sortedKeys);

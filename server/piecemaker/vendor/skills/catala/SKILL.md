@@ -52,7 +52,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article sous son propre titre, son extrait exact, son texte intégral, puis ses blocs ` ```catala `. Ajoutez chaque section source par `pm catala section`, puis écrivez son bloc dessous.
 4. Déclarez chaque fait du dossier comme un `contexte` : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur (`references/format.md`). Confiez les prémisses à `premise-maker`.
 5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier, chacun sous `## okf:/_premises/<fiche>.md`.
-6. Lancez `pm catala verifier --programme <nom>` jusqu'à « vérifié », puis `pm okf verify`. Suivez chaque message.
+6. Le Hérisson lance `pm catala verifier` après chaque écriture d'un fichier du programme et rend les messages nouveaux : suivez chacun jusqu'à « vérifié ». Ne le lancez pas vous-même. Lancez ensuite `pm okf verify`.
 
 ## Où chercher
 

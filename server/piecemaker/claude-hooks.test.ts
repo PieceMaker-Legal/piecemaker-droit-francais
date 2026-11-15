@@ -72,13 +72,13 @@ test('approves only the PieceMaker hooks in the Codex config, keeping the other 
     assert.ok(config.includes(foreign));
     assert.deepEqual(state[`${hooksFile}:pre_tool_use:0:0`], { enabled: false, trusted_hash: 'sha256:perso' });
     assert.equal(state[`${hooksFile}:pre_tool_use:1:0`].enabled, true);
-    for (const [event, label] of [['PreToolUse', 'pre_tool_use'], ['PostToolUse', 'post_tool_use'], ['SubagentStop', 'subagent_stop']]) {
+    for (const [event, label] of [['PreToolUse', 'pre_tool_use'], ['PostToolUse', 'post_tool_use'], ['SubagentStop', 'subagent_stop'], ['Stop', 'stop']]) {
       document[event].forEach((group: { matcher: string; hooks: Array<{ command: string }> }, index: number) => {
         if (group.hooks[0].command === 'echo perso') return;
         assert.equal(state[`${hooksFile}:${label}:${index}:0`].trusted_hash, codexHookTrustedHash(event, group.matcher, group.hooks[0]));
       });
     }
-    assert.equal(Object.keys(state).length, 5);
+    assert.equal(Object.keys(state).length, 6);
     const settled = fs.readFileSync(configFile, 'utf8');
     assert.equal((await reconcileCodexHooks(applicationRoot, home)).ok, true);
     assert.equal(fs.readFileSync(configFile, 'utf8'), settled);
@@ -113,7 +113,7 @@ test('installs the PieceMaker hooks in ~/.vibe/hooks.toml only when Vibe is pres
     assert.equal((await reconcileVibeHooks(applicationRoot, home)).ok, true);
     assert.equal(fs.readFileSync(file, 'utf8'), first);
     const names = [...first.matchAll(/^name = "([^"]+)"/gm)].map((match) => match[1]);
-    assert.deepEqual(names, ['perso', 'piecemaker-protect-originals', 'piecemaker-guard-ontologie', 'piecemaker-guard-legal-search', 'piecemaker-guard-secrets', 'piecemaker-classify-ai-documents', 'piecemaker-herisson', 'piecemaker-verify-subagent']);
+    assert.deepEqual(names, ['perso', 'piecemaker-protect-originals', 'piecemaker-guard-ontologie', 'piecemaker-guard-legal-search', 'piecemaker-guard-secrets', 'piecemaker-classify-ai-documents', 'piecemaker-herisson', 'piecemaker-herisson-fin-de-tour', 'piecemaker-verify-subagent']);
     assert.ok(first.includes('vibe-hook.mjs'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

@@ -63,6 +63,10 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     try { context = result.trim() ? JSON.parse(result).hookSpecificOutput?.additionalContext ?? '' : ''; } catch { context = ''; }
     return context ? `${done}\n\n${context}` : done;
   };
+  const turnEnd = async () => {
+    const result = await run(process.execPath, [featureScript], JSON.stringify({ hook_event_name: 'Stop', cwd })).catch(() => '');
+    try { return result.trim() ? String(JSON.parse(result).reason ?? '') : ''; } catch { return ''; }
+  };
   const classify = (toolName: string, input: Record<string, unknown>) => run(process.execPath, [classifyScript], JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: toolName, tool_input: input, tool_response: { success: true }, cwd })).catch(() => undefined);
 
   const add = (name: string, description: string, properties: Record<string, unknown>, required: string[], readOnly: boolean, execute: (input: Record<string, unknown>) => Promise<string>) => {
@@ -199,6 +203,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
 
   return {
     tools,
+    turnEnd,
     instructions: `Skills disponibles (charger avec skill avant utilisation) :\n${skills.map(skill => `${skill.name} : ${skill.description}`).join('\n')}\n${failures.length ? `Serveurs MCP indisponibles :\n${failures.join('\n')}` : ''}`,
     close: async () => { await Promise.allSettled(clients.map(client => client.close())); },
   };

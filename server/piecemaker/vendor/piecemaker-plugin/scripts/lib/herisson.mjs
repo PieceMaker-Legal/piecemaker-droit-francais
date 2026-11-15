@@ -23,7 +23,38 @@ export function verifierArgs(found) {
 }
 
 const PATCH_SECTION = /^\*\*\* (Add|Update|Delete) File: (.+)$/;
+const SUIVI_KEYS = ['matter', 'evenements', 'echeances'];
+const lineOf = (content, index) => content.slice(0, Math.max(0, index)).split('\n').length;
+
+function suiviErrors(content) {
+  let value;
+  try { value = JSON.parse(content); } catch (error) {
+    const position = /position (\d+)/.exec(error.message);
+    return [{ line: position ? lineOf(content, Number(position[1])) : 1, message: `JSON illisible : ${error.message.replace(/ in JSON at position.*$/, '')}. Réécrivez un JSON valide : guillemets doubles, pas de virgule finale, pas de commentaire.` }];
+  }
+  const shape = '{ "matter": {…}, "evenements": { "nom de l’événement": {…} }, "echeances": { "nom de l’échéance": {…} } }';
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [{ line: 1, message: `le suivi est un objet ${shape}, pas ${Array.isArray(value) ? 'une liste' : 'une valeur seule'}.` }];
+  const errors = [];
+  for (const key of Object.keys(value)) {
+    const line = lineOf(content, content.indexOf(JSON.stringify(key)));
+    if (!SUIVI_KEYS.includes(key)) errors.push({ line, message: `clé « ${key} » inconnue à la racine du suivi. Clés admises : ${SUIVI_KEYS.join(', ')}. Placez son contenu sous l’une d’elles ou retirez-la.` });
+    else if (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])) errors.push({ line, message: `« ${key} » est un objet ${key === 'matter' ? '{ "client": …, "summary": … }' : `{ "nom en français": {…} }`}, pas ${Array.isArray(value[key]) ? 'une liste' : 'une valeur seule'}.` });
+  }
+  return errors;
+}
+
+function memoireErrors(content) {
+  return /^---\r?\n/.test(content) ? [{ line: 1, message: 'frontmatter interdit : la mémoire commence par un bloc entre deux lignes « --- ». Retirez ce bloc. Les échéances vont dans .piecemaker/<nom>-suivi.json ; l’étape en cours et le document à produire sont réglés par l’avocat sur le tableau de l’onglet Suivi des dossiers (lisez-les avec pm check).' }] : [];
+}
+
+const REFUSALS = {
+  catala: ['le programme ne respecte pas le format Catala ou ne compile pas.', 'Corrigez puis réécrivez. Voir le skill catala (references/format.md).'],
+  suivi: ['le fichier de suivi n’a pas la forme attendue. Rien n’a été écrit.', 'Corrigez ces lignes puis réécrivez le fichier. Modèle complet : skill piecemaker, references/suivi.md.'],
+  memoire: ['la mémoire projet n’a pas la forme attendue. Rien n’a été écrit.', 'Corrigez puis réécrivez la mémoire : du Markdown simple, sans frontmatter.'],
+};
 const FORMATS = {
+  suivi: async (file, content) => suiviErrors(content),
+  memoire: async (file, content) => memoireErrors(content),
   catala: async (file, content) => [
     ...(file.endsWith('.catala_fr') ? (await import('../../../skills/Skill-PieceMaker/scripts/catala-documentation.mjs')).catalaDocumentation(content, { test: /^test_/.test(path.basename(file)) }).errors : []),
     ...(await (await import('../../../skills/Skill-PieceMaker/scripts/catala.mjs')).typecheckErrors(path.dirname(file), file, content)).map((error) => ({ line: error.line, where: error.file === path.basename(file) ? undefined : `${error.file}:${error.line}`, message: `compilation : ${error.message}` })),
@@ -78,7 +109,7 @@ export function writtenTexts(tool, input = {}, cwd = process.cwd()) {
 }
 
 export async function formatErrors(tool, input, cwd) {
-  const refused = [];
+  const refused = new Map();
   for (const { file, after } of writtenTexts(tool, input, cwd)) {
     const found = featureOf(file.normalize('NFC'));
     const check = FORMATS[found?.feature.format];
@@ -89,9 +120,9 @@ export async function formatErrors(tool, input, cwd) {
     for (const error of await check(file, current(file))) known.set(error.message, (known.get(error.message) ?? 0) + 1);
     for (const error of errors) {
       if (known.get(error.message)) known.set(error.message, known.get(error.message) - 1);
-      else refused.push(`${error.where ?? `${path.basename(file)}:${error.line}`}: ${error.message}`);
+      else refused.set(found.feature.format, [...(refused.get(found.feature.format) ?? []), `${error.where ?? `${path.basename(file)}:${error.line}`}: ${error.message}`]);
     }
   }
-  if (!refused.length) return null;
-  return ['Écriture refusée par le Hérisson : le programme ne respecte pas le format Catala ou ne compile pas.', ...refused.slice(0, 10), ...(refused.length > 10 ? [`… ${refused.length - 10} erreur(s) de plus.`] : []), 'Corrigez puis réécrivez. Voir le skill catala (references/format.md).'].join('\n');
+  if (!refused.size) return null;
+  return [...refused].map(([format, lines]) => [`Écriture refusée par le Hérisson : ${REFUSALS[format][0]}`, ...lines.slice(0, 10), ...(lines.length > 10 ? [`… ${lines.length - 10} erreur(s) de plus.`] : []), REFUSALS[format][1]].join('\n')).join('\n\n');
 }

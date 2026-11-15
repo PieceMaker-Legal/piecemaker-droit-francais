@@ -10,7 +10,7 @@ const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const KEY_REASON = 'La clé de sceau de l’ontologie (~/.piecemaker/ontologie.cle) n’est accessible qu’au serveur PieceMaker.';
 const OKF_REASON = FEATURES.find((feature) => feature.nom === 'okf').motif;
 const SHELL_KEY = /\.piecemaker[\\/]ontologie\.cle\b|\bontologie\.cle\b/;
-const SHELL_MENTION = /\.piecemaker[\\/](ontologie\.json|arborescence\.json|okf\b)/;
+const SHELL_MENTION = /\.piecemaker[\\/]((?:ontologie|arborescence)(?:\.proposition)?\.json|etapes\.json|protection\.json|okf\b)/;
 const READ_COMMANDS = new Set(['cat', 'head', 'tail', 'less', 'more', 'grep', 'egrep', 'fgrep', 'rg', 'ls', 'wc', 'file', 'stat', 'diff', 'sort', 'uniq', 'cut', 'tr', 'jq', 'find', 'echo', 'printf', 'test', 'cd', 'pwd', 'pm', 'true']);
 const UNSAFE_ARGUMENT = /(^|\s)(-i\b|--in-place|-delete\b|-exec\b|-execdir\b|-ok\b|-fprint)/;
 

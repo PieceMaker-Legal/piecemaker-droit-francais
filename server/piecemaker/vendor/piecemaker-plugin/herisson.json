@@ -2,14 +2,14 @@
   "features": [
     {
       "nom": "ontologie",
-      "cible": "^ontologie\\.json$",
+      "cible": "^ontologie(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "okf",
       "motif": "L’ontologie des liens (~/.piecemaker/ontologie.json), commune à tous les dossiers, est réglée par l’avocat seul, dans l’onglet Index › Ontologie. Lisez-la avec pm okf ontologie ; pour proposer un changement, modifiez ontologie.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell : la modification devient une proposition, l’avocat décide."
     },
     {
       "nom": "arborescence",
-      "cible": "^arborescence\\.json$",
+      "cible": "^arborescence(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "piecemaker",
       "motif": "L’arborescence (.piecemaker/arborescence.json) est réglée par l’avocat seul, dans l’onglet Index › Classement. Pour proposer un changement, modifiez arborescence.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell, ou lancez pm dossier arborescence --dossiers : la modification devient une proposition, l’avocat décide."
@@ -22,7 +22,22 @@
       "motif": "Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).",
       "verifier": ["okf", "verify"],
       "commande": "\\bpm okf (link|unlink)\\b",
+      "erreur": "Index OKF : \\d+ erreur|Contradictions : \\d|Graphe : \\d+ élément",
       "delai": 30
+    },
+    {
+      "nom": "etapes",
+      "cible": "^etapes\\.json$",
+      "ecriture": "serveur",
+      "skill": "piecemaker",
+      "motif": "Les étapes du dossier (.piecemaker/etapes.json) sont réglées par l’avocat seul, sur le tableau de l’onglet Suivi des dossiers. Lisez l’étape en cours et le document à produire avec pm check ; n’écrivez jamais ce fichier. Pour changer une étape, demandez-le à l’avocat."
+    },
+    {
+      "nom": "protection",
+      "cible": "^protection\\.json$",
+      "ecriture": "serveur",
+      "skill": "piecemaker",
+      "motif": "La protection des pièces (.piecemaker/protection.json) est écrite par le serveur PieceMaker. Seul l’avocat lève la protection, par le bouclier du dossier dans la barre latérale ; n’écrivez jamais ce fichier. Lisez le Markdown converti d’une pièce protégée au lieu du PDF ou de l’image."
     },
     {
       "nom": "suivi",
@@ -30,7 +45,9 @@
       "ecriture": "agent",
       "skill": "piecemaker",
       "verifier": ["suivi_dossiers", "verifier", "--suivi", "{nom}"],
-      "delai": 60
+      "erreur": "\\d+ erreur\\(s\\), \\d+ manque\\(s\\)\\.",
+      "delai": 60,
+      "format": "suivi"
     },
     {
       "nom": "memoire",
@@ -38,7 +55,8 @@
       "ecriture": "agent",
       "skill": "piecemaker",
       "verifier": ["memoire", "verifier", "--memoire", "{nom}"],
-      "delai": 10
+      "delai": 10,
+      "format": "memoire"
     },
     {
       "nom": "catala",
@@ -49,6 +67,7 @@
       "commande": "\\bpm okf (link|unlink)\\b.*\\b(states|involves)\\b",
       "cite": "okf:/_premises/",
       "format": "catala",
+      "erreur": ": à corriger\\.",
       "delai": 60
     },
     {
@@ -58,6 +77,7 @@
       "skill": "piecemaker",
       "verifier": ["tabular_review", "verifier"],
       "commande": "\\bpm tabular_review (preparer|lancer)\\b",
+      "erreur": ": bloquée",
       "delai": 30
     }
   ]

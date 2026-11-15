@@ -96,7 +96,7 @@ Pour un contrat, chaque clause utile est une prémisse : titre = objet de la cla
 pm okf verify
 ```
 
-La commande renvoie les erreurs : type hors arborescence, document absent, document sans fiche, relation inconnue, cible absente ou hors graphe, citation introuvable, `index.md` incomplet. Elle renvoie aussi les contradictions : une prémisse à valeur unique avec plusieurs valeurs. Corrige la cause d'une erreur, puis relance. Signale une contradiction à l'avocat ; ne tranche pas.
+La commande renvoie les erreurs : type hors arborescence, document absent, document sans fiche, relation inconnue, cible absente ou hors graphe, citation introuvable, `index.md` incomplet. Elle renvoie aussi les contradictions : une prémisse à valeur unique avec plusieurs valeurs. Le Hérisson la lance seul après chaque `pm okf link` ou `unlink` : corrige la cause de chaque erreur qu'il rend. Signale une contradiction à l'avocat ; ne tranche pas.
 
 Elle liste enfin les éléments manquants du graphe ; un manque lié à un programme Catala nomme ce programme :
 
@@ -107,4 +107,4 @@ Elle liste enfin les éléments manquants du graphe ; un manque lié à un progr
 | Partie | aucune mention dans une pièce, aucune prémisse qui la concerne |
 | `#[doc]` Catala (`fichier:ligne`) | prémisse absente de l'index ou sans pièce ; pièce citée directement |
 
-Relance `verify` après avoir complété le graphe ou écrit un programme Catala. Comble chaque manque que les pièces permettent de combler. Signale les autres à l'avocat ; n'invente ni citation ni lien.
+Lance `verify` toi-même seulement pour lire les manques du graphe avant de le compléter. Comble chaque manque que les pièces permettent de combler. Signale les autres à l'avocat ; n'invente ni citation ni lien.

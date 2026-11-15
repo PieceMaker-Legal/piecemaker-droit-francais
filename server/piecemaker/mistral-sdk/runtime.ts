@@ -227,7 +227,11 @@ export function createMistralSdkRuntime(
           if (thinking) transcript.push(createNormalizedMessage({ id: thinkingId, provider: 'mistral', sessionId: nativeId, kind: 'thinking', content: thinking, model }));
           const toolCalls = [...calls.values()];
           messages.push({ role: 'assistant', content: chunks.length ? chunks : content || null, ...(toolCalls.length ? { toolCalls } : {}) });
-          if (!toolCalls.length) { await save(); return; }
+          if (!toolCalls.length) {
+            const remaining = planning ? '' : await toolbox.turnEnd();
+            if (remaining) { messages.push({ role: 'user', content: remaining }); continue; }
+            await save(); return;
+          }
           for (const call of toolCalls) {
             const apiName = call.function.name;
             const tool = toolbox.tools.get(apiName);
