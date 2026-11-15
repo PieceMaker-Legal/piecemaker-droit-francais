@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import type { ReasoningConnectors } from '@/modules/piecemaker-reasoning/index.js';
 
-import { createCatalaCitation } from './catala-citation.js';
+import { createCatalaCitation, historyNeeded } from './catala-citation.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { createReasoningConnectors } from './reasoning-connectors.js';
 
@@ -249,4 +249,13 @@ test('a Légifrance citation already validated is reused without querying the so
     await service.verify(home, files);
     assert.equal(queried.filter((id) => id === 'LEGIARTI000000000001').length, 2);
   } finally { await rm(home, { recursive: true, force: true }); }
+});
+
+test('a decision less than five years old keeps the remote history check, an older one is reused', async () => {
+  const now = new Date(2026, 10, 15);
+  assert.equal(historyNeeded('LEGIARTI000000000001', 'Article fictif', now), false);
+  assert.equal(historyNeeded('JURITEXT000000000001', 'Cour de cassation, civile, Chambre commerciale, 4 septembre 2024, 23-00.000, Inédit', now), true);
+  assert.equal(historyNeeded('JURITEXT000000000001', 'Cour de cassation, civile, Chambre commerciale, 1er mars 2021, 20-00.000, Inédit', now), false);
+  assert.equal(historyNeeded('0123456789abcdef01234567', 'Cour d’appel de Paris, 16 novembre 2021', now), true);
+  assert.equal(historyNeeded('CETATEXT000000000001', 'Conseil d’État', now), true);
 });

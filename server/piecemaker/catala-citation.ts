@@ -20,6 +20,17 @@ function readValidated(cwd: string): Record<string, Validated> {
   try { return JSON.parse(fs.readFileSync(validatedFile(cwd), 'utf8')); } catch { return {}; }
 }
 
+const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const DECISION = /^(?:JURITEXT|CETATEXT|CONSTEXT)\d+$|^[0-9a-f]{24}$/i;
+export function historyNeeded(id: string, title: string, now = new Date()) {
+  if (!DECISION.test(id)) return false;
+  const found = /(\d{1,2})(?:er)? (janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre) (\d{4})/i.exec(title);
+  if (!found) return true;
+  const limit = new Date(now);
+  limit.setFullYear(limit.getFullYear() - 5);
+  return new Date(Number(found[3]), MONTHS.indexOf(found[2].toLowerCase()), Number(found[1])) > limit;
+}
+
 function writeValidated(cwd: string, entries: Record<string, Validated>) {
   const file = validatedFile(cwd);
   const temporary = `${file}.${process.pid}.tmp`;
@@ -101,7 +112,7 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
           const file = files.find((file) => file.chemin === ref.origin)!;
           const key = JSON.stringify([id, ref.quote]);
           const known = !path.isAbsolute(id) && validated[key];
-          if (known && await store.read(known.token)) { results.push({ ...ref, id, ...known }); continue; }
+          if (known && !historyNeeded(id, known.title) && await store.read(known.token)) { results.push({ ...ref, id, ...known }); continue; }
           const inspected = await inspect(cwd, id, ref.quote, file.contenu);
           if (!path.isAbsolute(id) && inspected.verified && !inspected.correction) { validated[key] = { ...inspected, verified: true, status: 'passed' }; learned = true; }
           results.push({ ...ref, id, ...inspected });
