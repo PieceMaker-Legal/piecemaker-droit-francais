@@ -40,3 +40,11 @@ export async function reconcileCodexHooks(applicationRoot: string, userHome = os
   if (!trusted.ok) return { ok: false, reason: trusted.reason };
   return { ok: true, reason: null };
 }
+
+export async function reconcileVibeHooks(applicationRoot: string, userHome = os.homedir()): Promise<{ ok: boolean; skipped?: boolean; reason?: string | null }> {
+  if (!fs.existsSync(path.join(userHome, '.vibe'))) return { ok: true, skipped: true };
+  const vendorRoot = path.join(applicationRoot, 'server', 'piecemaker', 'vendor');
+  const hooks = await import(pathToFileURL(path.join(vendorRoot, 'installer', 'lib', 'vibe-hooks.mjs')).href) as { installVibeHooks(repoRoot: string, userHome: string): { ok: boolean; reason?: string } };
+  const installed = hooks.installVibeHooks(vendorRoot, userHome);
+  return { ok: installed.ok, reason: installed.reason ?? null };
+}

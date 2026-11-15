@@ -6,7 +6,7 @@ import test from 'node:test';
 
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
-import { reconcileClaudeHooks, reconcileCodexHooks } from './claude-hooks.js';
+import { reconcileClaudeHooks, reconcileCodexHooks, reconcileVibeHooks } from './claude-hooks.js';
 
 const applicationRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
 
@@ -96,6 +96,38 @@ test('leaves an unreadable Codex config untouched', async () => {
     const result = await reconcileCodexHooks(applicationRoot, home);
     assert.deepEqual(result, { ok: false, reason: 'config-toml-non-modifiable' });
     assert.equal(fs.readFileSync(configFile, 'utf8'), 'model = [\n');
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('installs the PieceMaker hooks in ~/.vibe/hooks.toml only when Vibe is present, keeping personal hooks', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-vibe-hooks-'));
+  try {
+    assert.deepEqual(await reconcileVibeHooks(applicationRoot, home), { ok: true, skipped: true });
+    const file = path.join(home, '.vibe', 'hooks.toml');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, '[[hooks]]\nname = "perso"\ntype = "post_agent"\ncommand = "echo perso"\n');
+    assert.equal((await reconcileVibeHooks(applicationRoot, home)).ok, true);
+    const first = fs.readFileSync(file, 'utf8');
+    assert.equal((await reconcileVibeHooks(applicationRoot, home)).ok, true);
+    assert.equal(fs.readFileSync(file, 'utf8'), first);
+    const names = [...first.matchAll(/^name = "([^"]+)"/gm)].map((match) => match[1]);
+    assert.deepEqual(names, ['perso', 'piecemaker-protect-originals', 'piecemaker-guard-ontologie', 'piecemaker-guard-legal-search', 'piecemaker-guard-secrets', 'piecemaker-classify-ai-documents', 'piecemaker-verify-subagent']);
+    assert.ok(first.includes('vibe-hook.mjs'));
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('leaves an unreadable Vibe hooks file untouched', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-vibe-hooks-'));
+  try {
+    const file = path.join(home, '.vibe', 'hooks.toml');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, '[[hooks]\nname = ');
+    assert.equal((await reconcileVibeHooks(applicationRoot, home)).ok, false);
+    assert.equal(fs.readFileSync(file, 'utf8'), '[[hooks]\nname = ');
   } finally {
     fs.rmSync(home, { recursive: true, force: true });
   }

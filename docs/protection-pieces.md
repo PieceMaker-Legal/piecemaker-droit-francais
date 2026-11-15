@@ -104,9 +104,9 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 
 ## Limites connues (audit du 2026-09-26)
 
-- Seuls Claude Code, Codex et le chat Mistral de l'app ont les hooks ; le CLI
-  `vibe` et les autres fournisseurs pilotés par CloudCLI ne sont couverts que
-  par le proxy.
+- Claude Code, Codex, le CLI `vibe` (`~/.vibe/hooks.toml`, adaptateur
+  `scripts/vibe-hook.mjs`) et le chat Mistral de l'app ont les hooks ; les
+  autres fournisseurs pilotés par CloudCLI ne sont couverts que par le proxy.
 - Le hook analyse le texte des commandes : `python -c`, variables, globs
   (`cat *.pdf`), `cd` puis chemin relatif y échappent.
 - `Grep` n'est bloqué qu'à la racine du dossier, pas dans un sous-dossier

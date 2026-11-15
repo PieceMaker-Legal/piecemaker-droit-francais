@@ -15,7 +15,7 @@ import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
-import { reconcileClaudeHooks, reconcileCodexHooks } from './claude-hooks.js';
+import { reconcileClaudeHooks, reconcileCodexHooks, reconcileVibeHooks } from './claude-hooks.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime, projectOfDirectory } from './anonymizer/session-runtime.js';
@@ -173,6 +173,9 @@ try {
 reconcileCodexHooks(applicationRoot)
   .then((hook) => { if (!hook.ok) console.warn(`[piecemaker] hooks Codex incomplets : ${hook.reason}`); })
   .catch((error) => console.warn(`[piecemaker] hooks Codex non enregistrés : ${error instanceof Error ? error.message : String(error)}`));
+reconcileVibeHooks(applicationRoot)
+  .then((hook) => { if (!hook.ok) console.warn(`[piecemaker] hooks Vibe incomplets : ${hook.reason}`); })
+  .catch((error) => console.warn(`[piecemaker] hooks Vibe non enregistrés : ${error instanceof Error ? error.message : String(error)}`));
 startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => row.project_path), path.join(piecemakerHome(), 'CLAUDE.md'), (workspace) => {
   declarePieceMakerServer(workspace);
   declareBundledSkills(workspace);

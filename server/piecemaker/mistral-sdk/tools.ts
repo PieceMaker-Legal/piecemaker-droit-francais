@@ -26,6 +26,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     'server/piecemaker/vendor/piecemaker-plugin/scripts/guard-ontologie.mjs',
     'server/piecemaker/vendor/installer/assets/claude-hooks/piecemaker-guard-secrets.mjs',
   ].map(file => path.join(applicationRoot, file));
+  const classifyScript = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin/scripts/classify-ai-documents.mjs');
 
   const run = (command: string, args: string[], input?: string, shell = false) => new Promise<string>((resolve, reject) => {
     const child = spawn(command, args, { cwd, env: { ...process.env }, shell, signal, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
@@ -54,6 +55,8 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     }
     return guarded;
   };
+
+  const classify = (toolName: string, input: Record<string, unknown>) => run(process.execPath, [classifyScript], JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: toolName, tool_input: input, tool_response: { success: true }, cwd })).catch(() => undefined);
 
   const add = (name: string, description: string, properties: Record<string, unknown>, required: string[], readOnly: boolean, execute: (input: Record<string, unknown>) => Promise<string>) => {
     tools.set(name, { name, readOnly, execute, definition: { type: 'function', function: {
@@ -101,7 +104,9 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
   });
   add('Bash', 'Exécuter une commande dans le dossier courant (shell Windows ou Unix selon le poste).', { command: string }, ['command'], false, async input => {
     const guarded = await guard('Bash', { command: text(input, 'command') });
-    return run(text(guarded, 'command'), [], undefined, true);
+    const output = await run(text(guarded, 'command'), [], undefined, true);
+    await classify('Bash', guarded);
+    return output;
   });
 
   const disabled = new Set(Array.isArray(disabledSkills) ? disabledSkills.map(item => String(item?.name).toLowerCase()) : []);
