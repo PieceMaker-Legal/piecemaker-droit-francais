@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
 import { proposalMessage } from './lib/proposition-edit.mjs';
-import { FEATURES, featureOf } from './lib/features.mjs';
+import { FEATURES, featureOf } from './lib/herisson.mjs';
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);

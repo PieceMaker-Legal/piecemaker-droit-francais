@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/feature-hook.mjs\"",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/herisson.mjs\"",
             "timeout": 90
           }
         ]

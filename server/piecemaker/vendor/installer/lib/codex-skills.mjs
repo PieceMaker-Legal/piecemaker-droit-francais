@@ -188,13 +188,13 @@ export function codexSubagentCheckHookStatus(repoRoot, userHome = os.homedir()) 
   return codexHookGroupStatus(userHome, codexSubagentCheckGroup(repoRoot), isPieceMakerSubagentCheck, 'SubagentStop');
 }
 
-function isPieceMakerFeatureCheck(handler) {
+function isPieceMakerHerisson(handler) {
   const command = typeof handler?.command === 'string' ? handler.command : '';
-  return command.includes('feature-hook.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+  return /(feature-hook|herisson)\.mjs/.test(command) && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
 }
 
-function codexFeatureCheckGroup(repoRoot) {
-  const script = path.join(pluginRoot(repoRoot), 'scripts', 'feature-hook.mjs');
+function codexHerissonGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'herisson.mjs');
   return {
     matcher: '^apply_patch$',
     hooks: [{
@@ -202,18 +202,18 @@ function codexFeatureCheckGroup(repoRoot) {
       command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
       commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
       timeout: 90,
-      statusMessage: 'Vérification automatique du fichier PieceMaker modifié',
+      statusMessage: 'Le Hérisson : vérification du fichier PieceMaker modifié',
     }],
   };
 }
 
-/** Lance le vérificateur de la feature (features.json) après chaque écriture de l'agent. */
-export function installCodexFeatureCheckHook(repoRoot, userHome = os.homedir()) {
-  return installCodexHookGroup(userHome, codexFeatureCheckGroup(repoRoot), isPieceMakerFeatureCheck, 'PostToolUse');
+/** Lance le vérificateur de la feature (herisson.json, le Hérisson) après chaque écriture de l'agent. */
+export function installCodexHerissonHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexHerissonGroup(repoRoot), isPieceMakerHerisson, 'PostToolUse');
 }
 
-export function codexFeatureCheckHookStatus(repoRoot, userHome = os.homedir()) {
-  return codexHookGroupStatus(userHome, codexFeatureCheckGroup(repoRoot), isPieceMakerFeatureCheck, 'PostToolUse');
+export function codexHerissonHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexHerissonGroup(repoRoot), isPieceMakerHerisson, 'PostToolUse');
 }
 
 function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') {
@@ -249,7 +249,7 @@ function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') 
   }
 }
 
-const PIECEMAKER_HOOKS = [isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerFeatureCheck];
+const PIECEMAKER_HOOKS = [isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerHerisson];
 const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use', SubagentStop: 'subagent_stop' };
 
 function sortedKeys(value) {

@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
-import { featureOf, verifierArgs } from './lib/features.mjs';
+import { featureOf, verifierArgs } from './lib/herisson.mjs';
 import { runPm } from './verify-subagent.mjs';
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);

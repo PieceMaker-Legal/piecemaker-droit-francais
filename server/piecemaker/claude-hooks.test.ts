@@ -113,7 +113,7 @@ test('installs the PieceMaker hooks in ~/.vibe/hooks.toml only when Vibe is pres
     assert.equal((await reconcileVibeHooks(applicationRoot, home)).ok, true);
     assert.equal(fs.readFileSync(file, 'utf8'), first);
     const names = [...first.matchAll(/^name = "([^"]+)"/gm)].map((match) => match[1]);
-    assert.deepEqual(names, ['perso', 'piecemaker-protect-originals', 'piecemaker-guard-ontologie', 'piecemaker-guard-legal-search', 'piecemaker-guard-secrets', 'piecemaker-classify-ai-documents', 'piecemaker-feature-check', 'piecemaker-verify-subagent']);
+    assert.deepEqual(names, ['perso', 'piecemaker-protect-originals', 'piecemaker-guard-ontologie', 'piecemaker-guard-legal-search', 'piecemaker-guard-secrets', 'piecemaker-classify-ai-documents', 'piecemaker-herisson', 'piecemaker-verify-subagent']);
     assert.ok(first.includes('vibe-hook.mjs'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

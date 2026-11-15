@@ -118,13 +118,13 @@ Le format exact du bloc `<CITATIONS>` est injecté à chaque tour par
 Le Hérisson est la feature centrale qui garde et vérifie les écritures de l'agent.
 
 Un seul registre décrit les fichiers que l'agent écrit dans `.piecemaker/` :
-`server/piecemaker/vendor/piecemaker-plugin/features.json`. Deux hooks le
+`server/piecemaker/vendor/piecemaker-plugin/herisson.json`. Deux hooks le
 lisent, pour tous les clients (Claude, Codex, Vibe, chat Mistral de l'app) :
 
 - **avant l'écriture** (PreToolUse) : `guard-ontologie.mjs` transforme en
   proposition, ou refuse, l'écriture des features gardées. Le message renvoyé
   à l'agent est le `motif` du registre ;
-- **après l'écriture** (PostToolUse) : `feature-hook.mjs` lance le
+- **après l'écriture** (PostToolUse) : `herisson.mjs` lance le
   vérificateur `pm` de la feature touchée et rend sa sortie à l'agent
   (40 lignes au plus), avec la consigne de corriger avant de continuer.
 
@@ -139,10 +139,10 @@ flowchart LR
   A[Agent : Write / Edit / apply_patch] --> P{guard-ontologie<br/>PreToolUse}
   P -- proposition / serveur --> R[Proposition à l'avocat<br/>ou refus + motif]
   P -- agent --> W[Fichier écrit]
-  W --> F[feature-hook<br/>PostToolUse]
+  W --> F[herisson.mjs<br/>PostToolUse]
   F --> V[pm … verifier]
   V --> C[Erreurs rendues à l'agent]
-  R2[(features.json)] -.-> P
+  R2[(herisson.json)] -.-> P
   R2 -.-> F
 ```
 
@@ -162,7 +162,7 @@ Branchements :
 |---|---|---|
 | Claude | `hooks.json` du plugin, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash\|…` | `hooks.json`, matcher `Write\|Edit\|MultiEdit\|NotebookEdit`, 90 s |
 | Codex | `~/.codex/hooks.json`, `^(Bash\|apply_patch)$` | `~/.codex/hooks.json`, `post_tool_use`, `^apply_patch$`, 90 s, approuvé dans `config.toml` |
-| Vibe | `~/.vibe/hooks.toml`, `piecemaker-guard-ontologie` | `~/.vibe/hooks.toml`, `piecemaker-feature-check`, 90 s |
+| Vibe | `~/.vibe/hooks.toml`, `piecemaker-guard-ontologie` | `~/.vibe/hooks.toml`, `piecemaker-herisson`, 90 s |
 | Chat Mistral | `guard()` de `mistral-sdk/tools.ts` | `checked()` après Write et Edit, ajouté au résultat de l'outil |
 
 ### Durée de chaque vérification
@@ -188,11 +188,11 @@ Limites des mesures :
 
 ### Ajouter une feature
 
-1. Ajoutez une entrée dans `features.json` : `nom`, `cible` (expression
+1. Ajoutez une entrée dans `herisson.json` : `nom`, `cible` (expression
    régulière sur le chemin relatif à `.piecemaker/`, groupe `nom` facultatif),
    `ecriture`, `skill`, et `motif` (feature gardée) ou `verifier` et `delai`
    (feature écrite par l'agent). `{nom}` dans `verifier` reçoit le groupe `nom`.
-2. Ajoutez un cas dans `scripts/feature-hook.test.js`.
+2. Ajoutez un cas dans `scripts/herisson.test.js`.
 
 Aucun hook n'est à modifier. Limite : une écriture par le shell (`Bash`) ne
 déclenche pas la vérification après écriture.

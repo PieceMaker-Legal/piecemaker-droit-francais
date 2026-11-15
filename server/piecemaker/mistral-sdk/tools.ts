@@ -56,7 +56,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     return guarded;
   };
 
-  const featureScript = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin/scripts/feature-hook.mjs');
+  const featureScript = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin/scripts/herisson.mjs');
   const checked = async (toolName: string, input: Record<string, unknown>, done: string) => {
     const result = await run(process.execPath, [featureScript], JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: toolName, tool_input: input, cwd })).catch(() => '');
     let context = '';

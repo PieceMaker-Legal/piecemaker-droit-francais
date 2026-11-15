@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const REGISTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'features.json');
+const REGISTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'herisson.json');
 
 export const FEATURES = JSON.parse(fs.readFileSync(REGISTRY, 'utf8')).features.map((feature) => ({ ...feature, pattern: new RegExp(feature.cible) }));
 

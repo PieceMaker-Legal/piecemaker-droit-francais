@@ -3,8 +3,8 @@ const path = require('node:path');
 const test = require('node:test');
 const { pathToFileURL } = require('node:url');
 
-const load = () => import(pathToFileURL(path.join(__dirname, 'feature-hook.mjs')).href);
-const loadFeatures = () => import(pathToFileURL(path.join(__dirname, 'lib', 'features.mjs')).href);
+const load = () => import(pathToFileURL(path.join(__dirname, 'herisson.mjs')).href);
+const loadFeatures = () => import(pathToFileURL(path.join(__dirname, 'lib', 'herisson.mjs')).href);
 const root = path.resolve('/dossiers/dossier-exemple');
 
 function fakePm(stdout = '') {
