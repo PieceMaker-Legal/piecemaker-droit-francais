@@ -56,3 +56,32 @@ test('Vibe : le chemin passé dans path est reconnu', async () => {
   const { touchedFiles } = await load();
   assert.deepEqual(touchedFiles({ tool_name: 'Write', cwd: root, tool_input: { path: '.piecemaker/suivi.json' } }), [path.join(root, '.piecemaker', 'suivi.json')]);
 });
+
+test('la garde refuse un titre Catala qui cite plusieurs sources, à l’écriture', async () => {
+  const { ontologyDecision } = await import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mjs')).href);
+  const file_path = '.piecemaker/catala/indemnite/indemnite.catala_fr';
+  const multiple = '## Articles 1 et 2 | LEGIARTI000000000001 | LEGIARTI000000000002\n\n« Texte fictif. »';
+  const single = '## Article 1 | LEGIARTI000000000001\n\n« Texte fictif. »';
+  const reason = (payload) => ontologyDecision({ cwd: root, ...payload })?.hookSpecificOutput.permissionDecisionReason ?? null;
+  assert.match(reason({ tool_name: 'Write', tool_input: { file_path, content: multiple } }), /Une règle = une source[\s\S]*Ligne refusée : ## Articles 1 et 2/);
+  assert.match(reason({ tool_name: 'Edit', tool_input: { file_path, old_string: 'x', new_string: multiple } }), /Une règle = une source/);
+  assert.match(reason({ tool_name: 'apply_patch', tool_input: { command: `*** Begin Patch\n*** Add File: ${file_path}\n+${multiple.split('\n')[0]}\n*** End Patch` } }), /Une règle = une source/);
+  assert.equal(reason({ tool_name: 'Write', tool_input: { file_path, content: single } }), null);
+  assert.equal(reason({ tool_name: 'Write', tool_input: { file_path: 'notes/sources.md', content: multiple } }), null);
+});
+
+test('une commande pm okf link vérifie l’index, et les programmes Catala qui citent une prémisse', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { featureReport } = await load();
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-'));
+  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  for (const [nom, contenu] of [['cite', '## okf:/_premises/date-de-depart.md\n'], ['autre', '## Article 1 | LEGIARTI000000000001\n']]) {
+    fs.mkdirSync(path.join(dossier, '.piecemaker', 'catala', nom), { recursive: true });
+    fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', nom, `${nom}.catala_fr`), contenu);
+  }
+  const link = (command) => { const pm = fakePm('Index OKF : 0 erreur(s).'); return featureReport({ tool_name: 'Bash', cwd: dossier, tool_input: { command } }, { run: pm.run }).then(() => pm.calls.map((call) => call.args)); };
+  assert.deepEqual(await link('pm okf link pieces/a.md states "Date de départ" --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`, `catala verifier --programme cite --dossier ${dossier}`]);
+  assert.deepEqual(await link('pm okf link pieces/a.md amends pieces/b.md --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await link('pm okf verify'), []);
+});

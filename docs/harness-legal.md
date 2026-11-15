@@ -136,10 +136,16 @@ lisent, pour tous les clients (Claude, Codex, Vibe, chat Mistral de l'app) :
 
 - **avant l'écriture** (PreToolUse) : `guard-ontologie.mjs` transforme en
   proposition, ou refuse, l'écriture des features gardées. Le message renvoyé
-  à l'agent est le `motif` du registre ;
+  à l'agent est le `motif` du registre. Il refuse aussi toute écriture dont une
+  ligne ajoutée correspond à une règle `interdit` de la feature : rien n'est
+  écrit, l'agent reçoit le `message` et la ligne refusée ;
 - **après l'écriture** (PostToolUse) : `herisson.mjs` lance le
   vérificateur `pm` de la feature touchée et rend sa sortie à l'agent
-  (40 lignes au plus), avec la consigne de corriger avant de continuer.
+  (40 lignes au plus), avec la consigne de corriger avant de continuer ;
+- **après une commande** (PostToolUse sur le shell) : une commande qui
+  correspond à la `commande` d'une feature lance aussi son vérificateur. Avec
+  `cite`, il est lancé pour chaque programme Catala du dossier dont un fichier
+  contient ce texte.
 
 Le raisonnement YAML (`.piecemaker/raisonnements/`) n'est pas une feature du
 registre : sa vérification reste lancée par l'agent (`pm raisonnement verifier`).
@@ -165,18 +171,18 @@ flowchart LR
 |---|---|---|---|---|---|---|
 | `ontologie` | `ontologie.json` (dans `~/.piecemaker`) | proposition | devient une proposition (onglet Index › Ontologie) | — | `okf` | — |
 | `arborescence` | `arborescence.json` | proposition | devient une proposition (onglet Index › Classement) | — | `piecemaker` | — |
-| `okf` | `okf/**` | serveur | refusée : `pm okf link` / `unlink` | — (contrôle par `pm okf link`, puis `verify-subagent`) | `okf` | 30 s |
+| `okf` | `okf/**` | serveur | refusée : `pm okf link` / `unlink` | après `pm okf link` ou `unlink` : `pm okf verify` (erreurs, contradictions entre valeurs d'une prémisse, manques) | `okf` | 30 s |
 | `suivi` | `<nom>-suivi.json`, `suivi.json` | agent | libre | `pm suivi_dossiers verifier --suivi <fichier>` | `piecemaker` | 60 s |
-| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | libre | `pm catala verifier --programme <nom>` | `catala` | 60 s |
+| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si un titre cite plusieurs sources (une règle = une source) | `pm catala verifier --programme <nom>` ; aussi après `pm okf link` ou `unlink` avec `states` ou `involves`, pour chaque programme qui cite une prémisse `okf:/_premises/` | `catala` | 60 s |
 
 Branchements :
 
 | Client | Avant | Après |
 |---|---|---|
-| Claude | `hooks.json` du plugin, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash\|…` | `hooks.json`, matcher `Write\|Edit\|MultiEdit\|NotebookEdit`, 90 s |
-| Codex | `~/.codex/hooks.json`, `^(Bash\|apply_patch)$` | `~/.codex/hooks.json`, `post_tool_use`, `^apply_patch$`, 90 s, approuvé dans `config.toml` |
-| Vibe | `~/.vibe/hooks.toml`, `piecemaker-guard-ontologie` | `~/.vibe/hooks.toml`, `piecemaker-herisson`, 90 s |
-| Chat Mistral | `guard()` de `mistral-sdk/tools.ts` | `checked()` après Write et Edit, ajouté au résultat de l'outil |
+| Claude | `hooks.json` du plugin, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash\|…` | `hooks.json`, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash`, 90 s |
+| Codex | `~/.codex/hooks.json`, `^(Bash\|apply_patch)$` | `~/.codex/hooks.json`, `post_tool_use`, `^(Bash\|apply_patch)$`, 90 s, approuvé dans `config.toml` |
+| Vibe | `~/.vibe/hooks.toml`, `piecemaker-guard-ontologie` | `~/.vibe/hooks.toml`, `piecemaker-herisson` (écriture et shell), 90 s |
+| Chat Mistral | `guard()` de `mistral-sdk/tools.ts` | `checked()` après Write, Edit et Bash, ajouté au résultat de l'outil |
 
 ### Durée de chaque vérification
 
@@ -206,7 +212,23 @@ Limites des mesures :
    régulière sur le chemin relatif à `.piecemaker/`, groupe `nom` facultatif),
    `ecriture`, `skill`, et `motif` (feature gardée) ou `verifier` et `delai`
    (feature écrite par l'agent). `{nom}` dans `verifier` reçoit le groupe `nom`.
+   Facultatif :
+   - `interdit` : liste de `{ motif, message }`. `motif` est une expression
+     régulière testée sur chaque ligne écrite ; une ligne qui correspond bloque
+     l'écriture ;
+   - `commande` : expression régulière sur une commande shell, qui lance
+     `verifier` dans le dossier courant ;
+   - `cite` : avec `commande`, lance `verifier` pour chaque programme
+     `catala/<nom>/` dont un fichier `.catala_fr` contient ce texte.
 2. Ajoutez un cas dans `scripts/herisson.test.js`.
 
-Aucun hook n'est à modifier. Limite : une écriture par le shell (`Bash`) ne
-déclenche pas la vérification après écriture.
+Aucun hook n'est à modifier.
+
+Limites :
+
+- une écriture de fichier par le shell (`cat >`, `sed -i`) n'est ni filtrée ni
+  vérifiée ;
+- une `commande` est vérifiée dans le dossier courant de l'agent, pas dans un
+  `--dossier` passé à `pm` ;
+- `interdit` ne voit que les lignes écrites, pas le fichier entier : une
+  faute déjà présente dans le fichier n'est pas signalée.

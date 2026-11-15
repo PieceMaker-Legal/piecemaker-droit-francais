@@ -1,34 +1,39 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
-import { featureOf, verifierArgs } from './lib/herisson.mjs';
+import { FEATURES, featureOf, verifierArgs, writtenTexts } from './lib/herisson.mjs';
 import { runPm } from './verify-subagent.mjs';
 
-const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
-const PATCH_FILE = /^\*\*\* (?:Add|Update) File: (.+)$/gm;
 const MAX_LINES = 40;
 
 export function touchedFiles(payload) {
-  const tool = String(payload?.tool_name || '');
-  const input = payload?.tool_input || {};
-  const cwd = payload?.cwd || process.cwd();
-  if (FILE_TOOLS.has(tool)) {
-    const target = input.file_path || input.notebook_path || input.path;
-    return target ? [path.resolve(cwd, String(target))] : [];
-  }
-  if (tool !== 'apply_patch') return [];
-  const patch = String(Array.isArray(input.command) ? input.command.join(' ') : input.command || input.patch || input.input || '');
-  return [...patch.matchAll(PATCH_FILE)].map((match) => path.resolve(cwd, match[1].trim()));
+  return writtenTexts(String(payload?.tool_name || ''), payload?.tool_input || {}, payload?.cwd || process.cwd()).map((entry) => entry.file);
+}
+
+function citingPrograms(root, cite) {
+  const folder = path.join(root, '.piecemaker', 'catala');
+  const names = fs.existsSync(folder) ? fs.readdirSync(folder, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name) : [];
+  return names.filter((name) => fs.readdirSync(path.join(folder, name)).some((file) => file.endsWith('.catala_fr') && fs.readFileSync(path.join(folder, name, file), 'utf8').includes(cite)));
+}
+
+export function commandChecks(payload) {
+  if (payload?.tool_name !== 'Bash') return [];
+  const input = payload.tool_input || {};
+  const command = String(Array.isArray(input.command) ? input.command.join(' ') : input.command || '');
+  const root = payload.cwd || process.cwd();
+  if (!fs.existsSync(path.join(root, '.piecemaker'))) return [];
+  return FEATURES.filter((feature) => feature.commande && feature.verifier && new RegExp(feature.commande).test(command))
+    .flatMap((feature) => (feature.cite ? citingPrograms(root, feature.cite) : ['']).map((nom) => ({ feature, root, nom })));
 }
 
 export async function featureReport(payload, { run = runPm } = {}) {
   const checks = new Map();
-  for (const file of touchedFiles(payload)) {
-    const found = featureOf(file);
-    if (found?.feature.ecriture !== 'agent' || !found.feature.verifier) continue;
-    const args = verifierArgs(found);
-    checks.set(`${found.root}\0${args.join(' ')}`, { found, args });
+  const found = touchedFiles(payload).map((file) => featureOf(file)).filter((entry) => entry?.feature.ecriture === 'agent' && entry.feature.verifier);
+  for (const entry of [...found, ...commandChecks(payload)]) {
+    const args = verifierArgs(entry);
+    checks.set(`${entry.root}\0${args.join(' ')}`, { found: entry, args });
   }
   const sections = [];
   for (const { found, args } of checks.values()) {

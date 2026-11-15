@@ -113,7 +113,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     const guarded = await guard('Bash', { command: text(input, 'command') });
     const output = await run(text(guarded, 'command'), [], undefined, true);
     await classify('Bash', guarded);
-    return output;
+    return checked('Bash', guarded, output);
   });
 
   const disabled = new Set(Array.isArray(disabledSkills) ? disabledSkills.map(item => String(item?.name).toLowerCase()) : []);

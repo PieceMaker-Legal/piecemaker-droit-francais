@@ -21,6 +21,7 @@
       "skill": "okf",
       "motif": "Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).",
       "verifier": ["okf", "verify"],
+      "commande": "\\bpm okf (link|unlink)\\b",
       "delai": 30
     },
     {
@@ -37,6 +38,14 @@
       "ecriture": "agent",
       "skill": "catala",
       "verifier": ["catala", "verifier", "--programme", "{nom}"],
+      "commande": "\\bpm okf (link|unlink)\\b.*\\b(states|involves)\\b",
+      "cite": "okf:/_premises/",
+      "interdit": [
+        {
+          "motif": "^#{1,6}\\s.*(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\\d{12}.*(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\\d{12}",
+          "message": "Une règle = une source : ce titre cite plusieurs identifiants. Écrivez une section ## Article N | LEGIARTI… par source, avec son extrait entre « » et sa règle."
+        }
+      ],
       "delai": 60
     }
   ]
