@@ -99,8 +99,8 @@ test('an SDK write to a registered feature file returns its verifier report', { 
   t.mock.method(providerSkillsService, 'listProviderSkills', async () => []);
   const toolbox = await createMistralTools(caseRoot, [], AbortSignal.timeout(20000), path.join(root, 'home'));
   t.after(() => toolbox.close());
-  const report = await toolbox.tools.get('Write')!.execute({ file_path: '.piecemaker/raisonnements/indemnite.yaml', content: 'question: fictive\n' });
-  assert.match(report, /^Fichier enregistré\.\n\nVérification automatique \(raisonnement\)/);
-  assert.match(report, /pm raisonnement verifier --raisonnement indemnite --dossier /);
+  const report = await toolbox.tools.get('Write')!.execute({ file_path: '.piecemaker/appel-suivi.json', content: '{}\n' });
+  assert.match(report, /^Fichier enregistré\.\n\nVérification automatique \(suivi\)/);
+  assert.match(report, /pm suivi_dossiers verifier --suivi appel-suivi.json --dossier /);
   assert.equal(await toolbox.tools.get('Write')!.execute({ file_path: 'notes.md', content: 'Notes fictives.' }), 'Fichier enregistré.');
 });

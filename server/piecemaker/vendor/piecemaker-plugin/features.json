@@ -24,14 +24,6 @@
       "delai": 30
     },
     {
-      "nom": "raisonnement",
-      "cible": "^raisonnements/(?<nom>[^/]+)\\.yaml$",
-      "ecriture": "agent",
-      "skill": "piecemaker",
-      "verifier": ["raisonnement", "verifier", "--raisonnement", "{nom}"],
-      "delai": 60
-    },
-    {
       "nom": "suivi",
       "cible": "^(?<nom>(?:[^/]+-)?suivi\\.json)$",
       "ecriture": "agent",

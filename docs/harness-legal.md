@@ -126,6 +126,9 @@ lisent, pour tous les clients (Claude, Codex, Vibe, chat Mistral de l'app) :
   vérificateur `pm` de la feature touchée et rend sa sortie à l'agent
   (40 lignes au plus), avec la consigne de corriger avant de continuer.
 
+Le raisonnement YAML (`.piecemaker/raisonnements/`) n'est pas une feature du
+registre : sa vérification reste lancée par l'agent (`pm raisonnement verifier`).
+
 Les sous-agents gardent leur propre contrôle de fin : `verify-subagent.mjs`
 (inchangé).
 
@@ -148,7 +151,6 @@ flowchart LR
 | `ontologie` | `ontologie.json` (dans `~/.piecemaker`) | proposition | devient une proposition (onglet Index › Ontologie) | — | `okf` | — |
 | `arborescence` | `arborescence.json` | proposition | devient une proposition (onglet Index › Classement) | — | `piecemaker` | — |
 | `okf` | `okf/**` | serveur | refusée : `pm okf link` / `unlink` | — (contrôle par `pm okf link`, puis `verify-subagent`) | `okf` | 30 s |
-| `raisonnement` | `raisonnements/<nom>.yaml` | agent | libre | `pm raisonnement verifier --raisonnement <nom>` | `piecemaker` | 60 s |
 | `suivi` | `<nom>-suivi.json`, `suivi.json` | agent | libre | `pm suivi_dossiers verifier --suivi <fichier>` | `piecemaker` | 60 s |
 | `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | libre | `pm catala verifier --programme <nom>` | `catala` | 60 s |
 
@@ -163,12 +165,11 @@ Branchements :
 
 ### Durée de chaque vérification
 
-Mesures sur un Mac de 8 Go, dossier fictif (6 pièces, un raisonnement, un
-suivi, un programme Catala).
+Mesures sur un Mac de 8 Go, dossier fictif (6 pièces, un suivi, un programme
+Catala).
 
 | Vérificateur | Durée mesurée | Ce qui coûte |
 |---|---|---|
-| `pm raisonnement verifier` | 9,6 à 9,8 s | vérification des sources en ligne |
 | `pm catala verifier` | 21,5 s au premier lancement, 6,0 s ensuite | compilation Catala |
 | `pm okf verify` (cœur, 6 pièces) | 44 ms à froid, 14 ms ensuite | — |
 | `pm okf verify` (aller-retour `pm` + serveur) | 0,25 à 1,5 s | lancement de `pm` |

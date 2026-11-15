@@ -17,7 +17,7 @@ test('le registre classe chaque fichier dans sa feature', async () => {
   const of = (relative) => featureOf(path.join(root, '.piecemaker', relative));
   assert.equal(of('okf/pieces/a.md').feature.nom, 'okf');
   assert.equal(of('arborescence.json').feature.nom, 'arborescence');
-  assert.deepEqual([of('raisonnements/indemnite.yaml').feature.nom, of('raisonnements/indemnite.yaml').nom], ['raisonnement', 'indemnite']);
+  assert.equal(of('raisonnements/indemnite.yaml'), null);
   assert.deepEqual([of('appel-suivi.json').feature.nom, of('appel-suivi.json').nom], ['suivi', 'appel-suivi.json']);
   assert.deepEqual([of('catala/indemnite/indemnite.catala_fr').feature.nom, of('catala/indemnite/indemnite.catala_fr').nom], ['catala', 'indemnite']);
   assert.equal(of('catala/indemnite/_build/x.catala_fr'), null);
@@ -26,12 +26,12 @@ test('le registre classe chaque fichier dans sa feature', async () => {
   assert.equal(featureOf(path.join(root, '.piecemaker', 'okf')).feature.nom, 'okf');
 });
 
-test('une écriture de raisonnement lance son vérificateur et rend le résultat à l’agent', async () => {
+test('une écriture de suivi lance son vérificateur et rend le résultat à l’agent', async () => {
   const { featureReport } = await load();
-  const pm = fakePm('indemnite.yaml\n  6:7  warning  fait non établi');
-  const report = await featureReport({ tool_name: 'Write', cwd: root, tool_input: { file_path: '.piecemaker/raisonnements/indemnite.yaml' } }, { run: pm.run });
-  assert.deepEqual(pm.calls, [{ args: `raisonnement verifier --raisonnement indemnite --dossier ${root}`, cwd: root, timeoutMs: 60000 }]);
-  assert.match(report.hookSpecificOutput.additionalContext, /Vérification automatique \(raisonnement\)[\s\S]*fait non établi/);
+  const pm = fakePm('appel-suivi.json\n  échéance sans source');
+  const report = await featureReport({ tool_name: 'Write', cwd: root, tool_input: { file_path: '.piecemaker/appel-suivi.json' } }, { run: pm.run });
+  assert.deepEqual(pm.calls, [{ args: `suivi_dossiers verifier --suivi appel-suivi.json --dossier ${root}`, cwd: root, timeoutMs: 60000 }]);
+  assert.match(report.hookSpecificOutput.additionalContext, /Vérification automatique \(suivi\)[\s\S]*échéance sans source/);
 });
 
 test('un apply_patch Codex vérifie chaque feature touchée une seule fois', async () => {
@@ -45,7 +45,7 @@ test('un apply_patch Codex vérifie chaque feature touchée une seule fois', asy
 test('rien à vérifier hors des features écrites par l’agent', async () => {
   const { featureReport } = await load();
   const pm = fakePm('ignoré');
-  for (const file_path of ['pieces/note.md', '.piecemaker/okf/pieces/a.md', '.piecemaker/arborescence.json']) {
+  for (const file_path of ['pieces/note.md', '.piecemaker/raisonnements/indemnite.yaml', '.piecemaker/okf/pieces/a.md', '.piecemaker/arborescence.json']) {
     assert.equal(await featureReport({ tool_name: 'Edit', cwd: root, tool_input: { file_path } }, { run: pm.run }), null);
   }
   assert.equal(await featureReport({ tool_name: 'Bash', cwd: root, tool_input: { command: 'cat .piecemaker/appel-suivi.json' } }, { run: pm.run }), null);
