@@ -113,7 +113,9 @@ retiré : `DEPRECATED_HOOKS` de `websocket-server/claude-hooks.cjs`.
 Le format exact du bloc `<CITATIONS>` est injecté à chaque tour par
 `server/piecemaker/harness/citation-instructions.ts`.
 
-## Feature centrale : registre et vérification automatique
+## Le Hérisson : registre et vérification automatique
+
+Le Hérisson est la feature centrale qui garde et vérifie les écritures de l'agent.
 
 Un seul registre décrit les fichiers que l'agent écrit dans `.piecemaker/` :
 `server/piecemaker/vendor/piecemaker-plugin/features.json`. Deux hooks le
