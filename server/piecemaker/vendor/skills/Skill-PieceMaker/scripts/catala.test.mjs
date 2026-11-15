@@ -271,8 +271,11 @@ test('a proof with an overlap warning fails and a pack without proof refuses it'
     assert.equal(uncovered.passed, true);
     assert.equal(uncovered.non_couvertes, 1);
     assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: {}, deps: { ...deps, run: untranslated.runner } }), /- preuve : ok — 1 variable\(s\) non couverte\(s\) par Z3 : Prime\.montant/);
-    const overlap = fakeRun({ proofOutput: 'This verification condition was generated\n┌─[WARNING]─\n│  At least two exceptions overlap for this variable\n└─\n' });
-    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: {}, deps: { ...deps, run: overlap.runner } }), /- preuve : échec — prime\.catala_fr › Prime : At least two exceptions overlap for this variable/);
+    const overlap = fakeRun({ proofOutput: 'This verification condition was generated\n┌─[WARNING]─\n│\n│  [Prime.montant] At least two exceptions overlap for this variable:\n─➤ prime.catala_fr:8.12-21:\n  │\n8 │   résultat montant contenu entier\nPrime\nThe solver generated the following counterexample to explain the faulty behavior:\n--> age : 60\n\n│\n└─\n┌─[WARNING]─\n│\n│  [Prime.taux] This variable might return an empty error:\n─➤ prime.catala_fr:7.12-16:\n--> age : 0\n│\n└─\n' });
+    assert.match(await runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime' }, deps: { ...deps, run: overlap.runner } }), /échec — \[Prime\.montant\] At least two exceptions overlap for this variable \(prime\.catala_fr, ligne 8\) — contre-exemple : age = 60 ; \[Prime\.taux\] This variable might return an empty error \(prime\.catala_fr, ligne 7\) — contre-exemple : age = 0\./);
+    const counted = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json'), 'utf8'));
+    assert.deepEqual([counted.conflits, counted.vides], [1, 1]);
+    assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: {}, deps: { ...deps, run: overlap.runner } }), /- preuve : échec — prime\.catala_fr › Prime : \[Prime\.montant\] At least two exceptions overlap for this variable \(prime\.catala_fr, ligne 8\) — contre-exemple : age = 60/);
     assert.match(await runCatala({ commande: 'verifier', cwd: dossier, flags: {}, deps: { ...deps, run: emptyProof.runner } }), /- preuve : échec — prime\.catala_fr › Prime : aucune obligation produite/);
     await assert.rejects(() => runCatala({ commande: 'preuve', cwd: dossier, flags: {}, deps }), /--scope/);
     await assert.rejects(() => runCatala({ commande: 'preuve', cwd: dossier, flags: { scope: 'Prime', whole_program: true }, deps }), /masquer des conflits/);

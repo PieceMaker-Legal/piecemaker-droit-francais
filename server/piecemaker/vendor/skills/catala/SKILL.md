@@ -100,7 +100,7 @@ Le titre `##` nomme la case du graphe. L’avocat le lit sans le code. `verifier
 - `pm catala section --programme <nom> --fichier <f>.catala_fr --source <LEGIARTI…|JURITEXT…> --extrait "…" [--titre "Article 1224"]` : ajoute à la fin du fichier le titre, l'extrait et le texte officiel. Lisez d'abord la source avec `consulter_article` ou `consulter_decision` (MCP legifrance). Un extrait qui n'est pas mot pour mot est refusé : recopiez-le du texte officiel.
 - Le Hérisson compile le programme avant chaque écriture : une erreur de compilation nouvelle bloque l'écriture. Corrigez la ligne citée, puis réécrivez.
 - `pm catala executer --scope <Scenario> [--fichier F]` : trace d'un test qui échoue. Filtrez le journal avec `grep "≔.*<identifiant>" .piecemaker/catala/<nom>/resultats/execution.log`.
-- `pm catala exceptions --scope <Champ> --variable <v>` : arbre des exceptions, pour un conflit signalé par la preuve (lisez `resultats/preuve.log`).
+- `pm catala exceptions --scope <Champ> --variable <v>` : arbre des exceptions, pour un conflit signalé par la preuve. La preuve contrôle deux choses par variable : aucune exception n'en chevauche une autre, et une définition s'applique dans tous les cas. Son message donne la variable, la ligne et un contre-exemple (les entrées qui provoquent le défaut) : ajoutez la condition ou l'exception qui couvre ce cas.
 - `pm catala expliquer --scope <Scenario> [--fichier F]` : graphe d'un autre scénario sans entrées.
 - `pm catala squelette --scope <Champ>` : test aux entrées par défaut, à compléter.
 
