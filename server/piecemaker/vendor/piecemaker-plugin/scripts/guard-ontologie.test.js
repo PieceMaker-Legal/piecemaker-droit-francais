@@ -49,6 +49,32 @@ test('laisse lire ces fichiers et écrire ailleurs', async () => {
   assert.equal(await decision('Bash', { command: 'find .piecemaker/okf -name "*.md" | wc -l' }), null);
 });
 
+test('ne refuse jamais un appel pm okf qui cite des fiches, quelle que soit sa forme', async () => {
+  const fiche = '.piecemaker/okf/Pièces/01_Lettre_Jean_Dupont.pdf.md';
+  for (const command of [
+    `pm okf link ${fiche} responds-to .piecemaker/okf/Pièces/02_Reponse.pdf.md --citation "Le prix (100 $) reste dû ; merci > tout !"`,
+    `node /opt/Skill-PieceMaker/scripts/pm.mjs okf link "${fiche}" amends Pièces/Contrat.pdf --citation "x"`,
+    `cd "/tmp/Dossier Exemple" && pm okf unlink "${fiche}" amends Pièces/Contrat.pdf`,
+    `F="${fiche}"; pm okf link "$F" amends Pièces/Contrat.pdf --citation "x"`,
+    `pm okf verify\npm okf link "${fiche}" states "Date" --citation "Le 3 mars."\npm okf verify 2>&1 | head -40`,
+  ]) {
+    assert.equal(await decision('Bash', { command }), null, command);
+  }
+  assert.equal(await decision('Bash', { command: ['bash', '-lc', `pm okf link "${fiche}" amends Pièces/Contrat.pdf --citation "x; y"`] }), null);
+});
+
+test('un segment pm okf ne couvre pas le reste de la commande', async () => {
+  for (const command of [
+    'pm okf verify; cp a.md .piecemaker/okf/b.md',
+    'pm okf verify\nrm -rf .piecemaker/okf',
+    'pm okf verify > .piecemaker/okf/b.md',
+    'pm okf link a.pdf amends b.pdf --citation "$(cp a.md .piecemaker/okf/b.md)"',
+    'pm okf verify | tee .piecemaker/okf/b.md',
+  ]) {
+    assert.equal(await decision('Bash', { command }), 'deny', command);
+  }
+});
+
 test('explique la voie autorisée', async () => {
   const { ontologyDecision } = await load();
   assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /Index › Ontologie tab/);

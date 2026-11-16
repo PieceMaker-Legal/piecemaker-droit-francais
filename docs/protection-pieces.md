@@ -96,11 +96,32 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 
 | Code | Rôle |
 | --- | --- |
-| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | sous bouclier vert seulement : refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine ; `pm okf link`/`unlink` seuls (commande unique, sans substitution) peuvent citer une pièce protégée, ils n'en lisent pas le contenu |
+| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | sous bouclier vert seulement : refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine ; un appel `pm okf …` peut citer une pièce protégée (voir ci-dessous) |
 | `classify-ai-documents.mjs` (`PostToolUse` Write/Bash) | exceptions pour les PDF/images produits par l'IA |
 | `lib/commits.cjs` | historique : pas d'extraction de texte des pièces protégées |
 | `knowledge/pipeline.ts` | exclut les « ressources » de la conversion et du scan |
 | proxy PII | ne lit ni `protection.json` ni le drapeau (voir couche 2) |
+
+### Commandes `pm okf`
+
+`pm okf` désigne la fiche d'une pièce dans l'index : il ne lit jamais la pièce
+originale. `protect-originals` et `guard-ontologie` laissent donc passer un
+appel `pm okf …`, même s'il cite une pièce ou une fiche de `.piecemaker/okf/`.
+Le mapping et les secrets restent refusés.
+
+`lib/shell-segments.mjs` découpe la commande en segments aux opérateurs
+`;`, `&&`, `||`, `|`, `&` et au saut de ligne, en respectant guillemets,
+échappements et commentaires. Seul le segment `pm okf` est exempté ; chaque
+autre segment est contrôlé comme avant. `pm okf verify; cat "Pièces/x.pdf"`
+reste refusé pour `cat`.
+
+Formes reconnues : `pm`, chemin du lanceur, `node …/pm.mjs`, affectations de
+variables avant le programme, `cd … &&` avant, `| head` après, plusieurs lignes.
+
+Le segment n'est pas exempté s'il contient une substitution (`$(…)`, accent
+grave, `$'…'`), une redirection autre que `2>&1` ou `>/dev/null`, ou si la
+commande contient une parenthèse hors guillemets ou un mot `alias`/`function`
+(redéfinition possible de `pm`).
 
 ## Limites connues (audit du 2026-09-26)
 

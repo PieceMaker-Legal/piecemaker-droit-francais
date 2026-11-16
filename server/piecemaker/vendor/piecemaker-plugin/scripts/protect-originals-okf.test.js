@@ -13,6 +13,8 @@ const caseRoot = path.join(sandbox, 'Dossier Protege');
 fs.mkdirSync(path.join(caseRoot, 'Pièces'), { recursive: true });
 fs.writeFileSync(path.join(caseRoot, 'Pièces', 'contrat fictif.pdf'), '%PDF fictif');
 fs.writeFileSync(path.join(caseRoot, 'Pièces', 'avenant fictif.pdf'), '%PDF fictif');
+fs.writeFileSync(path.join(caseRoot, 'Pièces', '01_Lettre_Jean_Dupont.pdf'), '%PDF fictif');
+fs.writeFileSync(path.join(caseRoot, 'Pièces', '02_Reponse_Societe_Exemple.pdf'), '%PDF fictif');
 fs.writeFileSync(path.join(caseRoot, '.env'), 'CLE=fictive');
 fs.mkdirSync(home, { recursive: true });
 fs.writeFileSync(path.join(home, 'projects.json'), JSON.stringify({ version: 1, sources: { test: [caseRoot] } }));
@@ -33,6 +35,25 @@ test('pm okf link et unlink peuvent citer une pièce protégée', () => {
     'pm okf link "Pièces/contrat fictif.pdf" states "Prix de vente" --citation "Le prix est fixé à 1 000 euros." --value "1 000 euros" --single',
     `pm okf link '${path.join(caseRoot, 'Pièces', 'avenant fictif.pdf')}' amends "Pièces/contrat fictif.pdf" --citation "Le présent avenant modifie le contrat."`,
     'pm okf unlink "Pièces/avenant fictif.pdf" amends "Pièces/contrat fictif.pdf"',
+    'pm okf verify "Pièces/contrat fictif.pdf"',
+  ]) {
+    assert.notEqual(decision(command), 'deny', command);
+  }
+});
+
+test('pm okf passe quelle que soit la forme de la commande', () => {
+  const lettre = path.join(caseRoot, 'Pièces', '01_Lettre_Jean_Dupont.pdf');
+  const reponse = path.join(caseRoot, 'Pièces', '02_Reponse_Societe_Exemple.pdf');
+  const launcher = path.join(caseRoot, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
+  for (const command of [
+    `pm okf link "${lettre}" responds-to "${reponse}" --citation "En réponse à votre lettre, le prix (100 $) reste dû ; merci !"`,
+    `"${launcher}" okf link "Pièces/01_Lettre_Jean_Dupont.pdf" refers-to "Pièces/contrat fictif.pdf" --citation "Voir le contrat."`,
+    `node "${launcher}.mjs" okf link "Pièces/01_Lettre_Jean_Dupont.pdf" refers-to "Pièces/contrat fictif.pdf" --citation="Voir le contrat."`,
+    `cd "${caseRoot}" && pm okf link "Pièces/01_Lettre_Jean_Dupont.pdf" amends "Pièces/contrat fictif.pdf" --citation "Il modifie le contrat." 2>&1 | head -20`,
+    'P="Pièces"; pm okf link "$P/x.pdf" amends "Pièces/01_Lettre_Jean_Dupont.pdf" --citation "x"',
+    'pm okf verify\npm okf link "Pièces/01_Lettre_Jean_Dupont.pdf" states "Date" --citation "Le 3 mars."\npm okf verify | head -40',
+    'PIECEMAKER_TAILLE=12 pm okf unlink "Pièces/01_Lettre_Jean_Dupont.pdf" amends "Pièces/contrat fictif.pdf" > /dev/null',
+    'pm okf link "Pièces/01_Lettre_Jean_Dupont.pdf" states "x" --citation "\\"; cat \\"Pièces/avenant fictif.pdf\\"; echo \\""',
   ]) {
     assert.notEqual(decision(command), 'deny', command);
   }
@@ -41,12 +62,20 @@ test('pm okf link et unlink peuvent citer une pièce protégée', () => {
 test('toute autre commande citant une pièce protégée reste refusée', () => {
   for (const command of [
     'cat "Pièces/contrat fictif.pdf"',
-    'pm okf verify "Pièces/contrat fictif.pdf"',
     'pm okf link "Pièces/contrat fictif.pdf" states "Prix" --citation "x" && cat "Pièces/contrat fictif.pdf"',
     'pm okf link "Pièces/contrat fictif.pdf" states "Prix" --citation "x"; cat "Pièces/avenant fictif.pdf"',
     'pm okf link "Pièces/contrat fictif.pdf" states "Prix" --citation "$(cat Pièces/avenant\\ fictif.pdf)"',
     'pm okf link "Pièces/contrat fictif.pdf" states "Prix" --citation "x" | cat "Pièces/avenant fictif.pdf"',
     'pm okf link .env states "Prix" --citation "x"',
+    'pm okf verify; cat "Pièces/01_Lettre_Jean_Dupont.pdf"',
+    'pm okf verify\ncat "Pièces/01_Lettre_Jean_Dupont.pdf"',
+    'pm okf verify || cat "Pièces/01_Lettre_Jean_Dupont.pdf"',
+    'pm okf verify & cat "Pièces/01_Lettre_Jean_Dupont.pdf"',
+    'pm okf verify < "Pièces/01_Lettre_Jean_Dupont.pdf"',
+    'pm okf link "Pièces/01_Lettre_Jean_Dupont.pdf" states "x" --citation "`cat Pièces/avenant\\ fictif.pdf`"',
+    "pm okf verify $'\\''; cat \"Pièces/01_Lettre_Jean_Dupont.pdf\"\necho '",
+    "pm okf verify # '\ncat \"Pièces/01_Lettre_Jean_Dupont.pdf\"\necho '",
+    'pm() { cat "$@"; }; pm okf "Pièces/01_Lettre_Jean_Dupont.pdf"',
   ]) {
     assert.equal(decision(command), 'deny', command);
   }

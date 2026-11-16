@@ -3,6 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
 import { proposalMessage } from './lib/proposition-edit.mjs';
+import { shellSegments } from './lib/shell-segments.mjs';
 import { FEATURES, featureOf, formatErrors } from './lib/herisson.mjs';
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -35,7 +36,7 @@ function readOnlyShell(command) {
   return harmless.split(/\|\||&&|[|;&\n]/).map((segment) => segment.trim()).filter(Boolean).every((segment) => {
     const words = segment.split(/\s+/).filter((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
     const program = path.basename(words[0] || '');
-    return READ_COMMANDS.has(program) && !UNSAFE_ARGUMENT.test(segment);
+    return (!words.length || READ_COMMANDS.has(program)) &&!UNSAFE_ARGUMENT.test(segment);
   });
 }
 
@@ -51,10 +52,12 @@ export function ontologyDecision(payload) {
     return reason ? denial(reason) : null;
   }
   if (tool !== 'Bash' && tool !== 'apply_patch') return null;
-  const command = String(Array.isArray(input.command) ? input.command.join(' ') : input.command || input.patch || input.input || '');
+  const script = tool === 'Bash' && Array.isArray(input.command) && /^-l?c$/.test(input.command[1]) ? input.command[2] : null;
+  const command = String(script ?? (Array.isArray(input.command) ? input.command.join(' ') : input.command || input.patch || input.input || ''));
   if (SHELL_KEY.test(command)) return denial(KEY_REASON);
-  const mention = command.match(SHELL_MENTION);
-  if (!mention || (tool === 'Bash' && readOnlyShell(command))) return null;
+  const shell = tool === 'Bash' ? shellSegments(command).filter((segment) => !segment.okf).map((segment) => segment.text).join('\n') : command;
+  const mention = shell.match(SHELL_MENTION);
+  if (!mention || (tool === 'Bash' && readOnlyShell(shell))) return null;
   return denial(guardedReason(`/.piecemaker/${mention[1]}`) || OKF_REASON);
 }
 
