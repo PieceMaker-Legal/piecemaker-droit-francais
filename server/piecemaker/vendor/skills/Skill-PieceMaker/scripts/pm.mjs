@@ -569,7 +569,7 @@ async function dossierState(api, project) {
     : pending.length ? `${pending.length} pièce(s) non convertie(s) : pm dossier conversion\n${pending.map((piece) => `  - ${piece.path} (${PIECE_STATES[piece.status] ?? piece.status})`).join('\n')}`
       : `${pieces.length} pièce(s), toutes converties`;
   const lignes = [
-    { nom: 'anonymisation', texte: job && !state.anonymized ? 'en cours, voir 1°' : anonymisation, ok: (state.anonymized && !sansEntite) || state.lifted },
+    { nom: 'anonymisation', texte: job && (!state.anonymized || sansEntite) ? 'en cours, voir 1°' : anonymisation, ok: (state.anonymized && !sansEntite) || state.lifted },
     { nom: 'mapping', texte: mapping, ok: mappingOk },
     { nom: 'index', texte: index, ok: indexOk },
     { nom: 'conversion', texte: conversionLine, ok: !job && !pending.length },
