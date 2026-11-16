@@ -87,7 +87,7 @@ export function graphGaps(projectPath: string): OkfGap[] {
   for (const premise of premises) {
     if (!stated.has(premise.id)) report(premise.id, 'prémisse sans pièce citée');
     else if (premise.frontmatter.single_value === true && !valued.has(premise.id)) report(premise.id, 'prémisse à valeur unique sans valeur');
-    if (!live(premise, INVOLVES).length) report(premise.id, 'prémisse sans partie concernée (involves)');
+    if (!live(premise, INVOLVES).length) report(premise.id, `prémisse sans partie concernée (involves) : pm okf link "${text(premise.frontmatter.title)}" involves <CODE_PARTIE>`);
   }
 
   return gaps;

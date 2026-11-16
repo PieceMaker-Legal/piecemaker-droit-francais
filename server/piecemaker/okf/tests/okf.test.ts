@@ -189,7 +189,7 @@ test('involves relie une prémisse à une partie sans citation', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf, parties: [{ code: PERSON, side: 'client' }] });
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf, undefined, AT);
-  assert.throws(() => addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: 'INCONNU_01' }, markdownOf), /n'est pas une partie du dossier/);
+  assert.throws(() => addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: 'INCONNU_01' }, markdownOf), (error: Error) => error.message.includes(`n'est pas une partie du dossier. Parties : ${PERSON}.`) && error.message.includes("json_set(data_json,'$.partySide','client')"));
 
   addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf, undefined, AT);
   buildBundle({ projectPath, documents, markdownOf, parties: [{ code: PERSON, side: 'client' }] });
@@ -332,7 +332,7 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   build();
   const gaps = graphGaps(projectPath).map((gap) => `${gap.element} | ${gap.manque}`);
   assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse à valeur unique sans valeur`));
-  assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse sans partie concernée (involves)`));
+  assert.ok(gaps.includes(`${RESILIATION_ID} | prémisse sans partie concernée (involves) : pm okf link "Montant de la facture" involves <CODE_PARTIE>`));
   assert.ok(gaps.includes(`/_parties/${COMPANY}.md | partie sans mention dans une pièce ni prémisse qui la concerne`));
   assert.equal(gaps.some((gap) => gap.startsWith(`/${LETTER}.md`)), false);
 

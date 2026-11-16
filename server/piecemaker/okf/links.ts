@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 
 import type { MarkdownOf } from './build.js';
 import {
@@ -81,7 +82,11 @@ export function addLink(projectPath: string, input: LinkInput, markdownOf: Markd
   if (source.id === ids.target) throw new TypeError('un document ne peut pas être lié à lui-même.');
 
   if (name === INVOLVES) {
-    if (!isPartyId(ids.target) || !fs.existsSync(conceptFile(projectPath, ids.target))) throw new TypeError(`cible : ${ids.target} n'est pas une partie du dossier.`);
+    if (!isPartyId(ids.target) || !fs.existsSync(conceptFile(projectPath, ids.target))) {
+      const folder = path.dirname(conceptFile(projectPath, partyId('_')));
+      const codes = fs.existsSync(folder) ? fs.readdirSync(folder).filter((name) => name.endsWith('.md')).map((name) => name.slice(0, -3)) : [];
+      throw new TypeError(`cible : ${ids.target} n'est pas une partie du dossier. Parties : ${codes.join(', ') || 'aucune'}. Cible admise : le code d'une partie (ex. PERSONNE_PHYSIQUE_01). Pour qualifier une personne de partie : pm dossier sql "UPDATE piecemaker_nodes SET data_json=json_set(data_json,'$.partySide','client') WHERE project_id=dossier() AND id='entity:<CODE>'" ('adversaire' pour la partie adverse), puis relancer pm okf link.`);
+    }
   } else if (!quoted(markdownOf(text(source.frontmatter.resource)), citation)) {
     throw new TypeError('citation introuvable mot pour mot dans le document source.');
   }
