@@ -1,7 +1,7 @@
 import { planCall } from '@/piecemaker/editor-tabs/planCalls';
 import type { PlanCall } from '@/piecemaker/editor-tabs/planCalls';
 
-export type DossierView = 'general' | 'chronology';
+export type DossierView = 'general' | 'chronology' | 'index-analysis';
 
 export type AutoPanelTarget =
   | { kind: 'file'; path: string }
@@ -130,7 +130,7 @@ function tabularReviewTarget(input: Input): AutoPanelTarget | null {
 
 function pieceMakerTarget(tool: string, input: Input): AutoPanelTarget | null {
   if (tool === 'afficher') return showTarget(input);
-  if (tool === 'tabular_review_index') return { kind: 'dossier', view: 'chronology' };
+  if (tool === 'tabular_review_index') return { kind: 'dossier', view: input.action === 'lister' || input.action === 'modifier' ? 'chronology' : 'index-analysis' };
   if (tool === 'tabular_review') return tabularReviewTarget(input);
   if (tool === 'sql') return sqlTarget(text(input.requete));
   return null;
@@ -179,7 +179,7 @@ function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
   const { flags, rest } = flagMap(argv.slice(script + 1));
   const [tool, action] = rest;
   if (tool === 'tab') return action === 'afficher' ? tabTarget(rest.slice(2)) : null;
-  if (tool === 'dossier' && action === 'index') return { kind: 'dossier', view: 'chronology' };
+  if (tool === 'dossier' && action === 'index') return { kind: 'dossier', view: 'index-analysis' };
   if (tool === 'dossier' && action === 'sql') return sqlTarget(rest.slice(2).join(' '));
   if (tool === 'tabular_review') return tabularReviewTarget({ ...flags, action });
   return null;

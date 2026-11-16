@@ -16,7 +16,7 @@ const LABELS = {
   'plugin:piecemaker-catala': 'Catala',
 };
 
-const VIEWS = { chronology: 'index', general: 'vue générale' };
+const VIEWS = { chronology: 'index', general: 'vue générale', 'index-analysis': 'analyse tabulaire de l’index' };
 
 export const openPanelsFile = (home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker')) => path.join(home, 'volets-ouverts.json');
 

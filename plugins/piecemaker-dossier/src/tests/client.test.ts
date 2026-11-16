@@ -49,6 +49,17 @@ describe('Chronologie', () => {
     expect(openIndexAnalysis).toHaveBeenCalledWith(expect.any(dom.window.HTMLElement), expect.objectContaining({ context: expect.objectContaining({ project: { name: graph.projectId, path: '/dossier-exemple' } }) }), expect.any(Function));
     expect(shown).not.toHaveBeenCalled();
   });
+
+  it('opens the index analysis window when pm asks for it', async () => {
+    vi.mocked(openIndexAnalysis).mockClear();
+    const focus: unknown[] = [];
+    dom.window.addEventListener('piecemaker:panel-focus', (event) => focus.push((event as CustomEvent).detail.view));
+    (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'index-analysis';
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined, rpc: vi.fn(), openFileInEditor: vi.fn() } as never);
+    await vi.waitFor(() => expect(focus).toContain('index-analysis'));
+    expect(openIndexAnalysis).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-action="index-analysis"]')).not.toBeNull();
+  });
 });
 
 describe('Index : tri et classement', () => {

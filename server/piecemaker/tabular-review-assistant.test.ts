@@ -34,7 +34,7 @@ test('transmet l’action au plugin avec son secret et l’adresse du proxy', as
   const prepared = await call({ action: 'preparer', project: '/dossier' });
   assert.equal(prepared.status, 200);
   assert.deepEqual(await prepared.json(), { resultat: { projet: 'p-1' } });
-  assert.deepEqual(received[0], { secret: 'secret-exemple', body: { action: 'preparer', project: '/dossier', proxyOrigin: 'http://127.0.0.1:9' } });
+  assert.deepEqual(received[0], { secret: 'secret-exemple', body: { action: 'preparer', project: '/dossier', proxyOrigin: 'http://127.0.0.1:9', hostOrigin: `http://127.0.0.1:${port}` } });
   const refused = await call({ action: 'lancer' });
   assert.equal(refused.status, 400);
   assert.deepEqual(await refused.json(), { erreur: 'À compléter avant de lancer : documents.' });

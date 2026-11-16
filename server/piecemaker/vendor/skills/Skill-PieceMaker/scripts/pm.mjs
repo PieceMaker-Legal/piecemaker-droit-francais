@@ -396,6 +396,7 @@ function panelNoticeLabel(target) {
     if (target.review) return `Analyse tabulaire (${target.review})`;
     return 'Analyse tabulaire';
   }
+  if (target.view === 'index-analysis') return 'Dossier (analyse tabulaire de l’index)';
   return target.view === 'chronology' ? 'Dossier (index)' : 'Dossier (vue générale)';
 }
 
@@ -705,7 +706,8 @@ async function dossier(api, positional, flags, resolved) {
   const action = positional[2];
   if (!INDEX_ACTIONS.includes(action)) usage(`dossier index attend ${INDEX_ACTIONS.join(', ')}.`);
   const result = await api.tabularIndex(api.tabularFn, { ...reviewInput(flags), action, project });
-  return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, target), target));
+  const analysis = { ...target, view: 'index-analysis' };
+  return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, analysis), analysis));
 }
 
 async function tabularReview(api, positional, flags, resolved) {
@@ -717,7 +719,7 @@ async function tabularReview(api, positional, flags, resolved) {
   const result = await api.tabularFn({ ...reviewInput(flags), action, project });
   const text = JSON.stringify(result);
   if (result?.index) {
-    const target = voletTarget(project, 'index');
+    const target = { ...voletTarget(project, 'index'), view: 'index-analysis' };
     return withNotice(text, await followPanel(api, panelRequest(project, target), target));
   }
   if (REVIEW_FOLLOWED.includes(action) || action === 'lister' || action === 'preparer' || action === 'lancer') {

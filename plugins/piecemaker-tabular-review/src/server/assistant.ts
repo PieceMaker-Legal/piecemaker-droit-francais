@@ -232,7 +232,7 @@ async function relaunch(project: string, input: Input, launchers: AssistantLaunc
   const rows = unindexedDocuments(project, review)
     .map((document) => ({ label: path.posix.basename(document.path, '.md'), documents: [document.path] }));
   if (!rows.length) return { fichier: file, ajoutes: 0 };
-  const detail = await launchers.appendDocuments({ project, file, rows, proxyOrigin: input.proxyOrigin });
+  const detail = await launchers.appendDocuments({ project, file, rows, proxyOrigin: input.proxyOrigin, hostOrigin: input.hostOrigin });
   return { fichier: file, ajoutes: rows.length, statut: detail.status };
 }
 
@@ -278,7 +278,7 @@ async function launch(project: string, input: Input, launchers: AssistantLaunche
   const absent = missing(draft);
   if (absent.length) throw new UserError(`À compléter avant de lancer : ${absent.join(', ')}.`);
   const { provider, model } = resolved(draft);
-  const settings = { project, title: draft.title, columns: draft.columns, provider, model, concurrency: CONCURRENCY, proxyOrigin: input.proxyOrigin };
+  const settings = { project, title: draft.title, columns: draft.columns, provider, model, concurrency: CONCURRENCY, proxyOrigin: input.proxyOrigin, hostOrigin: input.hostOrigin };
   if (draft.mode === 'recherche') {
     const state = startResearch(draft.research);
     watchResearch(state.id, draft, (body) => launchers.launchResearch({ ...settings, ...body }));

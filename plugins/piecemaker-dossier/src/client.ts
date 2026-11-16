@@ -40,11 +40,11 @@ const SCAN_POLL_INTERVAL_MS = 1000;
 const VERSION_POLL_INTERVAL_MS = 5000;
 const viewCache = new Map<string, ViewData>();
 
-function takeRequestedView(): Tab | null {
+function takeRequestedView(): Tab | 'index-analysis' | null {
   const pending = window as Window & { [VIEW_KEY]?: unknown };
   const view = pending[VIEW_KEY];
   delete pending[VIEW_KEY];
-  return view === 'general' || view === 'chronology' || view === 'graph' ? view : null;
+  return view === 'general' || view === 'chronology' || view === 'graph' || view === 'index-analysis' ? view : null;
 }
 
 function takeRequestedMapping(): string | null {
@@ -63,7 +63,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   root.style.position = 'relative';
   container.replaceChildren(style, root);
   let context = api.context;
-  let active: Tab = takeRequestedView() ?? 'general';
+  const requestedView = takeRequestedView();
+  let active: Tab = requestedView === 'index-analysis' ? 'chronology' : requestedView ?? 'general';
   let data: ViewData | null = null;
   let closeIndexAnalysis: (() => void) | null = null;
   let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
@@ -403,8 +404,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     window.dispatchEvent(new CustomEvent(ANONYMIZATION_STATE_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', project: context.project?.path || null, anonymized: Boolean(data?.graph.anonymizationComplete), pending: ready && !scanning && !mappingValidated } }));
   };
 
+  const emitFocus = () => {
+    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', view: closeIndexAnalysis ? 'index-analysis' : active } }));
+  };
+
   const paintContent = () => {
-    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', view: active } }));
+    emitFocus();
     const content = root.querySelector<HTMLElement>('[data-content]');
     if (!content) return;
     destroyGraph?.();
@@ -810,13 +815,31 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     void load();
   };
   const versionTimer = window.setInterval(() => void refreshWhenChanged(), VERSION_POLL_INTERVAL_MS);
+  let openingAnalysis = false;
+  const showIndexAnalysis = () => {
+    if (closeIndexAnalysis || openingAnalysis || !context.project) return;
+    openingAnalysis = true;
+    void openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); })
+      .then((dispose) => { closeIndexAnalysis = dispose; emitFocus(); })
+      .catch(showError)
+      .finally(() => { openingAnalysis = false; });
+  };
   const showRequestedView = () => {
     const view = takeRequestedView();
     if (!view) return;
+    if (view === 'index-analysis') {
+      if (active !== 'chronology') {
+        active = 'chronology';
+        render();
+      }
+      showIndexAnalysis();
+      return;
+    }
     active = view;
     render();
   };
   window.addEventListener(VIEW_EVENT, showRequestedView);
+  if (requestedView === 'index-analysis') showIndexAnalysis();
   const showRequestedMapping = () => {
     mappingRequested = takeRequestedMapping();
     openRequestedMapping();

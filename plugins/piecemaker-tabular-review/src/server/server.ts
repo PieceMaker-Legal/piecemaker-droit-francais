@@ -13,6 +13,7 @@ import { pickFiles } from './picker.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
 import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch, updateResearchFilters } from './research.js';
 import { appendRows, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, saveQuestion, updateReview } from './reviews.js';
+import { assertHostOrigin } from './classify.js';
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
 import { assertModel, assertProvider, assertProxyOrigin, probeProxy, sessionEnvironment } from './sessions.js';
@@ -49,9 +50,10 @@ async function createAndLaunch(body: Body) {
   const template = Array.isArray(request.columns) ? normalizeTemplate({ name: request.templateName || 'Questions personnalisées', columns: request.columns }) : findTemplate(request.templateId);
   const settings = { provider: assertProvider(request.provider), model: assertModel(request.model), concurrency: concurrency(request.concurrency) };
   const environment = await launchEnvironment(request.proxyOrigin);
+  const hostOrigin = assertHostOrigin(body.hostOrigin);
   const { file, review, created } = createReview(project, template, request.title, request.rows, settings);
   if (!created) return reviewDetail(project, file, isRunning(project, file));
-  await queueTasks(project, file, review.rows.map((row) => ({ rowId: row.id })), settings.concurrency, environment);
+  await queueTasks(project, file, review.rows.map((row) => ({ rowId: row.id })), settings.concurrency, environment, hostOrigin);
   return reviewDetail(project, file, isRunning(project, file));
 }
 
@@ -144,8 +146,9 @@ async function appendPieces(body: Body) {
   assertReviewFile(project, file);
   const review = readReview(project, file);
   const environment = await launchEnvironment(body.proxyOrigin);
+  const hostOrigin = assertHostOrigin(body.hostOrigin);
   const rows = await appendRows(project, file, body.rows as RowRequest[]);
-  if (rows.length) await queueTasks(project, file, rows.map((rowId) => ({ rowId })), review.concurrency || 3, environment);
+  if (rows.length) await queueTasks(project, file, rows.map((rowId) => ({ rowId })), review.concurrency || 3, environment, hostOrigin);
   return reviewDetail(project, file, isRunning(project, file));
 }
 

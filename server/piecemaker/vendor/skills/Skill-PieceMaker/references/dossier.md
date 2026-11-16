@@ -19,13 +19,13 @@ Sans MinerU, le Markdown d’un scan est vide ou presque : signalez-le, n’en c
 
 ## index
 
-**L’index du dossier est une tabular review : une seule par dossier lit toutes les pièces, une ligne par pièce, pour la chronologie et le tri.** Il s’affiche dans l’onglet Dossier. Le fichier et le projet sont déduits.
+**L’index du dossier est une tabular review : une seule par dossier lit toutes les pièces, une ligne par pièce, pour la chronologie et le tri.** `lancer`, `lire` et `colonnes` l’ouvrent dans la fenêtre « Analyse tabulaire » de l’onglet Dossier. Le fichier et le projet sont déduits.
 
 - `lancer` crée l’index s’il manque, puis l’analyse. S’il existe, analyse les pièces converties absentes de l’index. Lancez-le sur accord de l’avocat.
 - `lire` résume l’index : statut, questions, puis une ligne par pièce avec sa réponse courte à chaque question.
 - `colonnes` ajoute, modifie ou retire une question : format dans `tabular.md`.
 
-La colonne de classement range chaque pièce dans l’arborescence. Dès que le volet affiche sa réponse, il range la pièce, sans confirmation ; pour corriger, l’avocat change la valeur dans le tableau.
+La colonne de classement range chaque pièce dans l’arborescence, sans confirmation. Après `pm dossier index lancer`, le serveur range chaque pièce dès que sa ligne est analysée, même si l’index n’est pas affiché. Un lancement fait depuis l’interface la range quand le volet affiche la réponse. Pour corriger, l’avocat change la valeur dans le tableau.
 
 ## arborescence
 

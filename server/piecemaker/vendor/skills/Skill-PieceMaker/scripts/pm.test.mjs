@@ -192,8 +192,8 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
   const read = await run(['dossier', 'index', 'lire', '--dossier', dossier], { deps });
   assert.equal(calls.at(-1).fichier, 'index.json');
   assert.equal(opened[0].tab, 'plugin:piecemaker-dossier');
-  assert.equal(opened[0].view, 'chronology');
-  assert.match(read, /visible : Dossier \(index\)\./i);
+  assert.equal(opened[0].view, 'index-analysis');
+  assert.match(read, /visible : Dossier \(analyse tabulaire de l’index\)\./i);
   for (const action of ['preparer', 'relancer', 'ouvrir', 'classement', 'lister', 'modifier']) {
     await assert.rejects(() => run(['dossier', 'index', action, '--dossier', dossier], { deps }), (error) => error.exitCode === 2);
   }

@@ -377,7 +377,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       }
       const result = await tabularFn({ ...input, ...(fichier ? { fichier } : {}), action, project: resolved });
       if (result.index) {
-        await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-dossier', view: 'chronology' }, openPanelsTimeoutMs, openPanelsPath);
+        await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-dossier', view: 'index-analysis' }, openPanelsTimeoutMs, openPanelsPath);
       } else if (action === 'preparer' && result.fichier) {
         await openPanelAndWait({ project: resolved, tab: 'plugin:piecemaker-tabular-review', review: result.fichier, draft: result.projet }, openPanelsTimeoutMs, openPanelsPath);
       }
@@ -425,7 +425,7 @@ export function createServer({ execFn, sqlFn = runSql, reasoningFn = runReasonin
       }
       const project = path.resolve(resolveDossier(dossier));
       const result = await tabularIndex(tabularFn, { ...input, action, project });
-      await openPanelAndWait({ project, tab: 'plugin:piecemaker-dossier', view: 'chronology' }, openPanelsTimeoutMs, openPanelsPath);
+      await openPanelAndWait({ project, tab: 'plugin:piecemaker-dossier', view: 'index-analysis' }, openPanelsTimeoutMs, openPanelsPath);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     } catch (error) {
       return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };

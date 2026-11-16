@@ -34,7 +34,7 @@ export function createTabularReviewLocalRouter(options: TabularReviewAssistantOp
       const reply = await fetch(`http://127.0.0.1:${port}/assistant`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ ...request.body, proxyOrigin: options.proxyOrigin() }),
+        body: JSON.stringify({ ...request.body, proxyOrigin: options.proxyOrigin(), hostOrigin: `http://127.0.0.1:${request.socket.localPort}` }),
       });
       const payload = await reply.json() as { error?: string };
       if (!reply.ok || payload?.error) {

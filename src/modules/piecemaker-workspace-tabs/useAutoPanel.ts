@@ -109,7 +109,7 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
             openInEditor(request.document);
             handled = true;
           } else if (request.tab === DOSSIER_TAB) {
-            show({ kind: 'dossier', view: request.view === 'chronology' ? 'chronology' : 'general' }, state.current, request.id);
+            show({ kind: 'dossier', view: request.view === 'chronology' || request.view === 'index-analysis' ? request.view : 'general' }, state.current, request.id);
             handled = true;
           } else if (request.tab === TABULAR_REVIEW_TAB) {
             show({ kind: 'tabular-review', review: request.review ?? null, ...(request.draft ? { draft: request.draft } : {}) }, state.current, request.id);
