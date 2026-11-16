@@ -261,7 +261,7 @@ function maskToken(index) {
   return `\uF8FF${digits}\uF8FF`;
 }
 
-function applyReplacements({ replacements, scan }, text, overrides = null) {
+function applyReplacements({ replacements, scan }, text, overrides = null, restore = null) {
   let output = text;
   let present = null;
   replacements.forEach(({ regex, code, entity, anchor }, index) => {
@@ -269,7 +269,10 @@ function applyReplacements({ replacements, scan }, text, overrides = null) {
       if (present === null) present = scan(output);
       if (!present.has(index)) return;
     }
-    const next = output.replace(regex, (overrides && overrides.get(entity)) || code);
+    const value = (overrides && overrides.get(entity)) || code;
+    const token = restore ? maskToken(restore.length) : value;
+    const next = output.replace(regex, token);
+    if (restore && next !== output) restore.push([token, value]);
     if (next !== output) {
       output = next;
       present = null;
@@ -300,7 +303,7 @@ function applyMapping(text, mapping, overrides = null) {
     masked = masked.split(code).join(token);
   }
 
-  let output = applyReplacements(compiled.replacements, masked, overrides);
+  let output = applyReplacements(compiled.replacements, masked, overrides, restore);
   if (output === masked) return text;
 
   for (const [token, code] of restore) output = output.split(token).join(code);

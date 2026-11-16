@@ -172,6 +172,16 @@ test('une filiale au nom plus long garde son propre code', () => {
   );
 });
 
+test('un code posé à l’aller n’est jamais recodé par une entité plus courte', () => {
+  const dictionary = buildDictionary({
+    mapping: { 'Société Exemple SAS': 'SA_10', Exemple: 'SA_10', SA: 'SA_11' },
+    reverse_mapping: { SA_10: ['Société Exemple SAS', 'Exemple'], SA_11: ['SA'] },
+  }, 1);
+  const coded = anonymize('Lettre_par_Exemple_SA.pdf', dictionary);
+  assert.equal(coded, 'Lettre_par_SA_10_SA_11.pdf');
+  assert.equal(anonymize(deanonymize(coded, dictionary), dictionary), coded);
+});
+
 test('les identifiants d’appel et de résultat restent appariés', () => {
   const toolUseId = 'toolu_01JeanDupont_X';
   const payload = {

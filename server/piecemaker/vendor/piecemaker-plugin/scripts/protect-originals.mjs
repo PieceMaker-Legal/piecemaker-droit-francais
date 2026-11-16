@@ -289,6 +289,14 @@ function sameMaskedFiles(masked, dictionary, cwd) {
     .filter((file) => file.stat?.isFile());
 }
 
+function percentDecoded(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 async function withExistingFiles(command, cwd) {
   const text = String(command ?? '');
   if (missingFileWords(text, cwd).length === 0) return { command };
@@ -299,7 +307,7 @@ async function withExistingFiles(command, cwd) {
   const resolvedCommand = text.replace(SIZE_CHOICE, '').replace(SHELL_WORD, (word) => {
     const bare = word.replace(/^["']|["']$/g, '');
     if (!missingFileWords(bare, cwd).length) return word;
-    const masked = applyMapping(bare, dictionary.mapping);
+    const masked = applyMapping(percentDecoded(bare), dictionary.mapping);
     const resolved = resolveMappedPath(masked, dictionary.mapping, dictionary.reverse, cwd);
     if (statSafe(absolutePath(resolved, cwd))?.isFile()) return quotedForShell(resolved);
     const files = sameMaskedFiles(masked, dictionary, cwd);
