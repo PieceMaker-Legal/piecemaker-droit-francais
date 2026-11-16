@@ -88,6 +88,21 @@ test('the client turn limit counts model calls, also when it arrives as text', a
   assert.equal(requests.length, 3);
 });
 
+test('an exhausted Mistral budget is shown and kept in the session history', async t => {
+  const { home, history } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  const billing = Object.assign(new Error('API error occurred: Status 402'), { statusCode: 402, body: '{"message":"Budget fictif épuisé.","code":"2304"}' });
+  const auth = () => ({ client: { chat: { stream: async () => { throw billing; } } }, close: async () => {} }) as unknown as ReturnType<typeof mistralSdkAuth.createClient>;
+  await assert.rejects(
+    createMistralSdkRuntime(history, async () => [], home, auth, fixtureTools(async () => '')).run('bonjour', { sessionId: 'mistral-sdk-budget' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context),
+    /Status 402/,
+  );
+  const expected = 'Your Mistral credit or budget is exhausted (HTTP 402): Budget fictif épuisé. Top up your Mistral account, then send the message again.';
+  assert.equal(events.find(event => event.kind === 'error')?.content, expected);
+  const saved = (await history.load('mistral-sdk-budget'))?.transcript.at(-1);
+  assert.deepEqual([saved?.kind, saved?.content], ['error', expected]);
+});
+
 test('a fork copies the whole conversation and answers apart from its source', async t => {
   const { home, history } = await setup(t);
   const requests: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];

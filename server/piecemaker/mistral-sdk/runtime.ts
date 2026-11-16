@@ -31,6 +31,14 @@ async function readInstructions(file: string, visited: Set<string>): Promise<str
   return instructions;
 }
 
+function describeMistralError(error: unknown): string {
+  const { statusCode, body } = (error ?? {}) as { statusCode?: unknown; body?: unknown };
+  if (statusCode !== 402) return error instanceof Error ? error.message : String(error);
+  let detail = '';
+  try { detail = String(JSON.parse(String(body)).message ?? ''); } catch { detail = ''; }
+  return `Your Mistral credit or budget is exhausted (HTTP 402)${detail ? `: ${detail}` : '.'} Top up your Mistral account, then send the message again.`;
+}
+
 export function installMistralSdk(provider: IProvider, home: string) {
   const models = {
     OPTIONS: [
@@ -263,7 +271,7 @@ export function createMistralSdkRuntime(
         throw new Error('Limite de tours Mistral atteinte. Vous pouvez poursuivre dans un nouveau message.');
       } catch (error) {
         exitCode = 1;
-        if (!signal.aborted) emit({ kind: 'error', content: error instanceof Error ? error.message : String(error) });
+        if (!signal.aborted) transcript.push(emit({ kind: 'error', content: describeMistralError(error) }));
         if (messages.length && (!record || record.userId === userId)) await save();
         if (!signal.aborted) throw error;
       } finally {
