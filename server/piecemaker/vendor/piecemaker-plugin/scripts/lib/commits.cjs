@@ -638,6 +638,7 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
       entries.filter((entry) => entry.isFile()).map((entry) => documentKey(entry.name))
     );
     for (const entry of entries) {
+      if (truncated) return;
       if (entry.name.startsWith('.') || entry.name.startsWith('~$') || entry.isSymbolicLink()) continue;
       const absolute = path.join(directory, entry.name);
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
