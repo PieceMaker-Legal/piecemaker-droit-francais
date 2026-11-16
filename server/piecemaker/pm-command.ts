@@ -18,7 +18,7 @@ function shellQuote(value: string) {
 }
 
 function posixLauncher(runtime: string, script: string) {
-  return `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${shellQuote(runtime)} ${shellQuote(script)} "$@"\n`;
+  return `#!/bin/sh\n[ -z "\${NO_COLOR+x}" ] || unset FORCE_COLOR\nELECTRON_RUN_AS_NODE=1 exec ${shellQuote(runtime)} ${shellQuote(script)} "$@"\n`;
 }
 
 function windowsLauncher(runtime: string, script: string) {

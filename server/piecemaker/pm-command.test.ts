@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -29,6 +29,8 @@ test('installe pm dans le PATH des sessions du serveur, sans doublon', () => {
   assert.equal(fs.existsSync(path.join(userHome, '.profile')), false);
   const help = execFileSync('pm', ['--help'], { cwd: userHome, env: { ...process.env, PATH: env.PATH }, encoding: 'utf8' });
   assert.match(help, /Usage: pm <outil>/);
+  const proxied = { ...process.env, PATH: env.PATH, NO_COLOR: '1', FORCE_COLOR: '1', NODE_USE_ENV_PROXY: '1', HTTPS_PROXY: 'http://127.0.0.1:9' };
+  assert.equal(spawnSync('pm', ['--help'], { cwd: userHome, env: proxied, encoding: 'utf8' }).stderr, '');
 });
 
 test('un shell lancé hors PieceMaker trouve pm, interactif ou non', () => {

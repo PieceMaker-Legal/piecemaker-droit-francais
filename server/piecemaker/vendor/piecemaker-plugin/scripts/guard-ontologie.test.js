@@ -41,6 +41,9 @@ test('suit le format Codex : apply_patch avec le patch dans tool_input.command',
 
 test('laisse lire ces fichiers et écrire ailleurs', async () => {
   assert.equal(await decision('Bash', { command: 'cat .piecemaker/ontologie.json 2>&1 | head -20' }), null);
+  assert.equal(await decision('Bash', { command: "cat a.json; sed -n '1,180p' .piecemaker/okf/index.md" }), null);
+  assert.equal(await decision('Bash', { command: "sed -n '1,5w .piecemaker/okf/b.md' a.md" }), 'deny');
+  assert.equal(await decision('Bash', { command: "sed -i -n '1,5p' .piecemaker/okf/index.md" }), 'deny');
   assert.equal(await decision('Bash', { command: 'grep -r "amends" .piecemaker/okf' }), null);
   assert.equal(await decision('Bash', { command: 'pm okf link Pièces/Courrier.pdf amends Pièces/Contrat.pdf --citation "Il est résilié."' }), null);
   assert.equal(await decision('Write', { file_path: '.piecemaker/raisonnements/bail.yaml' }), null);

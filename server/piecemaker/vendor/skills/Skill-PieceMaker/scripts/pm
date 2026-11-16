@@ -79,6 +79,8 @@ def main():
         env['PIECEMAKER_APP_PORT'] = str(port)
     if home:
         env['PIECEMAKER_HOME'] = home
+    if 'NO_COLOR' in env:
+        env.pop('FORCE_COLOR', None)
     os.execve(node, [node, str(SCRIPT), *sys.argv[1:]], env)
 
 

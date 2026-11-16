@@ -12,7 +12,7 @@ export function installDocxCommand(home: string, applicationRoot: string, env: N
   const loader = current.endsWith('.ts') ? ['--import', createRequire(import.meta.url).resolve('tsx')] : [];
   const command = [process.execPath, ...loader, entry];
   fs.mkdirSync(directory, { recursive: true });
-  fs.writeFileSync(path.join(directory, 'docx'), `#!/bin/sh\nELECTRON_RUN_AS_NODE=1 exec ${command.map(quote).join(' ')} "$@"\n`, { mode: 0o755 });
+  fs.writeFileSync(path.join(directory, 'docx'), `#!/bin/sh\n[ -z "\${NO_COLOR+x}" ] || unset FORCE_COLOR\nELECTRON_RUN_AS_NODE=1 exec ${command.map(quote).join(' ')} "$@"\n`, { mode: 0o755 });
   fs.chmodSync(path.join(directory, 'docx'), 0o755);
   if (process.platform === 'win32') fs.writeFileSync(path.join(directory, 'docx.cmd'), `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n${command.map((arg) => `"${arg}"`).join(' ')} %*\r\n`);
   const key = Object.keys(env).find((name) => name.toUpperCase() === 'PATH') ?? 'PATH';
