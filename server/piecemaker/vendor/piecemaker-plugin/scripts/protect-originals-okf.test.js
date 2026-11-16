@@ -80,3 +80,48 @@ test('toute autre commande citant une pièce protégée reste refusée', () => {
     assert.equal(decision(command), 'deny', command);
   }
 });
+
+const Database = require('better-sqlite3');
+const { anonymize, deanonymize } = require('../../../anonymizer/dictionary.cjs');
+const { createSqliteDictionaryLoader } = require('../../../anonymizer/sqlite-dictionary.cjs');
+
+const databasePath = path.join(sandbox, 'auth.db');
+fs.writeFileSync(path.join(caseRoot, 'Pièces', 'Lettre_par_Exemple_SA.pdf'), '%PDF fictif');
+fs.writeFileSync(path.join(caseRoot, 'Pièces', 'Réponse_par_Dupont_SA.pdf'), '%PDF fictif');
+const database = new Database(databasePath);
+database.exec(`
+  CREATE TABLE piecemaker_nodes (project_id TEXT, id TEXT, label TEXT, PRIMARY KEY (project_id,id));
+  CREATE TABLE piecemaker_mappings (project_id TEXT,node_id TEXT,real_value TEXT,masked_value TEXT,updated_at TEXT);
+`);
+for (const [node, label, code, variants] of [
+  ['societe', 'Société Exemple SAS', 'SA_10', ['Société Exemple SAS', 'Exemple']],
+  ['forme', 'SA', 'SA_11', ['SA']],
+  ['personne', 'Jean Dupont', 'PERSONNE_PHYSIQUE_10', ['Jean Dupont', 'Dupont']],
+]) {
+  database.prepare('INSERT INTO piecemaker_nodes VALUES (?,?,?)').run('dossier-1', node, label);
+  for (const real of variants) database.prepare('INSERT INTO piecemaker_mappings VALUES (?,?,?,?,?)').run('dossier-1', node, real, code, '2026-11-02T10:00:00.000Z');
+}
+database.close();
+const loader = createSqliteDictionaryLoader({ databasePath });
+const dictionary = loader.get();
+loader.close();
+
+function rewrittenCommand(command) {
+  const output = execFileSync(process.execPath, [hook], {
+    input: JSON.stringify({ tool_name: 'Bash', tool_input: { command }, cwd: caseRoot, hook_event_name: 'PreToolUse' }),
+    env: { ...process.env, PIECEMAKER_HOME: home, DATABASE_PATH: databasePath },
+    encoding: 'utf8',
+  });
+  return output.trim() ? JSON.parse(output).hookSpecificOutput?.updatedInput?.command : command;
+}
+
+test('pm okf link accepte le chemin que l’agent recopie depuis ce qu’il lit', () => {
+  const seen = (name) => anonymize(`Pièces/${name}`, dictionary);
+  const source = seen('Réponse_par_Dupont_SA.pdf');
+  const target = seen('Lettre_par_Exemple_SA.pdf');
+  const expected = 'pm okf link "Pièces/Réponse_par_Dupont_SA.pdf" responds-to "Pièces/Lettre_par_Exemple_SA.pdf" --citation "x"';
+  for (const [left, right] of [[source, target], [source.replace(/_(\d+)/g, '%5F$1'), target.replace(/_(\d+)/g, '%5F$1')]]) {
+    const command = deanonymize(`pm okf link "${left}" responds-to "${right}" --citation "x"`, dictionary);
+    assert.equal(rewrittenCommand(command), expected, command);
+  }
+});
