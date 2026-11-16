@@ -121,7 +121,7 @@ Une preuve réussit si `catala proof --debug` produit au moins une obligation, s
 
 ## Explication d’une exécution
 
-`pm catala verifier --programme <nom>` produit aussi le graphe après une vérification réussie. Le scénario précédent est conservé s’il existe encore ; sinon, le premier scénario réussi est choisi. Les résultats de tests officiels de clerk désignent ce scénario. Un échec d’explication est signalé séparément des contrôles.
+`pm catala verifier --programme <nom>` produit aussi le graphe après une vérification réussie. Le scénario précédent est conservé s’il existe encore ; sinon, le premier scénario réussi est choisi. Les résultats de tests officiels de clerk désignent ce scénario. Un échec d’explication est signalé séparément des contrôles. Quand `catala explain` échoue sur un scénario dont le test réussit, le contrôle donne le scénario, la ligne, l’erreur du compilateur et la correction ; Catala 1.3 plante ainsi sur une `condition` que le scénario ne remplit pas, d’où `règle calcul.<condition> non rempli` pour chaque condition fausse.
 
 `pm catala expliquer --programme <nom> --fichier test_<module>.catala_fr --scope <Scenario>` reste disponible pour choisir une autre exécution.
 

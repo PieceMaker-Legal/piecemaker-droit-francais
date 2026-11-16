@@ -70,6 +70,7 @@ Chaque fait du test porte aussi son `## okf:/_premises/<fiche>.md` (voir « Fait
 | `Syntax error in preceding code block` | `si … alors …` sans `sinon` | `si … alors … sinon …` |
 | `unknown identifier` | nom non déclaré ou mal orthographié | déclarez-le dans ` ```catala-metadata `, avec les mêmes accents |
 | `titre « … » : écrivez 2 à 7 mots` | titre `##` d'une entrée trop court, trop long, avec `?` ou un identifiant | voir « Style des titres » du skill |
+| `explication` : `Operator && applied to the wrong arguments` (`value ø`) ou `explain.ml … Assertion failed` | scénario qui ne remplit pas une `condition` lue par une règle : le test réussit, `catala explain` plante | écrivez `règle calcul.fait non rempli` pour chaque condition fausse du scénario |
 | `règle sans source juridique` | bloc ` ```catala ` sous un titre sans identifiant | placez le bloc sous le titre de son article et son extrait, comme dans le modèle |
 
 ## Module : `resolution.catala_fr`

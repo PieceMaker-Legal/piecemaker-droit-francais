@@ -122,6 +122,19 @@ test('expliquer retains native provenance and succeeds through JSON when explain
   } finally { cleanup(); }
 });
 
+test('verifier names the scenario, the line and the fix when explain crashes on an unset condition', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    program(dossier, 'prime');
+    const crash = '┌─[ERROR]─\n│\n│  Oh no, you found a bug in the compiler!\n│  Please report to https://github.com/CatalaLang/catala/issues.\n│\n│  Operator && applied to the wrong arguments\n│\n│ Operator (value &&):\n├─➤ prime.catala_fr:9.20-22:\n│ 9 │     si eligible et anciennete_acquise alors bonus sinon 0 €\n│ Argument n°2, value ø\n├─➤ prime.catala_fr:5.12-30:\n│ 5 │   contexte anciennete_acquise condition\n└─\n';
+    const { runner } = fakeRun();
+    const run = async (command, args, options) => (args[0] === 'explain' ? { code: 123, stdout: '', stderr: crash } : runner(command, args, options));
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null } });
+    assert.match(text, /explication : échec[^\n]*\n  test_prime\.catala_fr › JeanDupont \(prime\.catala_fr:9\) : Operator && applied to the wrong arguments — [^\n]*règle calcul\.anciennete_acquise non rempli/);
+    assert.doesNotMatch(text, /Aucun scénario réussi/);
+  } finally { cleanup(); }
+});
+
 test('verifier computes dependencies and exceptions once for all scenarios', async () => {
   const { home, dossier, cleanup } = scratch();
   try {

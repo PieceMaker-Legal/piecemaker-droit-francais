@@ -402,6 +402,8 @@ async function verifier(context, program, flags = {}) {
       writeResult(program.directory, 'explication.log', logs.join('\n'));
       const valid = scenarios.filter((scenario) => scenario.test_reussi && scenario.passed);
       const selected = valid.find((scenario) => scenario.scope === previous?.scope && scenario.fichier === previous?.fichier) ?? valid[0];
+      const crashed = scenarios.filter((scenario) => scenario.test_reussi && !scenario.passed);
+      if (!selected && crashed.length) return { passed: false, exit_code: 1, message: 'catala explain échoue sur un scénario dont le test réussit.', errors: crashed.map(explainFailure) };
       if (!selected) return blocked('Aucun scénario réussi identifiable pour expliquer son exécution.');
       const { graphe, message, test_reussi, ...report } = selected;
       writeResult(program.directory, 'explication.json', report);
@@ -473,6 +475,14 @@ function proofWarnings(output) {
     const example = block.map((line) => line.match(/^\s*--> (.*)$/)?.[1]).filter(Boolean).map((value) => value.replace(' : ', ' = '));
     return `${text}${place ? ` (${place[1]}, ligne ${place[2]})` : ''}${example.length ? ` — contre-exemple : ${example.join(', ')}` : ''}`;
   });
+}
+
+function explainFailure({ fichier, scope, message }) {
+  const place = message.match(/─➤ (\S+?):(\d+)\./);
+  const error = message.split('\n').map((line) => line.match(/^\s*│ {2}(\S.*)$/)?.[1] ?? '').join('\n').split(/\n{2,}/).map((text) => text.trim().replace(/\n/g, ' ')).find((text) => text && !/bug in the compiler|Please report/.test(text)) ?? message.trim().split('\n')[0];
+  const condition = message.match(/value ø[\s\S]*?(?:contexte|entrée) (\S+) condition/)?.[1];
+  const advice = /ø|∅/.test(message) ? `Le scénario laisse une entrée condition sans valeur : écrivez « règle calcul.${condition ?? '<condition>'} non rempli » pour chaque condition fausse.` : 'Lisez resultats/explication.log et réécrivez la règle désignée.';
+  return `${fichier} › ${scope}${place ? ` (${place[1]}:${place[2]})` : ''} : ${error} — ${advice}`;
 }
 
 function uncoveredNote(variables) {
