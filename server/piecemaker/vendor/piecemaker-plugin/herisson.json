@@ -19,9 +19,9 @@
       "cible": "^okf(/|$)",
       "ecriture": "serveur",
       "skill": "okf",
-      "motif": "Only the server writes the OKF records (.piecemaker/okf/). You can read them with Read, cat, grep or ls in a command that writes nothing. To add or remove a link, a premise or a party, use pm okf link or pm okf unlink with a relation of the ontology (pm okf ontologie).",
+      "motif": "Only the server writes the OKF records (.piecemaker/okf/). You can read them with Read, cat, grep or ls in a command that writes nothing. To add or remove a link, a premise or a party, use pm okf link or pm okf unlink with a relation of the ontology (pm okf ontologie). To record that a document was read and nothing justifies a link, use pm okf examinee <document> --motif \"reason\".",
       "verifier": ["okf", "verify"],
-      "commande": "\\bpm okf (link|unlink)\\b",
+      "commande": "\\bpm okf (link|unlink|examinee)\\b",
       "erreur": "Index OKF : \\d+ erreur|Contradictions : \\d|Graphe : \\d+ élément",
       "delai": 30
     },

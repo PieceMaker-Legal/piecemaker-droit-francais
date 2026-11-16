@@ -17,10 +17,10 @@ const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lan
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink'];
+const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single']);
+const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
@@ -67,6 +67,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   raisonnement lister
       un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
       --raisonnement est requis quand le dossier en compte plusieurs
+      un programme Catala sans YAML du même nom : renvoie vers pm catala verifier --programme NOM
 
   suivi_dossiers verifier [--suivi FICHIER]
       vérifie .piecemaker/<nom>-suivi.json et recalcule les échéances ;
@@ -85,7 +86,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
       et les contradictions (une prémisse à valeur unique, plusieurs valeurs selon les pièces),
       puis les éléments manquants du graphe : pièce sans prémisse ni lien, prémisse sans pièce,
-      sans valeur ou sans partie, partie isolée
+      sans valeur ou sans partie, partie isolée ; enfin, en information, les pièces examinées sans lien
   okf types --json '[{"name":"contrat","icon":"pen"}]' [--motif "raison"]
       propose à l'avocat le catalogue complet des types (clés name et icon) ; rien ne change avant sa décision
   okf ontologie
@@ -105,6 +106,11 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   okf link "<titre de la prémisse>" involves <CODE_PARTIE>
       la prémisse concerne une partie du dossier ; pas de citation
   okf unlink <source> <relation> <target>
+  okf examinee <pièce> --motif "raison"
+      la pièce a été lue et aucun passage ne justifie un lien ni une prémisse : verify la liste
+      en information, plus en manque ; le manque revient si le document change
+  okf examinee <pièce> --retirer
+      retire cette marque : la pièce redevient à examiner
 
   catala verifier [--au today|AAAA-MM-JJ] [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
@@ -664,11 +670,11 @@ async function reasoningPoints(api, folder, manques) {
     const children = [];
     const add = (nomPoint, defauts, detail) => children.push(point(`${numero}.${children.length + 1}`, nomPoint, defauts, detail, 2));
     if (programs.includes(nom)) {
-      add('Catala', catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
+      add(`Programme Catala (.piecemaker/catala/${nom}/)`, catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
       const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
-      if (gaps || attachedPremises(folder, nom)) add('Prémisses', gaps ? `${gaps} manque(s)` : '', 'pm okf verify (sous-agent premise-maker)');
-      else add('Prémisses', 'aucune', 'sous-agent premise-maker');
-    } else add('Catala', 'programme à écrire', 'skill catala');
+      if (gaps || attachedPremises(folder, nom)) add('Prémisses OKF du programme', gaps ? `${gaps} manque(s)` : '', 'pm okf verify (sous-agent premise-maker)');
+      else add('Prémisses OKF du programme', 'aucune', 'sous-agent premise-maker');
+    } else add('Programme Catala', 'à écrire', 'skill catala');
     for (const document of suite?.documents ?? []) {
       const state = documentState(folder, document);
       children.push({ numero: `${numero}.${children.length + 1}`, depth: 2, ok: !state, texte: `${document.nom} : ${state || 'validé'}` });
@@ -765,7 +771,7 @@ async function okf(api, positional, flags, resolved) {
   if (!OKF_COMMANDS.includes(action)) usage(`okf attend ${OKF_COMMANDS.join(', ')}.`);
   const folder = path.resolve(resolved);
   if (action === 'verify') {
-    const { erreurs, contradictions = [], manques } = await api.okfFn({ action, folder });
+    const { erreurs, contradictions = [], manques, examinees = [] } = await api.okfFn({ action, folder });
     return [
       erreurs.length ? `Index OKF : ${erreurs.length} erreur(s).` : 'Index OKF : aucune erreur.',
       ...erreurs.map((entry) => `- ${entry.fiche} : ${entry.erreur}`),
@@ -773,6 +779,8 @@ async function okf(api, positional, flags, resolved) {
       ...contradictions.map((entry) => `- ${entry.titre} : ${entry.valeurs.map((item) => `${item.piece} → ${item.valeur}`).join(' ; ')}`),
       ...(manques ? [manques.length ? `Graphe : ${manques.length} élément(s) manquant(s).` : 'Graphe : aucun élément manquant.'] : []),
       ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}${entry.programmes?.length ? ` (programme ${entry.programmes.join(', ')})` : ''}`),
+      ...(examinees.length ? [`Examinées sans lien (information, pas un manque) : ${examinees.length}.`] : []),
+      ...examinees.map((entry) => `- ${entry.element} : ${entry.motif}`),
     ].join('\n');
   }
   if (action === 'types' || (action === 'ontologie' && positional[2] === 'proposer')) {
@@ -798,6 +806,13 @@ async function okf(api, positional, flags, resolved) {
       'Relations système :',
       ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),
     ].join('\n');
+  }
+  if (action === 'examinee') {
+    const piece = positional[2];
+    if (!piece) usage('okf examinee attend <pièce>.');
+    if (!flags.retirer && !value(flags.motif)) usage('okf examinee attend --motif "raison", ou --retirer.');
+    const examen = await api.okfFn({ action, folder, source: piece, ...(flags.retirer ? { retirer: true } : { motif: String(flags.motif) }) });
+    return flags.retirer ? `Examen retiré : ${examen.source} redevient à examiner.` : `Examinée sans lien : ${examen.source} — ${examen.motif}\nLe manque revient si le document change. Annuler : pm okf examinee ${piece} --retirer`;
   }
   const [source, relation, target] = positional.slice(2);
   if (!source || !relation || !target) usage(`okf ${action} attend <source> <relation> <target>.`);
@@ -903,7 +918,19 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
   if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
   const input = { commande, cwd: path.resolve(resolved), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
+  let yamls = [];
+  try { yamls = fs.readdirSync(path.join(input.cwd, '.piecemaker', 'raisonnements')).filter((entry) => entry.endsWith('.yaml')).map((entry) => entry.slice(0, -5)); } catch {}
+  const programs = listPrograms(input.cwd);
+  const named = commande === 'verifier' ? input.raisonnement : undefined;
+  const catalaOnly = named ? (programs.includes(named) && !yamls.includes(named) ? [named] : []) : (yamls.length ? [] : programs);
+  if (catalaOnly.length) {
+    return [
+      ...(named ? [] : ['Aucun raisonnement YAML dans .piecemaker/raisonnements/.']),
+      ...catalaOnly.map((nom) => `« ${nom} » est un programme Catala (.piecemaker/catala/${nom}/), pas un raisonnement YAML : pm catala verifier --programme ${nom}`),
+    ].join('\n');
+  }
   const result = await api.reasoningFn(input);
+  if (!yamls.length) return result;
   const target = voletTarget(input.cwd, 'raisonnement');
   return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));
 }

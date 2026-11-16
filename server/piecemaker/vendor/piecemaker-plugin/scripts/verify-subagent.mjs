@@ -44,6 +44,7 @@ function okfSections(output) {
     if (line.startsWith('Index OKF')) current = 'erreurs';
     else if (line.startsWith('Contradictions')) current = 'contradictions';
     else if (line.startsWith('Graphe')) current = 'manques';
+    else if (line.startsWith('Examinées')) current = null;
     else if (line.startsWith('- ') && current) sections[current].push(line);
   }
   return sections;

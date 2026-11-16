@@ -102,9 +102,18 @@ Elle liste enfin les éléments manquants du graphe ; un manque lié à un progr
 
 | Élément | Manque signalé |
 | --- | --- |
-| Pièce du graphe | aucune prémisse établie, aucun lien vers une autre pièce |
+| Pièce du graphe | pièce à examiner : aucune prémisse établie, aucun lien vers une autre pièce ; ou pièce modifiée depuis son examen sans lien |
 | Prémisse | aucune pièce citée ; à valeur unique sans valeur ; aucune partie concernée ; citée par aucun programme Catala (si un programme existe) |
 | Partie | aucune mention dans une pièce, aucune prémisse qui la concerne |
 | `#[doc]` Catala (`fichier:ligne`) | prémisse absente de l'index ou sans pièce ; pièce citée directement |
 
 Lance `verify` toi-même seulement pour lire les manques du graphe avant de le compléter. Comble chaque manque que les pièces permettent de combler. Signale les autres à l'avocat ; n'invente ni citation ni lien.
+
+Une pièce lue en entier dont aucun passage ne justifie de lien ni de prémisse se marque examinée sans lien, avec la raison :
+
+```bash
+pm okf examinee "Pièces/Courrier.pdf" --motif "Courrier isolé : il ne cite aucune autre pièce."
+pm okf examinee "Pièces/Courrier.pdf" --retirer
+```
+
+La marque est écrite dans la fiche (`examen_sans_lien` : motif, auteur, date, empreinte du document). `verify` liste alors la pièce sous « Examinées sans lien », en information, plus en manque. Le manque revient si le document change ou si la marque est retirée. Ne marque jamais une pièce que tu n'as pas lue.

@@ -49,7 +49,8 @@ La cible de `involves` est le code d'une partie : `pm okf link "<titre de la pr�
 3. Avant la première écriture, lisez `references/okf.md` du skill `piecemaker` (`.agents/skills/Skill-PieceMaker/references/okf.md`). Cette référence décrit les sous-commandes à jour.
 4. Pour régler les natures et icônes, lisez `pm okf ontologie`. Proposez la liste complète avec `pm okf types --json`. Comme les relations, elle reste une proposition jusqu’à la décision de l’avocat.
 5. Le Hérisson lance `pm okf verify` après chaque `pm okf link` ou `unlink` : corrigez chaque erreur qu'il rend, sans relancer la commande.
-6. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce sans prémisse, prémisse sans pièce, sans valeur ou sans partie, partie isolée.
+6. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce à examiner, prémisse sans pièce, sans valeur ou sans partie, partie isolée.
+7. Pour une pièce à examiner, lisez la pièce entière. Posez le lien qu'un passage justifie. Si aucun passage ne justifie de lien, lancez `pm okf examinee <pièce> --motif "raison en une phrase"`. `pm okf verify` liste alors la pièce en information, plus en manque. Le manque revient si le document change. `pm okf examinee <pièce> --retirer` annule la marque. Ne marquez jamais une pièce que vous n'avez pas lue.
 
 ## Règles de conduite
 

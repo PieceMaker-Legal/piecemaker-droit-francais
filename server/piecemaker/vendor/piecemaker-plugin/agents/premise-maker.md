@@ -38,7 +38,7 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 3. Vérifiez la valeur attendue dans les pièces repérées, puis dans les autres pièces utiles : Markdown converti ou `pm dossier sql`.
 4. Écrivez uniquement avec `pm okf link` et `pm okf unlink`, sous le titre exact attendu par la condition. Donnez la valeur trouvée (`--value`) quand le fait est une date, un montant ou une durée, dans le type demandé.
 5. Après toute écriture, lancez `pm okf verify`. Corrigez les erreurs et relancez jusqu'à zéro erreur.
-6. Lancez `pm okf verify`. Traitez seulement les manques des prémisses de la liste.
+6. Lancez `pm okf verify`. Traitez seulement les manques des prémisses de la liste. Laissez les « pièces à examiner » et `pm okf examinee` à index-maker.
 
 ## Contraintes
 

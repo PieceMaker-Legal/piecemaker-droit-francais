@@ -25,10 +25,12 @@ import {
 } from './bundle.js';
 import type { Ontology } from './ontology.js';
 import { readOntology, relationNames, ruleOf } from './ontology.js';
+import { EXAMINED, fingerprintOf } from './premises.js';
 import { quoted } from './verify.js';
 
 export type LinkInput = { source?: unknown; relation?: unknown; target?: unknown; citation?: unknown; value?: unknown; single?: unknown };
 export type Link = { source: string; relation: string; target: string };
+export type ExamInput = { source?: unknown; motif?: unknown };
 
 function load(projectPath: string, id: string, role: string) {
   const filePath = conceptFile(projectPath, id);
@@ -128,4 +130,22 @@ export function removeLink(projectPath: string, input: LinkInput): Link {
   else relations[name] = relations[name].filter((candidate) => candidate !== entry);
   save(source, relations);
   return { source: source.id, relation: name, target: ids.target };
+}
+
+export function markExamined(projectPath: string, input: ExamInput, origin = AGENT_ACTOR, now = new Date().toISOString()): { source: string; motif: string } {
+  const concept = loadDocument(projectPath, documentId(projectPath, input.source, 'source'), 'source');
+  const motif = squash(text(input.motif));
+  if (!motif) throw new TypeError('motif absent : dire en une phrase pourquoi aucun passage du document ne justifie un lien ni une prémisse.');
+  const resource = text(concept.frontmatter.resource);
+  fs.writeFileSync(concept.filePath, serializeConcept({ ...concept.frontmatter, [EXAMINED]: { motif, by: origin, at: now, empreinte: fingerprintOf(projectPath, resource) } }, concept.body));
+  return { source: concept.id, motif };
+}
+
+export function unmarkExamined(projectPath: string, input: ExamInput): { source: string } {
+  const concept = loadDocument(projectPath, documentId(projectPath, input.source, 'source'), 'source');
+  if (!concept.frontmatter[EXAMINED]) throw new TypeError(`${concept.id} n'est pas marquée examinée sans lien.`);
+  const frontmatter = { ...concept.frontmatter };
+  delete frontmatter[EXAMINED];
+  fs.writeFileSync(concept.filePath, serializeConcept(frontmatter, concept.body));
+  return { source: concept.id };
 }

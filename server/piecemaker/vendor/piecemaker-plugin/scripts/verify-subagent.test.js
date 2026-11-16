@@ -55,10 +55,12 @@ test('premise-maker keeps premise gaps only and reports a clean index', async ()
     '- Pièces/avenant-fictif.md : pièce sans prémisse ni lien vers une autre pièce',
     '- /_premises/date-de-rupture.md : prémisse à valeur unique sans valeur (programme rupture)',
     '- /_premises/date-de-livraison.md : prémisse citée par aucun programme Catala',
+    'Examinées sans lien (information, pas un manque) : 1.',
+    '- Pièces/courrier-fictif.md : courrier isolé (programme rupture sans rapport)',
   ].join('\n');
   const report = await subagentReport(call('premise-maker', caseFolder('d')), fakePm({ 'okf verify': output }));
   const context = report.hookSpecificOutput.additionalContext;
-  assert.doesNotMatch(context, /avenant-fictif|date-de-livraison/);
+  assert.doesNotMatch(context, /avenant-fictif|date-de-livraison|courrier-fictif/);
   assert.match(context, /Manques : 1\./);
   assert.match(context, /Relancez le sous-agent premise-maker/);
 });

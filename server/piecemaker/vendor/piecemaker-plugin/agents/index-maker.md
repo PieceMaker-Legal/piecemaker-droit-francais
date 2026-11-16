@@ -34,7 +34,8 @@ Vous construisez l'index OKF des pièces du dossier PieceMaker, dans `.piecemake
 1. Lisez les fiches avec Read, Grep et Glob. Lisez les pièces dans leur Markdown converti ou avec `pm dossier sql`.
 2. N'écrivez jamais une fiche à la main. Écrivez uniquement avec `pm okf`.
 3. Après toute écriture, lancez `pm okf verify`. Corrigez les erreurs et relancez jusqu'à zéro erreur.
-4. Relisez les manques de `pm okf verify`. Comblez les manques de votre périmètre que les pièces permettent de combler. Ignorez les manques de prémisses, dont « pièce sans prémisse » : ce n'est pas une erreur de l'index.
+4. Relisez les manques de `pm okf verify`. Comblez les manques de votre périmètre que les pièces permettent de combler. Ignorez les manques de prémisses : premise-maker les traite.
+5. Pour une « pièce à examiner », lisez la pièce entière. Posez le lien qu'un passage justifie. Si aucun passage ne justifie de lien, lancez `pm okf examinee <pièce> --motif "raison en une phrase"`. Ne marquez jamais une pièce que vous n'avez pas lue.
 
 ## Contraintes
 
@@ -49,4 +50,5 @@ Vous construisez l'index OKF des pièces du dossier PieceMaker, dans `.piecemake
 Rendez un compte rendu court :
 1. Ce que vous avez lu ou changé.
 2. Le résultat de `pm okf verify`.
-3. Les manques laissés à l'avocat.
+3. Les pièces marquées examinées sans lien, avec leur motif.
+4. Les manques laissés à l'avocat.

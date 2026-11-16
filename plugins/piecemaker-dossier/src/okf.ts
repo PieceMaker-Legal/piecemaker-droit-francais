@@ -2,7 +2,7 @@ import { iconSvg } from './document-types.js';
 import type { DocumentType } from './document-types.js';
 
 export type OkfRelation = { relation: string; target: string; citation: string; origin: string; at?: string; value?: string };
-export type OkfFiche = { id: string; type: string; title: string; titleCitation?: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; generated?: { by: string; at: string }; relations: OkfRelation[] };
+export type OkfFiche = { id: string; type: string; title: string; titleCitation?: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; generated?: { by: string; at: string }; examen?: { motif: string; by: string; at: string } | null; relations: OkfRelation[] };
 export type OkfRelationLabel = { name: string; label: string; inverse: string };
 export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[]; documentTypes?: DocumentType[] };
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };

@@ -1,3 +1,7 @@
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
+
 import type { Concept } from './bundle.js';
 import {
   INVOLVES,
@@ -17,6 +21,14 @@ export const OKF_SCHEME = 'okf:';
 export type PremisePiece = { resource: string; title: string; citation: string; value: string; origin: string };
 export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[] };
 export type OkfGap = { element: string; manque: string; programmes?: string[] };
+export type OkfExamined = { element: string; motif: string; by: string; at: string };
+export const EXAMINED = 'examen_sans_lien';
+export const EXAMINE_HINT = 'pm okf examinee <pièce> --motif "…"';
+
+export const fingerprintOf = (projectPath: string, resource: string): string => {
+  const filePath = path.join(projectPath, resource);
+  return fs.existsSync(filePath) ? createHash('sha256').update(fs.readFileSync(filePath)).digest('hex') : '';
+};
 
 export const premiseIdOf = (source: string): string => migratedId(`/${source.slice(OKF_SCHEME.length).replace(/^\/+/, '')}`);
 
@@ -57,12 +69,13 @@ export function matchesExpected(expected: { date: string } | { number: number },
   return 'date' in expected ? isoDateOf(value) === expected.date : numberOf(value) === expected.number;
 }
 
-export function graphGaps(projectPath: string): OkfGap[] {
+export function graphReport(projectPath: string): { manques: OkfGap[]; examinees: OkfExamined[] } {
   const concepts = readBundle(projectPath).filter((concept) => !concept.error);
   const ontology = readOntology(projectPath);
   const graphTypes = graphTypesOf(projectPath, ontology);
   const premises = concepts.filter((concept) => concept.frontmatter.type === PREMISE_TYPE);
   const gaps: OkfGap[] = [];
+  const examined: OkfExamined[] = [];
   const report = (element: string, manque: string) => gaps.push({ element, manque });
 
   const linked = new Set<string>();
@@ -81,7 +94,13 @@ export function graphGaps(projectPath: string): OkfGap[] {
 
   for (const concept of concepts) {
     const type = text(concept.frontmatter.type);
-    if (graphTypes.includes(type) && !linked.has(concept.id)) report(concept.id, 'pièce sans prémisse ni lien vers une autre pièce');
+    if (graphTypes.includes(type) && !linked.has(concept.id)) {
+      const mark = concept.frontmatter[EXAMINED] as Record<string, unknown> | undefined;
+      const fresh = mark && text(mark.empreinte) && text(mark.empreinte) === fingerprintOf(projectPath, text(concept.frontmatter.resource));
+      if (mark && fresh) examined.push({ element: concept.id, motif: text(mark.motif), by: text(mark.by), at: text(mark.at) });
+      else if (mark) report(concept.id, `pièce modifiée depuis son examen sans lien du ${text(mark.at).slice(0, 10)} : la réexaminer, puis pm okf link ou ${EXAMINE_HINT}`);
+      else report(concept.id, `pièce à examiner : aucun lien vers une autre pièce ni prémisse ; si aucun passage ne justifie un lien : ${EXAMINE_HINT}`);
+    }
     if (type === PARTY_TYPE && !involved.has(concept.id)) report(concept.id, 'partie sans mention dans une pièce ni prémisse qui la concerne');
   }
   for (const premise of premises) {
@@ -90,5 +109,7 @@ export function graphGaps(projectPath: string): OkfGap[] {
     if (!live(premise, INVOLVES).length) report(premise.id, `prémisse sans partie concernée (involves) : pm okf link "${text(premise.frontmatter.title)}" involves <CODE_PARTIE>`);
   }
 
-  return gaps;
+  return { manques: gaps, examinees: examined };
 }
+
+export const graphGaps = (projectPath: string): OkfGap[] => graphReport(projectPath).manques;

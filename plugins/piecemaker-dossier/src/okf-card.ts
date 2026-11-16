@@ -77,7 +77,8 @@ function documentBody(index: OkfIndex, fiche: OkfFiche) {
       + row('Liens', [
         ...links.map((entry) => byId(index, entry.target)).map((target, at) => target ? pill(index, target, relationLabel(index, links[at].relation)) : ''),
         ...back.map(({ other, entry }) => pill(index, other, relationLabel(index, entry.relation, true))),
-      ].join('')),
+      ].join(''))
+      + row('Examen', fiche.examen ? text(`Examinée sans lien par ${ACTORS[fiche.examen.by] || fiche.examen.by}${when(fiche.examen.at) ? ` le ${when(fiche.examen.at)}` : ''} : ${fiche.examen.motif}`) : ''),
     sections: section('Description', fiche.description && fiche.description !== fiche.nature ? `<p class="pmd-fact-text">${escapeText(fiche.description)}</p>` : '')
       + section('Citations', fiche.relations.filter((entry) => entry.citation).map((entry) => {
         const target = byId(index, entry.target);

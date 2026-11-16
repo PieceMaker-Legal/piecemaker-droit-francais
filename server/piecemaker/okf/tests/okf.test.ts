@@ -8,10 +8,10 @@ import { REVIEW_FOLDER } from '../../../../plugins/piecemaker-tabular-review/src
 import type { SourceDocument, SourceParty } from '../build.js';
 import { buildBundle, datesIn, documentsFromSnapshot } from '../build.js';
 import { bundleRoot, conceptFile, parseConcept, readBundle, readTypes, relationsOf } from '../bundle.js';
-import { graphGaps, premiseEvidence } from '../premises.js';
+import { graphGaps, graphReport, premiseEvidence } from '../premises.js';
 import { premisesFromReviews } from '../reviews.js';
 import type { ReviewPremise } from '../reviews.js';
-import { addLink, removeLink } from '../links.js';
+import { addLink, markExamined, removeLink, unmarkExamined } from '../links.js';
 import { graphTypesOf, ontologyFile, readOntology, saveOntology } from '../ontology.js';
 import { createOkfBackend } from '../index.js';
 import { proposalFile, proposeOntology, readProposal, storedOntologyErrors } from '../ontology-proposal.js';
@@ -339,6 +339,36 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros', single: true }, markdownOf, undefined, AT);
   addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf, undefined, AT);
   assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element === RESILIATION_ID), []);
+});
+
+test('examinee marque une pièce examinée sans lien jusqu\'à ce que le document change', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  const build = () => buildBundle({ projectPath, documents, markdownOf });
+  build();
+  removeLink(projectPath, { source: LETTER, relation: 'refers-to', target: CONTRACT });
+  build();
+  const pieceGaps = () => graphReport(projectPath).manques.filter((gap) => gap.element.startsWith('/Pièces/'));
+  assert.deepEqual(pieceGaps().map((gap) => gap.element).sort(), [`/${CONTRACT}.md`, `/${LETTER}.md`]);
+  assert.match(pieceGaps()[0].manque, /^pièce à examiner : .* pm okf examinee <pièce> --motif "…"$/);
+  assert.throws(() => markExamined(projectPath, { source: LETTER, motif: '  ' }), /motif absent/);
+  assert.throws(() => unmarkExamined(projectPath, { source: LETTER }), /n'est pas marquée/);
+
+  const motif = 'Courrier isolé : il ne cite aucune autre pièce.';
+  markExamined(projectPath, { source: LETTER, motif }, undefined, AT);
+  build();
+  assert.deepEqual(graphReport(projectPath).examinees, [{ element: `/${LETTER}.md`, motif, by: 'piecemaker/agent', at: AT }]);
+  assert.deepEqual(pieceGaps().map((gap) => gap.element), [`/${CONTRACT}.md`]);
+  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
+
+  fs.writeFileSync(path.join(projectPath, LETTER), 'nouvelle version');
+  assert.deepEqual(graphReport(projectPath).examinees, []);
+  assert.match(pieceGaps().find((gap) => gap.element === `/${LETTER}.md`)?.manque || '', /^pièce modifiée depuis son examen sans lien du 2026-01-01 : /);
+
+  markExamined(projectPath, { source: LETTER, motif }, undefined, AT);
+  assert.equal(pieceGaps().length, 1);
+  unmarkExamined(projectPath, { source: LETTER });
+  assert.equal(concept(projectPath, LETTER).frontmatter.examen_sans_lien, undefined);
+  assert.equal(pieceGaps().length, 2);
 });
 
 function backendOf(projectPath: string, markdownOf: (resource: string) => string | null) {

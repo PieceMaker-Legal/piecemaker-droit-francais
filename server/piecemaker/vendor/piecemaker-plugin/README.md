@@ -26,7 +26,7 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
 - **Hooks** : `guard-ontologie` (Claude, Codex, Vibe, chat Mistral) refuse toute écriture directe dans
   `.piecemaker/ontologie.json`, `.piecemaker/arborescence.json` et `.piecemaker/okf/`. Une modification de
   l'ontologie ou de l'arborescence par Edit, Write ou apply_patch devient une proposition pour l'avocat
-  (`scripts/lib/proposition-edit.mjs`) ; les fiches passent par `pm okf link|unlink`.
+  (`scripts/lib/proposition-edit.mjs`) ; les fiches passent par `pm okf link|unlink|examinee`.
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).

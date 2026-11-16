@@ -255,11 +255,11 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '4° Index : 1 erreur(s), 1 manque(s) → pm okf verify (sous-agent index-maker)',
     '5° Raisonnement',
     '  5.A bail',
-    '    5.A.1 Catala : valide',
-    '    5.A.2 Prémisses : aucune → sous-agent premise-maker',
+    '    5.A.1 Programme Catala (.piecemaker/catala/bail/) : valide',
+    '    5.A.2 Prémisses OKF du programme : aucune → sous-agent premise-maker',
     '  5.B rupture (rédaction)',
-    '    5.B.1 Catala : jamais vérifié → pm catala verifier --programme rupture',
-    '    5.B.2 Prémisses : 1 manque(s) → pm okf verify (sous-agent premise-maker)',
+    '    5.B.1 Programme Catala (.piecemaker/catala/rupture/) : jamais vérifié → pm catala verifier --programme rupture',
+    '    5.B.2 Prémisses OKF du programme : 1 manque(s) → pm okf verify (sous-agent premise-maker)',
     '    5.B.3 Conclusions en défense : en cours de rédaction',
     '    5.B.4 Lettre fictive : validé',
     '    5.B.5 Assignation fictive : à rédiger',
@@ -270,7 +270,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
   assert.doesNotMatch(text, /ancien|yaml/i);
   write('.piecemaker/catala/bail/bail.catala_fr', '## okf:/_premises/date-du-bail.md\n');
   write('.piecemaker/okf/_premises/date-du-bail.md', '');
-  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses : valide/);
+  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : valide/);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
   await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });
@@ -397,6 +397,8 @@ test('raisonnement transmet la commande et le nom du raisonnement à reasoningFn
   const panels = [];
   const deps = { reasoningFn: async (input) => { calls.push(input); return 'Raisonnement penalite'; }, openPanel: async (request) => { panels.push(request); return {}; } };
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-raisonnement-'));
+  fs.mkdirSync(path.join(dossier, '.piecemaker', 'raisonnements'), { recursive: true });
+  fs.writeFileSync(path.join(dossier, '.piecemaker', 'raisonnements', 'penalite.yaml'), '');
   const result = await run(['raisonnement', 'verifier', '--raisonnement', 'penalite'], { cwd: dossier, deps });
   assert.equal(result, 'Raisonnement penalite\nVisible : Raisonnement.');
   assert.deepEqual(panels, [{ project: path.resolve(dossier), tab: 'plugin:piecemaker-raisonnement' }]);
@@ -406,6 +408,23 @@ test('raisonnement transmet la commande et le nom du raisonnement à reasoningFn
   await assert.rejects(run(['raisonnement', 'consignes'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
   await assert.rejects(run(['raisonnement', 'verifier', '--raisonnement'], { cwd: dossier, deps }));
   assert.equal(calls.length, 2);
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('raisonnement renvoie vers pm catala quand le nom est un programme Catala sans YAML', async () => {
+  const calls = [];
+  const panels = [];
+  const deps = { reasoningFn: async (input) => { calls.push(input); return 'Aucun raisonnement dans .piecemaker/raisonnements/.'; }, openPanel: async (request) => { panels.push(request); return {}; } };
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-raisonnement-'));
+  assert.equal(await run(['raisonnement', 'lister'], { cwd: dossier, deps }), 'Aucun raisonnement dans .piecemaker/raisonnements/.');
+  fs.mkdirSync(path.join(dossier, '.piecemaker', 'catala', 'bail'), { recursive: true });
+  fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', 'bail', 'clerk.toml'), '');
+  const guidance = '« bail » est un programme Catala (.piecemaker/catala/bail/), pas un raisonnement YAML : pm catala verifier --programme bail';
+  assert.equal(await run(['raisonnement', 'verifier', '--raisonnement', 'bail'], { cwd: dossier, deps }), guidance);
+  assert.equal(await run(['raisonnement', 'lister'], { cwd: dossier, deps }), `Aucun raisonnement YAML dans .piecemaker/raisonnements/.\n${guidance}`);
+  assert.equal(await run(['raisonnement', 'verifier'], { cwd: dossier, deps }), `Aucun raisonnement YAML dans .piecemaker/raisonnements/.\n${guidance}`);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(panels, []);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
@@ -449,6 +468,14 @@ test('okf verify, link et unlink passent par okfFn', async () => {
   const manque = { element: '/_premises/date-de-signature.md', manque: 'prémisse sans pièce citée', programmes: ['bail'] };
   assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return { erreurs: [], contradictions: [], manques: [manque] }; } } }), 'Index OKF : aucune erreur.\nGraphe : 1 élément(s) manquant(s).\n- /_premises/date-de-signature.md : prémisse sans pièce citée (programme bail)');
   assert.deepEqual(calls.pop(), { action: 'verify', folder });
+  const examinee = { element: '/Pièces/Courrier.pdf.md', motif: 'Courrier isolé.', by: 'piecemaker/agent', at: '2026-01-01T00:00:00.000Z' };
+  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async () => ({ erreurs: [], contradictions: [], manques: [], examinees: [examinee] }) } }), 'Index OKF : aucune erreur.\nGraphe : aucun élément manquant.\nExaminées sans lien (information, pas un manque) : 1.\n- /Pièces/Courrier.pdf.md : Courrier isolé.');
+  const examen = { okfFn: async (input) => { calls.push(input); return { source: '/Pièces/Courrier.pdf.md', motif: input.motif }; } };
+  assert.equal(await run(['okf', 'examinee', 'Pièces/Courrier.pdf', '--motif', 'Courrier isolé.'], { cwd: dossier, deps: examen }), 'Examinée sans lien : /Pièces/Courrier.pdf.md — Courrier isolé.\nLe manque revient si le document change. Annuler : pm okf examinee Pièces/Courrier.pdf --retirer');
+  assert.deepEqual(calls.pop(), { action: 'examinee', folder, source: 'Pièces/Courrier.pdf', motif: 'Courrier isolé.' });
+  assert.equal(await run(['okf', 'examinee', 'Pièces/Courrier.pdf', '--retirer'], { cwd: dossier, deps: examen }), 'Examen retiré : /Pièces/Courrier.pdf.md redevient à examiner.');
+  assert.deepEqual(calls.pop(), { action: 'examinee', folder, source: 'Pièces/Courrier.pdf', retirer: true });
+  await assert.rejects(run(['okf', 'examinee', 'Pièces/Courrier.pdf'], { cwd: dossier, deps: examen }), (error) => error.exitCode === 2);
   const ontologie = { relations: [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'], description: 'Un acte conteste une pièce.' }], systeme: [{ name: 'states', label: 'établit', source: 'document', target: 'Premise' }] };
   assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return ontologie; } } }), 'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nTypes principaux du dossier : . Classement : pm dossier arborescence.\nIcônes disponibles : .\nTypes de documents (pm okf types --json pour proposer la liste complète) :\nRelations système :\n- states (établit) : document → Premise');
   assert.deepEqual(calls.pop(), { action: 'ontologie', folder });
@@ -465,7 +492,7 @@ test('SKILL.md documente toute la surface d’interface', () => {
   const skill = [path.join(HERE, '..', 'SKILL.md'), ...fs.readdirSync(references).map((name) => path.join(references, name))]
     .map((file) => fs.readFileSync(file, 'utf8')).join('\n');
   const required = [
-    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm raisonnement', 'pm suivi_dossiers', 'pm okf', 'link', 'unlink', '--citation',
+    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm raisonnement', 'pm suivi_dossiers', 'pm okf', 'link', 'unlink', 'examinee', '--motif', '--retirer', '--citation',
     'lister', 'afficher', 'fermer', 'verifier', 'sql', 'conversion', 'arborescence', 'index', 'lire', 'ecrire',
     'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'fichier',
     '--force', '--dossier', '--dossiers', '--raisonnement', '--suivi', '--json',
