@@ -337,7 +337,7 @@ async function verifier(context, program, flags = {}) {
     const typed = await record('typecheck', 'clerk typecheck', async () => {
       if (!context.pack) return missing('Pack Catala absent.');
       const { entry, result } = await check(context, program.directory, 'typecheck', 'clerk', TYPECHECK, (outcome) => outcome.code === 0 && !/\[WARNING\]/.test(`${outcome.stdout}${outcome.stderr}`));
-      return entry.passed ? entry : { ...entry, errors: compilerErrors(`${result.stdout}${result.stderr}`) };
+      return entry.passed ? entry : { ...entry, errors: compilerErrors(`${result.stdout}${result.stderr}`).flatMap(moduleNameFix) };
     });
     await record('format', 'catala-format', async () => {
       if (!context.pack) return missing('Pack Catala absent.');
@@ -483,6 +483,11 @@ function explainFailure({ fichier, scope, message }) {
   const condition = message.match(/value ø[\s\S]*?(?:contexte|entrée) (\S+) condition/)?.[1];
   const advice = /ø|∅/.test(message) ? `Le scénario laisse une entrée condition sans valeur : écrivez « règle calcul.${condition ?? '<condition>'} non rempli » pour chaque condition fausse.` : 'Lisez resultats/explication.log et réécrivez la règle désignée.';
   return `${fichier} › ${scope}${place ? ` (${place[1]}:${place[2]})` : ''} : ${error} — ${advice}`;
+}
+
+function moduleNameFix(line) {
+  const [, module, file] = line.match(/Module declared as (\S+), which does not match the file name "([^"]+)"/) ?? [];
+  return module ? [line, `— Renommez le fichier « ${file} » en « ${module}.catala_fr » et gardez « > Module ${module} » : un nom de module n'a pas de tiret. Le dossier du programme garde son nom.`] : [line];
 }
 
 function uncoveredNote(variables) {

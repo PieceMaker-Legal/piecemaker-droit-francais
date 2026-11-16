@@ -68,6 +68,7 @@ Chaque fait du test porte aussi son `## okf:/_premises/<fiche>.md` (voir « Fait
 | `Syntax error at "ET"` | mot-clé en majuscules | `et`, `ou`, `non`, `si … alors … sinon` en minuscules |
 | `Syntax error at "="` après `définition x` | `définition x = 1` | `définition x égal à 1` |
 | `Syntax error in preceding code block` | `si … alors …` sans `sinon` | `si … alors … sinon …` |
+| `Module declared as X, which does not match the file name` | fichier `.catala_fr` nommé autrement que son module, par exemple avec des tirets | renommez le fichier `X.catala_fr` : nom du fichier = nom du module, sans tiret ; le dossier du programme garde son nom |
 | `unknown identifier` | nom non déclaré ou mal orthographié | déclarez-le dans ` ```catala-metadata `, avec les mêmes accents |
 | `titre « … » : écrivez 2 à 7 mots` | titre `##` d'une entrée trop court, trop long, avec `?` ou un identifiant | voir « Style des titres » du skill |
 | `explication` : `Operator && applied to the wrong arguments` (`value ø`) ou `explain.ml … Assertion failed` | scénario qui ne remplit pas une `condition` lue par une règle : le test réussit, `catala explain` plante | écrivez `règle calcul.fait non rempli` pour chaque condition fausse du scénario |

@@ -572,6 +572,18 @@ test('verifier prints the compiler error lines under the failed typecheck', asyn
   } finally { cleanup(); }
 });
 
+test('verifier gives the file rename when the module name does not match the file name', async () => {
+  const { home, dossier, cleanup } = scratch();
+  try {
+    program(dossier, 'prime-annuelle', { 'prime-annuelle.catala_fr': MODULE.replace('Prime', 'PrimeAnnuelle'), 'test_prime.catala_fr': TESTS });
+    const { runner } = fakeRun();
+    const error = 'prime-annuelle.catala_fr:1.10-23: [ERROR] Module declared as PrimeAnnuelle, which does not match the file name "prime-annuelle.catala_fr". Rename the module to Prime-annuelle or the file to "PrimeAnnuelle.catala_fr".\n';
+    const run = async (command, args, options) => (args[0] === 'typecheck' ? { code: 1, stdout: error, stderr: '' } : runner(command, args, options));
+    const text = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => ({ passed: true, status: 'passed', results: [] }) } });
+    assert.match(text, /Module declared as PrimeAnnuelle[^\n]*\n  — Renommez le fichier « prime-annuelle\.catala_fr » en « PrimeAnnuelle\.catala_fr » [^\n]*Le dossier du programme garde son nom\./);
+  } finally { cleanup(); }
+});
+
 test('exceptions, executer and squelette call Catala with the expected arguments', async () => {
   const { home, dossier, pack, root, cleanup } = scratch();
   try {
