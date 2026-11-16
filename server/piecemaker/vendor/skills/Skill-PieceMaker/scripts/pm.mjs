@@ -502,21 +502,43 @@ async function runningJob(api, folder) {
 }
 
 function progress(job) {
-  return `Conversion en cours : phase ${job.phase}, ${job.percent} %, ${job.processed}/${job.total} pièce(s).`;
+  return `Conversion en cours : phase ${job.phase}, ${job.processed}/${job.total} (avancement global ${Math.round(job.percent)} %).`;
+}
+
+const EN_ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
+  + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala, raisonnement, suivi.\n'
+  + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
+  + 'Revenez à la fin avec pm dossier conversion.';
+
+const EN_COURS_CHECK = 'Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala, raisonnement et suivi, qui ne lisent pas les pièces.';
+
+function background(job) {
+  return `${job ? progress(job) : 'Conversion en cours.'}\n${EN_ARRIERE_PLAN}`;
+}
+
+async function followJob(api, project, deadline) {
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => { setTimeout(resolve, api.conversionPollMs ?? 2000); });
+    if (!await runningJob(api, project)) {
+      const { job } = await api.conversionJob({ folder: project }).catch(() => ({}));
+      if (job?.state === 'done') return 'Conversion terminée. Lancez pm check.';
+      return `Conversion arrêtée : ${job?.state ?? 'état inconnu'}${job?.error ? `, ${job.error}` : ''}.`;
+    }
+  }
+  return background(await runningJob(api, project));
 }
 
 async function conversion(api, project, pieces, force) {
-  const running = await runningJob(api, project);
-  if (running) return `${progress(running)}\nRelancez pm dossier conversion pour suivre.`;
+  const waitMs = api.conversionWaitMs ?? CONVERSION_WAIT_MS;
+  if (await runningJob(api, project)) return followJob(api, project, Date.now() + waitMs);
   const controller = new AbortController();
   let timer;
-  const timeout = new Promise((resolve) => { timer = setTimeout(resolve, api.conversionWaitMs ?? CONVERSION_WAIT_MS, null); });
+  const timeout = new Promise((resolve) => { timer = setTimeout(resolve, waitMs, null); });
   const result = await Promise.race([api.execFn(conversionArgs({ dossier: project, pieces, force }), project, controller.signal), timeout]);
   clearTimeout(timer);
   if (!result) {
     controller.abort();
-    const job = await runningJob(api, project);
-    return `${job ? progress(job) : 'Conversion en cours.'}\nLe travail continue dans PieceMaker : relancez pm dossier conversion pour suivre.`;
+    return background(await runningJob(api, project));
   }
   if (result.code !== 0) {
     fail((result.stderr && result.stderr.trim()) || (result.stdout && result.stdout.trim()) || `Échec de la conversion (code ${result.code}).`);
@@ -547,12 +569,12 @@ async function dossierState(api, project) {
     : pending.length ? `${pending.length} pièce(s) non convertie(s) : pm dossier conversion\n${pending.map((piece) => `  - ${piece.path} (${PIECE_STATES[piece.status] ?? piece.status})`).join('\n')}`
       : `${pieces.length} pièce(s), toutes converties`;
   const lignes = [
-    { nom: 'anonymisation', texte: anonymisation, ok: (state.anonymized && !sansEntite) || state.lifted },
+    { nom: 'anonymisation', texte: job && !state.anonymized ? 'en cours, voir 1°' : anonymisation, ok: (state.anonymized && !sansEntite) || state.lifted },
     { nom: 'mapping', texte: mapping, ok: mappingOk },
     { nom: 'index', texte: index, ok: indexOk },
     { nom: 'conversion', texte: conversionLine, ok: !job && !pending.length },
   ];
-  return { lignes, pret: lignes.every((ligne) => ligne.ok) };
+  return { lignes, pret: lignes.every((ligne) => ligne.ok), enCours: Boolean(job) };
 }
 
 const DOSSIER_LABELS = { conversion: 'Conversion', anonymisation: 'Anonymisation', mapping: 'Mapping' };
@@ -667,11 +689,12 @@ async function researchPoints(api, folder) {
 }
 
 async function check(api, folder) {
-  const { lignes } = await dossierState(api, folder);
+  const { lignes, enCours } = await dossierState(api, folder);
   const preparation = ['conversion', 'anonymisation', 'mapping'].map((nom, index) => {
     const ligne = lignes.find((entry) => entry.nom === nom);
     return { numero: `${index + 1}°`, depth: 0, ok: ligne.ok, texte: `${DOSSIER_LABELS[nom]} : ${ligne.ok ? 'valide' : ligne.texte.split('\n')[0]}` };
   });
+  if (enCours) preparation[0].texte += ` ${EN_COURS_CHECK}`;
   const okfResult = await api.okfFn({ action: 'verify', folder });
   const { points, others } = await reasoningPoints(api, folder, okfResult.manques ?? []);
   const research = await researchPoints(api, folder);
@@ -887,6 +910,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (isMain) {
+  if (process.env.NO_COLOR) delete process.env.FORCE_COLOR;
   run(process.argv.slice(2)).then((text) => {
     if (text && typeof text === 'object') {
       process.exitCode = text.exitCode;

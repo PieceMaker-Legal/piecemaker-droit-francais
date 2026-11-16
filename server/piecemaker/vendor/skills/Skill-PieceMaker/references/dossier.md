@@ -13,7 +13,7 @@ pm dossier index colonnes --questions JSON
 
 Convertit en Markdown **et** pseudonymise (GLiNER). Sans pièce : toutes les pièces pas encore prêtes. `--force` reconvertit les pièces déjà prêtes.
 
-La commande attend au plus 90 s. Au-delà, ou si une conversion tourne déjà, elle renvoie l’avancée : relancez `pm dossier conversion` pour suivre. Le travail continue dans PieceMaker.
+La commande attend au plus 90 s, qu’elle lance la conversion ou qu’une conversion tourne déjà. Au-delà, elle renvoie l’avancée et le travail continue en arrière-plan dans PieceMaker. Ne la relancez pas en boucle : traitez d’abord le programme Catala, le raisonnement et le suivi, qui ne lisent pas les pièces. L’index et les prémisses attendent la fin du scan. Revenez ensuite à `pm dossier conversion`.
 
 Sans MinerU, le Markdown d’un scan est vide ou presque : signalez-le, n’en concluez pas que la pièce est vide.
 

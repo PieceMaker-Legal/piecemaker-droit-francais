@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -316,6 +317,11 @@ test('check sur un dossier à jour ne signale rien', async () => {
     '1° Conversion : valide',
     '2° Anonymisation : à refaire, aucune entité ni mapping en base pour ce dossier : pm dossier conversion',
   ].join('\n'));
+  const scan = { ...deps, caseState: () => ({ anonymized: false, lifted: false }), conversionJob: async () => ({ job: { state: 'running', phase: 'scan', percent: 27.25, processed: 8, total: 216 } }) };
+  assert.equal((await run(['check', '--dossier', dossier], { deps: scan })).split('\n').slice(1, 3).join('\n'), [
+    '1° Conversion : Conversion en cours : phase scan, 8/216 (avancement global 27 %). Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala, raisonnement et suivi, qui ne lisent pas les pièces.',
+    '2° Anonymisation : en cours, voir 1°',
+  ].join('\n'));
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
@@ -346,9 +352,28 @@ test('dossier conversion lance le CLI, ou renvoie l’avancée d’un travail en
   const text = await run(['dossier', 'conversion', '--force', 'contrat.pdf', '--dossier', '/tmp/affaire'], { deps });
   assert.equal(text, '{"result":{"documents":1}}');
   assert.deepEqual(calls[0], { args: ['conversion', '--json', '--case', '/tmp/affaire', 'contrat.pdf', '--force'], cwd: '/tmp/affaire' });
-  job = { state: 'running', phase: 'convert', percent: 40, processed: 2, total: 5 };
-  assert.equal(await run(['dossier', 'conversion', '--dossier', '/tmp/affaire'], { deps }), 'Conversion en cours : phase convert, 40 %, 2/5 pièce(s).\nRelancez pm dossier conversion pour suivre.');
   assert.equal(calls.length, 1);
+});
+
+const ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
+  + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala, raisonnement, suivi.\n'
+  + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
+  + 'Revenez à la fin avec pm dossier conversion.';
+
+test('dossier conversion attend un travail déjà en cours sans relancer le CLI', async () => {
+  let reads = 0;
+  const job = { state: 'running', phase: 'scan', percent: 27.25, processed: 8, total: 216 };
+  const execFn = async () => { throw new Error('inattendu'); };
+  const running = { conversionWaitMs: 30, conversionPollMs: 5, execFn, conversionJob: async () => ({ job }) };
+  assert.equal(await run(['dossier', 'conversion', '--dossier', '/tmp/affaire'], { deps: running }), `Conversion en cours : phase scan, 8/216 (avancement global 27 %).\n${ARRIERE_PLAN}`);
+  const ending = { ...running, conversionWaitMs: 1000, conversionJob: async () => ({ job: reads++ < 2 ? job : { ...job, state: 'done' } }) };
+  assert.equal(await run(['dossier', 'conversion', '--dossier', '/tmp/affaire'], { deps: ending }), 'Conversion terminée. Lancez pm check.');
+});
+
+test('pm sous Codex n’affiche pas l’avertissement NO_COLOR et FORCE_COLOR', () => {
+  const hook = `data:text/javascript,${encodeURIComponent("process.once('beforeExit', () => console.error({ couleur: 1 }))")}`;
+  const result = spawnSync(process.execPath, ['--import', hook, fileURLToPath(new URL('./pm.mjs', import.meta.url)), '--help'], { env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '1' }, encoding: 'utf8' });
+  assert.doesNotMatch(result.stderr, /NO_COLOR/);
 });
 
 test('dossier conversion rend la main après le délai d’attente', async () => {
@@ -364,7 +389,7 @@ test('dossier conversion rend la main après le délai d’attente', async () =>
   };
   const text = await run(['dossier', 'conversion', '--dossier', '/tmp/affaire'], { deps });
   assert.equal(aborted, true);
-  assert.equal(text, 'Conversion en cours : phase anonymize, 70 %, 7/10 pièce(s).\nLe travail continue dans PieceMaker : relancez pm dossier conversion pour suivre.');
+  assert.equal(text, `Conversion en cours : phase anonymize, 7/10 (avancement global 70 %).\n${ARRIERE_PLAN}`);
 });
 
 test('raisonnement transmet la commande et le nom du raisonnement à reasoningFn', async () => {
