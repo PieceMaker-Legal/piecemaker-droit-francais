@@ -7,7 +7,7 @@ import { FEATURES, featureOf, formatErrors } from './lib/herisson.mjs';
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
-const KEY_REASON = 'La clé de sceau de l’ontologie (~/.piecemaker/ontologie.cle) n’est accessible qu’au serveur PieceMaker.';
+const KEY_REASON = 'Only the PieceMaker server can access the seal key of the ontology (~/.piecemaker/ontologie.cle).';
 const OKF_REASON = FEATURES.find((feature) => feature.nom === 'okf').motif;
 const SHELL_KEY = /\.piecemaker[\\/]ontologie\.cle\b|\bontologie\.cle\b/;
 const SHELL_MENTION = /\.piecemaker[\\/]((?:ontologie|arborescence)(?:\.proposition)?\.json|etapes\.json|protection\.json|okf\b)/;
@@ -68,7 +68,7 @@ export async function hookDecision(payload, run) {
     const message = await proposalMessage(payload, run);
     if (message) return denial(message);
   } catch (error) {
-    return denial(`Proposition non enregistrée, rien n’a changé : ${error?.message || error}.`);
+    return denial(`Proposal not saved, nothing changed: ${error?.message || error}.`);
   }
   return blocked;
 }

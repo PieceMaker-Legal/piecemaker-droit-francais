@@ -81,7 +81,7 @@ test('green-shield original and mapping guards apply to SDK reads, edits and she
   await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cp notes.md .piecemaker/arborescence.json' }), /pm dossier arborescence/);
   await toolbox.tools.get('Bash')!.execute({ command: "printf 'PDF fictif' > note-ia.pdf" });
   assert.equal(await toolbox.tools.get('Read')!.execute({ file_path: 'note-ia.pdf' }), 'PDF fictif');
-  await assert.rejects(toolbox.tools.get('Read')!.execute({ file_path: path.join(home, '.piecemaker', 'ontologie.cle') }), /clé de sceau/);
+  await assert.rejects(toolbox.tools.get('Read')!.execute({ file_path: path.join(home, '.piecemaker', 'ontologie.cle') }), /seal key/);
 });
 
 test('an SDK write to a registered feature file returns its verifier report', { skip: process.platform === 'win32' }, async t => {
@@ -100,7 +100,7 @@ test('an SDK write to a registered feature file returns its verifier report', { 
   const toolbox = await createMistralTools(caseRoot, [], AbortSignal.timeout(20000), path.join(root, 'home'));
   t.after(() => toolbox.close());
   const report = await toolbox.tools.get('Write')!.execute({ file_path: '.piecemaker/appel-suivi.json', content: '{}\n' });
-  assert.match(report, /^Fichier enregistré\.\n\nVérification automatique \(suivi\)/);
+  assert.match(report, /^Fichier enregistré\.\n\nAutomatic check \(suivi\)/);
   assert.match(report, /pm suivi_dossiers verifier --suivi appel-suivi.json --dossier /);
   assert.equal(await toolbox.tools.get('Write')!.execute({ file_path: 'notes.md', content: 'Notes fictives.' }), 'Fichier enregistré.');
 });

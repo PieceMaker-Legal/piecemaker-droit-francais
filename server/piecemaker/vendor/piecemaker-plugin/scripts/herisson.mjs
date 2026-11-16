@@ -32,9 +32,9 @@ function units(output) {
 }
 
 const unplaced = (unit) => unit.replace(/^(\p{L}+) \d+ —/u, '$1 —').replace(/(:|\bligne )\d+/g, '$1');
-const capped = (lines) => (lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), `… ${lines.length - MAX_LINES} ligne(s) de plus.`] : lines);
+const capped = (lines) => (lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), `… ${lines.length - MAX_LINES} more line(s).`] : lines);
 const failing = (feature, output) => Boolean(output) && (!feature.erreur || new RegExp(feature.erreur).test(output));
-const title = (check) => `Vérification automatique (${check.feature}) : pm ${check.args.join(' ')}`;
+const title = (check) => `Automatic check (${check.feature}): pm ${check.args.join(' ')}`;
 
 async function verified(check, run) {
   const result = await run([...check.args, '--dossier', check.root], check.root, check.delai * 1000);
@@ -92,14 +92,14 @@ export async function featureReport(payload, { run = runPm } = {}) {
     sections.push([
       title(check),
       ...capped(fresh.join('\n').split('\n')),
-      ...(repeated ? [`${repeated} élément(s) du rapport, déjà rendu(s) plus haut et inchangé(s), ne sont pas répétés.${failed ? ' Ceux qui signalent une erreur ou un manque restent à corriger.' : ''}`] : []),
+      ...(repeated ? [`${repeated} report item(s) were already shown above and did not change. They are not repeated.${failed ? ' The items that report an error or a gap must still be corrected.' : ''}`] : []),
     ].join('\n'));
   }
   if (!sections.length) return null;
   return {
     hookSpecificOutput: {
       hookEventName: 'PostToolUse',
-      additionalContext: [...sections, ...(errors ? ['Corrigez chaque erreur ou manque dans le fichier et à la ligne indiqués. Ne relancez pas ce vérificateur : le Hérisson le relance après chaque écriture et rend le rapport complet en fin de tour.'] : [])].join('\n\n'),
+      additionalContext: [...sections, ...(errors ? ['Correct each error or gap in the file and at the line shown. Do not run this verifier yourself: Le Hérisson runs it after each write and gives the full report at the end of the turn.'] : [])].join('\n\n'),
     },
   };
 }
@@ -117,9 +117,9 @@ export async function turnEndReport(payload, { run = runPm } = {}) {
   return {
     decision: 'block',
     reason: [
-      `Fin de tour suspendue par le Hérisson : ${sections.length} vérification(s) signalent encore des erreurs ou des manques dans des fichiers que vous avez écrits pendant ce tour.`,
+      `End of turn stopped by Le Hérisson: ${sections.length} check(s) still report errors or gaps in files that you wrote during this turn.`,
       ...sections,
-      'Corrigez chaque erreur ou manque dans le fichier et à la ligne indiqués, puis terminez. Si un point ne peut pas être corrigé (pièce absente du dossier, décision qui revient à l’avocat), ne le corrigez pas : citez-le tel quel à l’avocat dans votre réponse finale. La fin de tour ne sera pas suspendue une seconde fois.',
+      'Correct each error or gap in the file and at the line shown, then finish. If you cannot correct an item (document missing from the case, decision that belongs to the lawyer), do not correct it: quote it as is to the lawyer in your final answer. The end of turn will not be stopped a second time.',
     ].join('\n\n'),
   };
 }

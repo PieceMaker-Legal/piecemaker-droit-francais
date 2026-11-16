@@ -34,7 +34,7 @@ test('une écriture de suivi lance son vérificateur et rend le résultat à l�
   const pm = fakePm('appel-suivi.json\n  échéance sans source');
   const report = await featureReport({ tool_name: 'Write', cwd: root, tool_input: { file_path: '.piecemaker/appel-suivi.json' } }, { run: pm.run });
   assert.deepEqual(pm.calls, [{ args: `suivi_dossiers verifier --suivi appel-suivi.json --dossier ${root}`, cwd: root, timeoutMs: 60000 }]);
-  assert.match(report.hookSpecificOutput.additionalContext, /Vérification automatique \(suivi\)[\s\S]*échéance sans source/);
+  assert.match(report.hookSpecificOutput.additionalContext, /Automatic check \(suivi\)[\s\S]*échéance sans source/);
 });
 
 test('une écriture de mémoire projet lance pm memoire verifier', async () => {
@@ -44,7 +44,7 @@ test('une écriture de mémoire projet lance pm memoire verifier', async () => {
   const pm = fakePm('.piecemaker/memoires/appel.md:1: erreur : pas de frontmatter.');
   const report = await featureReport({ tool_name: 'Edit', cwd: root, tool_input: { file_path: '.piecemaker/memoires/appel.md' } }, { run: pm.run });
   assert.deepEqual(pm.calls, [{ args: `memoire verifier --memoire appel --dossier ${root}`, cwd: root, timeoutMs: 10000 }]);
-  assert.match(report.hookSpecificOutput.additionalContext, /Vérification automatique \(memoire\)[\s\S]*pas de frontmatter/);
+  assert.match(report.hookSpecificOutput.additionalContext, /Automatic check \(memoire\)[\s\S]*pas de frontmatter/);
 });
 
 test('un apply_patch Codex vérifie chaque feature touchée une seule fois', async () => {
@@ -120,7 +120,7 @@ test('la garde refuse une erreur de compilation nouvelle, garde les erreurs déj
   const reason = async (content) => (await hookDecision({ cwd: dossier, tool_name: 'Write', tool_input: { file_path, content } }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
   process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'pack');
   assert.equal(await reason('> Module Prime\n\nTexte fictif.\n'), null);
-  assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), 'Écriture refusée par le Hérisson : le programme ne respecte pas le format Catala ou ne compile pas.\nprime.catala_fr:3: compilation : Unknown identifier inconnu_nouveau\nCorrigez puis réécrivez. Voir le skill catala (references/format.md).');
+  assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), 'Write refused by Le Hérisson: the program does not follow the Catala format or does not compile. Nothing was written.\nprime.catala_fr:3: compilation: Unknown identifier inconnu_nouveau\nCorrect each line shown, then write the file again. Format rules: catala skill, references/format.md.');
   fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '> Module Prime\n\ninconnu_present\n');
   assert.equal(await reason('> Module Prime\n\nTexte.\n\ninconnu_present\n'), null);
   process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'absent');
@@ -150,7 +150,7 @@ test('une commande pm tabular_review preparer ou lancer vérifie le brouillon', 
   const review = (command) => { const pm = fakePm('Recherche « Rupture fictive » : bloquée'); return featureReport({ tool_name: 'Bash', cwd: dossier, tool_input: { command } }, { run: pm.run }).then((report) => ({ calls: pm.calls.map((call) => call.args), report })); };
   const prepared = await review('pm tabular_review preparer --mode recherche --nom "Rupture fictive"');
   assert.deepEqual(prepared.calls, [`tabular_review verifier --dossier ${dossier}`]);
-  assert.match(prepared.report.hookSpecificOutput.additionalContext, /Vérification automatique \(revue\) : pm tabular_review verifier/);
+  assert.match(prepared.report.hookSpecificOutput.additionalContext, /Automatic check \(revue\): pm tabular_review verifier/);
   assert.deepEqual((await review('pm tabular_review lancer --projet p1')).calls, [`tabular_review verifier --dossier ${dossier}`]);
   assert.deepEqual((await review('pm tabular_review lister')).calls, []);
 });
@@ -160,12 +160,12 @@ test('un rapport déjà rendu n’est pas répété : seuls les blocs nouveaux r
   const dossier = path.resolve('/dossiers/dossier-delta');
   const write = (stdout) => featureReport({ tool_name: 'Write', cwd: dossier, tool_input: { file_path: '.piecemaker/bail-suivi.json' } }, { run: fakePm(stdout).run }).then((report) => report?.hookSpecificOutput.additionalContext ?? null);
   const first = ['Échéances :', '  Congé : 2027-03-31', '1 erreur(s), 0 manque(s).', 'Erreur 1 — echeances.Congé.source (ligne 12)', '  source absente'].join('\n');
-  assert.match(await write(first), /Erreur 1 — echeances\.Congé\.source \(ligne 12\)\n  source absente\n\nCorrigez chaque erreur ou manque dans le fichier et à la ligne indiqués\. Ne relancez pas ce vérificateur/);
+  assert.match(await write(first), /Erreur 1 — echeances\.Congé\.source \(ligne 12\)\n  source absente\n\nCorrect each error or gap in the file and at the line shown\. Do not run this verifier yourself/);
   assert.equal(await write(first), null);
   const second = ['Échéances :', '  Congé : 2027-03-31', '2 erreur(s), 0 manque(s).', 'Erreur 1 — evenements.Bail.piece (ligne 4)', '  pièce introuvable', 'Erreur 2 — echeances.Congé.source (ligne 14)', '  source absente'].join('\n');
-  assert.equal(await write(second), ['Vérification automatique (suivi) : pm suivi_dossiers verifier --suivi bail-suivi.json', '2 erreur(s), 0 manque(s).', 'Erreur 1 — evenements.Bail.piece (ligne 4)', '  pièce introuvable', '2 élément(s) du rapport, déjà rendu(s) plus haut et inchangé(s), ne sont pas répétés. Ceux qui signalent une erreur ou un manque restent à corriger.', '', 'Corrigez chaque erreur ou manque dans le fichier et à la ligne indiqués. Ne relancez pas ce vérificateur : le Hérisson le relance après chaque écriture et rend le rapport complet en fin de tour.'].join('\n'));
+  assert.equal(await write(second), ['Automatic check (suivi): pm suivi_dossiers verifier --suivi bail-suivi.json', '2 erreur(s), 0 manque(s).', 'Erreur 1 — evenements.Bail.piece (ligne 4)', '  pièce introuvable', '2 report item(s) were already shown above and did not change. They are not repeated. The items that report an error or a gap must still be corrected.', '', 'Correct each error or gap in the file and at the line shown. Do not run this verifier yourself: Le Hérisson runs it after each write and gives the full report at the end of the turn.'].join('\n'));
   const clean = await write('Échéances :\n  Congé : 2027-03-31\nAucune erreur, aucun manque.');
-  assert.equal(clean, 'Vérification automatique (suivi) : pm suivi_dossiers verifier --suivi bail-suivi.json\nAucune erreur, aucun manque.\n1 élément(s) du rapport, déjà rendu(s) plus haut et inchangé(s), ne sont pas répétés.');
+  assert.equal(clean, 'Automatic check (suivi): pm suivi_dossiers verifier --suivi bail-suivi.json\nAucune erreur, aucun manque.\n1 report item(s) were already shown above and did not change. They are not repeated.');
 });
 
 test('la fin de tour est suspendue une seule fois, avec le rapport complet des erreurs restantes', async () => {
@@ -179,7 +179,7 @@ test('la fin de tour est suspendue une seule fois, avec le rapport complet des e
   const blocked = await stop(failed);
   assert.deepEqual(blocked.calls, [`suivi_dossiers verifier --suivi bail-suivi.json --dossier ${dossier}`]);
   assert.equal(blocked.report.decision, 'block');
-  assert.match(blocked.report.reason, /^Fin de tour suspendue par le Hérisson : 1 vérification\(s\) signalent encore[\s\S]*Erreur 1 — echeances\.Congé\.source \(ligne 12\)\n  source absente\n\nCorrigez chaque erreur[\s\S]*ne sera pas suspendue une seconde fois\.$/);
+  assert.match(blocked.report.reason, /^End of turn stopped by Le Hérisson: 1 check\(s\) still report[\s\S]*Erreur 1 — echeances\.Congé\.source \(ligne 12\)\n  source absente\n\nCorrect each error[\s\S]*will not be stopped a second time\.$/);
   assert.equal((await stop(failed)).report, null);
   assert.deepEqual(await stop(failed), { report: null, calls: [] });
   await write(failed);
@@ -198,22 +198,22 @@ test('la garde refuse, avant l’écriture, un suivi ou une mémoire hors format
   t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
   const reason = async (file_path, content) => (await hookDecision({ cwd: dossier, tool_name: 'Write', tool_input: { file_path, content } }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
   assert.equal(await reason('.piecemaker/bail-suivi.json', '{\n  "matter": {},\n  "echeance": {},\n  "evenements": []\n}'), [
-    'Écriture refusée par le Hérisson : le fichier de suivi n’a pas la forme attendue. Rien n’a été écrit.',
-    'bail-suivi.json:3: clé « echeance » inconnue à la racine du suivi. Clés admises : matter, evenements, echeances. Placez son contenu sous l’une d’elles ou retirez-la.',
-    'bail-suivi.json:4: « evenements » est un objet { "nom en français": {…} }, pas une liste.',
-    'Corrigez ces lignes puis réécrivez le fichier. Modèle complet : skill piecemaker, references/suivi.md.',
+    'Write refused by Le Hérisson: the tracking file does not have the expected structure. Nothing was written.',
+    'bail-suivi.json:3: unknown key "echeance" at the root of the tracking file. Permitted keys: matter, evenements, echeances. Move its content under one of them or remove it.',
+    'bail-suivi.json:4: "evenements" must be an object { "name in French": {…} }, not a list.',
+    'Correct these lines, then write the file again. Full model: piecemaker skill, references/suivi.md.',
   ].join('\n'));
-  assert.match(await reason('.piecemaker/bail-suivi.json', '{ "matter": {}, }'), /bail-suivi\.json:1: JSON illisible/);
+  assert.match(await reason('.piecemaker/bail-suivi.json', '{ "matter": {}, }'), /bail-suivi\.json:1: invalid JSON/);
   assert.equal(await reason('.piecemaker/bail-suivi.json', '{ "matter": {}, "evenements": {}, "echeances": {} }'), null);
-  assert.match(await reason('.piecemaker/memoires/bail.md', '---\netape: redaction\n---\n# Bail\n'), /^Écriture refusée par le Hérisson : la mémoire projet n’a pas la forme attendue\. Rien n’a été écrit\.\nbail\.md:1: frontmatter interdit/);
+  assert.match(await reason('.piecemaker/memoires/bail.md', '---\netape: redaction\n---\n# Bail\n'), /^Write refused by Le Hérisson: the project memory does not have the expected structure\. Nothing was written\.\nbail\.md:1: frontmatter is not permitted/);
   assert.equal(await reason('.piecemaker/memoires/bail.md', '# Bail\n\n---\n'), null);
 });
 
 test('la garde refuse d’écrire les étapes, la protection et une proposition en attente', async () => {
   const { hookDecision } = await import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mjs')).href);
   const reason = async (tool_name, tool_input) => (await hookDecision({ cwd: root, tool_name, tool_input }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
-  assert.match(await reason('Write', { file_path: '.piecemaker/etapes.json', content: '{}' }), /réglées par l’avocat seul[\s\S]*pm check/);
-  assert.match(await reason('Bash', { command: 'echo {} > .piecemaker/protection.json' }), /Seul l’avocat lève la protection/);
+  assert.match(await reason('Write', { file_path: '.piecemaker/etapes.json', content: '{}' }), /Only the lawyer sets the case steps[\s\S]*pm check/);
+  assert.match(await reason('Bash', { command: 'echo {} > .piecemaker/protection.json' }), /Only the lawyer removes the protection/);
   assert.match(await reason('Bash', { command: 'rm .piecemaker/arborescence.proposition.json' }), /arborescence/);
   assert.match(await reason('Write', { file_path: '.piecemaker/ontologie.proposition.json', content: '{}' }), /ontologie/);
   assert.equal(await reason('Bash', { command: 'cat .piecemaker/etapes.json' }), null);

@@ -67,12 +67,12 @@ test('streamed tool fragments execute once and persisted history resumes after a
 test('the turn goes on once when the turn-end report still lists errors', async t => {
   const { home, history } = await setup(t);
   const requests: unknown[] = [];
-  const reports = ['Fin de tour suspendue par le Hérisson : 1 vérification(s)'];
+  const reports = ['End of turn stopped by Le Hérisson: 1 check(s)'];
   const tools = fixtureTools(async () => '', true, async () => reports.shift() ?? '');
   const auth = fixtureClient([[{ content: 'Terminé.' }], [{ content: 'Corrigé.' }]], requests);
   await createMistralSdkRuntime(history, async () => [], home, auth, tools).run('Écrire le suivi', { sessionId: 'mistral-sdk-fin-de-tour' }, { userId: 1, send() {} } as never, context);
   assert.equal(requests.length, 2);
-  assert.ok(JSON.stringify(requests[1]).includes('Fin de tour suspendue par le Hérisson'));
+  assert.ok(JSON.stringify(requests[1]).includes('End of turn stopped by Le Hérisson'));
   assert.equal((await history.load('mistral-sdk-fin-de-tour'))?.transcript.at(-1)?.content, 'Corrigé.');
 });
 

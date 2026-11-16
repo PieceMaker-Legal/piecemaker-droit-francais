@@ -11,7 +11,7 @@ const PANEL_NOTICE = /^(Visible|Déjà visible|Le volet)/;
 const KINDS = {
   arborescence: {
     pattern: /(^|[\\/])\.piecemaker[\\/]arborescence\.json$/,
-    label: 'l’arborescence',
+    label: 'folder tree',
     place: 'Index › Classement',
     list: (value) => (Array.isArray(value) ? value : value?.dossiers),
     stored: (proposal) => (Array.isArray(proposal?.dossiers) ? proposal.dossiers : undefined),
@@ -20,7 +20,7 @@ const KINDS = {
   },
   ontologie: {
     pattern: /(^|[\\/])\.piecemaker[\\/]ontologie\.json$/,
-    label: 'l’ontologie',
+    label: 'ontology',
     place: 'Index › Ontologie',
     list: (value) => (Array.isArray(value) ? value : value?.relations),
     stored: (proposal, current) => (proposal?.relations || proposal?.documentTypes ? {
@@ -47,10 +47,10 @@ function readJson(file) {
 
 function replaced(text, before, after, all) {
   const old = String(before ?? '');
-  if (!old) throw new Error('le texte à remplacer est vide');
+  if (!old) throw new Error('the text to replace is empty');
   const count = text.split(old).length - 1;
-  if (!count) throw new Error('le texte à remplacer est introuvable');
-  if (count > 1 && !all) throw new Error('le texte à remplacer apparaît plusieurs fois');
+  if (!count) throw new Error('the text to replace was not found');
+  if (count > 1 && !all) throw new Error('the text to replace occurs more than once');
   return all ? text.split(old).join(String(after ?? '')) : text.replace(old, () => String(after ?? ''));
 }
 
@@ -61,7 +61,7 @@ function fileEdit(tool, input, cwd) {
   if (!kind) return null;
   if (tool === 'Write') return { kind, file, whole: true, apply: () => String(input.content ?? '') };
   const edits = tool === 'MultiEdit' ? input.edits : [input];
-  if (!Array.isArray(edits) || !edits.length) return { kind, file, error: 'modification vide' };
+  if (!Array.isArray(edits) || !edits.length) return { kind, file, error: 'empty edit' };
   return { kind, file, apply: (text) => edits.reduce((current, edit) => replaced(current, edit?.old_string, edit?.new_string, edit?.replace_all === true), text) };
 }
 
@@ -93,7 +93,7 @@ function patchEdit(patch, cwd) {
   const [section] = touched;
   const kind = kindOf(section.file);
   if (sections.length !== 1 || section.action === 'Delete' || section.lines.some((line) => line.startsWith('*** Move to:'))) {
-    return { kind, file: section.file, error: `modifiez ${path.basename(section.file)} seul dans son patch, par Add File ou Update File` };
+    return { kind, file: section.file, error: `edit ${path.basename(section.file)} alone in its patch, with Add File or Update File` };
   }
   if (section.action === 'Add') {
     return { kind, file: section.file, whole: true, apply: () => `${section.lines.filter((line) => line.startsWith('+')).map((line) => line.slice(1)).join('\n')}\n` };
@@ -121,7 +121,7 @@ function bases(kind, file) {
 function edited(edit) {
   if (edit.whole) return { text: edit.apply(''), origin: 'nouveau', pending: false };
   const candidates = bases(edit.kind, edit.file);
-  if (!candidates.length) throw new Error(`${path.basename(edit.file)} n’existe pas encore : écrivez-le en entier`);
+  if (!candidates.length) throw new Error(`${path.basename(edit.file)} does not exist yet: write the full file`);
   let failure;
   for (const base of candidates) {
     try {
@@ -136,15 +136,15 @@ function edited(edit) {
 function changes(kind, before, after) {
   const { key, comparable } = KINDS[kind];
   if (!Array.isArray(before)) before = [];
-  if (!Array.isArray(after)) return 'aucun changement';
+  if (!Array.isArray(after)) return 'no change';
   const old = new Map(before.map((entry) => [key(entry), comparable(entry)]));
   const next = new Map(after.map((entry) => [key(entry), comparable(entry)]));
   const parts = [
-    ['ajout', [...next.keys()].filter((name) => !old.has(name))],
-    ['suppression', [...old.keys()].filter((name) => !next.has(name))],
-    ['modification', [...next.keys()].filter((name) => old.has(name) && old.get(name) !== next.get(name))],
+    ['added', [...next.keys()].filter((name) => !old.has(name))],
+    ['removed', [...old.keys()].filter((name) => !next.has(name))],
+    ['changed', [...next.keys()].filter((name) => old.has(name) && old.get(name) !== next.get(name))],
   ].filter(([, names]) => names.length);
-  return parts.length ? parts.map(([label, names]) => `${label}${names.length > 1 ? 's' : ''} : ${names.join(', ')}`).join(' ; ') : 'aucun changement';
+  return parts.length ? parts.map(([label, names]) => `${label}: ${names.join(', ')}`).join('; ') : 'no change';
 }
 
 export function runPm(args, cwd) {
@@ -171,23 +171,23 @@ export async function proposalMessage(payload, run = runPm) {
   const { kind, file } = edit;
   const { label, place, list } = KINDS[kind];
   const name = path.basename(file);
-  const refused = (reason) => `Proposition non enregistrée, rien n’a changé : ${reason}. Corrigez puis modifiez de nouveau ${name}.`;
+  const refused = (reason) => `Proposal not saved, nothing changed: ${reason}. Correct the cause, then edit ${name} again.`;
   if (edit.error) return refused(edit.error);
   let result;
   try { result = edited(edit); } catch (error) { return refused(error.message); }
   let value;
-  try { value = JSON.parse(result.text); } catch (error) { return refused(`JSON illisible après la modification (${error.message})`); }
-  if (!Array.isArray(list(value))) return refused(kind === 'arborescence' ? 'le fichier doit contenir la liste des dossiers' : 'le fichier doit contenir « relations », la liste des relations');
+  try { value = JSON.parse(result.text); } catch (error) { return refused(`invalid JSON after the edit (${error.message})`); }
+  if (!Array.isArray(list(value))) return refused(kind === 'arborescence' ? 'the file must contain the list of folders' : 'the file must contain "relations", the list of relations');
   const { cwd, args } = pmArguments(kind, value, file, payload?.cwd || process.cwd());
   const answer = await run(args, cwd);
-  if (!answer.ok) return refused(/ECONNREFUSED/.test(answer.output) ? 'PieceMaker n’est pas lancé, la proposition ne peut pas être vérifiée ; demandez à l’avocat de lancer PieceMaker' : answer.output.split('\n').filter(Boolean).pop() || 'pm a échoué');
+  if (!answer.ok) return refused(/ECONNREFUSED/.test(answer.output) ? 'PieceMaker is not running, the proposal cannot be checked; ask the lawyer to start PieceMaker' : answer.output.split('\n').filter(Boolean).pop() || 'pm failed');
   const notice = answer.output.split('\n').filter((line) => PANEL_NOTICE.test(line)).pop();
   const current = readJson(file);
-  const summary = kind === 'arborescence' ? changes(kind, list(current), list(value)) : `relations — ${changes(kind, current?.relations, list(value))} ; types de documents — ${changes(kind, current?.documentTypes, value.documentTypes ?? current?.documentTypes)}`;
+  const summary = kind === 'arborescence' ? changes(kind, list(current), list(value)) : `relations — ${changes(kind, current?.relations, list(value))}; document types — ${changes(kind, current?.documentTypes, value.documentTypes ?? current?.documentTypes)}`;
   return [
-    `Modification enregistrée comme proposition dans ${name.replace(/\.json$/, '.proposition.json')}. ${name} ne change pas, c’est normal : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet ${place}.`,
-    `Par rapport à ${label} actuelle : ${summary}.`,
-    result.pending && result.origin === 'actuel' ? 'La proposition en attente ne contenait pas le texte remplacé : la nouvelle proposition part du fichier actuel et remplace l’ancienne.' : `Pour la compléter, modifiez encore ${name} : chaque modification s’ajoute à la proposition en attente.`,
+    `Edit saved as a proposal in ${name.replace(/\.json$/, '.proposition.json')}. ${name} does not change, this is normal: the lawyer accepts, refuses or modifies each change in the ${place} tab.`,
+    `Compared with the current ${label}: ${summary}.`,
+    result.pending && result.origin === 'actuel' ? 'The pending proposal did not contain the replaced text: the new proposal starts from the current file and replaces the old proposal.' : `To add to it, edit ${name} again: each edit is added to the pending proposal.`,
     ...(notice ? [notice] : []),
   ].join('\n');
 }

@@ -30,34 +30,34 @@ function suiviErrors(content) {
   let value;
   try { value = JSON.parse(content); } catch (error) {
     const position = /position (\d+)/.exec(error.message);
-    return [{ line: position ? lineOf(content, Number(position[1])) : 1, message: `JSON illisible : ${error.message.replace(/ in JSON at position.*$/, '')}. Réécrivez un JSON valide : guillemets doubles, pas de virgule finale, pas de commentaire.` }];
+    return [{ line: position ? lineOf(content, Number(position[1])) : 1, message: `invalid JSON: ${error.message.replace(/ in JSON at position.*$/, '')}. Write valid JSON: double quotes, no trailing comma, no comment.` }];
   }
-  const shape = '{ "matter": {…}, "evenements": { "nom de l’événement": {…} }, "echeances": { "nom de l’échéance": {…} } }';
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return [{ line: 1, message: `le suivi est un objet ${shape}, pas ${Array.isArray(value) ? 'une liste' : 'une valeur seule'}.` }];
+  const shape = '{ "matter": {…}, "evenements": { "event name": {…} }, "echeances": { "deadline name": {…} } }';
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [{ line: 1, message: `the tracking file must be an object ${shape}, not ${Array.isArray(value) ? 'a list' : 'a single value'}.` }];
   const errors = [];
   for (const key of Object.keys(value)) {
     const line = lineOf(content, content.indexOf(JSON.stringify(key)));
-    if (!SUIVI_KEYS.includes(key)) errors.push({ line, message: `clé « ${key} » inconnue à la racine du suivi. Clés admises : ${SUIVI_KEYS.join(', ')}. Placez son contenu sous l’une d’elles ou retirez-la.` });
-    else if (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])) errors.push({ line, message: `« ${key} » est un objet ${key === 'matter' ? '{ "client": …, "summary": … }' : `{ "nom en français": {…} }`}, pas ${Array.isArray(value[key]) ? 'une liste' : 'une valeur seule'}.` });
+    if (!SUIVI_KEYS.includes(key)) errors.push({ line, message: `unknown key "${key}" at the root of the tracking file. Permitted keys: ${SUIVI_KEYS.join(', ')}. Move its content under one of them or remove it.` });
+    else if (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])) errors.push({ line, message: `"${key}" must be an object ${key === 'matter' ? '{ "client": …, "summary": … }' : `{ "name in French": {…} }`}, not ${Array.isArray(value[key]) ? 'a list' : 'a single value'}.` });
   }
   return errors;
 }
 
 function memoireErrors(content) {
-  return /^---\r?\n/.test(content) ? [{ line: 1, message: 'frontmatter interdit : la mémoire commence par un bloc entre deux lignes « --- ». Retirez ce bloc. Les échéances vont dans .piecemaker/<nom>-suivi.json ; l’étape en cours et le document à produire sont réglés par l’avocat sur le tableau de l’onglet Suivi des dossiers (lisez-les avec pm check).' }] : [];
+  return /^---\r?\n/.test(content) ? [{ line: 1, message: 'frontmatter is not permitted: the memory starts with a block between two "---" lines. Remove this block. Deadlines go in .piecemaker/<name>-suivi.json. The lawyer sets the current step and the document to produce on the board of the Suivi des dossiers tab: read them with pm check.' }] : [];
 }
 
 const REFUSALS = {
-  catala: ['le programme ne respecte pas le format Catala ou ne compile pas.', 'Corrigez puis réécrivez. Voir le skill catala (references/format.md).'],
-  suivi: ['le fichier de suivi n’a pas la forme attendue. Rien n’a été écrit.', 'Corrigez ces lignes puis réécrivez le fichier. Modèle complet : skill piecemaker, references/suivi.md.'],
-  memoire: ['la mémoire projet n’a pas la forme attendue. Rien n’a été écrit.', 'Corrigez puis réécrivez la mémoire : du Markdown simple, sans frontmatter.'],
+  catala: ['the program does not follow the Catala format or does not compile. Nothing was written.', 'Correct each line shown, then write the file again. Format rules: catala skill, references/format.md.'],
+  suivi: ['the tracking file does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Full model: piecemaker skill, references/suivi.md.'],
+  memoire: ['the project memory does not have the expected structure. Nothing was written.', 'Correct the memory, then write it again: plain Markdown, no frontmatter.'],
 };
 const FORMATS = {
   suivi: async (file, content) => suiviErrors(content),
   memoire: async (file, content) => memoireErrors(content),
   catala: async (file, content) => [
     ...(file.endsWith('.catala_fr') ? (await import('../../../skills/Skill-PieceMaker/scripts/catala-documentation.mjs')).catalaDocumentation(content, { test: /^test_/.test(path.basename(file)) }).errors : []),
-    ...(await (await import('../../../skills/Skill-PieceMaker/scripts/catala.mjs')).typecheckErrors(path.dirname(file), file, content)).map((error) => ({ line: error.line, where: error.file === path.basename(file) ? undefined : `${error.file}:${error.line}`, message: `compilation : ${error.message}` })),
+    ...(await (await import('../../../skills/Skill-PieceMaker/scripts/catala.mjs')).typecheckErrors(path.dirname(file), file, content)).map((error) => ({ line: error.line, where: error.file === path.basename(file) ? undefined : `${error.file}:${error.line}`, message: `compilation: ${error.message}` })),
   ],
 };
 
@@ -124,5 +124,5 @@ export async function formatErrors(tool, input, cwd) {
     }
   }
   if (!refused.size) return null;
-  return [...refused].map(([format, lines]) => [`Écriture refusée par le Hérisson : ${REFUSALS[format][0]}`, ...lines.slice(0, 10), ...(lines.length > 10 ? [`… ${lines.length - 10} erreur(s) de plus.`] : []), REFUSALS[format][1]].join('\n')).join('\n\n');
+  return [...refused].map(([format, lines]) => [`Write refused by Le Hérisson: ${REFUSALS[format][0]}`, ...lines.slice(0, 10), ...(lines.length > 10 ? [`… ${lines.length - 10} more error(s).`] : []), REFUSALS[format][1]].join('\n')).join('\n\n');
 }

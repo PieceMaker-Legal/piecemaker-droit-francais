@@ -110,7 +110,7 @@ async function verification(agent, cwd, report, run) {
   const results = await check(cwd, run, report);
   const lines = results.flatMap((result) => result.lines);
   if (!lines.length) return null;
-  const shown = lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), `… ${lines.length - MAX_LINES} ligne(s) de plus.`] : lines;
+  const shown = lines.length > MAX_LINES ? [...lines.slice(0, MAX_LINES), `… ${lines.length - MAX_LINES} more line(s).`] : lines;
   return { results, shown, owners: [...new Set(results.flatMap((result) => result.failing))] };
 }
 
@@ -118,10 +118,10 @@ async function subagentStop(payload, run) {
   const agent = String(payload.agent_type || '');
   const found = await verification(agent, payload.cwd, String(payload.last_assistant_message ?? ''), run);
   if (!found?.owners.length) return null;
-  if (payload.stop_hook_active) return { systemMessage: [`Le sous-agent ${agent} termine avec des erreurs ou manques :`, ...found.shown].join('\n') };
+  if (payload.stop_hook_active) return { systemMessage: [`The subagent ${agent} ends with errors or gaps:`, ...found.shown].join('\n') };
   return {
     decision: 'block',
-    reason: [`Vérification avant la fin du sous-agent ${agent} :`, ...found.shown, 'Corrigez ces erreurs ou manques avant de rendre votre compte rendu. Ce que les pièces ne prouvent pas, signalez-le comme absent.'].join('\n'),
+    reason: [`Check before the end of the subagent ${agent}:`, ...found.shown, 'Correct these errors or gaps before you give your report. If the documents do not prove a point, report it as missing.'].join('\n'),
   };
 }
 

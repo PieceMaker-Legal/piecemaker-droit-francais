@@ -5,21 +5,21 @@
       "cible": "^ontologie(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "okf",
-      "motif": "L’ontologie des liens (~/.piecemaker/ontologie.json), commune à tous les dossiers, est réglée par l’avocat seul, dans l’onglet Index › Ontologie. Lisez-la avec pm okf ontologie ; pour proposer un changement, modifiez ontologie.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell : la modification devient une proposition, l’avocat décide."
+      "motif": "Only the lawyer sets the link ontology (~/.piecemaker/ontologie.json, common to all cases), in the Index › Ontologie tab. Read it with pm okf ontologie. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
     },
     {
       "nom": "arborescence",
       "cible": "^arborescence(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "piecemaker",
-      "motif": "L’arborescence (.piecemaker/arborescence.json) est réglée par l’avocat seul, dans l’onglet Index › Classement. Pour proposer un changement, modifiez arborescence.json avec l’outil Edit ou Write (ou apply_patch), jamais par le shell, ou lancez pm dossier arborescence --dossiers : la modification devient une proposition, l’avocat décide."
+      "motif": "Only the lawyer sets the folder tree (.piecemaker/arborescence.json), in the Index › Classement tab. To propose a change, edit arborescence.json with the Edit or Write tool (or apply_patch), never with the shell, or run pm dossier arborescence --dossiers: the edit becomes a proposal and the lawyer decides."
     },
     {
       "nom": "okf",
       "cible": "^okf(/|$)",
       "ecriture": "serveur",
       "skill": "okf",
-      "motif": "Les fiches OKF (.piecemaker/okf/) sont écrites par le serveur. Posez ou retirez un lien avec pm okf link ou pm okf unlink, dans les relations de l’ontologie (pm okf ontologie).",
+      "motif": "Only the server writes the OKF records (.piecemaker/okf/). You can read them with Read, cat, grep or ls in a command that writes nothing. To add or remove a link, a premise or a party, use pm okf link or pm okf unlink with a relation of the ontology (pm okf ontologie).",
       "verifier": ["okf", "verify"],
       "commande": "\\bpm okf (link|unlink)\\b",
       "erreur": "Index OKF : \\d+ erreur|Contradictions : \\d|Graphe : \\d+ élément",
@@ -30,14 +30,14 @@
       "cible": "^etapes\\.json$",
       "ecriture": "serveur",
       "skill": "piecemaker",
-      "motif": "Les étapes du dossier (.piecemaker/etapes.json) sont réglées par l’avocat seul, sur le tableau de l’onglet Suivi des dossiers. Lisez l’étape en cours et le document à produire avec pm check ; n’écrivez jamais ce fichier. Pour changer une étape, demandez-le à l’avocat."
+      "motif": "Only the lawyer sets the case steps (.piecemaker/etapes.json), on the board of the Suivi des dossiers tab. Read the current step and the document to produce with pm check. Never write this file. To change a step, ask the lawyer."
     },
     {
       "nom": "protection",
       "cible": "^protection\\.json$",
       "ecriture": "serveur",
       "skill": "piecemaker",
-      "motif": "La protection des pièces (.piecemaker/protection.json) est écrite par le serveur PieceMaker. Seul l’avocat lève la protection, par le bouclier du dossier dans la barre latérale ; n’écrivez jamais ce fichier. Lisez le Markdown converti d’une pièce protégée au lieu du PDF ou de l’image."
+      "motif": "Only the PieceMaker server writes the document protection file (.piecemaker/protection.json). Only the lawyer removes the protection, with the shield of the case in the sidebar. Never write this file. Read the converted Markdown of a protected document, not the PDF or the image."
     },
     {
       "nom": "suivi",
