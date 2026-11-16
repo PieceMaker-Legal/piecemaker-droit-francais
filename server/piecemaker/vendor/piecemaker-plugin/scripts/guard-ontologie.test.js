@@ -47,6 +47,19 @@ test('laisse lire ces fichiers et écrire ailleurs', async () => {
   assert.equal(await decision('Read', { file_path: '.piecemaker/ontologie.json' }), null);
   assert.equal(await decision('Bash', { command: 'ls .piecemaker/okf 2>/dev/null && jq .relations ~/.piecemaker/ontologie.json' }), null);
   assert.equal(await decision('Bash', { command: 'find .piecemaker/okf -name "*.md" | wc -l' }), null);
+  assert.equal(await decision('Bash', { command: 'cd "/tmp/Dossier A" && grep -n -i -E "26_|_parties|partie" .piecemaker/okf/index.md | head -20' }), null);
+  assert.equal(await decision('Bash', { command: 'cd "/tmp/Dossier A" && ls .piecemaker/okf; ls .piecemaker/okf/* | grep -i -E "partie|ZETABIO SA|PERSON" | head' }), null);
+});
+
+test('refuse une écriture cachée après une chaîne entre guillemets', async () => {
+  for (const command of [
+    'grep "a|b" x; echo y > .piecemaker/okf/z.md',
+    'grep "a;b" x; rm .piecemaker/okf/z.md',
+    'grep "a|b" x | tee .piecemaker/okf/z.md',
+    'grep "a&b" x && sed -i "" s/a/b/ .piecemaker/okf/z.md',
+  ]) {
+    assert.equal(await decision('Bash', { command }), 'deny', command);
+  }
 });
 
 test('ne refuse jamais un appel pm okf qui cite des fiches, quelle que soit sa forme', async () => {

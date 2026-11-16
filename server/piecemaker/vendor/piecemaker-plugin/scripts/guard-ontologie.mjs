@@ -33,10 +33,10 @@ function guardedReason(absolute) {
 function readOnlyShell(command) {
   const harmless = command.replace(/\d?>&\d/g, '').replace(/\d?>{1,2}\s*\/dev\/null\b/g, '');
   if (/>|`|\$\(|<\(/.test(harmless)) return false;
-  return harmless.split(/\|\||&&|[|;&\n]/).map((segment) => segment.trim()).filter(Boolean).every((segment) => {
-    const words = segment.split(/\s+/).filter((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
+  return shellSegments(harmless).every((segment) => {
+    const words = segment.words.filter((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
     const program = path.basename(words[0] || '');
-    return (!words.length || READ_COMMANDS.has(program)) &&!UNSAFE_ARGUMENT.test(segment);
+    return (!words.length || READ_COMMANDS.has(program)) && (/^([ef]?grep|rg)$/.test(program) || !UNSAFE_ARGUMENT.test(segment.text));
   });
 }
 
