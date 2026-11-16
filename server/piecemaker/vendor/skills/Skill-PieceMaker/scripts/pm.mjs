@@ -308,6 +308,10 @@ async function defaultDeps(cwd) {
       const scanned = Object.values(read('anonymization-state.json').files ?? {}).map((entry) => entry?.scanned?.updatedAt ?? '').sort().at(-1);
       return Boolean(validated) && !(scanned && new Date(scanned) > new Date(validated));
     },
+    entityCount: async (dir) => Number(String(await client.runSql({
+      requete: "SELECT (SELECT count(*) FROM piecemaker_nodes WHERE project_id = dossier() AND id LIKE 'entity:%') + (SELECT count(*) FROM piecemaker_mappings WHERE project_id = dossier()) AS n",
+      cwd: dir,
+    })).split('\n')[1]),
     tabularIndex: volets.tabularIndex,
     refuseIndex: volets.refuseIndex,
     describePanels: (dir) => panels.describeOpenPanels(dir, panelsPath),
@@ -522,8 +526,10 @@ async function conversion(api, project, pieces, force) {
 
 async function dossierState(api, project) {
   const state = api.caseState(project);
+  const sansEntite = state.anonymized && !state.lifted && (await api.entityCount?.(project)) === 0;
   const anonymisation = state.lifted ? 'levée par l’avocat (pièces lisibles par l’IA)'
-    : state.anonymized ? 'faite' : 'à faire : pm dossier conversion';
+    : sansEntite ? 'à refaire, aucune entité ni mapping en base pour ce dossier : pm dossier conversion'
+      : state.anonymized ? 'faite' : 'à faire : pm dossier conversion';
   const mappingOk = state.lifted || Boolean(api.mappingValidated?.(project));
   const mapping = state.lifted ? 'sans objet (anonymisation levée)' : mappingOk ? 'validé par l’avocat' : 'à valider par l’avocat (onglet Dossier, Mapping)';
   const { analyses = [], projets = [] } = await api.tabularFn({ action: 'lister', project });
@@ -541,7 +547,7 @@ async function dossierState(api, project) {
     : pending.length ? `${pending.length} pièce(s) non convertie(s) : pm dossier conversion\n${pending.map((piece) => `  - ${piece.path} (${PIECE_STATES[piece.status] ?? piece.status})`).join('\n')}`
       : `${pieces.length} pièce(s), toutes converties`;
   const lignes = [
-    { nom: 'anonymisation', texte: anonymisation, ok: state.anonymized || state.lifted },
+    { nom: 'anonymisation', texte: anonymisation, ok: (state.anonymized && !sansEntite) || state.lifted },
     { nom: 'mapping', texte: mapping, ok: mappingOk },
     { nom: 'index', texte: index, ok: indexOk },
     { nom: 'conversion', texte: conversionLine, ok: !job && !pending.length },

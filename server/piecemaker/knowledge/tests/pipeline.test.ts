@@ -124,6 +124,46 @@ test('scan delegates every file format to the converter and still rejects unsafe
   }
 });
 
+test('a copied case marked scanned but without any entity in the database is scanned again', async () => {
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-copy-')));
+  const database = new Database(':memory:');
+  database.exec('CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT NOT NULL UNIQUE)');
+  database.prepare('INSERT INTO projects (project_id, project_path) VALUES (?, ?)').run('project-copie', root);
+  const store = new KnowledgeStore(database);
+  try {
+    writeFile(root, 'contrat.pdf');
+    const hash = crypto.createHash('sha256').update('contrat.pdf').digest('hex');
+    const fingerprint = { size: 1, mtimeMs: Math.trunc(fs.statSync(path.join(root, 'contrat.pdf')).mtimeMs) };
+    writeFile(root, '.piecemaker/anonymization-state.json', JSON.stringify({ version: 1, files: { [hash]: { converted: fingerprint, scanned: fingerprint } } }));
+    const applicationRoot = path.join(root, '.converter');
+    const argumentsFile = path.join(applicationRoot, 'arguments.json');
+    writeFile(applicationRoot, 'server/piecemaker/vendor/websocket-server/scripts/convert_and_scan_pipeline.py',
+      `require('node:fs').writeFileSync(${JSON.stringify(argumentsFile)}, JSON.stringify(process.argv.slice(2)));`);
+    const projects = { getProjectById: (id: string) => (id === 'project-copie' ? { project_id: id, project_path: root } : null) };
+    const pipeline = createKnowledgePipeline({ applicationRoot, projects, store, pythonPath: process.execPath });
+    const scanArguments = async () => {
+      await pipeline.scan('project-copie');
+      return JSON.parse(fs.readFileSync(argumentsFile, 'utf8')) as string[];
+    };
+
+    assert.equal((await scanArguments()).includes('--rescan'), true);
+
+    store.update({
+      projectId: 'project-copie',
+      operations: [
+        { op: 'upsertNode', node: { id: 'entity:PERSONNE_PHYSIQUE_01', kind: 'person', label: 'Jean Dupont', aliases: [], data: { code: 'PERSONNE_PHYSIQUE_01', category: 'personnes' } } },
+        { op: 'upsertMapping', mapping: { nodeId: 'entity:PERSONNE_PHYSIQUE_01', real: 'Jean Dupont', masked: 'PERSONNE_PHYSIQUE_01' } },
+      ],
+    });
+    const args = await scanArguments();
+    assert.equal(args.includes('--skip-existing'), true);
+    assert.equal(args.includes('--rescan'), false);
+  } finally {
+    database.close();
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('a document the converter could not convert is returned as failed and the scan still completes', async () => {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'piecemaker-knowledge-failed-')));
   const database = new Database(':memory:');

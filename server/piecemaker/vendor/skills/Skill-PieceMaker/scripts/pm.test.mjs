@@ -310,6 +310,12 @@ test('check sur un dossier à jour ne signale rien', async () => {
     '2° Anonymisation : valide',
     '3° Mapping : à valider par l’avocat (onglet Dossier, Mapping)',
   ].join('\n'));
+  const copie = { ...deps, entityCount: async () => 0 };
+  assert.equal((await run(['check', '--dossier', dossier], { deps: copie })).split('\n').slice(0, 3).join('\n'), [
+    'Dossier : 1 point(s) à traiter.',
+    '1° Conversion : valide',
+    '2° Anonymisation : à refaire, aucune entité ni mapping en base pour ce dossier : pm dossier conversion',
+  ].join('\n'));
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 

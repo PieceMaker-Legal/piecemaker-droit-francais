@@ -2139,6 +2139,11 @@ def run_pipeline(resources: PipelineResources):
         action="store_true",
         help="Reuse existing Markdown and scans whose source fingerprint is unchanged",
     )
+    parser.add_argument(
+        "--rescan",
+        action="store_true",
+        help="With --skip-existing, reuse Markdown but scan every file again (case without entities)",
+    )
     args = parser.parse_args()
     progress_context = {"offset": 0, "total": 0, "active_chunks": 0}
 
@@ -2209,7 +2214,7 @@ def run_pipeline(resources: PipelineResources):
         return EXIT_OCR_REQUIRED
 
     scan_needed = bool(reconverted_with_ocr) or any(
-        not (args.skip_existing and source_is_anonymized(anonymization_state, f, state_case_root))
+        not (args.skip_existing and not args.rescan and source_is_anonymized(anonymization_state, f, state_case_root))
         for f in input_files
     )
 
@@ -2301,6 +2306,7 @@ def run_pipeline(resources: PipelineResources):
         if md_sources[md_file] in reconverted_with_ocr
         or not (
             args.skip_existing
+            and not args.rescan
             and source_is_anonymized(anonymization_state, md_sources[md_file], state_case_root)
         )
     ]
