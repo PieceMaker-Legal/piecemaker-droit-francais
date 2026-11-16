@@ -189,6 +189,18 @@ test('les identifiants d’appel et de résultat restent appariés', () => {
   assert.equal(rewritten.messages[1].content[0].tool_use_id, toolUseId);
 });
 
+test('le nom d’outil d’une référence d’outil reste intact', () => {
+  const payload = {
+    messages: [{ role: 'user', content: [{ type: 'tool_reference', tool_name: 'mcp__JeanDupont__lire' }] }],
+  };
+  const rewritten = JSON.parse(rewriteJsonBody(
+    JSON.stringify(payload),
+    (text) => text.split('JeanDupont').join(CODE),
+  ));
+
+  assert.equal(rewritten.messages[0].content[0].tool_name, 'mcp__JeanDupont__lire');
+});
+
 test('les schémas gardent leur contrat et anonymisent leurs données', () => {
   const payload = {
     max_tokens: 1000,

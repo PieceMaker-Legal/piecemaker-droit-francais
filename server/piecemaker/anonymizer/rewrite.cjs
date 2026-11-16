@@ -42,6 +42,7 @@ const UNCHANGED_VALUE_KEYS = new Set([
   'signature',
   'call_id',
   'tool_use_id',
+  'tool_name',
   'tool_call_id',
   'parent_tool_use_id',
   'id',
