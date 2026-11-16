@@ -66,6 +66,23 @@ test('checks all declared quotations, retains missing and failed citations and s
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
+test('a cross-reference inside the official article text needs no source, one written outside it does', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-officiel-'));
+  try {
+    const service = createCatalaCitation({
+      source: async () => ({ kind: 'texte', title: 'Article 1229', text: 'La résolution met fin au contrat.' }),
+      match: (text, quote) => text.includes(quote) ? quote : null,
+    }, createCitationStore(home));
+    const file = (extra: string) => [{ nom: 'resolution.catala_fr', chemin: path.join(home, 'resolution.catala_fr'), contenu: `## Article 1229 | LEGIARTI000000000001\n\n« La résolution met fin au contrat. »\n\nLa résolution met fin au contrat.\n\nLes restitutions ont lieu dans les conditions prévues aux articles 1352 à 1352-9.\n\n\`\`\`catala\ndéfinition résolu égal à vrai\n\`\`\`\n${extra}` }];
+    const official = await service.verify(home, file(''));
+    assert.equal(official.passed, true);
+    assert.equal(official.results.length, 1);
+    const written = await service.verify(home, file('\n## Restitutions\n\nVoir les articles 1352 et suivants.\n'));
+    assert.equal(written.passed, false);
+    assert.match(written.results.find((entry) => !entry.target)!.message, /Lien de source absent/);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
 test('verifies Judilibre and constitutional decisions through the existing source connector', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'catala-decisions-'));
   try {

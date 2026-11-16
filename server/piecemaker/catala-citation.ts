@@ -63,7 +63,8 @@ export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'sour
       const ref = found.get(key) ?? { label: fact.source, target: fact.source, kind: 'premise', origin: file.chemin, quote: '' };
       found.set(key, { ...ref, values: [...(ref.values ?? []), fact.value].filter(Boolean) });
     }
-    return [...found.values()];
+    const outside = file.contenu.replace(/(^#{1,6}\s+.*\|\s*(?:LEGIARTI|JORFARTI)\d{12}\b.*$)(?:\n(?!\s{0,3}(?:#{1,6}\s|`{3,}|~{3,})).*)*/gm, '$1');
+    return [...found.values()].filter((ref) => ref.target || outside.includes(ref.label));
   });
   return {
     async cite(cwd: string, id: string, quote: string, content: string, parent?: string) {
