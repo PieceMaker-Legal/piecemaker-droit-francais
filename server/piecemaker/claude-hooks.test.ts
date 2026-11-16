@@ -22,6 +22,10 @@ test('registers the Légifrance search guard in Claude settings and keeps person
     assert.ok(groups.some((group) => group.matcher === 'mcp__.*legifrance.*__Search_.*' && group.hooks[0].command.includes('guard-legal-search.mjs')));
     assert.ok(groups.some((group) => group.matcher === 'Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob' && group.hooks[0].command.includes('guard-ontologie.mjs')));
     assert.ok(groups.some((group) => group.hooks[0].command === 'echo perso'));
+    for (const event of ['SubagentStart', 'SubagentStop']) {
+      const tracked = JSON.parse(fs.readFileSync(settings, 'utf8')).hooks[event] as Array<{ matcher: string; hooks: Array<{ command: string }> }>;
+      assert.ok(tracked.some((group) => new RegExp(group.matcher).test('premise-maker') && group.hooks[0].command.includes('herisson.mjs')));
+    }
     assert.equal(reconcileClaudeHooks(applicationRoot, home).ok, true);
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

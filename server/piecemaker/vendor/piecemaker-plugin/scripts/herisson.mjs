@@ -12,10 +12,12 @@ const MAX_LINES = 40;
 
 const stateFile = (root) => path.join(process.env.PIECEMAKER_HERISSON_ETAT || path.join(os.tmpdir(), 'piecemaker-herisson'), `${createHash('sha1').update(path.resolve(root)).digest('hex')}.json`);
 const readState = (root) => { try { return JSON.parse(fs.readFileSync(stateFile(root), 'utf8')); } catch { return { checks: {} }; } };
+const agentsFolder = (root) => stateFile(root).replace(/\.json$/, '.agents');
 
 function writeState(root, state) {
   try {
-    if (!state || !Object.keys(state.checks).length) { fs.rmSync(stateFile(root), { force: true }); return; }
+    if (!state) fs.rmSync(agentsFolder(root), { recursive: true, force: true });
+    if (!state || !(Object.keys(state.checks).length || state.blocked)) { fs.rmSync(stateFile(root), { force: true }); return; }
     fs.mkdirSync(path.dirname(stateFile(root)), { recursive: true });
     fs.writeFileSync(stateFile(root), JSON.stringify(state));
   } catch {}
@@ -104,6 +106,21 @@ export async function featureReport(payload, { run = runPm } = {}) {
   };
 }
 
+export function subagentTrack(payload) {
+  const id = String(payload?.agent_id || '').replace(/[^\w.-]/g, '_');
+  if (!id) return null;
+  const file = path.join(agentsFolder(payload.cwd || process.cwd()), id);
+  try {
+    if (payload.hook_event_name !== 'SubagentStart') fs.rmSync(file, { force: true });
+    else { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, String(payload.agent_type || 'subagent')); }
+  } catch {}
+  return null;
+}
+
+function pendingAgents(root) {
+  try { return fs.readdirSync(agentsFolder(root)).map((id) => fs.readFileSync(path.join(agentsFolder(root), id), 'utf8')); } catch { return []; }
+}
+
 export async function turnEndReport(payload, { run = runPm } = {}) {
   const root = payload?.cwd || process.cwd();
   const state = readState(root);
@@ -112,14 +129,23 @@ export async function turnEndReport(payload, { run = runPm } = {}) {
     const output = await verified(check, run);
     if (failing(FEATURES.find((feature) => feature.nom === check.feature) ?? {}, output)) sections.push([title(check), ...capped(units(output).join('\n').split('\n'))].join('\n'));
   }
-  if (!sections.length || state.blocked || payload?.stop_hook_active) { writeState(root, null); return null; }
+  const agents = pendingAgents(root);
+  if ((!sections.length && !agents.length) || state.blocked || payload?.stop_hook_active) { writeState(root, null); return null; }
   writeState(root, { ...state, blocked: true });
+  const causes = [
+    ...(sections.length ? [`${sections.length} check(s) still report errors or gaps in files that you wrote during this turn`] : []),
+    ...(agents.length ? [`${agents.length} PieceMaker subagent(s) started during this turn did not give their report (${agents.join(', ')})`] : []),
+  ];
   return {
     decision: 'block',
     reason: [
-      `End of turn stopped by Le Hérisson: ${sections.length} check(s) still report errors or gaps in files that you wrote during this turn.`,
+      `End of turn stopped by Le Hérisson: ${causes.join('; ')}.`,
       ...sections,
-      'Correct each error or gap in the file and at the line shown, then finish. If you cannot correct an item (document missing from the case, decision that belongs to the lawyer), do not correct it: quote it as is to the lawyer in your final answer. The end of turn will not be stopped a second time.',
+      [
+        ...(sections.length ? ['Correct each error or gap in the file and at the line shown, then finish. If you cannot correct an item (document missing from the case, decision that belongs to the lawyer), do not correct it: quote it as is to the lawyer in your final answer.'] : []),
+        ...(agents.length ? ['Do the work that the lawyer asked for in this turn: wait for each report, or run the subagent again in the foreground and use its report. Do not schedule a wake-up and do not suspend the work. If the lawyer stopped a subagent, do not run it again.'] : []),
+        'The end of turn will not be stopped a second time.',
+      ].join(' '),
     ].join('\n\n'),
   };
 }
@@ -127,5 +153,6 @@ export async function turnEndReport(payload, { run = runPm } = {}) {
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (isMain) runHook(async () => {
   const payload = await readHookPayload(3000);
+  if (['SubagentStart', 'SubagentStop'].includes(payload?.hook_event_name)) return subagentTrack(payload);
   return payload?.hook_event_name === 'Stop' ? turnEndReport(payload) : featureReport(payload);
 }, { timeoutMs: 85000 }).catch(() => noop());

@@ -190,6 +190,27 @@ test('la fin de tour est suspendue une seule fois, avec le rapport complet des e
   assert.deepEqual(await stop(failed), { report: null, calls: [] });
 });
 
+test('la fin de tour est suspendue une seule fois quand un sous-agent PieceMaker lancé n’a pas rendu son compte rendu', async () => {
+  const { subagentTrack, turnEndReport } = await load();
+  const dossier = path.resolve('/dossiers/dossier-sous-agents');
+  const agent = (event, id, type) => subagentTrack({ hook_event_name: event, cwd: dossier, agent_id: id, agent_type: type });
+  const stop = (extra = {}) => turnEndReport({ hook_event_name: 'Stop', cwd: dossier, ...extra }, { run: fakePm('').run });
+  agent('SubagentStart', 'a1', 'index-maker');
+  agent('SubagentStop', 'a1', 'index-maker');
+  assert.equal(await stop(), null);
+  agent('SubagentStart', 'a2', 'premise-maker');
+  agent('SubagentStart', 'a3', 'research-maker');
+  agent('SubagentStop', 'a3', 'research-maker');
+  const blocked = await stop();
+  assert.equal(blocked.decision, 'block');
+  assert.equal(blocked.reason, 'End of turn stopped by Le Hérisson: 1 PieceMaker subagent(s) started during this turn did not give their report (premise-maker).\n\nDo the work that the lawyer asked for in this turn: wait for each report, or run the subagent again in the foreground and use its report. Do not schedule a wake-up and do not suspend the work. If the lawyer stopped a subagent, do not run it again. The end of turn will not be stopped a second time.');
+  assert.equal(await stop(), null);
+  assert.equal(await stop(), null);
+  agent('SubagentStart', 'a4', 'index-maker');
+  assert.equal(await stop({ stop_hook_active: true }), null);
+  assert.equal(await stop(), null);
+});
+
 test('la garde refuse, avant l’écriture, un suivi ou une mémoire hors format', async (t) => {
   const fs = require('node:fs');
   const os = require('node:os');

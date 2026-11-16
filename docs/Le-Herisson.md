@@ -25,11 +25,17 @@ lisent, pour tous les clients (Claude, Codex, Vibe, chat Mistral de l'app) :
 - **en fin de tour** (Stop) : `herisson.mjs` relance les vérifications
   encore en erreur et suspend la fin de tour une seule fois, avec le rapport
   complet. L'agent corrige, ou cite à l'avocat ce qu'il ne peut pas corriger.
+  Elle est aussi suspendue, une seule fois, quand un sous-agent PieceMaker
+  (`index-maker`, `premise-maker`, `research-maker`, `deep-research-maker`)
+  lancé pendant le tour n'a pas rendu son compte rendu (Claude seulement).
 
 Le Hérisson garde l'état du tour dans un fichier temporaire par dossier
 (`<dossier temporaire>/piecemaker-herisson/<empreinte du dossier>.json`) :
 pour chaque vérification, son dernier rapport et s'il signale une erreur. La
-fin de tour efface ce fichier.
+fin de tour efface ce fichier. Pour Claude, les hooks `SubagentStart` et
+`SubagentStop` de `herisson.mjs` notent à côté, dans
+`<empreinte du dossier>.agents/<agent_id>`, chaque sous-agent PieceMaker lancé
+et pas encore terminé ; la fin de tour efface aussi ce dossier.
 
 Un élément du rapport est une ligne non indentée avec ses lignes indentées.
 Deux éléments sont les mêmes si seuls leur numéro d'ordre et leurs numéros
@@ -103,6 +109,7 @@ vérificateurs `pm`, reprise telle quelle, reste en français.
 | toutes les features vérifiées | PostToolUse | sortie vide ou rapport inchangé | aucun message |
 | toutes les features vérifiées | Stop | une vérification du tour signale encore une erreur | `End of turn stopped by Le Hérisson: <N> check(s) still report errors or gaps in files that you wrote during this turn.⏎⏎Automatic check (<feature>): pm <arguments>⏎<rapport complet>⏎⏎Correct each error or gap in the file and at the line shown, then finish. If you cannot correct an item (document missing from the case, decision that belongs to the lawyer), do not correct it: quote it as is to the lawyer in your final answer. The end of turn will not be stopped a second time.` |
 | toutes les features vérifiées | Stop | plus d'erreur, ou fin de tour déjà suspendue | aucun message |
+| sous-agents PieceMaker (Claude) | Stop | un sous-agent lancé pendant le tour n'a pas rendu son compte rendu | `End of turn stopped by Le Hérisson: <N> PieceMaker subagent(s) started during this turn did not give their report (<agents>).⏎⏎Do the work that the lawyer asked for in this turn: wait for each report, or run the subagent again in the foreground and use its report. Do not schedule a wake-up and do not suspend the work. If the lawyer stopped a subagent, do not run it again. The end of turn will not be stopped a second time.` — avec des vérifications en erreur, les deux causes sont jointes par `; ` dans la première ligne, les rapports suivent, puis les deux consignes dans le dernier paragraphe |
 | `memoire` | PostToolUse | frontmatter déjà présent avant l'écriture (sortie de `pm memoire verifier`, dans le message de vérification ci-dessus) | `.piecemaker/memoires/<nom>.md:1: erreur : pas de frontmatter. Les échéances vont dans .piecemaker/<nom>-suivi.json ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.` |
 | `memoire` | PostToolUse | aucun acte du même nom (idem) | `.piecemaker/memoires/<nom>.md : manque : aucun raisonnement, programme Catala, suivi ni carte du tableau ne s’appelle <nom>. Nommez la mémoire comme son acte.` |
 | `memoire` | PostToolUse | mémoire conforme | aucun message |
@@ -146,7 +153,7 @@ de reprise (fin de tour).
 
 | Client | Avant | Après | Fin de tour |
 |---|---|---|---|
-| Claude | `hooks.json` du plugin, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash\|…` | `hooks.json`, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash`, 90 s | `hooks.json`, `Stop`, 90 s |
+| Claude | `hooks.json` du plugin, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash\|…` | `hooks.json`, matcher `Write\|Edit\|MultiEdit\|NotebookEdit\|Bash`, 90 s | `hooks.json`, `Stop`, 90 s ; sous-agents suivis par `SubagentStart` et `SubagentStop` |
 | Codex | `~/.codex/hooks.json`, `^(Bash\|apply_patch)$` | `~/.codex/hooks.json`, `post_tool_use`, `^(Bash\|apply_patch)$`, 90 s, approuvé dans `config.toml` | `~/.codex/hooks.json`, `stop`, 90 s, approuvé dans `config.toml` |
 | Vibe | `~/.vibe/hooks.toml`, `piecemaker-guard-ontologie` | `~/.vibe/hooks.toml`, `piecemaker-herisson` (écriture et shell), 90 s | `~/.vibe/hooks.toml`, `piecemaker-herisson-fin-de-tour` (`post_agent`, agent `main`), 90 s |
 | Chat Mistral | `guard()` de `mistral-sdk/tools.ts` | `checked()` après Write, Edit et Bash, ajouté au résultat de l'outil | `turnEnd()` de `mistral-sdk/tools.ts`, appelé par `runtime.ts` quand le modèle ne demande plus d'outil, hors mode plan |
@@ -222,6 +229,9 @@ Limites :
   tour repris, la fin du tour suivant passe sans suspension ;
 - un sous-agent écrit dans le même état que l'agent principal : ses erreurs
   restantes sont rendues à la fin du tour de l'agent principal ;
+- le suivi des sous-agents en cours ne vaut que pour Claude, et seulement si
+  le hook reçoit un `agent_id`. Un sous-agent arrêté sans `SubagentStop`
+  (interruption) suspend une fois la fin du tour suivant ;
 
 - une écriture de fichier par le shell (`cat >`, `sed -i`) n'est ni filtrée ni
   vérifiée ;

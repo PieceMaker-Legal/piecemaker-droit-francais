@@ -32,6 +32,10 @@ Avant d'utiliser une commande, lisez sa référence dans `<cette-skill>/referenc
 
 Au début du travail sur un dossier, lancez `pm check`.
 
+## Sous-agents
+
+Lancez `index-maker`, `premise-maker`, `research-maker` et `deep-research-maker` au premier plan, jamais en arrière-plan. Attendez leur compte rendu, puis finissez dans le même tour le travail demandé. Ne planifiez pas de reprise et ne suspendez pas le travail.
+
 ## Volets
 
 Le geste ouvre le volet tout seul : `pm dossier sql` (écriture), `pm dossier index`, `pm tabular_review` (lister, preparer, lancer), `pm raisonnement verifier`, `pm bordereau`, un `.docx` écrit ou édité. Une ligne `Visible : …` le confirme. N'appelez pas `pm tab afficher` après ces commandes. La conversion n'ouvre aucun volet.
