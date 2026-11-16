@@ -76,6 +76,18 @@ test('the turn goes on once when the turn-end report still lists errors', async 
   assert.equal((await history.load('mistral-sdk-fin-de-tour'))?.transcript.at(-1)?.content, 'Corrigé.');
 });
 
+test('the client turn limit counts model calls, also when it arrives as text', async t => {
+  const { home, history } = await setup(t);
+  const requests: unknown[] = [];
+  const call = [{ toolCalls: [{ id: 'abcdef123', function: { name: 'probe', arguments: '{}' } }] }];
+  const auth = fixtureClient([call, call, call, call], requests);
+  await assert.rejects(
+    createMistralSdkRuntime(history, async () => [], home, auth, fixtureTools(async () => '')).run('boucler', { sessionId: 'mistral-sdk-tours', maxTurns: '3' }, { userId: 1, send() {} } as never, context),
+    /Limite de tours Mistral atteinte/,
+  );
+  assert.equal(requests.length, 3);
+});
+
 test('a fork copies the whole conversation and answers apart from its source', async t => {
   const { home, history } = await setup(t);
   const requests: Array<{ messages: Array<{ role: string; content: unknown }> }> = [];

@@ -120,11 +120,34 @@ test('la garde refuse une erreur de compilation nouvelle, garde les erreurs déj
   const reason = async (content) => (await hookDecision({ cwd: dossier, tool_name: 'Write', tool_input: { file_path, content } }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
   process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'pack');
   assert.equal(await reason('> Module Prime\n\nTexte fictif.\n'), null);
-  assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), 'Write refused by Le Hérisson: the program does not follow the Catala format or does not compile. Nothing was written.\nprime.catala_fr:3: compilation: Unknown identifier inconnu_nouveau\n    line 3 is: inconnu_nouveau\nCorrect each line shown, then write the file again. Format rules: catala skill, references/format.md.');
+  assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), 'Write refused by Le Hérisson: the program does not follow the Catala format or does not compile. Nothing was written.\nprime.catala_fr:3: compilation: Unknown identifier inconnu_nouveau\n    line 3 is: inconnu_nouveau\nCorrect only the lines shown, keep the rest of the file, then write again. Start from the model of references/format.md (catala skill), which compiles; its table "Fautes fréquentes" gives the fix of common errors.');
   fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '> Module Prime\n\ninconnu_present\n');
   assert.equal(await reason('> Module Prime\n\nTexte.\n\ninconnu_present\n'), null);
   process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'absent');
   assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), null);
+});
+
+test('la garde refuse un nouveau programme Catala dont le nom n’est pas un raisonnement du dossier', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { hookDecision } = await import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mjs')).href);
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-nom-'));
+  const previous = process.env.PIECEMAKER_COMPONENTS_HOME;
+  t.after(() => {
+    if (previous === undefined) delete process.env.PIECEMAKER_COMPONENTS_HOME;
+    else process.env.PIECEMAKER_COMPONENTS_HOME = previous;
+    fs.rmSync(dossier, { recursive: true, force: true });
+  });
+  process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'absent');
+  fs.mkdirSync(path.join(dossier, '.piecemaker', 'catala', 'vieux'), { recursive: true });
+  fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', 'vieux', 'vieux.catala_fr'), '> Module Vieux\n');
+  const reason = async (nom) => (await hookDecision({ cwd: dossier, tool_name: 'Write', tool_input: { file_path: `.piecemaker/catala/${nom}/clerk.toml`, content: `[project]\nname = "${nom}"\n` } }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
+  assert.equal(await reason('indem'), null);
+  fs.writeFileSync(path.join(dossier, '.piecemaker', 'etapes.json'), JSON.stringify({ raisonnements: { 'indemnite-licenciement': { etape: 'raisonnement' }, ancien: { etape: 'raisonnement', remplacePar: 'indemnite-licenciement' } } }));
+  assert.match(await reason('indem'), /clerk\.toml:1: program name "indem" is not a reasoning of the case\. Use the exact name given by pm check: \.piecemaker\/catala\/indemnite-licenciement\/\./);
+  assert.match(await reason('ancien'), /program name "ancien"/);
+  assert.equal(await reason('indemnite-licenciement'), null);
+  assert.equal(await reason('vieux'), null);
 });
 
 test('une commande pm okf link vérifie l’index, et les programmes Catala qui citent une prémisse', async (t) => {

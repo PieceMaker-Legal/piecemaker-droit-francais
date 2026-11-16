@@ -177,7 +177,8 @@ export function createMistralSdkRuntime(
         messages.push({ role: 'user', content: appendFilesInputTag(command, options.attachments ?? options.files) });
         transcript.push(createNormalizedMessage({ provider: 'mistral', sessionId: nativeId, role: 'user', kind: 'text', content: command, ...(options.files ? { files: options.files } : {}), ...(options.images ? { images: options.images } : {}) }));
         await save();
-        const maxTurns = typeof options.maxTurns === 'number' ? Math.max(1, Math.min(500, options.maxTurns)) : 200;
+        const requestedTurns = Math.floor(Number(options.maxTurns));
+        const maxTurns = requestedTurns >= 1 ? Math.min(500, requestedTurns) : 200;
         for (let turn = 0; turn < maxTurns; turn++) {
           signal.throwIfAborted();
           const response = await connection.client.chat.stream({

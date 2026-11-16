@@ -47,8 +47,19 @@ function memoireErrors(content) {
   return /^---\r?\n/.test(content) ? [{ line: 1, message: 'frontmatter is not permitted: the memory starts with a block between two "---" lines. Remove this block. Deadlines go in .piecemaker/<name>-suivi.json. The lawyer sets the current step and the document to produce on the board of the Suivi des dossiers tab: read them with pm check.' }] : [];
 }
 
+function programNameErrors(file, content) {
+  const directory = path.dirname(file);
+  const nom = path.basename(directory);
+  if (!content || (fs.existsSync(directory) && fs.readdirSync(directory).some((entry) => entry.endsWith('.catala_fr') && path.join(directory, entry) !== file))) return [];
+  let etapes = {};
+  try { etapes = JSON.parse(fs.readFileSync(path.join(directory, '..', '..', 'etapes.json'), 'utf8')); } catch {}
+  const expected = Object.entries(etapes.raisonnements ?? {}).filter(([, suite]) => !suite?.remplacePar).map(([name]) => name);
+  if (!expected.length || expected.includes(nom)) return [];
+  return [{ line: 1, message: `program name "${nom}" is not a reasoning of the case. Use the exact name given by pm check: ${expected.map((name) => `.piecemaker/catala/${name}/`).join(' or ')}.` }];
+}
+
 const REFUSALS = {
-  catala: ['the program does not follow the Catala format or does not compile. Nothing was written.', 'Correct each line shown, then write the file again. Format rules: catala skill, references/format.md.'],
+  catala: ['the program does not follow the Catala format or does not compile. Nothing was written.', 'Correct only the lines shown, keep the rest of the file, then write again. Start from the model of references/format.md (catala skill), which compiles; its table "Fautes fréquentes" gives the fix of common errors.'],
   suivi: ['the tracking file does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Full model: piecemaker skill, references/suivi.md.'],
   memoire: ['the project memory does not have the expected structure. Nothing was written.', 'Correct the memory, then write it again: plain Markdown, no frontmatter.'],
 };
@@ -56,6 +67,7 @@ const FORMATS = {
   suivi: async (file, content) => suiviErrors(content),
   memoire: async (file, content) => memoireErrors(content),
   catala: async (file, content) => [
+    ...programNameErrors(file, content),
     ...(file.endsWith('.catala_fr') ? (await import('../../../skills/Skill-PieceMaker/scripts/catala-documentation.mjs')).catalaDocumentation(content, { test: /^test_/.test(path.basename(file)) }).errors : []),
     ...(await (await import('../../../skills/Skill-PieceMaker/scripts/catala.mjs')).typecheckErrors(path.dirname(file), file, content)).map((error) => ({ line: error.line, where: error.file === path.basename(file) ? undefined : `${error.file}:${error.line}`, message: `compilation: ${error.message}` })),
   ],

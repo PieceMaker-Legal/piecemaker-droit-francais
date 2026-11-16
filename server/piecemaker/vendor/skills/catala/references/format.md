@@ -2,6 +2,76 @@
 
 Ce modèle suit la programmation littéraire du livre Catala (`livre/5-1-literate-programming.md`). Il passe `clerk typecheck`, les tests, `catala-format` et `pm catala verifier` sans changement avec Catala 1.3. Partez de lui. `pm catala verifier` contrôle chaque règle de ce modèle et nomme la correction.
 
+## Écrire sans boucle
+
+Le Hérisson compile chaque écriture. Un refus n'écrit rien : le fichier reste tel qu'avant.
+
+1. Écrivez le dossier `.piecemaker/catala/<nom>/` au nom exact que donne `pm check`.
+2. Copiez ce modèle, puis remplacez seulement les noms, les faits et les articles.
+3. Ajoutez ensuite une section à la fois, avec Edit.
+4. Après un refus, corrigez seulement la ligne citée, à l'aide des tableaux ci-dessous. Gardez le reste du texte. Ne réécrivez pas tout le fichier.
+
+## Types et valeurs
+
+Formes vérifiées avec Catala 1.3. Déclarations, dans ` ```catala-metadata ` :
+
+```
+déclaration champ d'application DelaiDePaiement:
+  contexte facture_reçue condition
+  contexte date_facture contenu date
+  contexte montant contenu argent
+  contexte jours_de_retard contenu entier
+  contexte taux contenu décimal
+  contexte délai contenu durée
+  résultat date_limite contenu date
+  résultat en_retard contenu booléen
+  résultat pénalité contenu argent
+```
+
+Règles, dans ` ```catala ` sous leur article :
+
+```
+champ d'application DelaiDePaiement:
+  définition délai égal à 30 jour
+  définition date_limite égal à date_facture + délai
+  définition en_retard égal à jours_de_retard > 0
+  définition pénalité égal à
+    si facture_reçue et en_retard alors montant * taux sinon 0 €
+```
+
+Valeurs, dans le test :
+
+```
+  règle calcul.facture_reçue rempli
+  définition calcul.date_facture égal à |2024-01-15|
+  définition calcul.montant égal à 1 500,50 €
+  définition calcul.jours_de_retard égal à 3
+  définition calcul.taux égal à 0,1
+  assertion calcul.date_limite = |2024-02-14|
+  assertion calcul.pénalité = 150,05 €
+  assertion |2024-01-15| + 1 mois + 2 an = |2026-02-15|
+```
+
+Chaque fait du test porte aussi son `## okf:/_premises/<fiche>.md` (voir « Faits du dossier »).
+
+## Fautes fréquentes
+
+| Message du compilateur | Faute | Forme correcte |
+|---|---|---|
+| `Unknown built-in type` | `contenu montant`, `nombre`, `bool`, `texte` | `contenu argent`, `entier`, `décimal`, `booléen` ; un libellé est une énumération |
+| `Syntax error at "jours"` (ou `"ans"`, `"années"`) | unité au pluriel | `30 jour`, `2 mois`, `1 an` |
+| `Syntax error at "jour": » expected an expression` | `jour(30)`, unité avant le nombre | `30 jour` |
+| `operator + on types date and integer` | `date_facture + 30` | `date_facture + 30 jour` |
+| `Parsing error after token` | date au format français, `€1500` | date au format ISO entre barres verticales (ci-dessus), `1 500 €` |
+| `operator / on types decimal and integer` | date sans barres : `15/01/2024` | date au format ISO entre barres verticales (ci-dessus) |
+| `Syntax error at "50 €"` ou `a tuple was expected` | point décimal : `1500.50 €`, `0.1` | virgule : `1 500,50 €`, `0,1` |
+| `Syntax error at "ET"` | mot-clé en majuscules | `et`, `ou`, `non`, `si … alors … sinon` en minuscules |
+| `Syntax error at "="` après `définition x` | `définition x = 1` | `définition x égal à 1` |
+| `Syntax error in preceding code block` | `si … alors …` sans `sinon` | `si … alors … sinon …` |
+| `unknown identifier` | nom non déclaré ou mal orthographié | déclarez-le dans ` ```catala-metadata `, avec les mêmes accents |
+| `titre « … » : écrivez 2 à 7 mots` | titre `##` d'une entrée trop court, trop long, avec `?` ou un identifiant | voir « Style des titres » du skill |
+| `règle sans source juridique` | bloc ` ```catala ` sous un titre sans identifiant | placez le bloc sous le titre de son article et son extrait, comme dans le modèle |
+
 ## Module : `resolution.catala_fr`
 
 ````
