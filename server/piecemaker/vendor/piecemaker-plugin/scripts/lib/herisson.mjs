@@ -120,7 +120,7 @@ export async function formatErrors(tool, input, cwd) {
     for (const error of await check(file, current(file))) known.set(error.message, (known.get(error.message) ?? 0) + 1);
     for (const error of errors) {
       if (known.get(error.message)) known.set(error.message, known.get(error.message) - 1);
-      else refused.set(found.feature.format, [...(refused.get(found.feature.format) ?? []), `${error.where ?? `${path.basename(file)}:${error.line}`}: ${error.message}`]);
+      else refused.set(found.feature.format, [...(refused.get(found.feature.format) ?? []), `${error.where ?? `${path.basename(file)}:${error.line}`}: ${error.message}${error.where || !after.split('\n')[error.line - 1]?.trim() ? '' : `\n    line ${error.line} is: ${after.split('\n')[error.line - 1].trim().slice(0, 200)}`}`]);
     }
   }
   if (!refused.size) return null;
