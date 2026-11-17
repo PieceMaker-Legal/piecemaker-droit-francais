@@ -86,6 +86,10 @@ Deux points de branchement distincts :
   (`session-conversations-search.service.ts`). Les commandes slash sont
   préservées. Une question posée en commentaire d'un `.docx` part sans le
   bloc (`docs/docx.md`).
+  Seuls se citent le droit (article, décision) et les pièces du dossier : la
+  consigne exclut sorties de commande, résultats SQL et fichiers techniques,
+  et `citation-turn.ts` écarte toute entrée `kind: "code"` du chat (acceptée
+  seulement quand `codeRoot` est passé explicitement, ce que le chat ne fait pas).
 - Liste **Sources** en fin de réponse (`finish` de `citation-turn.ts`), une
   ligne par citation, dérivée de la seule sortie du vérifieur (inchangé) :
   `[n]`, titre lié au panneau, extraits vérifiés entre guillemets. Titre d'une

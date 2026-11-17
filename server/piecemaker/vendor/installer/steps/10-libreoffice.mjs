@@ -135,20 +135,20 @@ export async function check() {
 
 export const LIBREOFFICE = {
   version: '26.8.1.1',
-  url: 'https://download.documentfoundation.org/libreoffice/stable/26.8.1/win/x86_64/LibreOffice_26.8.1_Win_x86-64.msi',
+  url: 'https://downloadarchive.documentfoundation.org/libreoffice/old/26.8.1.1/win/x86_64/LibreOffice_26.8.1.1_Win_x86-64.msi',
   sha256: 'c6298b10cfa1748bcbedad94c62ce771e240e5021bfd6d7a967cd571b04b5312',
-  sources: 'https://download.documentfoundation.org/libreoffice/src/26.8.1/',
+  sources: 'https://downloadarchive.documentfoundation.org/libreoffice/old/26.8.1.1/src/',
 };
 export const LIBREOFFICE_DIR = 'libreoffice';
 export const LIBREOFFICE_MAC = {
   arm64: {
     ...LIBREOFFICE,
-    url: 'https://download.documentfoundation.org/libreoffice/stable/26.8.1/mac/aarch64/LibreOffice_26.8.1_MacOS_aarch64.dmg',
+    url: 'https://downloadarchive.documentfoundation.org/libreoffice/old/26.8.1.1/mac/aarch64/LibreOffice_26.8.1.1_MacOS_aarch64.dmg',
     sha256: 'ca074e0b13571efb30a31fc531c5f95e997030637325e5d5de92d67aefdf0dfc',
   },
   x64: {
     ...LIBREOFFICE,
-    url: 'https://download.documentfoundation.org/libreoffice/stable/26.8.1/mac/x86_64/LibreOffice_26.8.1_MacOS_x86-64.dmg',
+    url: 'https://downloadarchive.documentfoundation.org/libreoffice/old/26.8.1.1/mac/x86_64/LibreOffice_26.8.1.1_MacOS_x86-64.dmg',
     sha256: '4c7464313a529e9074400cbcdc894fc40ac4ef9421ded03b16b5a78d12cb155e',
   },
 };

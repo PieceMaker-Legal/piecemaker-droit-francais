@@ -67,6 +67,7 @@ const TOOLS_RULE_LINES = [
   DELEGATION_LINE,
   HELP_LINE,
 ];
+const DISCRETION_RULE = '7° Discrétion: L’utilisateur ne voit ni commandes ni fichiers techniques. Ne nomme jamais une commande, un outil, une requête, un chemin sous .piecemaker ni un message technique ; dis ce que tu as fait en termes métier (« le suivi est à jour », « le volet Raisonnement est ouvert »). Un échec se dit en clair, avec ce qu’il empêche. Sauf si l’utilisateur le demande.';
 const RULE_UPDATES = new Map([
   ...OLD_SUIVI_RULES.map((rule): [string, string] => [rule, SUIVI_RULE]),
   [OLD_GENERAL_RULE, GENERAL_RULE],
@@ -94,6 +95,7 @@ export function agentInstructionsTemplate(): string {
   TREE_RULE,
   MEMORY_RULE,
   SUIVI_RULE,
+  DISCRETION_RULE,
   ...TOOLS_RULE_LINES,
 ].join('\n');
 }
@@ -119,7 +121,9 @@ const refreshRules = async (agentsPath: string) => {
   const content = await readFile(agentsPath, 'utf8');
   const next = withDelegationRule(withToolsRule(content.split('\n').map((line) => {
     const updated = RULE_UPDATES.get(line.replace(/\r$/, ''));
-    return updated ? updated + (line.endsWith('\r') ? '\r' : '') : line;
+    const current = updated ?? line.replace(/\r$/, '');
+    const ending = line.endsWith('\r') ? '\r' : '';
+    return current === SUIVI_RULE && !content.includes(DISCRETION_RULE) ? `${current}${ending}\n${DISCRETION_RULE}${ending}` : updated ? updated + ending : line;
   }).join('\n')));
   if (next !== content) await writeFile(agentsPath, next);
 };

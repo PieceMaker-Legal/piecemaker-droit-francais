@@ -372,7 +372,7 @@ export function createCitationTurn(options: {
           const saved = await options.store.readTurnSources(options.sessionId, block);
           if (saved !== null) return saved;
         }
-        const parsed = overflow ? [] : parseCitationsWithDiagnostics(citationText).citations as Citation[];
+        const parsed = overflow ? [] : (parseCitationsWithDiagnostics(citationText).citations as Citation[]).filter((citation) => citation.kind !== 'code' || options.codeRoot !== undefined);
         const citations = await verifyCitations(parsed, sourceText, async (id: string) => decisions.get(id) ?? '') as Citation[];
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];

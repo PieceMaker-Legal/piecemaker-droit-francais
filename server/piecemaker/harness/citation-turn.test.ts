@@ -118,18 +118,13 @@ test('une instruction répétée sans fermeture est retirée de la réponse visi
   assert.doesNotMatch(await turn.finish(), /texte confidentiel|CITATIONS/);
 });
 
-test('un Markdown du dossier cité comme code est lu hors du dépôt applicatif', async (t) => {
-  const { cwd, turn, store } = await fixture(t);
+test('un fichier technique du dossier cité comme code est écarté des sources', async (t) => {
+  const { cwd, turn } = await fixture(t);
   await mkdir(path.join(cwd, '.agents', 'skills', 'docx-cli'), { recursive: true });
   const source = '`docx` is a command-line tool for reading, editing, redlining, and commenting on Microsoft Word `.docx` files.\n';
   await writeFile(path.join(cwd, '.agents', 'skills', 'docx-cli', 'SKILL.md'), source);
-  turn.text(block([{ ref: 1, kind: 'code', doc_id: '.agents/skills/docx-cli/SKILL.md', quotes: [{ quote: '`docx` is a command-line tool for reading, editing, redlining, and commenting on Microsoft Word `.docx` files.' }] }]));
-  const suffix = await turn.finish();
-  assert.doesNotMatch(suffix, /🔴/);
-  assert.match(suffix, /SKILL\.md, l\. 1/);
-  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
-  assert.ok(token);
-  assert.equal((await store.read(token))?.source, source);
+  turn.text(block([{ ref: 1, kind: 'code', doc_id: '.agents/skills/docx-cli/SKILL.md', quotes: [{ quote: source.trim() }] }]));
+  assert.equal(await turn.finish(), '');
 });
 
 test('une pièce citée par son Markdown converti enregistre le chemin de l’original', async (t) => {
@@ -246,8 +241,9 @@ test('une réponse MCP en erreur et un résultat de sous-agent ne constituent pa
   assert.match(await turn.finish(), /#piecemaker-cite-miss/);
 });
 
-test('la sortie d’une commande chaînée du tour vérifie sa citation, une citation absente reste signalée', async (t) => {
-  const { turn, store } = await fixture(t);
+test('avec codeRoot, la sortie d’une commande chaînée vérifie sa citation, une citation absente reste signalée', async (t) => {
+  const { cwd, store } = await fixture(t);
+  const turn = createCitationTurn({ cwd, codeRoot: cwd, sessionId: 'session', store });
   const sortie = 'Mapping : à valider par l’avocat (onglet Dossier, Mapping)\nIndex OKF : 4 erreur(s).\nGraphe : 11 élément(s) manquant(s).\n';
   const codex = { provider: 'codex' as const, sessionId: 'session', toolId: 'item_1' };
   turn.observe(createNormalizedMessage({ ...codex, kind: 'tool_use', toolName: 'Bash', toolInput: { command: '/bin/zsh -lc "pm check; pm okf verify"' } }));

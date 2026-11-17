@@ -75,8 +75,13 @@ test('updates the old suivi rule in an existing AGENTS.md and nothing else', () 
   const oldRule = '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.yaml, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans l’onglet Échéances.';
   await writeFile(path.join(root, 'AGENTS.md'), `Ma règle sur suivi.yaml\n${oldRule}\n`);
   await ensureAgentInstructionFiles(root, SHARED);
-  const rule = agentInstructionsTemplate().split('\n').find((line) => line.startsWith('5° '));
-  assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n`);
+  const lines = agentInstructionsTemplate().split('\n');
+  const rule = lines.find((line) => line.startsWith('5° '));
+  const discretion = lines.find((line) => line.startsWith('7° '));
+  assert.match(discretion ?? '', /^7° Discrétion/);
+  assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n${discretion}\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n${discretion}\n`);
 }));
 
 test('replaces the old project memory rule, which kept deadlines and stage in a frontmatter', () => withProject(async (root) => {
