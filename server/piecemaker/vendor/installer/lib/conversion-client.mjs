@@ -180,12 +180,6 @@ export async function movePiece(body) {
   return requestJson({ method: 'POST', path: `${LOCAL_BASE}/rename`, body });
 }
 
-export async function runReasoning(body) {
-  await adoptRunningServerPort();
-  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/reasoning`, body, timeout: 180_000 });
-  return response.resultat;
-}
-
 export async function runSuivi(body) {
   await adoptRunningServerPort();
   const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/suivi`, body, timeout: 180_000 });

@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-import type { ReasoningConnectors } from '@/modules/piecemaker-reasoning/index.js';
+import type { SourceConnectors } from '@/modules/piecemaker-suivi/index.js';
 
 import { sourceContext } from '../../shared/piecemaker/catala-sources.js';
 
@@ -37,7 +37,7 @@ function writeValidated(cwd: string, entries: Record<string, Validated>) {
   try { fs.writeFileSync(temporary, `${JSON.stringify(entries, null, 2)}\n`); fs.renameSync(temporary, file); } catch { fs.rmSync(temporary, { force: true }); }
 }
 
-export function createCatalaCitation(connectors: Pick<ReasoningConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
+export function createCatalaCitation(connectors: Pick<SourceConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
   const appeals = (details: string[] = []) => details.flatMap((line) => { const found = /^Recours (\S+) du (\S+) \((.*?)\)/.exec(line); return found ? [{ id: found[1], date: found[2], juridiction: found[3] }] : []; });
   const inspect = async (cwd: string, id: string, quote: string, content?: string) => {
     if (!/^(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d+$/.test(id) && !/^[0-9a-f]{24}$/i.test(id) && !path.isAbsolute(id)) throw new Error('Source absente du programme Catala.');

@@ -23,7 +23,7 @@ flowchart LR
 
 `FeatureData` et `FeatureComments` reprennent les paramètres des outils `ArtifactData` et `ArtifactComments` de Claude. `feature` remplace `url`. Non repris : `profiles`, `as_level`, `file_path`, `out_dir`, `cursor` de `read`, `watch`.
 
-- `quickstart` est le premier appel d'un travail nouveau. Il prend `intent` (`case`, `index`, `review`, `stamp`, `reasoning`, `deadlines`, `catala`, `draft`, `other`) et renvoie la feature, ses commandes, les pages à lire d'abord, un extrait de `pm check` et, si le catalogue en donne, les premiers appels.
+- `quickstart` est le premier appel d'un travail nouveau. Il prend `intent` (`case`, `index`, `review`, `stamp`, `deadlines`, `catala`, `draft`, `other`) et renvoie la feature, ses commandes, les pages à lire d'abord, un extrait de `pm check` et, si le catalogue en donne, les premiers appels.
 - `read` sans `path` renvoie la même fiche. Sa section `## Read first` donne une ligne `Feature read <feature> path=<skill>/references/<fichier>` par référence. Un skill sans références (catala, docx-cli, style-redaction-cabinet) donne `path=<skill>/SKILL.md`. `read` avec `path` renvoie le fichier.
 - `run` prend `name`, `command` et `args`. Le catalogue traduit les noms anglais en argv `pm`. `pm` garde ses noms français.
 - `open` montre à l'avocat un onglet ou un fichier sans le modifier, comme `open` d'Artifact : juste après un `run`, une écriture `FeatureData` ou une modification de fichier qui change ce qu'il doit voir, ou à sa demande. `stamp_exhibits` ouvre son onglet lui-même.

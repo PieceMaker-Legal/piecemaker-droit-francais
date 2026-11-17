@@ -11,7 +11,6 @@ const LABELS = {
   'plugin:piecemaker-library': 'Bibliothèque',
   'plugin:piecemaker-tampon': 'Bordereau',
   'plugin:piecemaker-timesheet': 'Timesheet',
-  'plugin:piecemaker-raisonnement': 'Raisonnement',
   'plugin:piecemaker-echeances': 'Suivi des dossiers',
   'plugin:piecemaker-catala': 'Catala',
 };

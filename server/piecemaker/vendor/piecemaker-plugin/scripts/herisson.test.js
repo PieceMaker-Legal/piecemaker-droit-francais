@@ -19,7 +19,7 @@ test('le registre classe chaque fichier dans sa feature', async () => {
   const of = (relative) => featureOf(path.join(root, '.piecemaker', relative));
   assert.equal(of('okf/pieces/a.md').feature.nom, 'okf');
   assert.equal(of('arborescence.json').feature.nom, 'arborescence');
-  assert.equal(of('raisonnements/indemnite.yaml'), null);
+  assert.equal(of('notes/indemnite.md'), null);
   assert.deepEqual([of('appel-suivi.json').feature.nom, of('appel-suivi.json').nom], ['suivi', 'appel-suivi.json']);
   assert.deepEqual([of('catala/indemnite/indemnite.catala_fr').feature.nom, of('catala/indemnite/indemnite.catala_fr').nom], ['catala', 'indemnite']);
   assert.equal(of('catala/indemnite/_build/x.catala_fr'), null);
@@ -58,7 +58,7 @@ test('un apply_patch Codex vérifie chaque feature touchée une seule fois', asy
 test('rien à vérifier hors des features écrites par l’agent', async () => {
   const { featureReport } = await load();
   const pm = fakePm('ignoré');
-  for (const file_path of ['pieces/note.md', '.piecemaker/raisonnements/indemnite.yaml', '.piecemaker/arborescence.json']) {
+  for (const file_path of ['pieces/note.md', '.piecemaker/notes/indemnite.md', '.piecemaker/arborescence.json']) {
     assert.equal(await featureReport({ tool_name: 'Edit', cwd: root, tool_input: { file_path } }, { run: pm.run }), null);
   }
   assert.equal(await featureReport({ tool_name: 'Bash', cwd: root, tool_input: { command: 'cat .piecemaker/appel-suivi.json' } }, { run: pm.run }), null);

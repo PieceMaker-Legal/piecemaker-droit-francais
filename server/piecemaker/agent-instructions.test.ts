@@ -94,9 +94,16 @@ test('points rule 6° of a previous template to the Feature tool', () => withPro
     .replace('seul l’avocat l’accepte.', 'seul l’avocat l’accepte (voir la skill piecemaker).')
     .replace('pm memoire verifier la contrôle.', 'pm memoire verifier la contrôle (voir la skill piecemaker).')
     .replace('pm suivi_dossiers verifier ;', 'pm suivi_dossiers verifier (voir la skill piecemaker) ;')
-    .replace('→ outil Feature : quickstart, puis lis les pages qu’il indique', '→ skill piecemaker');
+    .replace('échéances → outil Feature : quickstart, puis lis les pages qu’il indique', 'échéances, raisonnement → skill piecemaker');
   assert.equal(previous.split('(voir la skill piecemaker)').length, 4);
   await writeFile(path.join(root, 'AGENTS.md'), `${previous}\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await read(root, 'AGENTS.md'), `${template}\n`);
+}));
+
+test('drops raisonnement from the Feature line of a previous template', () => withProject(async (root) => {
+  const template = agentInstructionsTemplate();
+  await writeFile(path.join(root, 'AGENTS.md'), `${template.replace('échéances → outil Feature', 'échéances, raisonnement → outil Feature')}\n`);
   await ensureAgentInstructionFiles(root, SHARED);
   assert.equal(await read(root, 'AGENTS.md'), `${template}\n`);
 }));

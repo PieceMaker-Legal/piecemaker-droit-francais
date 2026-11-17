@@ -38,7 +38,7 @@ Deux points de branchement distincts :
   (`dateFin` passée) est gardée sans expiration ; une version sans fin publiée
   ou à fin future n'est réutilisée que le jour du téléchargement. Aucune
   réponse « en vigueur à la date X » n'est mise en cache. Les vérificateurs
-  (`pm raisonnement verifier`, citations du suivi et de `pm catala verifier`)
+  (citations du suivi et de `pm catala verifier`)
   passent par `consulter_article` et `consulter_decision` du MCP : ils lisent
   donc ces caches avant tout appel PISTE. `catleg check-expiry` et `catleg
   diff` restent en direct (code catleg non modifié).

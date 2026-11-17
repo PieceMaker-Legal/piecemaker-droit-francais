@@ -8,8 +8,8 @@ import { installLegalCodeHarness, withLegalCodeInstructions, withoutLegalCodeIns
 
 function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'legal-code-'));
-  fs.mkdirSync(path.join(root, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'references'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'references', 'raisonnement.md'), 'Tu es Legal Code.\n');
+  fs.mkdirSync(path.join(root, 'server', 'piecemaker', 'vendor', 'skills', 'catala'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'server', 'piecemaker', 'vendor', 'skills', 'catala', 'SKILL.md'), 'Tu es Legal Code.\n');
   const calls: string[] = [];
   const sent: any[] = [];
   const runtime: any = {

@@ -1,6 +1,6 @@
 # Projection Catala — indemnité de départ du directeur général
 
-Le corpus est entièrement fictif. La projection reprend les six pièces et le raisonnement archivé, sans modifier ces documents.
+Le corpus est entièrement fictif. La projection repose sur les six pièces du dossier.
 
 ## Résultat du dossier
 
@@ -21,7 +21,7 @@ L’arrêt de la cour d’appel de Versailles du 3 juin 2025, RG 23/06335, n’i
 Il concernait une présidente de directoire : son raisonnement est discuté pour le directeur général du corpus, sans transformer cette transposition en fait établi.
 La thèse doctrinale excluant tout vote ex post est exposée dans cet arrêt ; la cour ne l’adopte pas.
 L’argument de la société ne doit donc plus être nommé « lecture de Versailles ».
-L’arrêt de Lyon de 2002 est conservé dans la discussion de l’ancien raisonnement ; il ne devient pas une interdiction universelle codée.
+L’arrêt de Lyon de 2002 est discuté ; il ne devient pas une interdiction universelle codée.
 
 ## Délais et limites
 
@@ -74,7 +74,6 @@ Le résultat de paiement porte sur l’indemnité restant impayée. Le rapport a
 - Sept scénarios Clerk et leur exécution Python : réussis.
 - Citations : 29 sur 29 retrouvées dans les textes officiels consultés ou les documents fictifs.
 - Graphe : sept scénarios affichés ; ouverture des pièces et décisions dans la visionneuse contrôlée par le DOM.
-- Archive initiale : les douze empreintes du manifeste restent identiques.
 
 La preuve Z3 produit 64 obligations et ne signale aucun conflit. Elle reste non validée : `ErrorOnEmpty unsupported` concerne l’exception pour faute.
 Le vérificateur automatique classe ce fichier contenant des scénarios comme fichier de test et omet sa preuve métier.

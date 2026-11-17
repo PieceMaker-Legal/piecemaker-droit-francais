@@ -89,7 +89,7 @@ test('tab liste, ouvre et ferme chaque cible', async () => {
   await assert.rejects(() => run(['tab', 'afficher', 'fichier', 'absent.docx'], { deps }), /introuvable/);
   assert.equal(await run(['tab', 'afficher', 'index'], { deps }), 'Volet affiché : index');
   assert.equal(opened[1].view, 'chronology');
-  const tabs = { bordereau: 'plugin:piecemaker-tampon', raisonnement: 'plugin:piecemaker-raisonnement', suivi_dossiers: 'plugin:piecemaker-echeances', catala: 'plugin:piecemaker-catala' };
+  const tabs = { bordereau: 'plugin:piecemaker-tampon', suivi_dossiers: 'plugin:piecemaker-echeances', catala: 'plugin:piecemaker-catala' };
   for (const [cible, tab] of Object.entries(tabs)) {
     assert.equal(await run(['tab', 'afficher', cible], { deps }), `Volet affiché : ${cible}`);
     assert.equal(opened.at(-1).tab, tab);
@@ -360,7 +360,7 @@ test('check sur un dossier à jour ne signale rien', async () => {
   ].join('\n'));
   const scan = { ...deps, caseState: () => ({ anonymized: false, lifted: false }), conversionJob: async () => ({ job: { state: 'running', phase: 'scan', percent: 27.25, processed: 8, total: 216 } }) };
   assert.equal((await run(['check', '--dossier', dossier], { deps: scan })).split('\n').slice(1, 3).join('\n'), [
-    '1° Conversion : Conversion en cours : phase scan, 8/216 (avancement global 27 %). Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala, raisonnement et suivi, qui ne lisent pas les pièces.',
+    '1° Conversion : Conversion en cours : phase scan, 8/216 (avancement global 27 %). Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala et suivi, qui ne lisent pas les pièces.',
     '2° Anonymisation : en cours, voir 1°',
   ].join('\n'));
   const parties = { ...deps, okfFn: async () => ({ erreurs: [], contradictions: [], manques: [
@@ -402,7 +402,7 @@ test('dossier conversion lance le CLI, ou renvoie l’avancée d’un travail en
 });
 
 const ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
-  + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala, raisonnement, suivi.\n'
+  + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala et suivi.\n'
   + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
   + 'Revenez à la fin avec pm dossier conversion.';
 
@@ -438,110 +438,15 @@ test('dossier conversion rend la main après le délai d’attente', async () =>
   assert.equal(text, `Conversion en cours : phase anonymize, 7/10 (avancement global 70 %).\n${ARRIERE_PLAN}`);
 });
 
-test('raisonnement transmet la commande et le nom du raisonnement à reasoningFn', async () => {
-  const calls = [];
-  const panels = [];
-  const deps = { reasoningFn: async (input) => { calls.push(input); return 'Raisonnement penalite'; }, openPanel: async (request) => { panels.push(request); return {}; } };
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-raisonnement-'));
-  fs.mkdirSync(path.join(dossier, '.piecemaker', 'raisonnements'), { recursive: true });
-  fs.writeFileSync(path.join(dossier, '.piecemaker', 'raisonnements', 'penalite.yaml'), '');
-  const result = await run(['raisonnement', 'verifier', '--raisonnement', 'penalite'], { cwd: dossier, deps });
-  assert.equal(result, 'Raisonnement penalite\nVisible : Raisonnement.');
-  assert.deepEqual(panels, [{ project: path.resolve(dossier), tab: 'plugin:piecemaker-raisonnement' }]);
-  assert.deepEqual(calls[0], { commande: 'verifier', cwd: path.resolve(dossier), raisonnement: 'penalite' });
-  await run(['raisonnement', 'lister'], { cwd: dossier, deps });
-  assert.deepEqual(calls[1], { commande: 'lister', cwd: path.resolve(dossier) });
-  await assert.rejects(run(['raisonnement', 'consignes'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
-  await assert.rejects(run(['raisonnement', 'verifier', '--raisonnement'], { cwd: dossier, deps }));
-  assert.equal(calls.length, 2);
-  fs.rmSync(dossier, { recursive: true, force: true });
-});
-
-test('raisonnement renvoie vers pm catala quand le nom est un programme Catala sans YAML', async () => {
-  const calls = [];
-  const panels = [];
-  const deps = { reasoningFn: async (input) => { calls.push(input); return 'Aucun raisonnement dans .piecemaker/raisonnements/.'; }, openPanel: async (request) => { panels.push(request); return {}; } };
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-raisonnement-'));
-  assert.equal(await run(['raisonnement', 'lister'], { cwd: dossier, deps }), 'Aucun raisonnement dans .piecemaker/raisonnements/.');
-  fs.mkdirSync(path.join(dossier, '.piecemaker', 'catala', 'bail'), { recursive: true });
-  fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', 'bail', 'clerk.toml'), '');
-  const guidance = '« bail » est un programme Catala (.piecemaker/catala/bail/), pas un raisonnement YAML : pm catala verifier --programme bail';
-  assert.equal(await run(['raisonnement', 'verifier', '--raisonnement', 'bail'], { cwd: dossier, deps }), guidance);
-  assert.equal(await run(['raisonnement', 'lister'], { cwd: dossier, deps }), `Aucun raisonnement YAML dans .piecemaker/raisonnements/.\n${guidance}`);
-  assert.equal(await run(['raisonnement', 'verifier'], { cwd: dossier, deps }), `Aucun raisonnement YAML dans .piecemaker/raisonnements/.\n${guidance}`);
-  assert.equal(calls.length, 1);
-  assert.deepEqual(panels, []);
-  fs.rmSync(dossier, { recursive: true, force: true });
-});
-
-test('suivi_dossiers verifier, lire et ecrire passent par suiviFn', async () => {
-  const calls = [];
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-suivi-'));
-  const deps = { suiviFn: async (input) => { calls.push(input); return 'Suivi du dossier'; } };
-  assert.equal(await run(['suivi_dossiers', 'verifier'], { cwd: dossier, deps }), 'Suivi du dossier');
-  assert.deepEqual(calls, [{ commande: 'verifier', cwd: path.resolve(dossier) }]);
-  await run(['suivi_dossiers', 'verifier', '--suivi', 'appel-suivi.json'], { cwd: dossier, deps });
-  assert.deepEqual(calls.pop(), { commande: 'verifier', cwd: path.resolve(dossier), suivi: 'appel-suivi.json' });
-  await assert.rejects(run(['suivi_dossiers', 'verifier', '--suivi'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
-  await run(['suivi_dossiers', 'lire', 'projects/cabinet/requests'], { cwd: dossier, deps });
-  assert.deepEqual(calls[1], { commande: 'lire', chemin: 'projects/cabinet/requests', cwd: path.resolve(dossier) });
-  await run(['suivi_dossiers', 'ecrire', 'projects/cabinet/requests/r1', '--json', '{"status":"done"}'], { cwd: dossier, deps });
-  assert.deepEqual(calls[2], { commande: 'ecrire', chemin: 'projects/cabinet/requests/r1', donnees: { status: 'done' }, cwd: path.resolve(dossier) });
-  await assert.rejects(run(['suivi_dossiers', 'ecrire', 'projects/cabinet/requests/r1'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
-  await assert.rejects(run(['suivi_dossiers', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
-  fs.rmSync(dossier, { recursive: true, force: true });
-});
-
-test('okf verify, link et unlink passent par okfFn', async () => {
-  const calls = [];
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-okf-'));
-  const folder = path.resolve(dossier);
-  const lien = { source: '/Pièces/Courrier.pdf.md', relation: 'amends', target: '/Pièces/Contrat.pdf.md' };
-  const deps = { okfFn: async (input) => { calls.push(input); return input.action === 'verify' ? { erreurs: calls.length > 1 ? [{ fiche: '/Pièces/Courrier.pdf.md', erreur: 'type absent' }] : [] } : lien; } };
-  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps }), 'Index OKF : aucune erreur.');
-  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps }), 'Index OKF : 1 erreur(s).\n- /Pièces/Courrier.pdf.md : type absent');
-  assert.equal(await run(['okf', 'link', 'Pièces/Courrier.pdf', 'amends', 'Pièces/Contrat.pdf', '--citation', 'Il est résilié.'], { cwd: dossier, deps }), 'Lien enregistré : /Pièces/Courrier.pdf.md amends /Pièces/Contrat.pdf.md');
-  assert.deepEqual(calls.pop(), { action: 'link', folder, source: 'Pièces/Courrier.pdf', relation: 'amends', target: 'Pièces/Contrat.pdf', citation: 'Il est résilié.' });
-  await run(['okf', 'unlink', 'Pièces/Courrier.pdf', 'amends', 'Pièces/Contrat.pdf'], { cwd: dossier, deps });
-  assert.deepEqual(calls.pop(), { action: 'unlink', folder, source: 'Pièces/Courrier.pdf', relation: 'amends', target: 'Pièces/Contrat.pdf' });
-  await assert.rejects(run(['okf', 'link', 'Pièces/Courrier.pdf', 'amends', 'Pièces/Contrat.pdf'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
-  await run(['okf', 'link', 'Pièces/Contrat.pdf', 'states', 'Date de signature', '--citation', 'Fait à Paris le 3 mars 2024.', '--value', '2024-03-03', '--single'], { cwd: dossier, deps });
-  assert.deepEqual(calls.pop(), { action: 'link', folder, source: 'Pièces/Contrat.pdf', relation: 'states', target: 'Date de signature', citation: 'Fait à Paris le 3 mars 2024.', value: '2024-03-03', single: true });
-  await run(['okf', 'link', 'Date de signature', 'involves', 'CLIENT_01'], { cwd: dossier, deps });
-  assert.deepEqual(calls.pop(), { action: 'link', folder, source: 'Date de signature', relation: 'involves', target: 'CLIENT_01' });
-  const contradiction = { premise: '/_premises/date-de-signature.md', titre: 'Date de signature', valeurs: [{ piece: '/Pièces/Contrat.pdf.md', valeur: '2024-03-03' }, { piece: '/Pièces/Courrier.pdf.md', valeur: '2024-03-05' }] };
-  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async () => ({ erreurs: [], contradictions: [contradiction] }) } }), 'Index OKF : aucune erreur.\nContradictions : 1.\n- Date de signature : /Pièces/Contrat.pdf.md → 2024-03-03 ; /Pièces/Courrier.pdf.md → 2024-03-05');
-  const manque = { element: '/_premises/date-de-signature.md', manque: 'prémisse sans pièce citée', programmes: ['bail'] };
-  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return { erreurs: [], contradictions: [], manques: [manque] }; } } }), 'Index OKF : aucune erreur.\nGraphe : 1 élément(s) manquant(s).\n- /_premises/date-de-signature.md : prémisse sans pièce citée (programme bail)');
-  assert.deepEqual(calls.pop(), { action: 'verify', folder });
-  const examinee = { element: '/Pièces/Courrier.pdf.md', motif: 'Courrier isolé.', by: 'piecemaker/agent', at: '2026-01-01T00:00:00.000Z' };
-  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn: async () => ({ erreurs: [], contradictions: [], manques: [], examinees: [examinee] }) } }), 'Index OKF : aucune erreur.\nGraphe : aucun élément manquant.\nExaminées sans lien (information, pas un manque) : 1.\n- /Pièces/Courrier.pdf.md : Courrier isolé.');
-  const examen = { okfFn: async (input) => { calls.push(input); return { source: '/Pièces/Courrier.pdf.md', motif: input.motif }; } };
-  assert.equal(await run(['okf', 'examinee', 'Pièces/Courrier.pdf', '--motif', 'Courrier isolé.'], { cwd: dossier, deps: examen }), 'Examinée sans lien : /Pièces/Courrier.pdf.md — Courrier isolé.\nLe manque revient si le document change. Annuler : pm okf examinee Pièces/Courrier.pdf --retirer');
-  assert.deepEqual(calls.pop(), { action: 'examinee', folder, source: 'Pièces/Courrier.pdf', motif: 'Courrier isolé.' });
-  assert.equal(await run(['okf', 'examinee', 'Pièces/Courrier.pdf', '--retirer'], { cwd: dossier, deps: examen }), 'Examen retiré : /Pièces/Courrier.pdf.md redevient à examiner.');
-  assert.deepEqual(calls.pop(), { action: 'examinee', folder, source: 'Pièces/Courrier.pdf', retirer: true });
-  await assert.rejects(run(['okf', 'examinee', 'Pièces/Courrier.pdf'], { cwd: dossier, deps: examen }), (error) => error.exitCode === 2);
-  const ontologie = { relations: [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'], description: 'Un acte conteste une pièce.' }], systeme: [{ name: 'states', label: 'établit', source: 'document', target: 'Premise' }] };
-  assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return ontologie; } } }), 'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nTypes principaux du dossier : . Classement : pm dossier arborescence.\nIcônes disponibles : .\nTypes de documents (pm okf types --json pour proposer la liste complète) :\nRelations système :\n- states (établit) : document → Premise');
-  assert.deepEqual(calls.pop(), { action: 'ontologie', folder });
-  const relations = [{ name: 'conteste', label: 'conteste', source: ['Projets'], target: ['Pièces'] }];
-  assert.equal(await run(['okf', 'ontologie', 'proposer', '--json', JSON.stringify({ relations }), '--motif', 'Les conclusions contestent des pièces.'], { cwd: dossier, deps: { okfFn: async (input) => { calls.push(input); return { relations, motif: input.motif, date: '2026-11-12T09:00:00.000Z' }; } } }), 'Proposition enregistrée (1 relation(s)) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Ontologie.');
-  assert.deepEqual(calls.pop(), { action: 'proposer', folder, ontologie: { relations, motif: 'Les conclusions contestent des pièces.' } });
-  assert.equal(await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn: async () => ({ ...ontologie, proposition: { relations, date: '2026-11-12T09:00:00.000Z' } }) } }), 'Proposition en attente de l’avocat (2026-11-12T09:00:00.000Z) : conteste.\nRelations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :\n- conteste (conteste) : Projets → Pièces — Un acte conteste une pièce.\nTypes principaux du dossier : . Classement : pm dossier arborescence.\nIcônes disponibles : .\nTypes de documents (pm okf types --json pour proposer la liste complète) :\nRelations système :\n- states (établit) : document → Premise');
-  await assert.rejects(run(['okf', 'lister'], { cwd: dossier, deps }), (error) => error.exitCode === 2);
-  fs.rmSync(dossier, { recursive: true, force: true });
-});
-
 test('SKILL.md documente toute la surface d’interface', () => {
   const references = path.join(HERE, '..', 'references');
   const skill = [path.join(HERE, '..', 'SKILL.md'), ...fs.readdirSync(references).map((name) => path.join(references, name))]
     .map((file) => fs.readFileSync(file, 'utf8')).join('\n');
   const required = [
-    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm raisonnement', 'pm suivi_dossiers', 'pm okf', 'link', 'unlink', 'examinee', '--motif', '--retirer', '--citation',
+    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm suivi_dossiers', 'pm okf', 'link', 'unlink', 'examinee', '--motif', '--retirer', '--citation',
     'lister', 'afficher', 'fermer', 'verifier', 'sql', 'conversion', 'arborescence', 'index', 'lire', 'ecrire',
-    'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'fichier',
-    '--force', '--dossier', '--dossiers', '--raisonnement', '--suivi', '--json',
+    'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'fichier',
+    '--force', '--dossier', '--dossiers', '--suivi', '--json',
     'Visible',
     'modeles', 'create_template', 'preparer', 'lancer', 'colonnes', 'relancer',
     '--fichier', '--projet', '--mode', '--nom', '--modele', '--description', '--questions',
@@ -592,7 +497,7 @@ test('memoire verifier refuse le frontmatter et exige un acte du même nom', asy
   assert.equal(await verify('--memoire', 'appel'), '');
   assert.match(await verify('--memoire', 'bail'), /^\.piecemaker\/memoires\/bail\.md:1: erreur : pas de frontmatter\. Les échéances vont dans \.piecemaker\/bail-suivi\.json/);
   assert.equal((await verify()).split('\n').length, 2);
-  assert.match(await verify(), /divers\.md : manque : aucun raisonnement, programme Catala, suivi ni carte du tableau ne s’appelle divers/);
+  assert.match(await verify(), /divers\.md : manque : aucun programme Catala, suivi ni carte du tableau ne s’appelle divers/);
   assert.equal(await verify('--memoire', 'absente'), '.piecemaker/memoires/absente.md : introuvable.');
   await assert.rejects(() => verify('--memoire'), /--memoire/);
   fs.rmSync(dossier, { recursive: true, force: true });

@@ -42,9 +42,6 @@ de ligne diffèrent. Le champ `erreur` du registre dit si une sortie signale
 une erreur : les vérificateurs `pm` rendent aussi un texte quand tout est
 conforme.
 
-Le raisonnement YAML (`.piecemaker/raisonnements/`) n'est pas une feature du
-registre : sa vérification reste lancée par l'agent (`pm raisonnement verifier`).
-
 Les sous-agents gardent leur propre contrôle de fin : `verify-subagent.mjs`
 (inchangé).
 

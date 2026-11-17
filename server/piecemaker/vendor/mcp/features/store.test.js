@@ -108,19 +108,19 @@ test('case views are readable and not writable', async () => {
 test('comments open, reply and resolve', async () => {
   const { openComments } = await load();
   const comments = openComments(caseFolder());
-  const thread = await comments.open('reasoning', { tab: 'raisonnement', file: '.piecemaker/raisonnements/assignation.yaml', start: 3, end: 5 }, 'Vérifier ce délai');
-  await comments.reply('reasoning', thread.id, 'Délai corrigé');
-  assert.equal(comments.read('reasoning')[0].messages.length, 2);
-  await comments.resolve('reasoning', thread.id);
-  await comments.reply('reasoning', thread.id, 'Précision');
-  assert.equal(comments.read('reasoning', thread.id)[0].resolved, true);
-  await rejects(comments.reply('reasoning', thread.id, 'x'.repeat(4097)), 'invalid_argument');
+  const thread = await comments.open('deadlines', { tab: 'suivi_dossiers', file: '.piecemaker/assignation-suivi.json', start: 3, end: 5 }, 'Vérifier ce délai');
+  await comments.reply('deadlines', thread.id, 'Délai corrigé');
+  assert.equal(comments.read('deadlines')[0].messages.length, 2);
+  await comments.resolve('deadlines', thread.id);
+  await comments.reply('deadlines', thread.id, 'Précision');
+  assert.equal(comments.read('deadlines', thread.id)[0].resolved, true);
+  await rejects(comments.reply('deadlines', thread.id, 'x'.repeat(4097)), 'invalid_argument');
 });
 
 test('comments open with a given id, once', async () => {
   const { openComments } = await load();
   const comments = openComments(caseFolder());
-  assert.equal((await comments.open('reasoning', null, 'Relire', 'lawyer', 'ab12cd34')).id, 'ab12cd34');
-  await rejects(comments.open('reasoning', null, 'Relire', 'lawyer', 'ab12cd34'), 'conflict');
-  await rejects(comments.open('reasoning', null, 'Relire', 'lawyer', '../x'), 'invalid_argument');
+  assert.equal((await comments.open('deadlines', null, 'Relire', 'lawyer', 'ab12cd34')).id, 'ab12cd34');
+  await rejects(comments.open('deadlines', null, 'Relire', 'lawyer', 'ab12cd34'), 'conflict');
+  await rejects(comments.open('deadlines', null, 'Relire', 'lawyer', '../x'), 'invalid_argument');
 });

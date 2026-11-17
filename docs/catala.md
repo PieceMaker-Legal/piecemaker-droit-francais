@@ -145,7 +145,7 @@ Chaque article, décision ou pièce cité est un lien. Un clic l’ouvre dans le
 
 Rattachement des sources. Les références écrites entre le bloc ` ```catala ` précédent et le bloc d’une règle fondent cette règle ; les blocs ` ```catala-metadata ` n’interrompent pas ce rattachement. Une ligne `Concerne : id1, id2` dans une section rattache ses références aux faits ou règles nommés. Le volet ne lit pas les pièces. Une référence déclarée ne constitue pas une vérification de son contenu. Le DOT seul ne contient pas le texte documentaire ; le serveur transmet aussi le contenu des fichiers Catala.
 
-Les états explicitement nommés `Indéterminé` ou `Disputé` sont signalés. Leur absence ne prouve pas que le dossier est complet. Les alertes juridiques, décisions sur la fiabilité des pièces et scénarios alternatifs du vérificateur YAML ne sont pas déduits de la trace.
+Les états explicitement nommés `Indéterminé` ou `Disputé` sont signalés. Leur absence ne prouve pas que le dossier est complet. Les alertes juridiques et les scénarios alternatifs ne sont pas déduits de la trace.
 
 Après la commande, le CLI notifie le serveur local par `/api/piecemaker/local/catala-updated`. Seuls les dossiers connus et la boucle locale sont acceptés. Le serveur transmet un événement léger sur le WebSocket déjà ouvert. Le pont PieceMaker du workspace le relaie au volet actif, qui relit le bilan. Le bouton Recalculer utilise le même mécanisme. Aucun watcher, flux supplémentaire ou interrogation périodique n’est ajouté. Ouvrir le volet charge le dernier résultat ; Actualiser permet une relecture manuelle. Une empreinte différente masque le graphe périmé. Une reconnexion recharge le résultat.
 

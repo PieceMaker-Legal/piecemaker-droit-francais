@@ -10,7 +10,6 @@
 | `pm tab afficher index` | ouvrir Dossier, index des pièces |
 | `pm tab afficher tabular_review [FICHIER.json]` | ouvrir Analyse tabulaire, ou cette analyse |
 | `pm tab afficher bordereau` | ouvrir Bordereau |
-| `pm tab afficher raisonnement` | ouvrir Raisonnement |
 | `pm tab afficher suivi_dossiers` | ouvrir Suivi des dossiers |
 | `pm tab afficher catala` | ouvrir Catala |
 | `pm tab fermer CIBLE` | fermer ce volet ou ce fichier (mêmes cibles) |

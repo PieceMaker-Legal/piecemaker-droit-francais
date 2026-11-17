@@ -436,44 +436,6 @@
       ]
     },
     {
-      "nom": "reasoning",
-      "titre": "Raisonnement",
-      "volet": "raisonnement",
-      "description": "Legal reasoning written in .piecemaker/raisonnements/<name>.yaml and checked line by line.",
-      "skills": [
-        {
-          "chemin": "vendor/skills/Skill-PieceMaker",
-          "references": [
-            "raisonnement.md"
-          ]
-        }
-      ],
-      "demarrage": [
-        "Feature run reasoning list_reasonings"
-      ],
-      "commandes": [
-        {
-          "nom": "list_reasonings",
-          "pm": [
-            "raisonnement",
-            "lister"
-          ],
-          "role": "List the reasonings of the case."
-        },
-        {
-          "nom": "verify_reasoning",
-          "pm": [
-            "raisonnement",
-            "verifier"
-          ],
-          "role": "Verify a reasoning file line by line.",
-          "parametres": {
-            "reasoning": "--raisonnement"
-          }
-        }
-      ]
-    },
-    {
       "nom": "deadlines",
       "titre": "Suivi des dossiers",
       "volet": "suivi_dossiers",

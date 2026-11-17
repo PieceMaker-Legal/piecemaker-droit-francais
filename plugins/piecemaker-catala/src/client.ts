@@ -46,6 +46,13 @@ export function mount(container: HTMLElement, api: Host) {
   const panel = root.querySelector<HTMLElement>('.pmc-detail')!;
   let context = api.context;
   let chosen: string | undefined;
+  const requested = () => {
+    const holder = window as Window & { __piecemakerCatalaShow?: { project: string; nom: string } };
+    const show = holder.__piecemakerCatalaShow;
+    if (!show || show.project !== context.project?.path) return;
+    delete holder.__piecemakerCatalaShow;
+    chosen = show.nom; chosenPart = ''; chosenScenario = '';
+  };
   let data: CatalaSnapshot | null = null;
   let serialized = '';
   let verifying = '';
@@ -244,8 +251,11 @@ export function mount(container: HTMLElement, api: Host) {
     const changed = next.project?.path !== context.project?.path;
     context = next;
     if (changed) { chosen = undefined; chosenScenario = ''; error = ''; data = null; serialized = ''; load(); }
+    requested();
     paint();
   });
+  const onShow = () => { requested(); paint(); };
+  window.addEventListener('piecemaker:catala-show', onShow);
   const togglePick = (event: Event) => { if ((event as CustomEvent<{ tab?: string }>).detail?.tab === TAB) setPicking(!picking); };
   const cancelPick = (event: KeyboardEvent) => { if (event.key === 'Escape') setPicking(false); };
   root.addEventListener('click', (event) => {
@@ -271,10 +281,11 @@ export function mount(container: HTMLElement, api: Host) {
     if (!project || project === context.project?.path) load();
   };
   window.addEventListener('piecemaker:catala-updated', updated);
+  requested();
   paint();
   load();
   window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: TAB } }));
-  cleanups.set(container, () => { stopped = true; sequence++; setPicking(false); window.removeEventListener('piecemaker:panel-pick', togglePick); window.removeEventListener('keydown', cancelPick); window.removeEventListener('piecemaker:catala-updated', updated); stopGraph(); unsubscribe(); container.replaceChildren(); });
+  cleanups.set(container, () => { stopped = true; sequence++; setPicking(false); window.removeEventListener('piecemaker:panel-pick', togglePick); window.removeEventListener('keydown', cancelPick); window.removeEventListener('piecemaker:catala-updated', updated); window.removeEventListener('piecemaker:catala-show', onShow); stopGraph(); unsubscribe(); container.replaceChildren(); });
 }
 
 export function unmount(container: HTMLElement) {

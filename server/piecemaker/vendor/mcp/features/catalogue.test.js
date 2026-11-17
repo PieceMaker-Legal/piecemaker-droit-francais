@@ -33,8 +33,8 @@ test('every listed reference can be read', async () => {
 
 test('references outside the skill are refused', async () => {
   const { readReference } = await load();
-  assert.throws(() => readReference('reasoning', 'piecemaker/../../../herisson.json'));
-  assert.throws(() => readReference('reasoning', 'okf/SKILL.md'));
+  assert.throws(() => readReference('exhibits', 'piecemaker/../../../herisson.json'));
+  assert.throws(() => readReference('exhibits', 'okf/SKILL.md'));
   assert.throws(() => readReference('nothing', 'piecemaker/SKILL.md'));
 });
 
@@ -62,6 +62,6 @@ test('every command maps to a pm command and its options, with unique English na
   assert.deepEqual(pmArgv('exhibits', 'stamp_exhibits', { exhibits: ['a.pdf', 'b.pdf'] }), ['bordereau', 'a.pdf', 'b.pdf']);
   assert.deepEqual(pmArgv('deadlines', 'write_board', { path: 'projects/cabinet', data: { a: 1 } }), ['suivi_dossiers', 'ecrire', 'projects/cabinet', '--json', '{"a":1}']);
   assert.throws(() => pmArgv('index', 'link', { source: 'a.md' }), /needs "relation"/);
-  assert.throws(() => pmArgv('reasoning', 'verify_reasoning', { file: 'x' }), /unknown parameter/);
-  assert.throws(() => pmArgv('reasoning', 'nothing'), /unknown command/);
+  assert.throws(() => pmArgv('deadlines', 'verify_deadlines', { file: 'x' }), /unknown parameter/);
+  assert.throws(() => pmArgv('deadlines', 'nothing'), /unknown command/);
 });

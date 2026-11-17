@@ -1,10 +1,10 @@
 # Suivi du dossier
 
-Le suivi relève les étapes d'un dossier qu'il ne faut pas manquer. Il se distingue du raisonnement : le raisonnement réfléchit dans un acte (`.piecemaker/raisonnements/<nom>.yaml`, plusieurs par dossier), le suivi liste les dates qui comptent pour le dossier (`.piecemaker/<nom>-suivi.json`, un fichier par acte ou procédure suivi, `suivi.json` reste valide). Ce n'est pas une chronologie : n'y entrent que les actes à valeur procédurale (contentieux) et les dates liées à la validité du contrat (contrat), avec les échéances qui en découlent.
+Le suivi relève les étapes d'un dossier qu'il ne faut pas manquer. Il se distingue du programme Catala : le programme raisonne dans un acte (`.piecemaker/catala/<nom>/`, plusieurs par dossier), le suivi liste les dates qui comptent pour le dossier (`.piecemaker/<nom>-suivi.json`, un fichier par acte ou procédure suivi, `suivi.json` reste valide). Ce n'est pas une chronologie : n'y entrent que les actes à valeur procédurale (contentieux) et les dates liées à la validité du contrat (contrat), avec les échéances qui en découlent.
 
 ## Mémoire projet, suivi et étapes : une place par information
 
-La règle 4° de l'`AGENTS.md` livré dans chaque dossier (`server/piecemaker/agent-instructions.ts`) fait tenir à l'agent une mémoire par projet. Un projet est un acte précis ; son `<nom>` est la clé commune du raisonnement, du programme Catala, du suivi, de la carte du tableau et de la mémoire.
+La règle 4° de l'`AGENTS.md` livré dans chaque dossier (`server/piecemaker/agent-instructions.ts`) fait tenir à l'agent une mémoire par projet. Un projet est un acte précis ; son `<nom>` est la clé commune du programme Catala, du suivi, de la carte du tableau et de la mémoire.
 
 | Information | Source unique | Écrite par | Lue par |
 |---|---|---|---|
@@ -19,7 +19,7 @@ flowchart LR
   N["&lt;nom&gt;"] --> M["memoires/&lt;nom&gt;.md<br/>récit"]
   N --> S["&lt;nom&gt;-suivi.json<br/>échéances"]
   N --> E["etapes.json<br/>étape, document"]
-  N --> R["raisonnements/&lt;nom&gt;.yaml"]
+  N --> R["catala/&lt;nom&gt;/"]
 ```
 
 L'ancienne règle 4° (mémoire libre, référencée dans l'`AGENTS.md`, frontmatter avec template, échéances et étape) est remplacée dans chaque `AGENTS.md` au démarrage, si la ligne n'a pas été modifiée. Une mémoire existante n'est pas migrée par le code : son emplacement et son format étaient libres. `pm memoire verifier` refuse le frontmatter et dit où reporter chaque donnée ; l'agent déplace le récit dans `.piecemaker/memoires/<nom>.md`.
@@ -27,7 +27,7 @@ L'ancienne règle 4° (mémoire libre, référencée dans l'`AGENTS.md`, frontma
 `pm memoire verifier [--memoire NOM]` (local, sans serveur) signale :
 
 - erreur : `<fichier>:1: erreur : pas de frontmatter. …` ;
-- manque : aucun raisonnement, programme Catala, suivi ni carte du tableau ne porte ce nom ;
+- manque : aucun programme Catala, suivi ni carte du tableau ne porte ce nom ;
 - `--memoire` sur un fichier absent : `introuvable`.
 
 Une mémoire conforme ne produit aucune sortie. Le Hérisson lance la vérification après chaque écriture (feature `memoire`, `docs/Le-Herisson.md`).
@@ -52,12 +52,12 @@ Aucune règle de droit n'est codée : le moteur applique les réglages déclaré
 
 ## Vérification
 
-`server/modules/piecemaker-reasoning/suivi.ts` (`verifySuivi`), calendrier dans `calendar.ts`.
+`server/modules/piecemaker-suivi/suivi.ts` (`verifySuivi`), calendrier dans `calendar.ts`.
 
-- Erreurs : syntaxe et clés, référence `de`/`avant` inconnue, boucle, délai ou prolongation sans `selon`, date fixée sans preuve ni source, date écrite différente du calcul, pièce introuvable ou marquée non fiable, citation introuvable, source sans identifiant officiel, version non en vigueur à la date de départ, décision remise en cause.
+- Erreurs : syntaxe et clés, référence `de`/`avant` inconnue, boucle, délai ou prolongation sans `selon`, date fixée sans preuve ni source, date écrite différente du calcul, pièce introuvable, citation introuvable, source sans identifiant officiel, version non en vigueur à la date de départ, décision remise en cause.
 - Manques : date d'événement non prouvée, citation qui ne montre pas la date, décompte absent ou non fondé, `depart`/`report` manquant, événement sans portée (ni échéance ni `selon`), accomplissement non prouvé, échéance dépassée non marquée faite, historique judiciaire à examiner, source sans connecteur.
 
-Les sources passent par les mêmes connecteurs que le raisonnement (Légifrance, pièces du dossier).
+Les sources passent par les mêmes connecteurs que `pm catala` (Légifrance, pièces du dossier).
 
 ## Service, commandes, onglet
 
@@ -70,16 +70,15 @@ Les sources passent par les mêmes connecteurs que le raisonnement (Légifrance,
 
 ## Tableau et tâches
 
-Service `server/modules/piecemaker-reasoning/etapes.ts`, routes `/api/piecemaker/etapes`. État par dossier dans `.piecemaker/etapes.json` ; types de documents dans `<data root>/types-documents.json`, modèles dans `<data root>/modeles-documents/` ; file de tâches centrale dans `<data root>/todo.json` (`taches.ts`).
+Service `server/modules/piecemaker-suivi/etapes.ts`, routes `/api/piecemaker/etapes`. État par dossier dans `.piecemaker/etapes.json` ; types de documents dans `<data root>/types-documents.json`, modèles dans `<data root>/modeles-documents/` ; file de tâches centrale dans `<data root>/todo.json` (`taches.ts`).
 
-- Vue Tableau (`src/tableau.ts`), une carte par raisonnement, colonnes vides masquées. Chaque colonne a un but ; la carte montre où en est ce but et un seul bouton, l'action qui fait avancer la carte (masqué tant qu'une tâche de la carte est en file ou en cours). Elle affiche aussi le nom du dossier, la pastille de nature, l'acte, le premier objectif (« +N » s'il y en a d'autres) et l'alerte d'échéance. Le panneau reprend ce bouton avec les actions secondaires (`colonne()` décrit les deux).
-  - Nature, d'après `qualification` du raisonnement, pastille arrondie aux couleurs de `docs/Design_Rule.md` : Contentieux en bleu, Contrat (`drafting`) en noir, Consultation en verre. Le libellé est écrit : la couleur n'est pas seule porteuse de sens.
-  - Acte : clé racine `acte` du raisonnement, le document à produire (par exemple « Conclusions en défense ») ; son absence est un manque.
+- Vue Tableau (`src/tableau.ts`), une carte par programme Catala, colonnes vides masquées. Chaque colonne a un but ; la carte montre où en est ce but et un seul bouton, l'action qui fait avancer la carte (masqué tant qu'une tâche de la carte est en file ou en cours). Elle affiche aussi le nom du dossier, la pastille de nature, l'acte, le premier objectif (« +N » s'il y en a d'autres) et l'alerte d'échéance. Le panneau reprend ce bouton avec les actions secondaires (`colonne()` décrit les deux).
+  - Titre : `tache` de `tache.json` du programme Catala, sinon son nom. Le programme ne donne ni nature ni acte : la pastille de nature et l'acte restent vides.
   - Préparation dossier (but : rendre les pièces exploitables) : dossiers sans raisonnement ni étape choisie, en échec à la vérification de préparation (`etatDossier` de `pm.mjs` : anonymisation, index, conversion) ou au mapping non validé. Un scan postérieur à la validation (`scanned.updatedAt` de `.piecemaker/anonymization-state.json`) l'annule, côté serveur comme dans `pm`. État : « Anonymisation faite / à faire · Index fait / à faire » ; l'anonymisation comprend la conversion des pièces protégées, la pseudonymisation et le mapping validé. Bouton : l'étape suivante, « Lancer l'anonymisation », puis « Valider le mapping » (le volet Dossier s'ouvre sur le mapping, `__piecemakerMappingShow`, événement `piecemaker:mapping-show`, dont le bouton du bas écrit `mappingValide` dans `.piecemaker/etapes.json`), puis « Lancer l'index ». Panneau : « Ouvrir les pièces », « Ouvrir l'index » une fois fait, « Démarrer le raisonnement » sans raisonnement. Une vérification en échec garde le dernier état valide, enregistré dans `etats-dossiers.json` du dossier de données ; sans état connu, pas de bouton. Menu « Non juridique » à toutes les étapes, même sans raisonnement. L'étape choisie est conservée : une préparation incomplète ne bloque ni le raisonnement ni les étapes suivantes. La case « Afficher les exclus » (légende au survol), à droite du titre de la colonne, n'y affiche que les dossiers exclus ; un dossier exclu n'est plus vérifié.
-  - Raisonnements (but : un raisonnement vérifié) : « À démarrer » → « Démarrer le raisonnement » ; non vérifié → « Vérifier le raisonnement » ; « N erreurs · M manques » → « Lever manques et erreurs », la liste des alertes est dans le panneau ; vérifié sans alerte → « Valider le raisonnement ». Avec des manques et sans erreur, le panneau propose « Valider malgré tout », qui rappelle les manques restants.
+  - Raisonnements (but : un programme Catala vérifié, `resultats/verification.json`) : « À démarrer » → « Démarrer le raisonnement » ; non vérifié → « Vérifier le raisonnement » ; « N erreurs · M manques » → « Lever manques et erreurs », la liste des alertes est dans le panneau ; vérifié sans alerte → « Valider le raisonnement ». Avec des manques et sans erreur, le panneau propose « Valider malgré tout », qui rappelle les manques restants.
   - Rédaction (but : le document .docx) : documents choisis parmi les types (skills `redaction-*` de la Bibliothèque et types ajoutés avec modèle). Le skill est activé dans le dossier pour toutes les IA ; s'il manque, l'IA le crée et la Bibliothèque est rescannée en fin de tâche. Sans document rédigé : « Rédaction non commencée » et « Lancer la rédaction » (choix du type et du nom, puis lancement). Document rédigé : son nom, et « Valider la rédaction » ; le panneau l'ouvre d'un clic. Un document choisi mais non rédigé se lance ou se retire depuis le panneau.
-  - Finalisation (but : relire, puis envoyer ou déposer) : « Valider la finalisation » demande explicitement « En attente de tiers » ou « Plus d’étape ni d’attente : clore ». En attente de tiers (but : suivre ce que l'on attend) : l'attente (« À faire » / « Effectué ») ; bouton « + Document du tiers », qui copie le document reçu dans `Pièces/`, crée une nouvelle version du raisonnement (l'ancienne et ses documents restent) et une tâche de reprise. La relance automatique est cochée par défaut ; décochée, la tâche reste manuelle. Chaque nouveau document reçoit un chemin sans collision avec les anciennes versions. Le panneau modifie l'attente, la marque effectuée et propose « Clore ». Une attente effectuée ne clôt jamais automatiquement le dossier.
-  - Clos (archive) : documents et raisonnement à ouvrir depuis le panneau. Le menu « ⋯ » déplace une carte vers toute étape, après confirmation.
+  - Finalisation (but : relire, puis envoyer ou déposer) : « Valider la finalisation » demande explicitement « En attente de tiers » ou « Plus d’étape ni d’attente : clore ». En attente de tiers (but : suivre ce que l'on attend) : l'attente (« À faire » / « Effectué ») ; bouton « + Document du tiers », qui copie le document reçu dans `Pièces/`, crée une nouvelle version du programme Catala (l'ancienne et ses documents restent) et une tâche de reprise. La relance automatique est cochée par défaut ; décochée, la tâche reste manuelle. Chaque nouveau document reçoit un chemin sans collision avec les anciennes versions. Le panneau modifie l'attente, la marque effectuée et propose « Clore ». Une attente effectuée ne clôt jamais automatiquement le dossier.
+  - Clos (archive) : documents et programme Catala à ouvrir depuis le panneau. Le menu « ⋯ » déplace une carte vers toute étape, après confirmation.
   - Code couleur du Matter board (`src/attention.ts`, mêmes règles et seuils) : bordure orange (attention) ou rouge (urgent) et une pastille avec l'alerte la plus urgente, d'après la fiche du dossier. Un dossier exclu n'en a pas.
 - Chargement instantané, sans bouton Actualiser :
   - Le serveur garde en mémoire l'état de préparation de chaque dossier (`etatDossier`) et répond sans le recalculer. Sans état connu, les pastilles restent vides, sans message d'attente.
@@ -93,9 +92,9 @@ Service `server/modules/piecemaker-reasoning/etapes.ts`, routes `/api/piecemaker
   - Style de `docs/Design_Rule.md` : panneau flottant `rounded-2xl` en verre, police Inter, titre en EB Garamond, boutons `rounded-full` de 28 px (principal en noir), anneau de focus bleu.
   - En-tête : nom du dossier, acte en titre (sinon nom du dossier), pastille de nature.
   - Sections : la colonne courante (état, alertes, actions), Parties (noms et rôles de `matter.parties`, en clair, depuis le disque), Document à produire, Objectifs (tous), Versions précédentes.
-  - Versions précédentes, après « + Document du tiers » : chaque ancienne version ouvre son raisonnement et ses documents.
+  - Versions précédentes, après « + Document du tiers » : chaque ancienne version ouvre son programme Catala et ses documents.
   - En dessous, quand le dossier a un suivi, la fiche du dossier en lecture seule : résumé, client, domaine, responsable, prochaine action, dates clés. Elle vient de `GET /api/piecemaker/suivi/board` (relu avec `?rev=`, seulement quand le panneau est ouvert), sans charger le Matter board. Le serveur donne l'identifiant de fiche de chaque carte (`matter`). La fiche se modifie dans la vue Échéances.
-- « Ouvrir le raisonnement » pose `window.__piecemakerRaisonnementShow` et ouvre le volet Raisonnement, qui affiche ce raisonnement. Un autre dossier s'ouvre via sa dernière conversation.
+- « Ouvrir le programme Catala » pose `window.__piecemakerCatalaShow`, émet `piecemaker:catala-show` et ouvre le volet Catala sur ce programme. Un autre dossier s'ouvre via sa dernière conversation.
 
 ## Page du tableau
 

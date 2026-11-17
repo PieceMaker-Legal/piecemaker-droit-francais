@@ -8,7 +8,7 @@ import type { Router } from 'express';
 import { getConnection, projectsDb, sessionsDb, userPreferencesDb } from '@/modules/database/index.js';
 import { desktopAuthRoutes } from '@/modules/desktop-auth/index.js';
 import { runDetachedChatTurn } from '@/modules/websocket/index.js';
-import { createBoardRouter, createBoardService, createEtapesRouter, createEtapesService, createReasoningLocalRouter, createReasoningRouter, createReasoningService, createSuiviLocalRouter, createSuiviRouter, createSuiviService, createTachesService } from '@/modules/piecemaker-reasoning/index.js';
+import { createBoardRouter, createBoardService, createEtapesRouter, createEtapesService, createSuiviLocalRouter, createSuiviRouter, createSuiviService, createTachesService } from '@/modules/piecemaker-suivi/index.js';
 import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
@@ -18,14 +18,13 @@ import { createAgentInstructionsRouter, startAgentInstructionsMigration } from '
 import { reconcileClaudeHooks, reconcileCodexHooks, reconcileVibeHooks } from './claude-hooks.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
-import { installSessionProxyRuntime, projectOfDirectory } from './anonymizer/session-runtime.js';
+import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
 import { installCodexPlanRuntime } from './codex-plan.js';
 import { installCodexEventsRuntime } from './codex-events.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
 import { createPieceTitleResolver } from './harness/piece-title.js';
-import { locateSourcePassages } from './harness/source-passages.js';
 import { installLegalCodeHarness } from './legal-code/legal-code-harness.js';
 import { openLibrary, installLibraryRuntime, installLibrarySkillVisibility } from './library/index.js';
 import { applyWorkspaceSkillVisibility } from './library/skill-visibility.js';
@@ -37,8 +36,7 @@ import { installDocxCommand } from './docx-command.js';
 import { createTimesheetBackend } from './timesheet/index.js';
 import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
-import { createReasoningConnectors } from './reasoning-connectors.js';
-import { createReasoningReview } from './reasoning-review.js';
+import { createSourceConnectors } from './source-connectors.js';
 import { createCatalaCitation } from './catala-citation.js';
 import { catalaScriptPath, createCatalaCitationCheck, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
@@ -99,17 +97,8 @@ const { createAnonymizerService } = createRequire(import.meta.url)(path.join(app
 const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
-const citationReview = createReasoningReview(applicationRoot, {
-  ensureProxy,
-  runInCase: (cwd, run) => {
-    const projectId = projectOfDirectory(cwd, projectsDb.getProjectPaths());
-    if (!projectId) throw new Error('Dossier de vérification non enregistré.');
-    return anonymizer.runInProject(projectId, run);
-  },
-});
-const reasoningConnectors = { ...createReasoningConnectors(), review: citationReview.review };
-const reasoning = createReasoningService(getConnection, reasoningConnectors);
-const suivi = createSuiviService(getConnection, reasoningConnectors);
+const sourceConnectors = createSourceConnectors();
+const suivi = createSuiviService(getConnection, sourceConnectors);
 const board = createBoardService(getConnection, suivi);
 const pmScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')).href;
 const taches = createTachesService(piecemakerHome(), {
@@ -132,7 +121,6 @@ const lastSession = (projectPath: string) => {
 };
 const etapes = createEtapesService({
   home: piecemakerHome(),
-  reasoning,
   suivi,
   taches,
   etat: async (projectPath) => (await import(pmScript) as { etatDossier(project: string): Promise<{ lignes: Array<{ nom: string; texte: string; ok: boolean }>; pret: boolean }> }).etatDossier(projectPath),
@@ -184,13 +172,11 @@ startAgentInstructionsMigration(() => projectsDb.getProjectPaths().map((row) => 
   declareBundledSkills(workspace);
 });
 
-const catalaCitations = createCatalaCitation(createReasoningConnectors(), citations);
+const catalaCitations = createCatalaCitation(sourceConnectors, citations);
 const localRouter = express.Router();
 localRouter.use(desktopAuthRoutes());
 localRouter.use(createMistralTabularBridge({ ensureProxy, runInProject: (id, run) => anonymizer.runInProject(id, run) }));
 localRouter.use(knowledge.localRouter);
-localRouter.use('/reasoning', express.json(), citationReview.scope(true));
-localRouter.use(createReasoningLocalRouter(reasoning, isLoopback));
 localRouter.use(createSuiviLocalRouter(suivi, isLoopback, board));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
@@ -211,16 +197,9 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   const router = vendor.createPieceMakerRouter({ ...options, anonymizer, publishProjects });
   router.use(createCitationsRouter(citations, (id) => {
     if (id.startsWith('catala:')) return projectsDb.getProjectPaths().some((row) => row.project_path === id.slice('catala:'.length));
-    if (id.startsWith('raisonnement:')) return projectsDb.getProjectPaths().some((row) => row.project_path === id.slice('raisonnement:'.length));
     try { sessionsService.getSessionDetailsById(id); return true; } catch { return false; }
   }));
   router.use(timesheet);
-  router.use('/reasoning', express.json(), citationReview.scope(false), createReasoningRouter(reasoning, async (cwd, id, quote, name) => {
-    const info = await reasoning.source(cwd, id, name);
-    const quotes = [{ quote, verification: { verified: true } }];
-    const reference = info.kind === 'decision' ? { kind: 'case' as const, decision_id: id } : info.kind === 'piece' ? { kind: 'document' as const, doc_id: id } : { kind: 'article' as const, article_id: id };
-    return citations.save({ sessionId: `raisonnement:${cwd}`, title: info.title, source: info.text, citation: { ref: 1, ...reference, verified: true, quotes }, ranges: locateSourcePassages(info.text, quotes) });
-  }));
   router.use('/catala', createCatalaRouter(catalaScriptPath(applicationRoot), {}, catalaCitations));
   router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));

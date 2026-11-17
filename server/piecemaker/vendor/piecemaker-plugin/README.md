@@ -33,8 +33,8 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   sous Claude, `SubagentStop` sous Codex) signale les décisions citées absentes
   du cache `~/.piecemaker/decisions/`, donc jamais lues. Claude donne le bilan à
   l'agent principal, avec l'invitation à relancer le sous-agent ; Codex renvoie
-  une fois le sous-agent au travail. L'index OKF, le programme Catala et le
-  raisonnement YAML sont écrits par l'agent principal.
+  une fois le sous-agent au travail. L'index OKF et le programme Catala sont écrits par
+  l'agent principal.
   Le mapping PII est appliqué par le proxy PII, pas par ces hooks. Tous
   les hooks échouent "ouverts" (fail-open) : aucune erreur, timeout ou
   absence de configuration ne bloque jamais une session.

@@ -4,18 +4,18 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import type { ReasoningConnectors } from '@/modules/piecemaker-reasoning/index.js';
+import type { SourceConnectors } from '@/modules/piecemaker-suivi/index.js';
 
 import { createCatalaCitation, historyNeeded } from './catala-citation.js';
 import { createCitationStore } from './harness/citation-store.js';
-import { createReasoningConnectors } from './reasoning-connectors.js';
+import { createSourceConnectors } from './source-connectors.js';
 
 test('opens declared Catala references in the citation reader without inventing quote verification', async () => {
   const home = await mkdtemp(path.join(os.tmpdir(), 'catala-citations-'));
   try {
     const store = createCitationStore(home);
     let queries = 0;
-    const connectors: Pick<ReasoningConnectors, 'source' | 'match'> = {
+    const connectors: Pick<SourceConnectors, 'source' | 'match'> = {
       source: async () => { queries++; return { kind: 'texte', title: 'Article fictif', text: 'Texte officiel fictif. Texte "officiel" fictif.', validity: { from: '2020-01-01', to: null } }; },
       match: (text: string, quote: string) => text.includes(quote) ? quote : null,
     };
@@ -152,7 +152,7 @@ test('develops an OKF premise into its cited pieces and fails without evidence',
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
-const appealsConnectors = (details: string[] | undefined, text = 'Extrait exact.', requested: string[] = []): Pick<ReasoningConnectors, 'source' | 'match'> => ({
+const appealsConnectors = (details: string[] | undefined, text = 'Extrait exact.', requested: string[] = []): Pick<SourceConnectors, 'source' | 'match'> => ({
   source: async (_cwd, id) => { requested.push(id); return { kind: 'decision', title: 'Cour fictive, 12 mars 2026', text, ...(details ? { history: { statut: 'remise en cause' as const, details } } : {}) }; },
   match: (found: string, quote: string) => found.includes(quote) ? quote : null,
 });
@@ -241,7 +241,7 @@ test('a quotation with a stray dot or space is corrected and verified, a differe
 });
 
 test('the connector returns the official wording when only spaces or punctuation differ', () => {
-  const { match } = createReasoningConnectors();
+  const { match } = createSourceConnectors();
   const text = 'Le salarié perçoit une prime, sauf faute grave.';
   assert.equal(match(text, 'Le salarié perçoit une prime, sauf faute grave.'), 'Le salarié perçoit une prime, sauf faute grave.');
   assert.equal(match(text, 'Le salarié  perçoit une prime, sauf faute grave. '), 'Le salarié perçoit une prime, sauf faute grave.');

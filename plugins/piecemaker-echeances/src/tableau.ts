@@ -25,7 +25,7 @@ const sansStatut = (documents: DocumentRedige[] = []) => documents.map(({ type, 
 const icone = (chemins: string) => `<svg class="pme-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${chemins}</svg>`;
 const ICONE_RAISONNEMENT = icone('<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>');
 const ICONE_DOCUMENT = icone('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>');
-const boutonRaisonnement = (version = '') => `<button type="button" class="ptr-button pme-glass" data-open-reasoning${version ? ` data-version="${escape(version)}"` : ''}>${ICONE_RAISONNEMENT}Ouvrir le raisonnement</button>`;
+const boutonRaisonnement = (version = '') => `<button type="button" class="ptr-button pme-glass" data-open-reasoning${version ? ` data-version="${escape(version)}"` : ''}>${ICONE_RAISONNEMENT}Ouvrir le programme Catala</button>`;
 const lienRaisonnement = boutonRaisonnement();
 
 const tacheHtml = (carte: Carte) => {

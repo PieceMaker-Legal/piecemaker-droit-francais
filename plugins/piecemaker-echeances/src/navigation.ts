@@ -1,7 +1,7 @@
 import { etapes } from './api.js';
 import type { Carte } from './api.js';
 
-type RaisonnementShow = { project: string; nom: string };
+type CatalaShow = { project: string; nom: string };
 
 export function ouvrirSession(sessionId: string) {
   window.history.pushState({}, '', `/session/${sessionId}`);
@@ -29,9 +29,9 @@ export async function ouvrirMapping(carte: Carte, current: string | null) {
 export async function ouvrirRaisonnement(carte: Carte, current: string | null, chemin?: string) {
   allerAuDossier(carte, current);
   if (carte.raisonnement) {
-    (window as Window & { __piecemakerRaisonnementShow?: RaisonnementShow }).__piecemakerRaisonnementShow = { project: carte.projectPath, nom: carte.raisonnement.nom };
-    window.dispatchEvent(new CustomEvent('piecemaker:raisonnement-show'));
+    (window as Window & { __piecemakerCatalaShow?: CatalaShow }).__piecemakerCatalaShow = { project: carte.projectPath, nom: carte.raisonnement.nom };
+    window.dispatchEvent(new CustomEvent('piecemaker:catala-show'));
   }
-  await etapes.volet(carte.projectPath, 'plugin:piecemaker-raisonnement');
+  await etapes.volet(carte.projectPath, 'plugin:piecemaker-catala');
   if (chemin) await etapes.volet(carte.projectPath, 'files', `${carte.projectPath}/${chemin}`);
 }

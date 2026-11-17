@@ -16,7 +16,7 @@ const PM_TIMEOUT_MS = 10 * 60 * 1000;
 const CHECK_LINES = 40;
 const FILE_LINES = 200;
 
-export const INTENTS = { case: 'case', index: 'index', review: 'tabular_review', stamp: 'exhibits', reasoning: 'reasoning', deadlines: 'deadlines', catala: 'catala', draft: 'projects', other: 'case' };
+export const INTENTS = { case: 'case', index: 'index', review: 'tabular_review', stamp: 'exhibits', deadlines: 'deadlines', catala: 'catala', draft: 'projects', other: 'case' };
 
 const DEFAULT_RELATIONS = ['amends', 'responds-to', 'refers-to', 'supersedes'];
 const SYSTEM_RELATIONS = ['states', 'involves'];

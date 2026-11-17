@@ -60,7 +60,7 @@ test('accepte le volet tampon et ferme un volet', async () => {
   assert.equal(closed.status, 200);
   const closeTaken = await (await json('/close-panel?project=/dossiers/Dupont')).json() as { request: { tab: string } | null };
   assert.equal(closeTaken.request?.tab, 'plugin:piecemaker-dossier');
-  for (const tab of ['plugin:piecemaker-raisonnement', 'plugin:piecemaker-echeances', 'plugin:piecemaker-catala']) {
+  for (const tab of ['plugin:piecemaker-echeances', 'plugin:piecemaker-catala']) {
     assert.equal((await json('/open-panel', { method: 'POST', body: JSON.stringify({ project: '/dossiers/Dupont', tab }) })).status, 200);
   }
   assert.equal((await json('/open-panel', { method: 'POST', body: JSON.stringify({ project: '/dossiers/Dupont', tab: 'inconnu' }) })).status, 400);

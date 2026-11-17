@@ -9,14 +9,13 @@ import { CATALA_COMMANDS, listPrograms, runCatala, sourceFiles } from './catala.
 import { scenarioFacts } from './catala-documentation.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
+const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
-const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'fichier'];
+const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'fichier'];
 const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
-const REASONING_COMMANDS = ['verifier', 'lister'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
 const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee'];
 const CONVERSION_WAIT_MS = 90000;
@@ -42,7 +41,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       volets ouverts à côté du chat
   tab afficher|fermer <cible>
       cibles : dossier | index | tabular_review [FICHIER.json] | bordereau
-               | raisonnement | suivi_dossiers | catala | fichier PATH
+               | suivi_dossiers | catala | fichier PATH
 
   dossier sql "REQUÊTE"
       seul accès à la base du dossier ; données masquées par le serveur
@@ -65,12 +64,6 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
 
   bordereau <pièce…>
       tamponne les pièces dans cet ordre : Pièces tamponnées/Pièce n°N.pdf
-
-  raisonnement verifier [--raisonnement NOM]
-  raisonnement lister
-      un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
-      --raisonnement est requis quand le dossier en compte plusieurs
-      un programme Catala sans YAML du même nom : renvoie vers pm catala verifier --programme NOM
 
   suivi_dossiers verifier [--suivi FICHIER]
       vérifie .piecemaker/<nom>-suivi.json et recalcule les échéances ;
@@ -298,7 +291,6 @@ async function defaultDeps(cwd) {
     sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
     moveFn: client.movePiece,
-    reasoningFn: client.runReasoning,
     catalaUpdated: client.notifyCatalaUpdated,
     catalaCitations: client.verifyCatalaCitations,
     suiviFn: client.runSuivi,
@@ -394,7 +386,6 @@ async function confirmClose(api, request, target) {
 
 function voletTarget(cwd, volet, review) {
   if (volet === 'bordereau') return { cwd, tab: 'plugin:piecemaker-tampon' };
-  if (volet === 'raisonnement') return { cwd, tab: 'plugin:piecemaker-raisonnement' };
   if (volet === 'suivi_dossiers') return { cwd, tab: 'plugin:piecemaker-echeances' };
   if (volet === 'catala') return { cwd, tab: 'plugin:piecemaker-catala' };
   if (volet === 'tabular_review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
@@ -404,7 +395,6 @@ function voletTarget(cwd, volet, review) {
 function panelNoticeLabel(target) {
   if (target.tab === 'files') return `Fichiers (${path.basename(target.document || '')})`;
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
-  if (target.tab === 'plugin:piecemaker-raisonnement') return 'Raisonnement';
   if (target.tab === 'plugin:piecemaker-echeances') return 'Suivi des dossiers';
   if (target.tab === 'plugin:piecemaker-catala') return 'Catala';
   if (target.tab === 'plugin:piecemaker-tabular-review') {
@@ -520,11 +510,11 @@ function progress(job) {
 }
 
 const EN_ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
-  + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala, raisonnement, suivi.\n'
+  + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala et suivi.\n'
   + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
   + 'Revenez à la fin avec pm dossier conversion.';
 
-const EN_COURS_CHECK = 'Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala, raisonnement et suivi, qui ne lisent pas les pièces.';
+const EN_COURS_CHECK = 'Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala et suivi, qui ne lisent pas les pièces.';
 
 function background(job) {
   return `${job ? progress(job) : 'Conversion en cours.'}\n${EN_ARRIERE_PLAN}`;
@@ -879,14 +869,14 @@ function memoire(positional, flags, resolved) {
   if (!flags.memoire) { try { noms = fs.readdirSync(directory).filter((entry) => entry.endsWith('.md')).map((entry) => entry.slice(0, -3)).sort(); } catch {} }
   let etapes = {};
   try { etapes = JSON.parse(fs.readFileSync(path.join(folder, '.piecemaker', 'etapes.json'), 'utf8')); } catch {}
-  const acte = (nom) => Boolean(etapes.raisonnements?.[nom]) || [`raisonnements/${nom}.yaml`, `catala/${nom}`, `${nom}-suivi.json`].some((relative) => fs.existsSync(path.join(folder, '.piecemaker', relative)));
+  const acte = (nom) => Boolean(etapes.raisonnements?.[nom]) || [`catala/${nom}`, `${nom}-suivi.json`].some((relative) => fs.existsSync(path.join(folder, '.piecemaker', relative)));
   return noms.flatMap((nom) => {
     const fichier = `${MEMOIRES_DIR}/${nom}.md`;
     let texte;
     try { texte = fs.readFileSync(path.join(directory, `${nom}.md`), 'utf8'); } catch { return [`${fichier} : introuvable.`]; }
     return [
       ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans .piecemaker/${nom}-suivi.json ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
-      ...(acte(nom) ? [] : [`${fichier} : manque : aucun raisonnement, programme Catala, suivi ni carte du tableau ne s’appelle ${nom}. Nommez la mémoire comme son acte.`]),
+      ...(acte(nom) ? [] : [`${fichier} : manque : aucun programme Catala, suivi ni carte du tableau ne s’appelle ${nom}. Nommez la mémoire comme son acte.`]),
     ];
   }).join('\n');
 }
@@ -942,25 +932,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     return withNotice([...lines, message].join('\n'), await followPanel(api, request, target));
   }
 
-  const commande = positional[1];
-  if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
-  if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
-  const input = { commande, cwd: path.resolve(resolved), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
-  let yamls = [];
-  try { yamls = fs.readdirSync(path.join(input.cwd, '.piecemaker', 'raisonnements')).filter((entry) => entry.endsWith('.yaml')).map((entry) => entry.slice(0, -5)); } catch {}
-  const programs = listPrograms(input.cwd);
-  const named = commande === 'verifier' ? input.raisonnement : undefined;
-  const catalaOnly = named ? (programs.includes(named) && !yamls.includes(named) ? [named] : []) : (yamls.length ? [] : programs);
-  if (catalaOnly.length) {
-    return [
-      ...(named ? [] : ['Aucun raisonnement YAML dans .piecemaker/raisonnements/.']),
-      ...catalaOnly.map((nom) => `« ${nom} » est un programme Catala (.piecemaker/catala/${nom}/), pas un raisonnement YAML : pm catala verifier --programme ${nom}`),
-    ].join('\n');
-  }
-  const result = await api.reasoningFn(input);
-  if (!yamls.length) return result;
-  const target = voletTarget(input.cwd, 'raisonnement');
-  return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));
+  usage();
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

@@ -52,7 +52,7 @@ test('laisse lire ces fichiers et écrire ailleurs', async () => {
   assert.equal(await decision('Bash', { command: "sed -i -n '1,5p' .piecemaker/etapes.json" }), 'deny');
   assert.equal(await decision('Bash', { command: 'grep -r "amends" .piecemaker/okf' }), null);
   assert.equal(await decision('Bash', { command: 'pm okf link Pièces/Courrier.pdf amends Pièces/Contrat.pdf --citation "Il est résilié."' }), null);
-  assert.equal(await decision('Write', { file_path: '.piecemaker/raisonnements/bail.yaml' }), null);
+  assert.equal(await decision('Write', { file_path: '.piecemaker/memoires/bail.md' }), null);
   assert.equal(await decision('Read', { file_path: '.piecemaker/ontologie.json' }), null);
   assert.equal(await decision('Bash', { command: 'ls .piecemaker/okf 2>/dev/null && jq .relations ~/.piecemaker/ontologie.json' }), null);
   assert.equal(await decision('Bash', { command: 'find .piecemaker/okf -name "*.md" | wc -l' }), null);

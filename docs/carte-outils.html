@@ -150,14 +150,14 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-note" x="306" y="362">HTTP en boucle locale, vers la base</text>
         <text class="t-note" x="306" y="378">et les volets.</text>
         <text class="t-name t-skill-c" x="306" y="426">legal-code</text>
-        <text class="t-note" x="306" y="444">skill : raisonnement, session /legal-code,</text>
-        <text class="t-note" x="306" y="460">utilise pm raisonnement et pm dossier sql</text>
+        <text class="t-note" x="306" y="444">skill : session /legal-code sur Catala,</text>
+        <text class="t-note" x="306" y="460">utilise pm catala et pm dossier sql</text>
         <text class="t-name t-skill-c" x="306" y="498">catala</text>
         <text class="t-note" x="306" y="516">skill : programme Catala, utilise pm catala</text>
 
         <text class="t-name" x="560" y="276">pm tab</text><text class="t-mono" x="730" y="276">lister | afficher | fermer</text>
         <text class="t-mono" x="730" y="294">dossier | index | tabular_review | bordereau</text>
-        <text class="t-mono" x="730" y="312">raisonnement | suivi_dossiers | catala | fichier</text>
+        <text class="t-mono" x="730" y="312">suivi_dossiers | catala | fichier</text>
         <text class="t-name" x="560" y="330">pm check</text><text class="t-mono" x="730" y="330">bilan : préparation, OKF, Catala, suivi, étape</text>
         <text class="t-name" x="560" y="348">pm dossier</text><text class="t-mono" x="730" y="348">sql "REQUÊTE" | conversion [pièce…] --force</text>
         <text class="t-mono" x="730" y="366">arborescence --dossiers</text>
@@ -165,12 +165,11 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-name" x="560" y="402">pm tabular_review</text><text class="t-mono" x="730" y="402">lister | modeles | create_template</text>
         <text class="t-mono" x="730" y="420">preparer | lancer | lire | colonnes | relancer</text>
         <text class="t-name" x="560" y="438">pm bordereau</text><text class="t-mono" x="730" y="438">pièce… dans l'ordre</text>
-        <text class="t-name" x="560" y="456">pm raisonnement</text><text class="t-mono" x="730" y="456">verifier | lister</text>
-        <text class="t-name" x="560" y="474">pm suivi_dossiers</text><text class="t-mono" x="730" y="474">verifier | lire | ecrire · pm memoire verifier</text>
-        <text class="t-name" x="560" y="492">pm catala</text><text class="t-mono" x="730" y="492">verifier (tous les contrôles)</text>
-        <text class="t-mono" x="730" y="510">executer | exceptions | expliquer | squelette</text>
-        <text class="t-name" x="560" y="528">pm okf</text><text class="t-mono" x="730" y="528">verify | ontologie [proposer] | types --json | link | unlink | examinee</text>
-        <text class="t-note" x="560" y="550">--dossier vise un autre dossier. Lancer l'index : accord de l'avocat.</text>
+        <text class="t-name" x="560" y="456">pm suivi_dossiers</text><text class="t-mono" x="730" y="456">verifier | lire | ecrire · pm memoire verifier</text>
+        <text class="t-name" x="560" y="474">pm catala</text><text class="t-mono" x="730" y="474">verifier (tous les contrôles)</text>
+        <text class="t-mono" x="730" y="492">executer | exceptions | expliquer | squelette</text>
+        <text class="t-name" x="560" y="510">pm okf</text><text class="t-mono" x="730" y="510">verify | ontologie [proposer] | types --json | link | unlink | examinee</text>
+        <text class="t-note" x="560" y="532">--dossier vise un autre dossier. Lancer l'index : accord de l'avocat.</text>
 
         <text class="t-title t-skill-c" x="306" y="584">Skill docx-cli</text>
         <text class="t-note" x="306" y="602">docx : édition directe, versions et cartes</text>
@@ -193,7 +192,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
         <text class="t-title t-mcp" x="306" y="882">MCP piecemaker</text>
         <text class="t-note" x="306" y="902">retiré par défaut, remplacé par pm</text>
-        <text class="t-off" x="560" y="880">conversion · sql · raisonnement · suivi</text>
+        <text class="t-off" x="560" y="880">conversion · sql · suivi</text>
         <text class="t-off" x="560" y="900">afficher · tabular_review · tabular_review_index</text>
       </svg>
     </div>
@@ -220,7 +219,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <p>La règle 6° de l'<code>AGENTS.md</code> du dossier dit au moteur quel skill charger avant d'agir. Claude la reçoit par l'import <code>@AGENTS.md</code> de <code>CLAUDE.md</code>. Le serveur l'ajoute une fois aux <code>AGENTS.md</code> issus du modèle ; il ne touche pas un fichier écrit par l'avocat.</p>
       <div class="scroll"><table>
         <tr><th>Demande</th><th>À charger</th></tr>
-        <tr><td>Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement</td><td class="c-mcp">MCP features : <code>Feature quickstart</code>, puis les pages qu'il indique (<code>Feature read &lt;feature&gt; path=…</code>)</td></tr>
+        <tr><td>Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances</td><td class="c-mcp">MCP features : <code>Feature quickstart</code>, puis les pages qu'il indique (<code>Feature read &lt;feature&gt; path=…</code>)</td></tr>
         <tr><td>Index OKF du dossier : liens entre pièces (ontologie commune, réglée par l'avocat ; l'agent propose en modifiant <code>ontologie.json</code> avec Edit ou Write), prémisses, parties, contradictions, manques du graphe</td><td class="c-skill">okf, puis piecemaker (<code>pm okf</code>, outil <code>OkfWrite</code>)</td></tr>
         <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala ; prémisses avec okf</td></tr>
         <tr><td>Question de droit à documenter</td><td class="c-agent">research-maker ; l'agent principal relit chaque source avant de la citer</td></tr>
@@ -266,13 +265,12 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     <section class="card wide">
       <h2>Pack Catala</h2>
       <p>L'app de bureau installe automatiquement une archive précompilée et vérifie son SHA-256. Le pack Mac et Windows comprend <code>catala</code>, <code>clerk</code>, <code>catala-lsp</code>, <code>catala-format</code>, <code>catala-dap</code>, le runtime Python Catala et <code>catala-proof</code> avec Z3. Aucune compilation ne tourne sur le poste de l'avocat. <code>catleg</code> utilise le Python partagé et les identifiants PISTE existants. Son parseur natif dénombre les articles contrôlés ; un contrôle vide ne valide rien. <code>pm catala verifier --au AAAA-MM-JJ</code> compare le numéro du titre, le texte intégral recopié (<code>catleg diff</code>) et la période officielle à cette date ; sans <code>--au</code>, Catleg n'est pas effectué. La date du jour est admise. Les liens Légifrance du graphe ouvrent le lecteur interne avec contrôle de citation.</p>
-      <p>Le skill <code>catala</code> donne une fiche de syntaxe vérifiée et ses pièges. <code>pm catala</code> sépare trois groupes. Contrôler : <code>verifier</code>, commande unique, qui met les fichiers au format officiel puis lance typage, tests, preuves, Catleg et citations. Comprendre un échec : <code>executer</code> (trace d'exécution), <code>exceptions</code> (arbre des exceptions), <code>expliquer</code> (graphe d'un autre scénario). Écrire : <code>squelette</code> (test généré) et <code>section</code> (titre, extrait vérifié mot pour mot et texte officiel d'une source, lus dans le cache local). Avant chaque écriture d'un programme, le hook PreToolUse compile une copie (<code>clerk typecheck</code>) et refuse une erreur de compilation nouvelle ; sans pack ou après 10 s, l'écriture passe. Le skill ne présente plus <code>formater</code>, <code>preuve</code> ni <code>catleg</code> ; le bilan montre les erreurs du compilateur ligne par ligne. Les programmes vivent dans <code>.piecemaker/catala/&lt;nom&gt;/</code>, les résultats dans <code>resultats/</code>. L'onglet Catala (<code>piecemaker-catala</code>) montre le bilan regroupé (typage, format, tests, preuves, Catleg, citations PieceMaker) et le graphe produit après <code>pm catala verifier</code>. La disposition et les couleurs reprennent Raisonnement. Le volet se met à jour par la connexion existante, sans surveillance des fichiers. Ce graphe décrit une exécution et ne prouve pas les faits. Le graphe partagé relie conditions, données, sources et points ouverts. Chaque application aligne horizontalement règle, conditions, faits et pièces. La conséquence juridique apparaît en dessous et peut alimenter une autre application. Le code reste du Catala natif, sans attribut propre. Chaque définition ou règle se place directement sous le titre <code>## … | LEGIARTI…</code> (JORFARTI, JURITEXT, CETATEXT, CONSTEXT) de son texte, suivi de l'extrait cité puis du texte intégral. Une citation qui ne diffère que par la ponctuation est corrigée seule ; une décision frappée de recours porte « Non rendue en dernier ressort, voir … », ouvert dans la visionneuse. Chaque entrée porte un titre <code>##</code> de 2 à 7 mots. Chaque fait d'un scénario porte juste au-dessus <code>## okf:/_premises/&lt;fiche&gt;.md</code> : le contrôle compare sa valeur à la prémisse et avertit d'un lien posé par l'avocat. <code>tache.json</code> exige <code>type</code> (<code>litigation</code>, <code>transactional</code>) et <code>date_vigueur</code>. Il refuse aussi un bloc mal ouvert, ignoré par Catala, un test sans <code>assertion</code> et tout avertissement du typage. Les sources des titres et les pièces des prémisses alimentent le graphe. Le détail conserve les définitions, conditions et positions natives ; les traces du compilateur restent hors du dessin principal. Le graphe utilise aussi les arbres d’exceptions et la trace JSON ; il conserve un repli JSON si le DOT échoue. Le choix du scénario utilise les traces Catala des tests Clerk ; Vrai/Faux reste distinct de la preuve. Les notes Markdown rattachent questions, justifications et démarches aux nœuds. Origine de chaque élément et limites : <code>docs/graphe-catala.md</code>. Les archives des deux plateformes doivent être construites, testées et épinglées avant livraison. Détail : <code>docs/catala.md</code>.</p>
+      <p>Le skill <code>catala</code> donne une fiche de syntaxe vérifiée et ses pièges. <code>pm catala</code> sépare trois groupes. Contrôler : <code>verifier</code>, commande unique, qui met les fichiers au format officiel puis lance typage, tests, preuves, Catleg et citations. Comprendre un échec : <code>executer</code> (trace d'exécution), <code>exceptions</code> (arbre des exceptions), <code>expliquer</code> (graphe d'un autre scénario). Écrire : <code>squelette</code> (test généré) et <code>section</code> (titre, extrait vérifié mot pour mot et texte officiel d'une source, lus dans le cache local). Avant chaque écriture d'un programme, le hook PreToolUse compile une copie (<code>clerk typecheck</code>) et refuse une erreur de compilation nouvelle ; sans pack ou après 10 s, l'écriture passe. Le skill ne présente plus <code>formater</code>, <code>preuve</code> ni <code>catleg</code> ; le bilan montre les erreurs du compilateur ligne par ligne. Les programmes vivent dans <code>.piecemaker/catala/&lt;nom&gt;/</code>, les résultats dans <code>resultats/</code>. L'onglet Catala (<code>piecemaker-catala</code>) montre le bilan regroupé (typage, format, tests, preuves, Catleg, citations PieceMaker) et le graphe produit après <code>pm catala verifier</code>. Le volet se met à jour par la connexion existante, sans surveillance des fichiers. Ce graphe décrit une exécution et ne prouve pas les faits. Le graphe partagé relie conditions, données, sources et points ouverts. Chaque application aligne horizontalement règle, conditions, faits et pièces. La conséquence juridique apparaît en dessous et peut alimenter une autre application. Le code reste du Catala natif, sans attribut propre. Chaque définition ou règle se place directement sous le titre <code>## … | LEGIARTI…</code> (JORFARTI, JURITEXT, CETATEXT, CONSTEXT) de son texte, suivi de l'extrait cité puis du texte intégral. Une citation qui ne diffère que par la ponctuation est corrigée seule ; une décision frappée de recours porte « Non rendue en dernier ressort, voir … », ouvert dans la visionneuse. Chaque entrée porte un titre <code>##</code> de 2 à 7 mots. Chaque fait d'un scénario porte juste au-dessus <code>## okf:/_premises/&lt;fiche&gt;.md</code> : le contrôle compare sa valeur à la prémisse et avertit d'un lien posé par l'avocat. <code>tache.json</code> exige <code>type</code> (<code>litigation</code>, <code>transactional</code>) et <code>date_vigueur</code>. Il refuse aussi un bloc mal ouvert, ignoré par Catala, un test sans <code>assertion</code> et tout avertissement du typage. Les sources des titres et les pièces des prémisses alimentent le graphe. Le détail conserve les définitions, conditions et positions natives ; les traces du compilateur restent hors du dessin principal. Le graphe utilise aussi les arbres d’exceptions et la trace JSON ; il conserve un repli JSON si le DOT échoue. Le choix du scénario utilise les traces Catala des tests Clerk ; Vrai/Faux reste distinct de la preuve. Les notes Markdown rattachent questions, justifications et démarches aux nœuds. Origine de chaque élément et limites : <code>docs/graphe-catala.md</code>. Les archives des deux plateformes doivent être construites, testées et épinglées avant livraison. Détail : <code>docs/catala.md</code>.</p>
     </section>
 
     <section class="card">
       <h2>Skills réservés au développement</h2>
       <ul>
-        <li><code class="c-skill">verifieur-raisonnement</code> : cadre de <code>pm raisonnement</code>.</li>
         <li><code class="c-skill">backend-module-standards</code> : architecture de <code>server/</code>.</li>
         <li><code class="c-skill">frontend-module-standards</code> : architecture de <code>src/</code>.</li>
         <li><code class="c-skill">electron-cloudcli</code> : packaging, installation, mises à jour.</li>
@@ -281,8 +279,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     <section class="card">
       <h2>Volets de l'interface</h2>
-      <p>Ces plugins servent l'avocat. Leurs manifestes ne déclarent aucun outil IA. Le moteur ouvre Dossier, Analyse tabulaire, Bordereau, Raisonnement, Suivi des dossiers et Catala avec <code>pm tab afficher</code>. <code>pm bordereau</code> tamponne les pièces et recharge le volet Bordereau. L'index est un onglet du volet Dossier, pas un plugin.</p>
-      <p><code>piecemaker-catala</code>, <code>piecemaker-dossier</code>, <code>piecemaker-echeances</code>, <code>piecemaker-library</code>, <code>piecemaker-raisonnement</code>, <code>piecemaker-tabular-review</code>, <code>piecemaker-tampon</code>, <code>piecemaker-timesheet</code>.</p>
+      <p>Ces plugins servent l'avocat. Leurs manifestes ne déclarent aucun outil IA. Le moteur ouvre Dossier, Analyse tabulaire, Bordereau, Suivi des dossiers et Catala avec <code>pm tab afficher</code>. <code>pm bordereau</code> tamponne les pièces et recharge le volet Bordereau. L'index est un onglet du volet Dossier, pas un plugin.</p>
+      <p><code>piecemaker-catala</code>, <code>piecemaker-dossier</code>, <code>piecemaker-echeances</code>, <code>piecemaker-library</code>, <code>piecemaker-tabular-review</code>, <code>piecemaker-tampon</code>, <code>piecemaker-timesheet</code>.</p>
     </section>
 
     <section class="card">
