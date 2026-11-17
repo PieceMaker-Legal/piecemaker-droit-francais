@@ -1,0 +1,61 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { parse } from 'yaml';
+
+export const VIEW_FEATURE = 'case';
+const COLLECTIONS = ['okf', 'deadlines', 'memories'];
+
+const versionOf = (file) => Math.floor(fs.statSync(file).mtimeMs);
+const updatedOf = (file) => fs.statSync(file).mtime.toISOString();
+
+function walk(folder, base = folder) {
+  if (!fs.existsSync(folder)) return [];
+  return fs.readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(folder, entry.name);
+    if (entry.isDirectory()) return walk(full, base);
+    return entry.isFile() ? [path.relative(base, full).split(path.sep).join('/')] : [];
+  });
+}
+
+function okfData(content) {
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(content);
+  if (!match) return { body: content };
+  return { ...(parse(match[1]) ?? {}), body: match[2] };
+}
+
+function sources(root) {
+  const folder = path.join(root, '.piecemaker');
+  return {
+    okf: () => walk(path.join(folder, 'okf')).filter((file) => file.endsWith('.md') && file !== 'index.md')
+      .map((file) => ({ id: encodeURIComponent(file), file: path.join(folder, 'okf', file), read: (text) => okfData(text) })),
+    deadlines: () => (fs.existsSync(folder) ? fs.readdirSync(folder) : []).filter((file) => file.endsWith('-suivi.json'))
+      .map((file) => ({ id: file.slice(0, -'-suivi.json'.length), file: path.join(folder, file), read: (text) => JSON.parse(text) })),
+    memories: () => walk(path.join(folder, 'memoires')).filter((file) => file.endsWith('.md') && !file.includes('/'))
+      .map((file) => ({ id: file.slice(0, -3), file: path.join(folder, 'memoires', file), read: (text) => ({ text }) })),
+  };
+}
+
+export function isView(feature, segments) {
+  return feature === VIEW_FEATURE && COLLECTIONS.includes(segments[0]);
+}
+
+function toDoc(collection, entry) {
+  return { id: entry.id, path: `${collection}/${entry.id}`, data: entry.read(fs.readFileSync(entry.file, 'utf8')), version: versionOf(entry.file), updatedAt: updatedOf(entry.file) };
+}
+
+export function viewList(root, segments) {
+  if (segments.length !== 1) return [];
+  return sources(root)[segments[0]]().map((entry) => toDoc(segments[0], entry));
+}
+
+export function viewGet(root, segments) {
+  if (segments.length !== 2) return null;
+  const entry = sources(root)[segments[0]]().find((candidate) => candidate.id === segments[1]);
+  return entry ? toDoc(segments[0], entry) : null;
+}
+
+export const VIEW_WRITE_HINT = {
+  okf: 'The index is written through its checked commands: Feature run index link, unlink or mark_examined.',
+  deadlines: 'Write .piecemaker/<name>-suivi.json with Edit or Write; Le Hérisson verifies it after each write.',
+  memories: 'Write .piecemaker/memoires/<name>.md with Edit or Write; Le Hérisson verifies it after each write.',
+};
