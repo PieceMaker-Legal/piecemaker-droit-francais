@@ -12,7 +12,8 @@ const KEY_REASON = 'Only the PieceMaker server can access the seal key of the on
 const OKF_REASON = FEATURES.find((feature) => feature.nom === 'okf').motif;
 const SHELL_KEY = /\.piecemaker[\\/]ontologie\.cle\b|\bontologie\.cle\b/;
 const SHELL_MENTION = /\.piecemaker[\\/]((?:ontologie|arborescence)(?:\.proposition)?\.json|etapes\.json|protection\.json|okf\b)/;
-const READ_COMMANDS = new Set(['cat', 'head', 'tail', 'less', 'more', 'grep', 'egrep', 'fgrep', 'rg', 'ls', 'wc', 'file', 'stat', 'diff', 'sort', 'uniq', 'cut', 'tr', 'jq', 'find', 'echo', 'printf', 'test', 'cd', 'pwd', 'pm', 'true']);
+const READ_COMMANDS = new Set(['cat', 'head', 'tail', 'less', 'more', 'grep', 'egrep', 'fgrep', 'rg', 'ls', 'wc', 'file', 'stat', 'diff', 'sort', 'uniq', 'cut', 'tr', 'jq', 'find', 'echo', 'printf', 'test', 'cd', 'pwd', 'pm', 'true', 'for', 'done', 'fi']);
+const CONTROL_PREFIX = /^\s*(?:(?:do|then|else|if|elif|while|until)\s+)+/;
 const UNSAFE_ARGUMENT = /(^|\s)(-i\b|--in-place|-delete\b|-exec\b|-execdir\b|-ok\b|-fprint)/;
 const SED_PRINT = /^\s*sed\s+-n\s+(['"]?)[\d,$]+p\1(\s|$)/;
 
@@ -33,11 +34,12 @@ function guardedReason(absolute) {
 
 function readOnlyShell(command) {
   const harmless = command.replace(/\d?>&\d/g, '').replace(/\d?>{1,2}\s*\/dev\/null\b/g, '');
-  if (/>|`|\$\(|<\(/.test(harmless)) return false;
+  if (/>|`|<\(/.test(harmless)) return false;
   return shellSegments(harmless).every((segment) => {
-    const words = segment.words.filter((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word));
+    const text = segment.text.replace(CONTROL_PREFIX, '');
+    const words = shellSegments(text)[0]?.words.filter((word) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(word)) ?? [];
     const program = path.basename(words[0] || '');
-    return (!words.length || READ_COMMANDS.has(program) || (program === 'sed' && SED_PRINT.test(segment.text))) && (/^([ef]?grep|rg)$/.test(program) || !UNSAFE_ARGUMENT.test(segment.text));
+    return (!words.length || READ_COMMANDS.has(program) || (program === 'sed' && SED_PRINT.test(text))) && (/^([ef]?grep|rg)$/.test(program) || !UNSAFE_ARGUMENT.test(text));
   });
 }
 

@@ -23,7 +23,7 @@ test('refuse les commandes shell qui ne sont pas de simple lecture', async () =>
   assert.equal(await decision('Bash', { command: 'jq -i . ~/.piecemaker/ontologie.json' }), 'deny');
   assert.equal(await decision('Bash', { command: 'find .piecemaker/okf -name "*.md" -delete' }), 'deny');
   assert.equal(await decision('Bash', { command: 'grep x .piecemaker/okf/a.md 2>.piecemaker/okf/b.md' }), 'deny');
-  assert.equal(await decision('Bash', { command: 'echo $(cat .piecemaker/arborescence.json)' }), 'deny');
+  assert.equal(await decision('Bash', { command: 'echo $(cp a.md .piecemaker/okf/b.md)' }), 'deny');
   assert.equal(await decision('Bash', { command: 'awk 1 .piecemaker/okf/a.md' }), 'deny');
 });
 
@@ -52,6 +52,35 @@ test('laisse lire ces fichiers et écrire ailleurs', async () => {
   assert.equal(await decision('Bash', { command: 'find .piecemaker/okf -name "*.md" | wc -l' }), null);
   assert.equal(await decision('Bash', { command: 'cd "/tmp/Dossier A" && grep -n -i -E "26_|_parties|partie" .piecemaker/okf/index.md | head -20' }), null);
   assert.equal(await decision('Bash', { command: 'cd "/tmp/Dossier A" && ls .piecemaker/okf; ls .piecemaker/okf/* | grep -i -E "partie|ZETABIO SA|PERSON" | head' }), null);
+});
+
+test('laisse lire les fiches dans une boucle et une substitution de commande', async () => {
+  const racine = 'B="$HOME/Documents/Dossiers"; for d in claude codex mistral; do ';
+  for (const command of [
+    `${racine}echo "======== $d"; pm check --dossier "$B/ESSAI 4 $d" 2>&1 | cut -c1-330 | head -40; echo "-- prémisses citées: $(grep -ho '_premises/[^ )"]*' "$B/ESSAI 4 $d/.piecemaker/catala/restitution/"*.catala_fr | sort -u | wc -l) ; fiches: $(ls "$B/ESSAI 4 $d/.piecemaker/okf/_premises" 2>/dev/null | wc -l)"; done`,
+    `${racine}echo "== $d"; grep -ho '_premises/[^ )"]*' "$B/ESSAI 4 $d/.piecemaker/catala/restitution/"*.catala_fr | sort -u | wc -l; ls "$B/ESSAI 4 $d/.piecemaker/okf/_premises" | wc -l; done`,
+    'echo $(cat .piecemaker/arborescence.json)',
+    'if test -d .piecemaker/okf; then ls .piecemaker/okf; else echo absent; fi',
+    "for f in .piecemaker/okf/*.md; do sed -n '1,5p' \"$f\"; done",
+  ]) {
+    assert.equal(await decision('Bash', { command }), null, command);
+  }
+});
+
+test('refuse une écriture dans une boucle ou une substitution de commande', async () => {
+  for (const command of [
+    'for d in a b; do rm -rf "$d/.piecemaker/okf"; done',
+    'for d in a b; do ls "$d/.piecemaker/okf" > "$d/.piecemaker/okf/liste.md"; done',
+    'for d in a b; do ls .piecemaker/okf; done > .piecemaker/okf/liste.md',
+    'echo "fiches: $(ls .piecemaker/okf | tee .piecemaker/okf/liste.md)"',
+    'echo "$(echo "$(mv a.md .piecemaker/okf/b.md)")"',
+    '$(echo rm) -rf .piecemaker/okf',
+    'if true; then cp a.md .piecemaker/okf/b.md; fi',
+    'ls `cp a.md .piecemaker/okf/b.md`',
+    'for f in .piecemaker/okf/*.md; do sed -i "" s/a/b/ "$f"; done',
+  ]) {
+    assert.equal(await decision('Bash', { command }), 'deny', command);
+  }
 });
 
 test('refuse une écriture cachée après une chaîne entre guillemets', async () => {

@@ -19,6 +19,8 @@ function split(command) {
   let segment = fresh();
   let word = null;
   let quote = '';
+  let depth = 0;
+  const outer = [];
   const endWord = () => {
     if (word !== null) segment.words.push(word);
     word = null;
@@ -27,6 +29,14 @@ function split(command) {
     endWord();
     if (segment.text.trim()) segments.push(segment);
     segment = fresh();
+  };
+  const endSubstitution = () => {
+    endSegment();
+    ({ segment, word, quote, depth } = outer.pop());
+    segment.text += '$()';
+    segment.expanded += '$()';
+    if (!quote) segment.unquoted += '$()';
+    word = (word ?? '') + '$()';
   };
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index];
@@ -43,6 +53,15 @@ function split(command) {
       if (next !== '\n' && next !== undefined) word = (word ?? '') + next;
       continue;
     }
+    if (char === '$' && next === '(') {
+      outer.push({ segment, word, quote, depth });
+      segment = fresh();
+      word = null;
+      quote = '';
+      depth = 0;
+      index += 1;
+      continue;
+    }
     if (quote === '"') {
       segment.text += char;
       if (char === '"') quote = '';
@@ -52,6 +71,12 @@ function split(command) {
       }
       continue;
     }
+    if (char === ')' && !depth && outer.length) {
+      endSubstitution();
+      continue;
+    }
+    if (char === '(') depth += 1;
+    if (char === ')' && depth) depth -= 1;
     if (char === '#' && word === null) {
       while (index + 1 < text.length && text[index + 1] !== '\n') index += 1;
       continue;
@@ -81,6 +106,7 @@ function split(command) {
     segment.unquoted += char;
     word = (word ?? '') + char;
   }
+  while (outer.length) endSubstitution();
   endSegment();
   return segments;
 }
