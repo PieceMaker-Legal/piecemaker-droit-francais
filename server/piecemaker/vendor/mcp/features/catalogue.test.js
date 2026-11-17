@@ -17,7 +17,7 @@ test('every feature has a unique English name, a known tab and existing skills',
     const read = readFeature(feature.nom);
     assert.ok(read.skills.length > 0);
     for (const skill of read.skills) {
-      for (const reference of skill.references) assert.ok(reference.path.includes('/references/') && reference.when.startsWith('before '), reference.path);
+      for (const reference of skill.references) assert.ok(reference.includes('/references/'), reference);
     }
   }
 });
@@ -26,7 +26,7 @@ test('every listed reference can be read', async () => {
   const { CATALOGUE, readFeature, readReference } = await load();
   for (const feature of CATALOGUE) {
     for (const skill of readFeature(feature.nom).skills) {
-      for (const reference of [...skill.references.map((entry) => entry.path), `${skill.name}/SKILL.md`]) assert.ok(readReference(feature.nom, reference).length > 0, reference);
+      for (const reference of [...skill.references, `${skill.name}/SKILL.md`]) assert.ok(readReference(feature.nom, reference).length > 0, reference);
     }
   }
 });
@@ -44,7 +44,6 @@ test('every command maps to a pm command and its options, with unique English na
   const help = require('node:child_process').execFileSync(process.execPath, [path.join(__dirname, '..', '..', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs'), '--help'], { encoding: 'utf8' });
   const names = new Set();
   for (const feature of CATALOGUE) {
-    assert.ok(feature.demarrage.length > 0, feature.nom);
     for (const command of feature.commandes) {
       assert.match(command.nom, /^[a-z]+(_[a-z]+)*$/);
       assert.ok(!names.has(command.nom), command.nom);

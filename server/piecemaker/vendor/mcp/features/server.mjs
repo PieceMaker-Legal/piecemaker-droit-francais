@@ -74,12 +74,9 @@ function featureText(name, root) {
   return [
     `# Feature ${feature.name} — ${feature.title}`,
     feature.description,
-    feature.tab ? `Tab: open it with Feature open ${feature.name}.` : 'No tab of its own: Feature open needs a file.',
     ...(feature.commands.length ? ['\n## Commands (Feature run name=' + feature.name + ' command=<name> args={...})\n', ...feature.commands.map((command) => `- ${command.name}(${command.parameters.join(', ')}): ${command.role} [pm ${command.pm}]`)] : []),
-    '\n## Read before you act\n',
-    ...feature.skills.flatMap((skill) => (skill.references.length
-      ? skill.references.map((reference) => `- ${reference.when[0].toUpperCase()}${reference.when.slice(1)}: Feature read ${feature.name} path=${reference.path}`)
-      : [`- Before you start: Feature read ${feature.name} path=${skill.name}/SKILL.md`])),
+    '\n## Read first\n',
+    ...feature.skills.flatMap((skill) => (skill.references.length ? skill.references : [`${skill.name}/SKILL.md`]).map((reference) => `- Feature read ${feature.name} path=${reference}`)),
     ...(name === 'projects' ? ['\n## Files of the case (Feature open projects file=<path>)\n', ...(files.length ? files.slice(0, FILE_LINES) : ['(none)']), ...(files.length > FILE_LINES ? [`… ${files.length - FILE_LINES} more file(s).`] : [])] : []),
   ].join('\n');
 }
@@ -91,7 +88,7 @@ export function createServer({ root = process.cwd(), pm = runPmScript, relations
   const caseArgs = (args) => [...args, '--dossier', root];
 
   server.registerTool('Feature', {
-    description: 'PieceMaker features: the tabs of the case. For new work, call quickstart first: it returns the feature, its commands, the reference to read before each task, the case state and the first calls. Otherwise list, then read a feature before you work with it. run executes a command of the feature (instead of the pm shell command); open shows its tab.',
+    description: 'PieceMaker features: the tabs of the case. For new work, call quickstart first: it returns the feature, its commands, the pages to read first, the case state and the first calls. Otherwise list, then read a feature before you work with it. run executes a command of the feature (instead of the pm shell command). open shows the lawyer a tab or a file of the case without changing it: use it right after a run, FeatureData write or file edit that changed what the lawyer should now see, or when the lawyer asks to see it. stamp_exhibits opens its tab itself.',
     inputSchema: {
       action: z.enum(['quickstart', 'list', 'read', 'run', 'open']),
       intent: z.enum(Object.keys(INTENTS)).optional().describe('quickstart: what the lawyer asks for (review = tabular review, stamp = exhibits, draft = write a document).'),
@@ -112,8 +109,7 @@ export function createServer({ root = process.cwd(), pm = runPmScript, relations
           featureText(feature, root),
           `\n## Case state (pm check)\n`,
           ...lines.slice(0, CHECK_LINES), ...(lines.length > CHECK_LINES ? [`… ${lines.length - CHECK_LINES} more line(s): Feature run case check_case.`] : []),
-          `\n## First calls\n`,
-          ...readFeature(feature).start.map((call, index) => `${index + 1}. ${call}`),
+          ...(readFeature(feature).start.length ? [`\n## First calls\n`, ...readFeature(feature).start.map((call, index) => `${index + 1}. ${call}`)] : []),
         ].join('\n'));
       }
       required(name, 'name', action);

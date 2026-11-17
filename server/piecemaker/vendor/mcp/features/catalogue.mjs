@@ -35,7 +35,7 @@ export function readFeature(name) {
     commands: (feature.commandes ?? []).map((command) => ({ name: command.nom, role: command.role, parameters: Object.keys(command.parametres ?? feature.parametres ?? {}), pm: command.pm.join(' ') })),
     skills: feature.skills.map((skill) => ({
       name: skillName(skill),
-      references: (skill.references ?? []).map((reference) => ({ path: `${skillName(skill)}/references/${reference.fichier}`, when: reference.quand })),
+      references: (skill.references ?? []).map((reference) => `${skillName(skill)}/references/${reference}`),
     })),
   };
 }

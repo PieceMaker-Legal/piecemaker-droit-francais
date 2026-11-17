@@ -2584,7 +2584,7 @@ const CONFIG = {
   cowork: {
   "pageNamed": "mon tableau des dossiers PieceMaker",
   "pageUnnamed": "mon tableau des dossiers PieceMaker",
-  "pageFind": "ouvre-le avec les commandes pm suivi_dossiers lire et pm suivi_dossiers ecrire ; avant, lis Feature read deadlines path=piecemaker/references/tableau.md",
+  "pageFind": "ouvre-le avec les commandes pm suivi_dossiers lire et pm suivi_dossiers ecrire ; avant, lance Feature quickstart intent=deadlines",
   "guide": [
     "La base du tableau est locale. Lis avec pm suivi_dossiers lire <chemin>. Écris avec pm suivi_dossiers ecrire <chemin> --json '{...}'. Identifiants que tu crées : minuscules et chiffres, tirets simples, 40 caractères au plus.",
     "- Ce tableau est sous projects/{pid} : matters (un enregistrement par dossier), docs (documents déposés dans la page) et requests (demandes de la page). Le tableau lit lui-même les dossiers PieceMaker : un dossier sans fichier de suivi n'y figure pas, chaque fichier .piecemaker/suivi.json ou .piecemaker/<nom>-suivi.json y donne une carte, et aucune carte ne s'y ajoute à la main.",
@@ -2592,7 +2592,7 @@ const CONFIG = {
     "Dossiers:",
     "- Chaque acte ou procédure suivi a son fichier .piecemaker/<nom>-suivi.json (ou .piecemaker/suivi.json s'il n'y en a qu'un), avec sa fiche sous la clé matter, à côté de evenements et echeances. Édite ce fichier, puis lance pm suivi_dossiers verifier, avec --suivi <fichier> quand le dossier en compte plusieurs.",
     "- matter : {name, client, practiceArea, responsible, status : \"open\" ou \"closed\", stage, openedOn, summary, parties, nextStep, links, via}. Seul name est requis. Omets ce que la source ne dit pas.",
-    "- Dates : n'écris jamais matter.keyDates. Écris chaque date dans evenements ou echeances, selon Feature read deadlines path=piecemaker/references/suivi.md. Le moteur calcule, vérifie et affiche la date sur le tableau. Un délai n'est jamais posé de mémoire : cite le texte ou la clause.",
+    "- Dates : n'écris jamais matter.keyDates. Écris chaque date dans evenements ou echeances, selon les pages que donne Feature quickstart intent=deadlines. Le moteur calcule, vérifie et affiche la date sur le tableau. Un délai n'est jamais posé de mémoire : cite le texte ou la clause.",
     "- kind d'une échéance : limitation (prescription ou forclusion), hearing (audience, réunion d'expertise, médiation), filing (acte à déposer ou signifier) ou other.",
     "- responsible : le nom de l'avocat. Une valeur \"user:\" est l'identifiant d'un confrère : ne l'affiche pas et ne la change pas.",
     "- parties : [{name, role, entityType, aliases}]. role : client, adverse, related, co-party, insurer, opposing-counsel, witness ou other. entityType : person ou organisation.",

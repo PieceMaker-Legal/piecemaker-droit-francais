@@ -97,16 +97,12 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            { "fichier": "check.md", "quand": "before you act on a defect reported by check_case" },
-            { "fichier": "dossier.md", "quand": "before you query the database, convert or file documents, build the index or propose a folder tree" }
+            "check.md",
+            "dossier.md"
           ]
         }
       ],
-      "demarrage": [
-        "Feature run case check_case",
-        "Feature read case path=piecemaker/references/dossier.md"
-      ],
-      "commandes": [
+            "commandes": [
         {
           "nom": "check_case",
           "pm": [
@@ -213,12 +209,6 @@
       "skills": [
         {
           "chemin": "vendor/skills/okf"
-        },
-        {
-          "chemin": "vendor/skills/Skill-PieceMaker",
-          "references": [
-            { "fichier": "okf.md", "quand": "before your first write to the index" }
-          ]
         }
       ],
       "demarrage": [
@@ -320,7 +310,7 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            { "fichier": "tabular.md", "quand": "before you prepare, run or complete a review" }
+            "tabular.md"
           ]
         }
       ],
@@ -425,12 +415,11 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            { "fichier": "bordereau.md", "quand": "before you stamp exhibits" }
+            "bordereau.md"
           ]
         }
       ],
       "demarrage": [
-        "Feature open exhibits",
         "Feature run exhibits stamp_exhibits exhibits=[...]"
       ],
       "commandes": [
@@ -455,13 +444,12 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            { "fichier": "raisonnement.md", "quand": "before you write or complete a reasoning" }
+            "raisonnement.md"
           ]
         }
       ],
       "demarrage": [
-        "Feature run reasoning list_reasonings",
-        "Feature read reasoning path=piecemaker/references/raisonnement.md"
+        "Feature run reasoning list_reasonings"
       ],
       "commandes": [
         {
@@ -494,8 +482,8 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            { "fichier": "suivi.md", "quand": "before you write a tracking file (.piecemaker/<name>-suivi.json) or a project memory" },
-            { "fichier": "tableau.md", "quand": "before you handle a board request (projects/cabinet/requests/<id>) or report on the state of the cases" }
+            "suivi.md",
+            "tableau.md"
           ]
         }
       ],
@@ -678,10 +666,6 @@
         {
           "chemin": "vendor/piecemaker-plugin/skills/style-redaction-cabinet"
         }
-      ],
-      "demarrage": [
-        "Feature read projects",
-        "Feature open projects file=<document>.docx"
       ],
       "commandes": []
     }

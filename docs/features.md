@@ -23,14 +23,15 @@ flowchart LR
 
 `FeatureData` et `FeatureComments` reprennent les paramètres des outils `ArtifactData` et `ArtifactComments` de Claude. `feature` remplace `url`. Non repris : `profiles`, `as_level`, `file_path`, `out_dir`, `cursor` de `read`, `watch`.
 
-- `quickstart` est le premier appel d'un travail nouveau. Il prend `intent` (`case`, `index`, `review`, `stamp`, `reasoning`, `deadlines`, `catala`, `draft`, `other`) et renvoie la feature, ses commandes, la référence à lire avant chaque tâche, un extrait de `pm check` et les premiers appels.
-- `read` sans `path` renvoie la même fiche. Une ligne par référence : `Before you …: Feature read <feature> path=<skill>/references/<fichier>`. Le texte vient du champ `quand` de la référence dans le catalogue. Un skill sans références (catala, docx-cli, style-redaction-cabinet) donne `path=<skill>/SKILL.md`. `read` avec `path` renvoie le fichier.
+- `quickstart` est le premier appel d'un travail nouveau. Il prend `intent` (`case`, `index`, `review`, `stamp`, `reasoning`, `deadlines`, `catala`, `draft`, `other`) et renvoie la feature, ses commandes, les pages à lire d'abord, un extrait de `pm check` et, si le catalogue en donne, les premiers appels.
+- `read` sans `path` renvoie la même fiche. Sa section `## Read first` donne une ligne `Feature read <feature> path=<skill>/references/<fichier>` par référence. Un skill sans références (catala, docx-cli, style-redaction-cabinet) donne `path=<skill>/SKILL.md`. `read` avec `path` renvoie le fichier.
 - `run` prend `name`, `command` et `args`. Le catalogue traduit les noms anglais en argv `pm`. `pm` garde ses noms français.
+- `open` montre à l'avocat un onglet ou un fichier sans le modifier, comme `open` d'Artifact : juste après un `run`, une écriture `FeatureData` ou une modification de fichier qui change ce qu'il doit voir, ou à sa demande. `stamp_exhibits` ouvre son onglet lui-même.
 - `read projects` liste aussi les fichiers du dossier, Word en tête, hors fichiers cachés et `.piecemaker/`.
 
 ## Catalogue
 
-Le catalogue est la clé `catalogue` de `server/piecemaker/vendor/piecemaker-plugin/herisson.json`. Chaque entrée porte `nom`, `titre`, `description`, `volet`, `skills`, `demarrage` et `commandes`. Un skill est `{chemin, references}` ; une référence est `{fichier, quand}`.
+Le catalogue est la clé `catalogue` de `server/piecemaker/vendor/piecemaker-plugin/herisson.json`. Chaque entrée porte `nom`, `titre`, `description`, `volet`, `skills`, `commandes` et, si besoin, `demarrage` (premiers appels). Un skill est `{chemin, references}` ; `references` liste des noms de fichiers de `references/`.
 
 Une commande est `{nom, pm, role, parametres}`. Valeurs d'un paramètre :
 
