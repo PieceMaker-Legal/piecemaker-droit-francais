@@ -600,14 +600,17 @@ function indexPoint({ erreurs = [], contradictions = [], manques = [] }) {
   const orphans = manques.filter((entry) => !entry.programmes?.length);
   const forAgent = orphans.filter((entry) => !entry.avocat);
   const forLawyer = orphans.length - forAgent.length;
+  const untyped = erreurs.filter((entry) => /^type « Non classé »/.test(entry.erreur)).map((entry) => String(entry.fiche).replace(/^\//, '').replace(/\.md$/, ''));
+  const faults = erreurs.length - untyped.length;
   const defauts = [
-    erreurs.length ? `${erreurs.length} erreur(s)` : '',
+    untyped.length ? `attribuer un type à ${untyped.join(', ')} : le déplacer dans un dossier de pm dossier arborescence` : '',
+    faults ? `${faults} erreur(s)` : '',
     forAgent.length ? `${forAgent.length} manque(s)` : '',
     forLawyer ? `${forLawyer} manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier)` : '',
     contradictions.length ? `${contradictions.length} contradiction(s) à présenter à l’avocat` : '',
   ].filter(Boolean).join(', ');
   const owners = [
-    ...(erreurs.length || forAgent.some((entry) => !isPremiseGap(entry)) ? ['index-maker'] : []),
+    ...(faults || forAgent.some((entry) => !isPremiseGap(entry)) ? ['index-maker'] : []),
     ...(forAgent.some(isPremiseGap) ? ['premise-maker'] : []),
   ];
   return point('4°', 'Index', defauts, `pm okf verify${agents(owners)}`);

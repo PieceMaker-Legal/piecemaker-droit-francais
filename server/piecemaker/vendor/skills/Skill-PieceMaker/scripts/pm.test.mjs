@@ -253,7 +253,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     piecesFn: async () => ({ pieces: [{ path: 'Pièces/bail.pdf', status: 'ready', protected: true }] }),
     conversionJob: async () => ({ job: null }),
     okfFn: async (input) => { calls.push(input); return {
-      erreurs: [{ fiche: 'Pièces/bail.md', erreur: 'lien sans citation' }],
+      erreurs: [{ fiche: 'Pièces/bail.md', erreur: 'lien sans citation' }, { fiche: '/Note.docx.md', erreur: 'type « Non classé » hors arborescence (Pièces)' }],
       contradictions: [],
       manques: [{ element: '/_premises/date-de-rupture.md', manque: 'prémisse sans valeur', programmes: ['rupture'] }, { element: 'Pièces/avenant.md', manque: 'pièce sans prémisse ni lien' }],
     }; },
@@ -267,7 +267,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
-    '4° Index : 1 erreur(s), 1 manque(s) → pm okf verify (sous-agent index-maker)',
+    '4° Index : attribuer un type à Note.docx : le déplacer dans un dossier de pm dossier arborescence, 1 erreur(s), 1 manque(s) → pm okf verify (sous-agent index-maker)',
     '5° Raisonnement',
     '  5.A bail',
     '    5.A.1 Programme Catala (.piecemaker/catala/bail/) : valide',
