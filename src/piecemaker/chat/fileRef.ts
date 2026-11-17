@@ -16,6 +16,8 @@ export function setActiveProjectId(projectId: string | null | undefined): void {
   activeProjectId = projectId ?? '';
 }
 
+export const activeProject = (): string => activeProjectId;
+
 const cacheKey = (projectId: string, ref: string) => `${projectId}\u0000${ref}`;
 
 /** Résultat connu : chemin réel, `null` si introuvable, `undefined` s'il faut demander au serveur. */

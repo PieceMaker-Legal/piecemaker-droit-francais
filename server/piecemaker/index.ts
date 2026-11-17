@@ -45,6 +45,7 @@ import { createSessionDossierRouter } from './session-dossier/session-dossier-ro
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createDocxReviewRouter } from './docx-review.js';
+import { createFeatureCommentsRouter } from './feature-comments.js';
 import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
 import { createInstitutionalTermsRouter, openInstitutionalTerms } from './institutional-terms.js';
@@ -231,6 +232,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createBodaccSearchRouter());
   router.use(createDocxDocumentRouter());
   router.use(createDocxReviewRouter(projectsDb));
+  router.use(createFeatureCommentsRouter(projectsDb));
   router.use(createFileLinksRouter());
   router.use(createInstitutionalTermsRouter(institutionalTerms));
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));

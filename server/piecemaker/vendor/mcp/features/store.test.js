@@ -104,3 +104,11 @@ test('comments open, reply and resolve', async () => {
   assert.equal(comments.read('reasoning').length, 0);
   assert.equal(comments.read('reasoning', { resolved: true }).length, 1);
 });
+
+test('comments open with a given id, once', async () => {
+  const { openComments } = await load();
+  const comments = openComments(caseFolder());
+  assert.equal((await comments.open('reasoning', null, 'Relire', 'lawyer', 'ab12cd34')).id, 'ab12cd34');
+  await rejects(comments.open('reasoning', null, 'Relire', 'lawyer', 'ab12cd34'), 'conflict');
+  await rejects(comments.open('reasoning', null, 'Relire', 'lawyer', '../x'), 'invalid_argument');
+});

@@ -285,9 +285,11 @@ export function openComments(root) {
     read(feature, { resolved = false } = {}) {
       return load(fileOf(feature)).threads.filter((thread) => resolved || !thread.resolved);
     },
-    open(feature, anchor, text, author = 'lawyer') {
+    open(feature, anchor, text, author = 'lawyer', id = randomUUID().slice(0, 8)) {
       return mutate(feature, (state) => {
-        const thread = { id: randomUUID().slice(0, 8), anchor: anchor ?? null, messages: [message(author, text)], resolved: false };
+        if (!/^[a-z0-9-]{1,40}$/.test(String(id))) fail('invalid_argument', `invalid thread id "${id}".`);
+        if (state.threads.some((thread) => thread.id === id)) fail('conflict', `thread "${id}" already exists.`);
+        const thread = { id, anchor: anchor ?? null, messages: [message(author, text)], resolved: false };
         state.threads.push(thread);
         return thread;
       });

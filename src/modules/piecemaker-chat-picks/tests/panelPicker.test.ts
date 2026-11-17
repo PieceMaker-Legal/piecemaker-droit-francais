@@ -30,7 +30,7 @@ it('cible un élément marqué du volet demandé et transmet son fichier et ses 
     document.querySelector('p')!.click();
     expect(picks).toEqual([]);
     document.querySelector('span')!.click();
-    expect(picks).toEqual([{ titre: 'modifie', nature: 'Relation', fichier: '/Users/exemple/.piecemaker/ontologie.json', debut: 3, fin: 16, note: undefined }]);
+    expect(picks).toEqual([{ titre: 'modifie', nature: 'Relation', fichier: '/Users/exemple/.piecemaker/ontologie.json', debut: 3, fin: 16, note: undefined, tab: TAB }]);
     expect(states).toEqual([{ tab: TAB, active: true }, { tab: TAB, active: false }]);
     expect(picked).toEqual([{ tab: TAB }]);
     expect(document.documentElement.classList.contains('pmc-picking')).toBe(false);

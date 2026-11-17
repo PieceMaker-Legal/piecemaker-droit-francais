@@ -54,7 +54,7 @@ export function startPanelPicker(): () => void {
     event.stopPropagation();
     const picked = tab;
     stop();
-    window.dispatchEvent(new CustomEvent(CHAT_PICK_EVENT, { detail: pick }));
+    window.dispatchEvent(new CustomEvent(CHAT_PICK_EVENT, { detail: { ...pick, tab: picked } }));
     window.dispatchEvent(new CustomEvent(PICKED_EVENT, { detail: { tab: picked } }));
   };
   const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') stop(); };

@@ -1,7 +1,13 @@
-type Card = { titre: string; nature?: string; note?: string; fichier?: string; debut?: number; fin?: number; identifiant?: string; valeur?: string; scenario?: string; demande?: string };
-type Pending = { target: HTMLTextAreaElement; original: string; full: string };
+import { activeProject } from '@/piecemaker/chat/fileRef';
+import { authenticatedFetch } from '@/shared/api';
 
-const PICK_EVENTS = ['piecemaker:chat-pick', 'piecemaker:catala-card-pick'];
+type Card = { titre: string; tab?: string; comment?: boolean; nature?: string; note?: string; fichier?: string; debut?: number; fin?: number; identifiant?: string; valeur?: string; scenario?: string; demande?: string };
+type Thread = { card: Card; feature: string; id: string };
+type Pending = { target: HTMLTextAreaElement; original: string; full: string; threads: Thread[] };
+
+const CATALA_TAB = 'plugin:piecemaker-catala';
+const CATALA_CARD_EVENT = 'piecemaker:catala-card-pick';
+const PICK_EVENTS = ['piecemaker:chat-pick', CATALA_CARD_EVENT];
 const FORM = 'form[data-slot="prompt-input"]';
 const FIELD = 'textarea[data-slot="prompt-input-textarea"]';
 const WATCH_INTERVAL = 200;
@@ -13,12 +19,16 @@ const STYLES = `
 .pmc-pick{display:inline-flex;align-items:center;gap:6px;max-width:100%;padding:2px 4px 2px 10px;border:1px solid hsl(var(--border));border-radius:999px;background:hsl(var(--muted));color:hsl(var(--foreground));font-size:12px;line-height:20px}
 .pmc-pick>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pmc-pick>button{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border:0;border-radius:999px;background:none;color:hsl(var(--muted-foreground));font-size:14px;line-height:1;cursor:pointer}
+.pmc-pick[data-commented]{border-color:hsl(var(--primary))}
+.pmc-pick>button[aria-pressed="true"]{background:hsl(var(--primary));color:hsl(var(--primary-foreground))}
 .pmc-pick>button:hover{background:hsl(var(--border));color:hsl(var(--foreground))}
 `;
 
 const escape = (text: string) => text.replace(/[&<>"]/g, (sign) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[sign]!);
 const heading = (card: Card) => `${card.nature || 'Carte'} « ${card.titre.replace(/[[\]]/g, '')} »`;
 const lines = (card: Card) => (card.debut ? (card.fin && card.fin > card.debut ? `lignes ${card.debut} à ${card.fin}` : `ligne ${card.debut}`) : '');
+const featureOf = (card: Card) => (card.tab === CATALA_TAB ? 'catala' : 'case');
+const threadLine = (thread: Thread) => `${cardReference(thread.card)} — commentaire ${thread.id} : FeatureComments read ${thread.feature}`;
 const place = (card: Card) => [card.fichier, card.fichier && lines(card)].filter(Boolean).join(', ');
 
 export function cardReference(card: Card): string {
@@ -53,7 +63,7 @@ export function startChatPickComposer(): () => void {
   };
   const paint = () => {
     row.hidden = !cards.length;
-    row.innerHTML = cards.map((card, index) => `<span class="pmc-pick" title="${escape(place(card))}"><span>${escape(card.demande ? card.titre : heading(card))}</span><button type="button" data-remove="${index}" aria-label="Retirer">×</button></span>`).join('');
+    row.innerHTML = cards.map((card, index) => `<span class="pmc-pick"${card.comment ? ' data-commented' : ''} title="${escape(place(card))}"><span>${escape(card.demande ? card.titre : heading(card))}</span>${card.demande ? '' : `<button type="button" data-comment="${index}" aria-pressed="${Boolean(card.comment)}" aria-label="Commenter">💬</button>`}<button type="button" data-remove="${index}" aria-label="Retirer">×</button></span>`).join('');
     attach();
   };
   const stopWatch = () => { window.clearInterval(watch); watch = 0; };
@@ -68,17 +78,19 @@ export function startChatPickComposer(): () => void {
   };
 
   const pick = (event: Event) => {
-    const card = (event as CustomEvent<Card>).detail;
-    if (!card?.titre) return;
+    const detail = (event as CustomEvent<Card>).detail;
+    if (!detail?.titre) return;
+    const card = { ...detail, tab: detail.tab ?? (event.type === CATALA_CARD_EVENT ? CATALA_TAB : undefined) };
     if (card.demande) cards = cards.filter((other) => !other.demande);
     if (!cards.some((other) => other.titre === card.titre && other.fichier === card.fichier && other.debut === card.debut)) cards.push(card);
     paint();
     field()?.focus();
   };
   const remove = (event: Event) => {
-    const index = (event.target as Element).closest<HTMLElement>('[data-remove]')?.dataset.remove;
-    if (index === undefined) return;
-    cards.splice(Number(index), 1);
+    const button = (event.target as Element).closest<HTMLElement>('[data-remove], [data-comment]');
+    if (!button) return;
+    if (button.dataset.comment !== undefined) cards[Number(button.dataset.comment)].comment = !cards[Number(button.dataset.comment)].comment;
+    else cards.splice(Number(button.dataset.remove), 1);
     paint();
   };
   const sending = (event: Event) => {
@@ -93,17 +105,27 @@ export function startChatPickComposer(): () => void {
       if (!origin.closest?.(`${FORM} button[type="submit"]`)) return;
     } else if (!origin.matches?.(FORM)) return;
     const original = target.value;
-    const full = [original.trimEnd(), cards.map(cardReference).join('\n')].filter(Boolean).join('\n\n');
+    const threads = cards.filter((card) => card.comment).map((card) => ({ card, feature: featureOf(card), id: window.crypto.randomUUID().slice(0, 8) }));
+    const full = [original.trimEnd(), cards.map((card) => { const thread = threads.find((entry) => entry.card === card); return thread ? threadLine(thread) : cardReference(card); }).join('\n')].filter(Boolean).join('\n\n');
     stopWatch();
     write(target, full);
-    pending = { target, original, full };
+    pending = { target, original, full, threads };
   };
   const settled = (event: Event) => {
     if (!pending) return;
-    const { target, original, full } = pending;
+    const { target, original, full, threads } = pending;
     pending = null;
     if (target.value === full) write(target, original);
     if (event.type !== 'submit' && !event.defaultPrevented) return;
+    for (const thread of threads) {
+      thread.card.comment = false;
+      const { tab, titre: title, nature: kind, fichier: file, debut: start, fin: end } = thread.card;
+      void authenticatedFetch(`/api/piecemaker/feature-comments?${new URLSearchParams({ projectId: activeProject() })}`, {
+        method: 'POST',
+        body: JSON.stringify({ feature: thread.feature, id: thread.id, text: original.trim() || heading(thread.card), anchor: { tab, title, kind, file, start, end } }),
+      }).catch(() => undefined);
+    }
+    if (threads.length) paint();
     if (target.value === '') clear();
     else startWatch();
   };
