@@ -766,7 +766,12 @@ export function useSessionStore() {
       msg.sessionId === sessionId
         ? msg
         : { ...msg, sessionId };
-    let updated = [...slot.realtimeMessages, normalizedMessage];
+    const replacedIndex = normalizedMessage.kind === 'tool_use' && normalizedMessage.toolId
+      ? slot.realtimeMessages.findIndex((existing) => existing.kind === 'tool_use' && existing.toolId === normalizedMessage.toolId)
+      : -1;
+    let updated = replacedIndex >= 0
+      ? slot.realtimeMessages.map((existing, index) => (index === replacedIndex ? normalizedMessage : existing))
+      : [...slot.realtimeMessages, normalizedMessage];
     if (updated.length > MAX_REALTIME_MESSAGES) {
       updated = updated.slice(-MAX_REALTIME_MESSAGES);
     }

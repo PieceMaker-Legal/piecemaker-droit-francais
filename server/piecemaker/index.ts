@@ -20,6 +20,7 @@ import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime, projectOfDirectory } from './anonymizer/session-runtime.js';
 import { installCodexPlanRuntime } from './codex-plan.js';
+import { installCodexEventsRuntime } from './codex-events.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
 import { createCitationsRouter } from './harness/citations.routes.js';
@@ -146,6 +147,7 @@ const etapes = createEtapesService({
 folderHistory.onChange(etapes.invalider);
 for (const { project_path: projectPath } of suivi.projects()) etapes.invalider(projectPath);
 installCodexPlanRuntime(providerRuntimeService);
+installCodexEventsRuntime(providerRuntimeService, sessionsService);
 installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
 installLegalCodeHarness({ runtime: providerRuntimeService, sessions: sessionsService, applicationRoot });
