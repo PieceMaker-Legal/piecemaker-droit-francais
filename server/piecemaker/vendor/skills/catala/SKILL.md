@@ -5,7 +5,7 @@ description: Écrire et vérifier un programme Catala qui code une règle juridi
 
 # Catala
 
-> **Délégation.** Agent principal : lisez les pièces, puis écrivez vous-même le programme avec ce skill. Confiez ensuite ses prémisses à `premise-maker`, avec le nom du programme et, pour chacune : le chemin `okf:`, la question, le type et l’unité, la valeur attendue, les pièces repérées et le passage Catala qui lit le fait. `premise-maker` confirme, corrige ou déclare le fait absent ; un fait absent est écarté faute de preuve. Une source manque → `research-maker`. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
+> Lisez les pièces, puis écrivez vous-même le programme avec ce skill et ses prémisses avec le skill `okf`. Une source manque → `research-maker`.
 
 Catala code une règle juridique en programme exécutable. Le pack Catala est installé par l'app de bureau PieceMaker. Lancez chaque outil par `pm catala`, jamais par un chemin direct. `pm catala verifier` contrôle documentation, typage, format, tests, preuve, vigueur et citations : ce skill ne répète pas ses règles, suivez ses messages.
 
@@ -50,7 +50,7 @@ Une tâche contient un ou plusieurs raisonnements : une demande principale et un
 1. Lisez les pièces et les textes. Formulez la question juridique.
 2. Écrivez `tache.json`, puis `clerk.toml` (`[project]`, `name = "<nom>"`).
 3. Écrivez le module sur le modèle de `references/format.md` : `> Module Nom` dans `nom.catala_fr`, chaque article sous son propre titre, son extrait exact, son texte intégral, puis ses blocs ` ```catala `. Ajoutez chaque section source par `pm catala section`, puis écrivez son bloc dessous.
-4. Déclarez chaque fait du dossier comme un `contexte` : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur (`references/format.md`). Confiez les prémisses à `premise-maker`.
+4. Déclarez chaque fait du dossier comme un `contexte` : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur (`references/format.md`). Établissez les prémisses avec le skill `okf`.
 5. Écrivez `test_<module>.catala_fr` : un scénario `#[test]` par raisonnement, avec ses assertions et les faits du dossier, chacun sous `## okf:/_premises/<fiche>.md`.
 6. Le Hérisson lance `pm catala verifier` après chaque écriture d'un fichier du programme et rend les messages nouveaux : suivez chacun jusqu'à « vérifié ». Ne le lancez pas vous-même. Lancez ensuite `pm okf verify`.
 

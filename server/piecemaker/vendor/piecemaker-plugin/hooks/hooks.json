@@ -62,7 +62,7 @@
     ],
     "SubagentStart": [
       {
-        "matcher": "index-maker|premise-maker|research-maker|deep-research-maker",
+        "matcher": "research-maker",
         "hooks": [
           {
             "type": "command",
@@ -73,7 +73,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "index-maker|premise-maker|research-maker|deep-research-maker",
+        "matcher": "research-maker",
         "hooks": [
           {
             "type": "command",

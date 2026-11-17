@@ -275,19 +275,19 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
-    '4° Index : attribuer un type à Note.docx : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence), 1 erreur(s), 1 manque(s) → pm okf verify (sous-agent index-maker)',
+    '4° Index : attribuer un type à Note.docx : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence), 1 erreur(s), 1 manque(s) → pm okf verify',
     '5° Raisonnement',
     '  5.A bail',
     '    5.A.1 Programme Catala (.piecemaker/catala/bail/) : valide',
-    '    5.A.2 Prémisses OKF du programme : aucune → sous-agent premise-maker',
+    '    5.A.2 Prémisses OKF du programme : aucune → skill okf',
     '  5.B rupture (rédaction)',
     '    5.B.1 Programme Catala (.piecemaker/catala/rupture/) : jamais vérifié → pm catala verifier --programme rupture',
-    '    5.B.2 Prémisses OKF du programme : 1 manque(s) → pm okf verify (sous-agent premise-maker)',
+    '    5.B.2 Prémisses OKF du programme : 1 manque(s) → pm okf verify',
     '    5.B.3 Conclusions en défense : en cours de rédaction',
     '    5.B.4 Lettre fictive : validé',
     '    5.B.5 Assignation fictive : à rédiger',
     '    5.B.6 Suivi : 1 erreur(s), 0 manque(s), 1 échéance(s) dépassée(s), du jour ou sans date → pm suivi_dossiers verifier --suivi rupture-suivi.json',
-    '6° Recherche « Rupture fictive » : bloquée → pm tabular_review lister (sous-agent deep-research-maker)',
+    '6° Recherche « Rupture fictive » : bloquée → pm tabular_review lister',
     '7° Suivi suivi.json : valide',
   ].join('\n'));
   assert.doesNotMatch(text, /ancien|yaml/i);
@@ -311,7 +311,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '  règle calcul.loyer_impayé rempli',
     '  règle calcul.caution_versée non rempli',
   ].join('\n'));
-  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 2 condition\(s\) sans prémisse : congé_donné, loyer_impayé → sous-agent premise-maker\n/);
+  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 2 condition\(s\) sans prémisse : congé_donné, loyer_impayé → skill okf\n/);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
   await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });
@@ -321,7 +321,7 @@ test('tabular_review verifier signale seulement les recherches bloquées', async
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-revue-'));
   const projets = [{ projet: 'p1', nom: 'Rupture fictive', mode: 'recherche', a_completer: ['questions'] }, { projet: 'p2', nom: 'Autre', mode: 'recherche' }, { projet: 'p3', nom: 'Index', index: true }];
   const verify = (liste) => run(['tabular_review', 'verifier', '--dossier', dossier], { deps: { tabularFn: async () => ({ analyses: [], projets: liste }) } });
-  assert.equal(await verify(projets), 'Recherche « Rupture fictive » : bloquée → pm tabular_review lister (sous-agent deep-research-maker)');
+  assert.equal(await verify(projets), 'Recherche « Rupture fictive » : bloquée → pm tabular_review lister');
   assert.equal(await verify(projets.slice(1)), '');
   fs.rmSync(dossier, { recursive: true, force: true });
 });
@@ -367,7 +367,7 @@ test('check sur un dossier à jour ne signale rien', async () => {
     { element: '/_premises/date-de-rupture.md', manque: 'prémisse sans partie concernée (involves) : attend l’avocat', avocat: true },
     { element: 'Pièces/avenant.md', manque: 'pièce à examiner' },
   ] }) };
-  assert.equal((await run(['check', '--dossier', dossier], { deps: parties })).split('\n')[4], '4° Index : 1 manque(s), 1 manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier) → pm okf verify (sous-agent index-maker)');
+  assert.equal((await run(['check', '--dossier', dossier], { deps: parties })).split('\n')[4], '4° Index : 1 manque(s), 1 manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier) → pm okf verify');
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 

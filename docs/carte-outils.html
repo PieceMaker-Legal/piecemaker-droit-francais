@@ -189,8 +189,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
         <text class="t-title t-agent" x="306" y="796">Sous-agents</text>
         <text class="t-note" x="306" y="816">activés par dossier, Bibliothèque</text>
-        <text class="t-name t-agent" x="560" y="806">IndexMaker · PremiseMaker</text><text class="t-mono" x="880" y="806">sonnet · okf</text>
-        <text class="t-name t-agent" x="560" y="826">ResearchMaker · DeepResearchMaker</text><text class="t-mono" x="820" y="826">haiku · legifrance / sonnet · pm tabular_review</text>
+        <text class="t-name t-agent" x="560" y="806">ResearchMaker</text><text class="t-mono" x="720" y="806">haiku · legifrance</text>
 
         <text class="t-title t-mcp" x="306" y="882">MCP piecemaker</text>
         <text class="t-note" x="306" y="902">retiré par défaut, remplacé par pm</text>
@@ -222,8 +221,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Demande</th><th>À charger</th></tr>
         <tr><td>Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement</td><td class="c-mcp">MCP features : <code>Feature quickstart</code>, puis les pages qu'il indique (<code>Feature read &lt;feature&gt; path=…</code>)</td></tr>
-        <tr><td>Index OKF du dossier : liens entre pièces (ontologie commune, réglée par l'avocat ; l'agent propose en modifiant <code>ontologie.json</code> avec Edit ou Write), prémisses, parties, contradictions, manques du graphe</td><td class="c-skill">okf, puis piecemaker (<code>pm okf</code>) ; écriture déléguée à <span class="c-agent">index-maker</span>, prémisses d'un programme Catala à <span class="c-agent">premise-maker</span></td></tr>
-        <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala ; prémisses déléguées à <span class="c-agent">premise-maker</span></td></tr>
+        <tr><td>Index OKF du dossier : liens entre pièces (ontologie commune, réglée par l'avocat ; l'agent propose en modifiant <code>ontologie.json</code> avec Edit ou Write), prémisses, parties, contradictions, manques du graphe</td><td class="c-skill">okf, puis piecemaker (<code>pm okf</code>, outil <code>OkfWrite</code>)</td></tr>
+        <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala ; prémisses avec okf</td></tr>
         <tr><td>Question de droit à documenter</td><td class="c-agent">research-maker ; l'agent principal relit chaque source avant de la citer</td></tr>
         <tr><td>Lire, modifier, annoter ou créer un fichier Word <code>.docx</code></td><td class="c-skill">docx-cli</td></tr>
         <tr><td>Rédiger ou relire un acte, un courrier, un document juridique</td><td class="c-skill">style-redaction-cabinet, puis docx-cli</td></tr>
@@ -244,9 +243,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_*</code> (Claude, Codex) : recherche réservée à research-maker ; Mistral : outil <code>research_maker</code> (délégation serveur)</td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>
-        <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude), <code>SubagentStop</code> (Codex), bilan ajouté au compte rendu (Mistral) : vérification propre à chaque sous-agent (index, prémisses et valeur attendue, décisions lues, revue soumise), relance du sous-agent</td></tr>
+        <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude), <code>SubagentStop</code> (Codex), bilan ajouté au compte rendu (Mistral) : décisions citées par research-maker et jamais lues, relance du sous-agent</td></tr>
       </table></div>
-      <p style="margin-top:12px">Codex reçoit la protection des pièces, le garde de recherche et la vérification des sous-agents. Mistral exécute <code>protect-originals</code> et <code>guard-secrets</code> avant ses outils intégrés ; il délègue les recherches <code>Search_*</code> à l'outil <code>research_maker</code>. Chaque sous-agent de <code>.vibe/agents</code> devient un outil de délégation du SDK Mistral (<code>index_maker</code>, <code>premise_maker</code>, <code>research_maker</code>, <code>deep_research_maker</code>) ; ses outils d'écriture demandent la même autorisation que ceux de l'agent principal.</p>
+      <p style="margin-top:12px">Codex reçoit la protection des pièces, le garde de recherche et la vérification des sous-agents. Mistral exécute <code>protect-originals</code> et <code>guard-secrets</code> avant ses outils intégrés ; il délègue les recherches <code>Search_*</code> à l'outil <code>research_maker</code>. Chaque sous-agent de <code>.vibe/agents</code> devient un outil de délégation du SDK Mistral (<code>research_maker</code>) ; ses outils d'écriture demandent la même autorisation que ceux de l'agent principal.</p>
     </section>
 
     <section class="card wide">

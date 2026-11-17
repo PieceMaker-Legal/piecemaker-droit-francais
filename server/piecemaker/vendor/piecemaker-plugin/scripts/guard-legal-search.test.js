@@ -34,7 +34,7 @@ test('lets the research-maker sub-agent search', async () => {
 test('denies a Légifrance search from any other sub-agent', async () => {
   const { searchDecision } = await load();
   const installed = home('e', true);
-  for (const agent_type of ['index-maker', 'deep-research-maker', 'general-purpose']) {
+  for (const agent_type of ['explorer', 'general-purpose']) {
     assert.equal(searchDecision(search({ agent_id: 'x2', agent_type }), { home: installed }).hookSpecificOutput.permissionDecision, 'deny');
   }
   assert.equal(searchDecision(search({ agent_id: 'x3' }), { home: installed }).hookSpecificOutput.permissionDecision, 'deny');

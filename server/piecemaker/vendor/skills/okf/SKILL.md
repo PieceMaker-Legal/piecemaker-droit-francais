@@ -5,8 +5,6 @@ description: Gérer l'index OKF du dossier (.piecemaker/okf/) — fiches de docu
 
 # Index OKF
 
-> **Délégation.** Agent principal : lisez l'index librement, mais déléguez l'écriture. Fiches de documents, parties et liens entre pièces → sous-agent `index-maker`. Prémisses d'un programme Catala → sous-agent `premise-maker`, avec le nom du programme. Sous-agent : vous êtes l'exécutant, appliquez ce skill. Sans sous-agent activé dans le dossier, faites le travail vous-même.
->
 > Une prémisse ne se crée que pour une condition Catala qui la demande. On la cherche dans les pièces ; on ne l'invente pas.
 
 L'index OKF résume le dossier en fiches Markdown. Il vit dans `.piecemaker/okf/`. L'OKF fait autorité : en cas de doute, il l'emporte sur toute autre note.

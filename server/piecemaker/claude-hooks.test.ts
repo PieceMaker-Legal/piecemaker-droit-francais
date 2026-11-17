@@ -24,7 +24,7 @@ test('registers the Légifrance search guard in Claude settings and keeps person
     assert.ok(groups.some((group) => group.hooks[0].command === 'echo perso'));
     for (const event of ['SubagentStart', 'SubagentStop']) {
       const tracked = JSON.parse(fs.readFileSync(settings, 'utf8')).hooks[event] as Array<{ matcher: string; hooks: Array<{ command: string }> }>;
-      assert.ok(tracked.some((group) => new RegExp(group.matcher).test('premise-maker') && group.hooks[0].command.includes('herisson.mjs')));
+      assert.ok(tracked.some((group) => new RegExp(group.matcher).test('research-maker') && group.hooks[0].command.includes('herisson.mjs')));
     }
     assert.equal(reconcileClaudeHooks(applicationRoot, home).ok, true);
   } finally {
@@ -50,7 +50,7 @@ test('registers the Légifrance search guard and the sub-agent check in Codex ho
     assert.ok(groups.some((group) => group.hooks[0].command === 'echo perso'));
     const checks = JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SubagentStop as Array<{ matcher: string; hooks: Array<{ command: string }> }>;
     assert.equal(checks.length, 1);
-    assert.ok(new RegExp(checks[0].matcher).test('premise-maker'));
+    assert.ok(new RegExp(checks[0].matcher).test('research-maker'));
     assert.ok(checks[0].hooks[0].command.includes('verify-subagent.mjs'));
   } finally {
     fs.rmSync(home, { recursive: true, force: true });

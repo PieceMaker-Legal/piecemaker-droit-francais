@@ -593,8 +593,6 @@ async function dossierState(api, project) {
 
 const DOSSIER_LABELS = { conversion: 'Conversion', anonymisation: 'Anonymisation', mapping: 'Mapping' };
 
-const isPremiseGap = (entry) => entry.element.startsWith('/_premises/');
-const agents = (names) => (names.length ? ` (sous-agent ${names.join(', ')})` : '');
 const point = (numero, nom, defauts, detail, depth = 0) => ({ numero, depth, ok: !defauts, texte: `${nom} : ${defauts ? `${defauts}${detail ? ` → ${detail}` : ''}` : 'valide'}` });
 const titre = (numero, texte, depth = 0) => ({ numero, depth, texte, titre: true });
 const letter = (index) => String.fromCharCode(65 + index);
@@ -612,11 +610,7 @@ function indexPoint({ erreurs = [], contradictions = [], manques = [] }) {
     forLawyer ? `${forLawyer} manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier)` : '',
     contradictions.length ? `${contradictions.length} contradiction(s) à présenter à l’avocat` : '',
   ].filter(Boolean).join(', ');
-  const owners = [
-    ...(faults || forAgent.some((entry) => !isPremiseGap(entry)) ? ['index-maker'] : []),
-    ...(forAgent.some(isPremiseGap) ? ['premise-maker'] : []),
-  ];
-  return point('4°', 'Index', defauts, `pm okf verify${agents(owners)}`);
+  return point('4°', 'Index', defauts, 'pm okf verify');
 }
 
 function newestSource(directory) {
@@ -697,8 +691,8 @@ async function reasoningPoints(api, folder, manques) {
       const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
       const { cited, missing } = programPremises(folder, nom);
       const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} condition(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
-      if (defauts || cited) add('Prémisses OKF du programme', defauts, gaps ? 'pm okf verify (sous-agent premise-maker)' : 'sous-agent premise-maker');
-      else add('Prémisses OKF du programme', 'aucune', 'sous-agent premise-maker');
+      if (defauts || cited) add('Prémisses OKF du programme', defauts, gaps ? 'pm okf verify' : 'skill okf');
+      else add('Prémisses OKF du programme', 'aucune', 'skill okf');
     } else add('Programme Catala', 'à écrire', 'skill catala');
     for (const document of suite?.documents ?? []) {
       const state = documentState(folder, document);
@@ -715,7 +709,7 @@ async function researchPoints(api, folder) {
   const { projets = [] } = await api.tabularFn({ action: 'lister', project: folder });
   return projets.filter((draft) => draft.mode === 'recherche').map((draft) => {
     const blocked = draft.erreur || draft.a_completer?.length;
-    return { ok: !blocked, texte: `Recherche « ${draft.nom} » : ${blocked ? 'bloquée → pm tabular_review lister (sous-agent deep-research-maker)' : 'en attente'}` };
+    return { ok: !blocked, texte: `Recherche « ${draft.nom} » : ${blocked ? 'bloquée → pm tabular_review lister' : 'en attente'}` };
   });
 }
 

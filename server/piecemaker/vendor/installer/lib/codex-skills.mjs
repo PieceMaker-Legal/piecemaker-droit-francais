@@ -168,7 +168,7 @@ function isPieceMakerSubagentCheck(handler) {
 function codexSubagentCheckGroup(repoRoot) {
   const script = path.join(pluginRoot(repoRoot), 'scripts', 'verify-subagent.mjs');
   return {
-    matcher: '^(premise-maker|index-maker|research-maker|deep-research-maker)$',
+    matcher: '^research-maker$',
     hooks: [{
       type: 'command',
       command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
@@ -179,7 +179,7 @@ function codexSubagentCheckGroup(repoRoot) {
   };
 }
 
-/** Vérifie l'index OKF ou les décisions citées avant qu'un sous-agent PieceMaker ne rende son compte rendu. */
+/** Vérifie les décisions citées avant qu'un sous-agent PieceMaker ne rende son compte rendu. */
 export function installCodexSubagentCheckHook(repoRoot, userHome = os.homedir()) {
   return installCodexHookGroup(userHome, codexSubagentCheckGroup(repoRoot), isPieceMakerSubagentCheck, 'SubagentStop');
 }

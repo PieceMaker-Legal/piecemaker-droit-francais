@@ -20,7 +20,9 @@ const BUNDLED_SKILLS = [
   { slug: 'okf', segments: ['vendor', 'skills', 'okf'] },
 ] as const;
 
-const BUNDLED_AGENTS = ['index-maker', 'premise-maker', 'research-maker', 'deep-research-maker'] as const;
+const BUNDLED_AGENTS = ['research-maker'] as const;
+
+const RETIRED_BUNDLED_AGENTS = ['index-maker', 'premise-maker', 'deep-research-maker'];
 
 const RETIRED_BUNDLED_SKILLS =['redaction-juridique', 'raisonner', 'indexer', 'premisses', 'rechercher', 'recherche-approfondie'];
 
@@ -144,6 +146,20 @@ function retireSkill(workspace: string, slug: string): void {
   removeFromMarker(workspace, slug);
 }
 
+function retireAgent(workspace: string, slug: string): void {
+  const key = `agent:${slug}`;
+  const previousFiles = readMarker(workspace, key);
+  if (!previousFiles) return;
+  const unchanged = Object.fromEntries(Object.entries(previousFiles).filter(([relative, hash]) => {
+    const absolute = path.join(workspace, relative);
+    return fs.existsSync(absolute) && digest(fs.readFileSync(absolute)) === hash;
+  }));
+  if (Object.keys(unchanged).length) {
+    prepareWorkspaceInstallation(workspace, { id: `bundled:${slug}`, kind: 'agent', name: slug, slug, files: unchanged, skipClaude: false }, null).commit();
+  }
+  removeFromMarker(workspace, key);
+}
+
 function agentComponent(slug: string) {
   const source = path.join(findApplicationRoot(getModuleDirectory(import.meta.url)), 'server', 'piecemaker', 'vendor', 'piecemaker-plugin', 'agents', `${slug}.md`);
   if (!fs.existsSync(source)) return null;
@@ -191,6 +207,13 @@ export function declareBundledSkills(workspace: string): void {
       declareSkill(workspace, skill);
     } catch (error) {
       console.warn(`[piecemaker] déclaration du skill ${skill.slug} impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  for (const slug of RETIRED_BUNDLED_AGENTS) {
+    try {
+      retireAgent(workspace, slug);
+    } catch (error) {
+      console.warn(`[piecemaker] retrait du sous-agent ${slug} impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   for (const slug of BUNDLED_AGENTS) {

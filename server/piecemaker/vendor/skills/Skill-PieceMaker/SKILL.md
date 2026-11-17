@@ -34,7 +34,7 @@ Au début du travail sur un dossier, lancez `pm check`.
 
 ## Sous-agents
 
-Lancez `index-maker`, `premise-maker`, `research-maker` et `deep-research-maker` au premier plan, jamais en arrière-plan. Attendez leur compte rendu, puis finissez dans le même tour le travail demandé. Ne planifiez pas de reprise et ne suspendez pas le travail.
+Lancez `research-maker` au premier plan, jamais en arrière-plan. Attendez son compte rendu, puis finissez dans le même tour le travail demandé. Ne planifiez pas de reprise et ne suspendez pas le travail.
 
 ## Volets
 

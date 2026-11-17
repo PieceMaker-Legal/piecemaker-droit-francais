@@ -113,7 +113,7 @@ test('adds the tools rule once to an AGENTS.md written from the template and kee
 test('adds the delegation line once to a previous tools rule, keeping CRLF', () => withProject(async (root) => {
   const template = agentInstructionsTemplate();
   const lines = template.split('\n');
-  const delegation = lines.find((line) => line.includes('sous-agent index-maker'));
+  const delegation = lines.find((line) => line.includes('sous-agent research-maker'));
   assert.ok(delegation);
   const previous = lines.filter((line) => line !== delegation).join('\r\n');
   await writeFile(path.join(root, 'AGENTS.md'), `${previous}\r\n`);
@@ -122,13 +122,20 @@ test('adds the delegation line once to a previous tools rule, keeping CRLF', () 
   assert.equal(await read(root, 'AGENTS.md'), `${lines.join('\r\n')}\r\n`);
 }));
 
-test('replaces the previous delegation line without duplicating it', () => withProject(async (root) => {
+test('replaces the previous delegation lines without duplicating them', () => withProject(async (root) => {
   const template = agentInstructionsTemplate();
-  const catala = template.replace('prémisses d’un programme Catala → sous-agent premise-maker', 'programme Catala d’un acte → sous-agent reasoning-maker, puis premise-maker pour ses prémisses');
-  const reasoning = catala.replace('programme Catala d’un acte → sous-agent reasoning-maker, puis premise-maker pour ses prémisses', 'raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala');
-  for (const previous of [catala, reasoning, reasoning.replace(' ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker.', '.')]) {
-    assert.notEqual(previous, template);
-    await writeFile(path.join(root, 'AGENTS.md'), previous);
+  const current = template.split('\n').find((line) => line.includes('sous-agent research-maker'))!;
+  const tail = '. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
+  const research = ' ; question de droit → sous-agent research-maker';
+  const deep = ' ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker';
+  const reasoning = '- Index des pièces → sous-agent index-maker ; raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala';
+  for (const line of [
+    `- Index des pièces → sous-agent index-maker ; prémisses d’un programme Catala → sous-agent premise-maker${research}${deep}${tail}`,
+    `- Index des pièces → sous-agent index-maker ; programme Catala d’un acte → sous-agent reasoning-maker, puis premise-maker pour ses prémisses${research}${deep}${tail}`,
+    `${reasoning}${research}${deep}${tail}`,
+    `${reasoning}${research}${tail}`,
+  ]) {
+    await writeFile(path.join(root, 'AGENTS.md'), template.replace(current, line));
     await ensureAgentInstructionFiles(root, SHARED);
     assert.equal(await read(root, 'AGENTS.md'), template);
   }

@@ -51,7 +51,8 @@ const HELP_LINE = '- Syntaxe d’une commande → pm --help';
 const OLD_DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala ; question de droit → sous-agent research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
 const PREVIOUS_DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala ; question de droit → sous-agent research-maker ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
 const CATALA_DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; programme Catala d’un acte → sous-agent reasoning-maker, puis premise-maker pour ses prémisses ; question de droit → sous-agent research-maker ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
-const DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; prémisses d’un programme Catala → sous-agent premise-maker ; question de droit → sous-agent research-maker ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
+const MAKERS_DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; prémisses d’un programme Catala → sous-agent premise-maker ; question de droit → sous-agent research-maker ; examen complet d’un point de droit dans la jurisprudence → sous-agent deep-research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
+const DELEGATION_LINE = '- Question de droit → sous-agent research-maker. Lis son compte rendu et la vérification qui le suit ; relance-le si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec les outils MCP legifrance.';
 const SKILL_PIECEMAKER_LINE = '- Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement → skill piecemaker';
 const PIECEMAKER_LINE = '- Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances, raisonnement → outil Feature : quickstart, puis lis les pages qu’il indique';
 const TOOLS_RULE_LINES = [
@@ -73,6 +74,7 @@ const RULE_UPDATES = new Map([
   [OLD_DELEGATION_LINE, DELEGATION_LINE],
   [PREVIOUS_DELEGATION_LINE, DELEGATION_LINE],
   [CATALA_DELEGATION_LINE, DELEGATION_LINE],
+  [MAKERS_DELEGATION_LINE, DELEGATION_LINE],
   [PREVIOUS_TREE_RULE, TREE_RULE],
   [REPLACE_TREE_RULE, TREE_RULE],
   [PROPOSE_TREE_RULE, TREE_RULE],
