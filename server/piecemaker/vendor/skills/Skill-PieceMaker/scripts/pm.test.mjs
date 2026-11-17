@@ -337,6 +337,11 @@ test('check sur un dossier à jour ne signale rien', async () => {
     '1° Conversion : Conversion en cours : phase scan, 8/216 (avancement global 27 %). Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala, raisonnement et suivi, qui ne lisent pas les pièces.',
     '2° Anonymisation : en cours, voir 1°',
   ].join('\n'));
+  const parties = { ...deps, okfFn: async () => ({ erreurs: [], contradictions: [], manques: [
+    { element: '/_premises/date-de-rupture.md', manque: 'prémisse sans partie concernée (involves) : attend l’avocat', avocat: true },
+    { element: 'Pièces/avenant.md', manque: 'pièce à examiner' },
+  ] }) };
+  assert.equal((await run(['check', '--dossier', dossier], { deps: parties })).split('\n')[4], '4° Index : 1 manque(s), 1 manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier) → pm okf verify (sous-agent index-maker)');
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 

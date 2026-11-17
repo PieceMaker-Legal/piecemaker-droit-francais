@@ -341,6 +341,15 @@ test('graphGaps liste les éléments manquants du graphe', () => {
   assert.deepEqual(graphGaps(projectPath).filter((gap) => gap.element === RESILIATION_ID), []);
 });
 
+test('sans partie qualifiée, le manque involves attend l\'avocat et dit où qualifier', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  buildBundle({ projectPath, documents, markdownOf });
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf, undefined, AT);
+  const gap = graphGaps(projectPath).find((entry) => entry.element === RESILIATION_ID && entry.manque.includes('involves'));
+  assert.equal(gap?.avocat, true);
+  assert.match(gap?.manque ?? '', /attend l’avocat.*onglet Dossier, vue générale.*ne la qualifie pas toi-même/);
+});
+
 test('examinee marque une pièce examinée sans lien jusqu\'à ce que le document change', () => {
   const { projectPath, documents, markdownOf } = dossier();
   const build = () => buildBundle({ projectPath, documents, markdownOf });

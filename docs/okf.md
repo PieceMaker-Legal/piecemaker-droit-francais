@@ -122,7 +122,7 @@ Le serveur refuse une citation absente du document source.
 | --- | --- |
 | Pièce d'un type du graphe | pièce à examiner : aucune prémisse ni lien vers une autre pièce ; ou pièce modifiée depuis son examen sans lien |
 | Partie | aucune mention dans une pièce ni prémisse qui la concerne |
-| Prémisse | aucune pièce citée ; valeur unique sans valeur ; aucune partie concernée |
+| Prémisse | aucune pièce citée ; valeur unique sans valeur ; aucune partie concernée (sans partie qualifiée au dossier : `avocat: true`, en attente de l'avocat, onglet Dossier, vue générale ; compté à part par `pm check`) |
 
 **Pièce examinée sans lien.** Une pièce lue dont aucun passage ne justifie de lien ni de prémisse reste sinon un manque à jamais. L'agent (ou l'avocat) la marque : `pm okf examinee <pièce> --motif "raison"`. Le serveur écrit dans la fiche le champ `examen_sans_lien` : motif, auteur, date et empreinte SHA-256 du document original. La reconstruction conserve ce champ. `verify` renvoie la pièce dans `examinees`, imprimée sous « Examinées sans lien (information, pas un manque) », et non dans les manques. Le manque revient si l'empreinte ne correspond plus au document (« pièce modifiée depuis son examen sans lien ») ou si la marque est retirée (`pm okf examinee <pièce> --retirer`). La fiche de la pièce, dans l'onglet Index, montre la ligne « Examen ». Le Hérisson lance `pm okf verify` après `pm okf examinee`, comme après `link`.
 

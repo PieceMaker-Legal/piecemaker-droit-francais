@@ -79,6 +79,7 @@ pm okf unlink "Pièces/Courrier.pdf" states "Date de résiliation"
 - `--value` : ce que la pièce dit de la prémisse. Écris la même valeur sous la même forme d'une pièce à l'autre (date en `AAAA-MM-JJ`, montant en chiffres).
 - `--single` : la prémisse n'a qu'une valeur. Un écart entre pièces devient une contradiction.
 - `involves` relie une prémisse à une partie, sans citation. La cible est le code de la partie.
+- Sans partie qualifiée dans le dossier, `verify` marque le manque `involves` « attend l'avocat » (champ `avocat: true`) et `pm check` le compte à part. L'avocat désigne une partie cliente ou adverse dans l'onglet Dossier, vue générale. Ne la qualifie pas toi-même ; signale-lui ce manque.
 
 Les colonnes de revue tabulaire marquées « Index du dossier » posent aussi des liens `states`. L'avocat en pose dans la visionneuse.
 

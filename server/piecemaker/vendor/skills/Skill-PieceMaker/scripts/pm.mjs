@@ -597,14 +597,17 @@ const letter = (index) => String.fromCharCode(65 + index);
 
 function indexPoint({ erreurs = [], contradictions = [], manques = [] }) {
   const orphans = manques.filter((entry) => !entry.programmes?.length);
+  const forAgent = orphans.filter((entry) => !entry.avocat);
+  const forLawyer = orphans.length - forAgent.length;
   const defauts = [
     erreurs.length ? `${erreurs.length} erreur(s)` : '',
-    orphans.length ? `${orphans.length} manque(s)` : '',
+    forAgent.length ? `${forAgent.length} manque(s)` : '',
+    forLawyer ? `${forLawyer} manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier)` : '',
     contradictions.length ? `${contradictions.length} contradiction(s) à présenter à l’avocat` : '',
   ].filter(Boolean).join(', ');
   const owners = [
-    ...(erreurs.length || orphans.some((entry) => !isPremiseGap(entry)) ? ['index-maker'] : []),
-    ...(orphans.some(isPremiseGap) ? ['premise-maker'] : []),
+    ...(erreurs.length || forAgent.some((entry) => !isPremiseGap(entry)) ? ['index-maker'] : []),
+    ...(forAgent.some(isPremiseGap) ? ['premise-maker'] : []),
   ];
   return point('4°', 'Index', defauts, `pm okf verify${agents(owners)}`);
 }

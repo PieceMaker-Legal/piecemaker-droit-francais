@@ -20,7 +20,7 @@ import { graphTypesOf, readOntology, relationNames } from './ontology.js';
 export const OKF_SCHEME = 'okf:';
 export type PremisePiece = { resource: string; title: string; citation: string; value: string; origin: string };
 export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[] };
-export type OkfGap = { element: string; manque: string; programmes?: string[] };
+export type OkfGap = { element: string; manque: string; programmes?: string[]; avocat?: true };
 export type OkfExamined = { element: string; motif: string; by: string; at: string };
 export const EXAMINED = 'examen_sans_lien';
 export const EXAMINE_HINT = 'pm okf examinee <pièce> --motif "…"';
@@ -76,7 +76,8 @@ export function graphReport(projectPath: string): { manques: OkfGap[]; examinees
   const premises = concepts.filter((concept) => concept.frontmatter.type === PREMISE_TYPE);
   const gaps: OkfGap[] = [];
   const examined: OkfExamined[] = [];
-  const report = (element: string, manque: string) => gaps.push({ element, manque });
+  const report = (element: string, manque: string, avocat = false) => gaps.push({ element, manque, ...(avocat ? { avocat: true as const } : {}) });
+  const unqualified = !concepts.some((concept) => concept.frontmatter.type === PARTY_TYPE);
 
   const linked = new Set<string>();
   const stated = new Set<string>();
@@ -106,7 +107,8 @@ export function graphReport(projectPath: string): { manques: OkfGap[]; examinees
   for (const premise of premises) {
     if (!stated.has(premise.id)) report(premise.id, 'prémisse sans pièce citée');
     else if (premise.frontmatter.single_value === true && !valued.has(premise.id)) report(premise.id, 'prémisse à valeur unique sans valeur');
-    if (!live(premise, INVOLVES).length) report(premise.id, `prémisse sans partie concernée (involves) : pm okf link "${text(premise.frontmatter.title)}" involves <CODE_PARTIE>`);
+    if (!live(premise, INVOLVES).length && unqualified) report(premise.id, 'prémisse sans partie concernée (involves) : attend l’avocat, aucune partie qualifiée dans le dossier ; il désigne une partie cliente ou adverse dans l’onglet Dossier, vue générale (colonnes Parties clientes et Parties adverses, ou champ Rôle de la fiche) ; ne la qualifie pas toi-même', true);
+    else if (!live(premise, INVOLVES).length) report(premise.id, `prémisse sans partie concernée (involves) : pm okf link "${text(premise.frontmatter.title)}" involves <CODE_PARTIE>`);
   }
 
   return { manques: gaps, examinees: examined };
