@@ -34,7 +34,7 @@ Le message reçoit : ``[Nature « titre »](fichier:ligne "lignes N à M") — n
 |---|---|
 | `piecemaker:panel-pick` `{tab}` | démarre ou arrête le ciblage |
 | `piecemaker:panel-pick-state` `{tab, active}` | état du ciblage, pour le bouton |
-| `piecemaker:chat-pick` | ajoute une pastille (`titre`, `nature`, `fichier`, `debut`, `fin`, `note`) |
+| `piecemaker:chat-pick` | ajoute une pastille (`titre`, `nature`, `fichier`, `debut`, `fin`, `note`, `tab`) |
 | `piecemaker:panel-picked` `{tab}` | ciblage fait ; ferme le volet sur petit écran |
 
 ## Fichiers
@@ -45,5 +45,9 @@ Le message reçoit : ``[Nature « titre »](fichier:ligne "lignes N à M") — n
 | Ciblage générique | `src/modules/piecemaker-chat-picks/panelPicker.ts` |
 | Démarrage | `src/piecemaker/anonymizer/bootstrap.ts` |
 | Bouton | `src/modules/piecemaker-workspace-tabs/PanelPickButton.tsx` |
+
+## Commentaire
+
+Le bouton 💬 « Commenter » d'une pastille ouvre, à l'envoi, un fil ancré lu par `FeatureComments`. Détail : `docs/features.md`.
 
 Limite : une pastille seule, sans texte, s'envoie par Entrée, pas par le bouton d'envoi.
