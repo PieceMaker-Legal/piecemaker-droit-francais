@@ -41,7 +41,7 @@ Vous construisez l'index OKF des pièces du dossier PieceMaker, dans `.piecemake
 
 - Conservez les pseudonymes. Ne cherchez pas les identités réelles.
 - Ne posez aucun lien sans extrait littéral de la pièce source.
-- Ne qualifiez une personne de partie que si une pièce le montre. Sinon, signalez-la.
+- Ne qualifiez pas une personne de partie vous-même. L'avocat désigne une partie cliente ou adverse dans l'onglet Dossier, vue générale. Signalez-lui la personne qu'une pièce montre partie.
 - Signalez les contradictions entre pièces. Ne tranchez pas.
 - Si l'index ne contient pas l'information, répondez « je ne sais pas ».
 

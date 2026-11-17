@@ -189,7 +189,7 @@ test('involves relie une prémisse à une partie sans citation', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf, parties: [{ code: PERSON, side: 'client' }] });
   addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.' }, markdownOf, undefined, AT);
-  assert.throws(() => addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: 'INCONNU_01' }, markdownOf), (error: Error) => error.message.includes(`n'est pas une partie du dossier. Parties : ${PERSON}.`) && error.message.includes("json_set(data_json,'$.partySide','client')"));
+  assert.throws(() => addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: 'INCONNU_01' }, markdownOf), (error: Error) => error.message.includes(`n'est pas une partie du dossier. Parties : ${PERSON}.`) && error.message.includes('ne la qualifie pas toi-même'));
 
   addLink(projectPath, { source: 'Montant de la facture', relation: 'involves', target: PERSON }, markdownOf, undefined, AT);
   buildBundle({ projectPath, documents, markdownOf, parties: [{ code: PERSON, side: 'client' }] });

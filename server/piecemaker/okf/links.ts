@@ -87,7 +87,7 @@ export function addLink(projectPath: string, input: LinkInput, markdownOf: Markd
     if (!isPartyId(ids.target) || !fs.existsSync(conceptFile(projectPath, ids.target))) {
       const folder = path.dirname(conceptFile(projectPath, partyId('_')));
       const codes = fs.existsSync(folder) ? fs.readdirSync(folder).filter((name) => name.endsWith('.md')).map((name) => name.slice(0, -3)) : [];
-      throw new TypeError(`cible : ${ids.target} n'est pas une partie du dossier. Parties : ${codes.join(', ') || 'aucune'}. Cible admise : le code d'une partie (ex. PERSONNE_PHYSIQUE_01). Pour qualifier une personne de partie : pm dossier sql "UPDATE piecemaker_nodes SET data_json=json_set(data_json,'$.partySide','client') WHERE project_id=dossier() AND id='entity:<CODE>'" ('adversaire' pour la partie adverse), puis relancer pm okf link.`);
+      throw new TypeError(`cible : ${ids.target} n'est pas une partie du dossier. Parties : ${codes.join(', ') || 'aucune'}. Cible admise : le code d'une partie (ex. PERSONNE_PHYSIQUE_01). La qualification d'une partie attend l'avocat : il désigne une partie cliente ou adverse dans l'onglet Dossier, vue générale (colonnes Parties clientes et Parties adverses, ou champ Rôle de la fiche) ; ne la qualifie pas toi-même.`);
     }
   } else if (!quoted(markdownOf(text(source.frontmatter.resource)), citation)) {
     throw new TypeError('citation introuvable mot pour mot dans le document source.');

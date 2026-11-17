@@ -35,7 +35,7 @@ Entre pièces, seules les relations de l'ontologie existent. Elle est commune à
 
 Une pièce établit une `Premise` par `states` (citation, valeur facultative). Le scan relie une pièce à une `Partie` par `mentions`. Une `Premise` concerne une `Partie` par `involves`, sans citation.
 
-La cible de `involves` est le code d'une partie : `pm okf link "<titre de la prémisse>" involves PERSONNE_PHYSIQUE_01`. Les parties existantes sont les fiches du dossier `_parties/` de l'index. Une personne devient partie quand sa fiche en base porte `partySide` : `pm dossier sql "UPDATE piecemaker_nodes SET data_json=json_set(data_json,'$.partySide','client') WHERE project_id=dossier() AND id='entity:<CODE>'"` (`adversaire` pour la partie adverse). Le `pm okf link` suivant crée la fiche `Partie`. Ne qualifiez une personne de partie que si une pièce le montre.
+La cible de `involves` est le code d'une partie : `pm okf link "<titre de la prémisse>" involves PERSONNE_PHYSIQUE_01`. Les parties existantes sont les fiches du dossier `_parties/` de l'index. La qualification d'une partie attend l'avocat : il désigne une partie cliente ou adverse dans l'onglet Dossier, vue générale (colonnes Parties clientes et Parties adverses, ou champ Rôle de la fiche). Le `pm okf link` suivant crée la fiche `Partie`. Ne qualifiez pas une personne de partie vous-même ; signalez à l'avocat celle qu'une pièce montre partie.
 
 ## Chaîne de justification
 

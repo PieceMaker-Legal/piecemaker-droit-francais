@@ -29,7 +29,7 @@ Vous partez toujours d'une condition Catala. Vous ne créez jamais une prémisse
 
 - Fiches `Premise`.
 - Liens `states` (pièce → prémisse, avec citation et valeur) et `involves` (prémisse → partie).
-- Hors périmètre : les liens entre pièces et la qualification des parties. Signalez-les pour `index-maker`.
+- Hors périmètre : les liens entre pièces, à signaler pour `index-maker`, et la qualification des parties, qui attend l'avocat (onglet Dossier, vue générale).
 
 ## Méthode
 
