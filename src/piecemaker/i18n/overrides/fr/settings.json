@@ -10,10 +10,19 @@
       "empty": "Aucune commande disponible pour ce dossier."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Tri des dossiers",
       "description": "Ordre d'affichage des dossiers dans la barre latérale"
+    },
+    "keepProjectsExpanded": {
+      "label": "Garder les dossiers dépliés",
+      "description": "Ouvrir plusieurs dossiers ensemble et les retrouver dépliés après rechargement."
     }
   },
   "mcpForm": {
@@ -31,6 +40,11 @@
       "steps": {
         "initCommand": "Utilisez task-master init dans le répertoire de votre dossier"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "Fournie avec PieceMaker et mise à jour en même temps que lui."
     }
   },
   "permissions": {

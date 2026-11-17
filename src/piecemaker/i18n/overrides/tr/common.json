@@ -24,5 +24,13 @@
     "buttons": {
       "createProject": "Davayı Oluştur"
     }
+  },
+  "commandPalette": {
+    "selectProjectFirst": "Önce bir dava seçin"
+  },
+  "misc": {
+    "projectFallback": "Dava",
+    "noProjectSelected": "Dava Seçilmedi",
+    "projectRequiredForShell": "Terminal açmak için bir dava gerekli"
   }
 }

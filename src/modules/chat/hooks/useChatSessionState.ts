@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { api } from '@/shared/api';
-import type { MarkSessionIdle, SessionActivityMap,Project,ProjectSession,LLMProvider,NormalizedMessage,ChatMessage,DiffCalculator } from '@/shared/types';
+import type { MarkSessionIdle, SessionActivityMap,Project,ProjectSession,LLMProvider,NormalizedMessage,ChatMessage,DiffCalculator,RunReplayPosition,WatchedRunSource } from '@/shared/types';
 import type { SessionStore } from '@/modules/chat/hooks/useSessionStore';
 import { SESSION_MESSAGES_PAGE_SIZE } from '@/modules/chat/utils/sessionMessagePagination';
 import { createMessageHistoryRefreshCoordinator } from '@/modules/chat/utils/messageHistoryRefreshCoordinator';
@@ -11,6 +12,8 @@ import { normalizedToChatMessages } from '@/modules/chat/hooks/useChatMessages';
 import { findSearchTargetIndex, resolveSearchWindowSize } from '@/modules/chat/utils/searchTargetLocator';
 import { readSelectedProvider } from '@/shared/selectedProvider';
 import type { SearchTarget } from '@/modules/chat/utils/searchTargetLocator';
+import { sideQuestionStore, useSideQuestions } from '@/modules/chat/hooks/useSideQuestions';
+import { mergeSideQuestions } from '@/modules/chat/utils/sideQuestions';
 
 const INITIAL_VISIBLE_MESSAGES = 100;
 
@@ -102,8 +105,10 @@ type UseChatSessionStateArgs = {
   resetStreamingState: () => void;
   /** When each session's `chat.subscribe` was last sent; guards stale idle acks. */
   statusCheckSentAtRef: MutableRefObject<Map<string, number>>;
-  /** Highest live seq observed per session; sent as `lastSeq` on subscribe. */
-  lastSeqRef: MutableRefObject<Map<string, number>>;
+  /** Highest live seq handled per session, with its run; sent back on subscribe. */
+  lastSeqRef: MutableRefObject<Map<string, RunReplayPosition>>;
+  /** Sessions whose current run already streams to this socket, or has a subscribe in flight. */
+  watchedRunSessionsRef: MutableRefObject<Map<string, WatchedRunSource>>;
   sessionStore: SessionStore;
 };
 
@@ -202,8 +207,10 @@ export function useChatSessionState({
   resetStreamingState,
   statusCheckSentAtRef,
   lastSeqRef,
+  watchedRunSessionsRef,
   sessionStore,
 }: UseChatSessionStateArgs) {
+  const { t } = useTranslation('chat');
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
   const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
@@ -413,6 +420,7 @@ export function useChatSessionState({
   }, [activeSessionId, pendingUserMessage, sessionStore]);
 
   const storeMessages = activeSessionId ? sessionStore.getMessages(activeSessionId) : NO_MESSAGES;
+  const sideQuestions = useSideQuestions(activeSessionId);
 
   const chatMessages = useMemo(() => {
     const all = normalizedToChatMessages(storeMessages);
@@ -420,8 +428,14 @@ export function useChatSessionState({
     if (pendingUserMessage && all.length === 0) {
       return [pendingUserMessage];
     }
-    return all;
-  }, [storeMessages, pendingUserMessage]);
+    // Older pages not loaded yet (`hasMoreMessages`) means a pair older than
+    // the oldest loaded row is left out, so it does not jump to the top of
+    // the window and move again once those older pages arrive.
+    return mergeSideQuestions(all, sideQuestions, {
+      hasOlder: hasMoreMessages,
+      failedText: t('sideQuestion.failed'),
+    });
+  }, [storeMessages, pendingUserMessage, sideQuestions, hasMoreMessages, t]);
 
   /* ---------------------------------------------------------------- */
   /*  addMessage                                                       */
@@ -673,18 +687,91 @@ export function useChatSessionState({
 
   // Session replay/subscription remains active regardless of which main tab is
   // visible. Only persisted-history HTTP traffic is visibility-gated below.
-  useEffect(() => {
-    if (!selectedSession || !selectedProject || !ws) return;
-
-    statusCheckSentAtRef.current.set(selectedSession.id, Date.now());
+  // Sends `chat.subscribe` for one session with how far this socket got
+  // through its run. The server replays what came after that position — the
+  // whole run when the position is from an earlier one — so a second
+  // subscribe costs an ack, never a duplicated turn.
+  const subscribeToSessionRun = useCallback((sessionId: string) => {
+    statusCheckSentAtRef.current.set(sessionId, Date.now());
+    // The ack settles whether a run is attached; until then the triggers
+    // below do not send another one.
+    if (!watchedRunSessionsRef.current.has(sessionId)) {
+      watchedRunSessionsRef.current.set(sessionId, 'subscribe');
+    }
+    const position = lastSeqRef.current.get(sessionId);
     sendMessage({
       type: 'chat.subscribe',
       sessions: [{
-        sessionId: selectedSession.id,
-        lastSeq: lastSeqRef.current.get(selectedSession.id) ?? 0,
+        sessionId,
+        lastSeq: position?.seq ?? 0,
+        ...(position?.runId ? { runId: position.runId } : {}),
       }],
     });
-  }, [lastSeqRef, selectedProject, selectedSession, sendMessage, statusCheckSentAtRef, ws]);
+  }, [lastSeqRef, sendMessage, statusCheckSentAtRef, watchedRunSessionsRef]);
+
+  useEffect(() => {
+    if (!selectedSession || !selectedProject || !ws) return;
+    subscribeToSessionRun(selectedSession.id);
+  }, [selectedProject, selectedSession, subscribeToSessionRun, ws]);
+
+  // A run this tab did not start — a queued or scheduled message the server
+  // sent, or a send from another tab — streams to nobody until a socket
+  // subscribes. Without that the viewed session sat busy while the message
+  // that started the turn and its reply stayed off screen until the turn
+  // ended. An idle ack just clears the entry again.
+  const subscribeToUnwatchedRun = useCallback((sessionId: string) => {
+    if (!ws || watchedRunSessionsRef.current.has(sessionId)) return;
+    subscribeToSessionRun(sessionId);
+  }, [subscribeToSessionRun, watchedRunSessionsRef, ws]);
+
+  // The server took the session's queued message to send it, and its card is
+  // gone. The run it starts is subscribed to so the message stays on screen;
+  // a short one can already be over by the time the card's poll notices, and
+  // a finished run is not replayed, so the history is read as well.
+  const followClaimedQueuedMessage = useCallback((sessionId: string) => {
+    subscribeToUnwatchedRun(sessionId);
+    void requestLatestMessages(sessionId);
+  }, [requestLatestMessages, subscribeToUnwatchedRun]);
+
+  // The composer's own send starts a run on this socket, so it is watched
+  // from the moment it is dispatched rather than subscribed to. A run already
+  // confirmed attached stays so: the send will be refused, and the run it
+  // collides with keeps streaming here.
+  const markRunStartedHere = useCallback((sessionId: string) => {
+    if (watchedRunSessionsRef.current.get(sessionId) !== 'attached') {
+      watchedRunSessionsRef.current.set(sessionId, 'send');
+    }
+  }, [watchedRunSessionsRef]);
+
+  // On WebSocket reconnect, request a bounded persisted-tail sync (deferred
+  // while Chat is hidden), then re-subscribe — the `chat_subscribed` ack
+  // restores or clears the activity indicator, replays missed live events,
+  // and re-attaches a still-running stream to this socket.
+  const resubscribeAfterReconnect = useCallback(async () => {
+    // Every run the dropped socket was attached to went with it; a session
+    // still busy has to be subscribed to again before it streams here.
+    watchedRunSessionsRef.current.clear();
+    if (!selectedProject || !selectedSession) return;
+    await requestLatestMessages(selectedSession.id, isActive);
+    subscribeToSessionRun(selectedSession.id);
+  }, [isActive, requestLatestMessages, selectedProject, selectedSession, subscribeToSessionRun, watchedRunSessionsRef]);
+
+  // The running-sessions poll reports the session busy.
+  useEffect(() => {
+    if (activeSessionId && isProcessing) {
+      subscribeToUnwatchedRun(activeSessionId);
+    }
+  }, [activeSessionId, isProcessing, subscribeToUnwatchedRun]);
+
+  // The viewed session's transcript changed on disk. A server-sent turn
+  // writes its prompt there as it starts, which is usually seconds before the
+  // poll above notices it.
+  const selectedSessionId = selectedSession?.id ?? null;
+  useEffect(() => {
+    if (externalMessageUpdate && selectedSessionId) {
+      subscribeToUnwatchedRun(selectedSessionId);
+    }
+  }, [externalMessageUpdate, selectedSessionId, subscribeToUnwatchedRun]);
 
   // Main session loading effect — store-based.
   //
@@ -1107,8 +1194,15 @@ export function useChatSessionState({
       canRequest: () => activeSessionIdRef.current === sessionId,
     });
 
-    return normalizedToChatMessages(sessionStore.getMessages(sessionId));
-  }, [sessionStore]);
+    // The whole transcript is loaded (`limit: null`), so there is no older
+    // page left to protect a pair against: `hasOlder` is false here even
+    // though the live view may still have more pages pending.
+    return mergeSideQuestions(
+      normalizedToChatMessages(sessionStore.getMessages(sessionId)),
+      sideQuestionStore.forSession(sessionId),
+      { hasOlder: false, failedText: t('sideQuestion.failed') },
+    );
+  }, [sessionStore, t]);
 
   const loadEarlierMessages = useCallback(() => {
     setVisibleMessageCount((prev) => prev + 100);
@@ -1148,6 +1242,10 @@ export function useChatSessionState({
     addMessage,
     sessionActivity,
     isProcessing,
+    followClaimedQueuedMessage,
+    markRunStartedHere,
+    resubscribeAfterReconnect,
+    subscribeToUnwatchedRun,
     canAbortSession,
     currentSessionId,
     setCurrentSessionId,

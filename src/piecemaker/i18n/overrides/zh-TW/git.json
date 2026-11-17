@@ -1,0 +1,11 @@
+{
+  "panel": {
+    "selectProject": "選擇一個案件以檢視版本控制"
+  },
+  "errorState": {
+    "noRepoDescription": "此案件還不是 git 儲存庫。初始化一個儲存庫即可開始追蹤變更並使用版本控制功能。"
+  },
+  "remove": {
+    "description": "要移除 {{branch}} 的工作樹嗎？其資料夾將被刪除，關聯的案件會被歸檔 — 聊天工作階段仍可恢復。"
+  }
+}

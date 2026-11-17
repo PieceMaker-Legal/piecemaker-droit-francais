@@ -36,12 +36,19 @@
   "search": {
     "modeProjects": "Expedientes",
     "projectsScanned_one": "{{count}} expediente examinado",
-    "projectsScanned_other": "{{count}} expedientes examinados"
+    "projectsScanned_other": "{{count}} expedientes examinados",
+    "projectsScanned_many": "{{count}} expedientes examinados"
+  },
+  "archived": {
+    "loadingDescription": "Obteniendo los expedientes y sesiones ocultos que puedes restaurar más tarde.",
+    "emptyDescription": "Los expedientes y sesiones archivados aparecerán aquí cuando los ocultes de la lista activa.",
+    "restoreProject": "Restaurar expediente"
   },
   "deleteConfirmation": {
     "deleteProject": "Quitar expediente",
     "sessionCount_one": "Este expediente contiene {{count}} conversación.",
     "sessionCount_other": "Este expediente contiene {{count}} conversaciones.",
+    "sessionCount_many": "Este expediente contiene {{count}} conversaciones.",
     "archiveProject": "Archivar expediente",
     "allConversationsDeleted": "El expediente se quitará de la barra lateral. Tus archivos, memorias y datos de sesión se conservarán.",
     "cannotUndo": "Puedes volver a añadir el expediente más tarde."

@@ -1,0 +1,11 @@
+{
+  "panel": {
+    "selectProject": "Elige un expediente para ver el control de versiones"
+  },
+  "errorState": {
+    "noRepoDescription": "Este expediente aún no es un repositorio git. Inicialízalo para empezar a seguir los cambios y usar el control de versiones."
+  },
+  "remove": {
+    "description": "¿Quitar el worktree de {{branch}}? Se elimina su carpeta y se archiva el expediente vinculado. Las sesiones de chat se pueden recuperar."
+  }
+}
