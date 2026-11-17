@@ -62,6 +62,12 @@ Deux points de branchement distincts :
   Lorsqu'une décision n'avait pas été lue dans le tour, la visionneuse peut
   ouvrir sa copie déjà présente dans `decisions/` : elle cherche mécaniquement
   le passage pour la consultation, sans modifier le `verified: false` initial.
+- Sortie de commande : une citation `document` ou `code` dont le `doc_id`
+  n'est pas un fichier lisible, mais figure dans une commande shell lancée
+  dans le tour (`Bash` Claude ou Codex, y compris `/bin/zsh -lc "…; …"`,
+  `file_system.bash` de Vibe), est vérifiée contre la sortie de ces
+  commandes, même en code de sortie non nul. Titre : le `doc_id` ; repère :
+  la ligne. Un extrait absent de la sortie reste « non retrouvé ».
   Cette provenance est affichée explicitement ; le snapshot reste inchangé.
 - `src/piecemaker/citations/` — liens Markdown natifs du chat, source ouverte
   dans un onglet de l'éditeur latéral de CloudCLI (`src/piecemaker/editor-tabs/`),

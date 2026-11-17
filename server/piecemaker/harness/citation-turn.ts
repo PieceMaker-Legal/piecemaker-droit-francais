@@ -52,6 +52,17 @@ function toolText(value: unknown): string {
   return typeof object.text === 'string' ? object.text : toolText(object.content ?? '');
 }
 
+function commandOf(input: unknown): string {
+  let value = input;
+  if (typeof value === 'string') {
+    try { value = JSON.parse(value); } catch { return ''; }
+  }
+  const command = record(value).command;
+  return typeof command === 'string' ? command : Array.isArray(command) ? command.join(' ') : '';
+}
+
+const commandKey = (text: string) => text.replace(/`/g, '').replace(/\s+/g, ' ').trim();
+
 function withinRoot(rootPath: string, file: string) {
   const relative = path.relative(rootPath, file);
   return Boolean(relative) && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -152,6 +163,8 @@ export function createCitationTurn(options: {
   const decisionTitles = new Map<string, string>();
   const documents = new Map<string, Promise<string>>();
   const codeFiles = new Map<string, Promise<string>>();
+  const commands = new Map<string, string>();
+  const commandOutputs = new Map<string, string>();
   const codeRoot = path.resolve(options.codeRoot ?? options.cwd);
   let sourceCharacters = 0;
   let fullText = '';
@@ -288,6 +301,14 @@ export function createCitationTurn(options: {
     return pending;
   };
 
+  const commandText = (id: string) => {
+    const wanted = commandKey(id);
+    if (wanted.length < 2) return '';
+    return [...commandOutputs].filter(([toolId]) => commandKey(commands.get(toolId) ?? '').includes(wanted)).map(([, output]) => output).join('\n');
+  };
+
+  const sourceText = async (id: string, kind: string) => (await (kind === 'code' ? codeText(id) : documentText(id))) || commandText(id);
+
   return {
     get hasCitations() { return hidden; },
     observe(message: NormalizedMessage) {
@@ -299,6 +320,14 @@ export function createCitationTurn(options: {
         }
         const id = input.text_id ?? input.article_id ?? input.id;
         if (typeof id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(id)) calls.set(message.toolId, id);
+      }
+      if (message.kind === 'tool_use' && message.toolId) {
+        const command = commandOf(message.toolInput);
+        if (command) commands.set(message.toolId, command);
+      }
+      if ((message.kind === 'tool_result' || message.toolResult) && message.toolId && commands.has(message.toolId)) {
+        const output = toolText(message.content ?? message.toolResult?.content);
+        if (output.length <= MAX_SOURCE_BYTES) commandOutputs.set(message.toolId, output);
       }
       if ((message.kind === 'tool_result' || message.toolResult) && message.toolId && !message.isError && !message.toolResult?.isError) {
         const id = calls.get(message.toolId);
@@ -344,15 +373,17 @@ export function createCitationTurn(options: {
           if (saved !== null) return saved;
         }
         const parsed = overflow ? [] : parseCitationsWithDiagnostics(citationText).citations as Citation[];
-        const citations = await verifyCitations(parsed, (id: string, kind: string) => kind === 'code' ? codeText(id) : documentText(id), async (id: string) => decisions.get(id) ?? '') as Citation[];
+        const citations = await verifyCitations(parsed, sourceText, async (id: string) => decisions.get(id) ?? '') as Citation[];
         const decisionTitle = (id?: string) => (id ? decisionTitles.get(id) : undefined);
         const links: string[] = [];
         const lines: string[] = [];
         for (const citation of citations) {
           const lawId = citation.decision_id ?? citation.article_id;
-          const source = citation.kind === 'case' || citation.kind === 'article'
+          const fileSource = citation.kind === 'case' || citation.kind === 'article'
             ? decisions.get(lawId ?? '') ?? ''
             : citation.kind === 'code' ? await codeText(citation.doc_id ?? '') : await documentText(citation.doc_id ?? '');
+          const commandSource = fileSource || citation.kind === 'case' || citation.kind === 'article' ? '' : commandText(citation.doc_id ?? '');
+          const source = fileSource || commandSource;
           citation.quotes = applyNearestPassages(source, citation.quotes ?? []);
           citation.verified = citation.quotes.every((quote) => quote.verification?.verified === true);
           const ranges = locateSourcePassages(source, citation.quotes);
@@ -365,7 +396,7 @@ export function createCitationTurn(options: {
               if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) openId = relative;
             }
           }
-          const title = citation.kind === 'code' ? docId : citation.kind === 'document'
+          const title = commandSource || citation.kind === 'code' ? docId : citation.kind === 'document'
             ? options.pieceTitle?.(options.cwd, openId) ?? formatPieceTitle(undefined, openId)
             : decisionTitle(lawId) ?? lawId ?? 'Source';
           try {
@@ -377,7 +408,7 @@ export function createCitationTurn(options: {
               ranges,
             });
             links.push(`[${citation.ref}]: #piecemaker-citation=${token}`);
-            lines.push(sourceLine(citation, title, source, ranges));
+            lines.push(sourceLine(commandSource ? { ...citation, kind: 'code' } : citation, title, source, ranges));
           } catch {
             lines.push(`- [${citation.ref}] ${linkLabel(title)} — [source indisponible](${MISS})`);
           }
