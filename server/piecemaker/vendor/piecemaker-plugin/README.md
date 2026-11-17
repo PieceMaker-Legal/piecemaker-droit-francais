@@ -19,9 +19,10 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   `research-maker` quand celui-ci est installé ; Mistral les remplace par l'outil `research_maker` ; il lui laisse `consulter_article` et `consulter_decision`.
   Avec le SDK Mistral, chaque `.vibe/agents/*.toml` devient un outil de délégation (`research_maker`) : boucle `chat.complete`, outils d'écriture soumis à la même autorisation que l'agent principal.
 - **Hooks** : `guard-ontologie` (Claude, Codex, Vibe, chat Mistral) refuse toute écriture directe dans
-  `.piecemaker/ontologie.json`, `.piecemaker/arborescence.json` et `.piecemaker/okf/`. Une modification de
-  l'ontologie ou de l'arborescence par Edit, Write ou apply_patch devient une proposition pour l'avocat
-  (`scripts/lib/proposition-edit.mjs`) ; les fiches passent par `pm okf link|unlink|examinee`.
+  `.piecemaker/ontologie.json` et `.piecemaker/arborescence.json`. Une modification de l'ontologie ou de
+  l'arborescence par Edit, Write ou apply_patch devient une proposition pour l'avocat
+  (`scripts/lib/proposition-edit.mjs`). Les liens des fiches OKF passent par l'outil `OkfWrite` du MCP
+  `features` ou par `pm okf link|unlink|examinee` ; le Hérisson vérifie l'index après chaque écriture.
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).
