@@ -179,8 +179,8 @@ test('un appel MCP Feature run déclenche le même contrôle que la commande pm'
   assert.deepEqual(await call({ ...link, action: 'read' }), []);
   assert.deepEqual(await call({ action: 'run', name: 'index', command: 'verify_index' }), []);
   assert.deepEqual(await call(link, 'mcp__autre__Feature'), []);
-  assert.deepEqual(await call({ action: 'link', ...link.args }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
-  assert.deepEqual(await call({ action: 'mark_examined', source: 'pieces/a.md', reason: 'Aucun lien' }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await call({ writes: [{ action: 'link', ...link.args }, { action: 'mark_examined', source: 'pieces/a.md', reason: 'Aucun lien' }] }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await call({ writes: [{ action: 'mark_examined', source: 'pieces/a.md', reason: 'Aucun lien' }] }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
 });
 
 test('une commande pm tabular_review preparer ou lancer vérifie le brouillon', async () => {

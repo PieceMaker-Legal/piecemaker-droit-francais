@@ -47,6 +47,17 @@ function required(value, name, action) {
   return value;
 }
 
+export function okfArgv({ action, source, relation, target, citation, value, single, reason, remove }) {
+  if (action === 'mark_examined') {
+    if (!remove) required(reason, 'reason', action);
+    return pmArgv('index', action, { document: source, reason, remove });
+  }
+  required(relation, 'relation', action);
+  required(target, 'target', action);
+  if (action === 'link' && relation !== 'involves') required(citation, 'citation', action);
+  return pmArgv('index', action, action === 'link' ? { source, relation, target, citation, value, single } : { source, relation, target });
+}
+
 export function caseFiles(root) {
   const walk = (folder) => fs.readdirSync(path.join(root, folder), { withFileTypes: true })
     .filter((entry) => !entry.name.startsWith('.'))
@@ -192,32 +203,37 @@ export function createServer({ root = process.cwd(), pm = runPmScript, relations
   });
 
   server.registerTool('OkfWrite', {
-    description: 'Writes the OKF index of the case, with the ontology enforced and the citation checked against the source by the server. link adds a cited link: between documents (a relation of the ontology), document states premise (citation, optional value and single), premise involves party code (no citation). unlink removes a link. mark_examined records that a document was read and nothing justifies a link (reason), or undoes it (remove). Read the ontology with Feature run index read_ontology.',
+    description: 'Writes the OKF index of the case, with the ontology enforced and the citation checked against the source by the server. writes holds one or more operations, run in order; all are validated before the first runs, and the run stops at the first failure. link adds a cited link: between documents (a relation of the ontology), document states premise (citation, optional value and single), premise involves party code (no citation). unlink removes a link. mark_examined records that a document was read and nothing justifies a link (reason), or undoes it (remove). Read the ontology with Feature run index read_ontology.',
     inputSchema: {
-      action: z.enum(['link', 'unlink', 'mark_examined']),
-      source: z.string().min(1).describe('The source document (path in the case), or the premise title for involves. mark_examined: the document.'),
-      relation: z.enum(relations).optional().describe('link, unlink: a relation of the ontology, or states (document → premise) or involves (premise → party).'),
-      target: z.string().min(1).optional().describe('link, unlink: the target document, premise title or party code.'),
-      citation: z.string().min(1).optional().describe('link: the exact sentence of the source that proves the link. Not for involves.'),
-      value: z.string().optional().describe('link states: the value of the premise.'),
-      single: z.boolean().optional().describe('link states: the premise has a single value.'),
-      reason: z.string().min(1).optional().describe('mark_examined: why no link is justified.'),
-      remove: z.boolean().optional().describe('mark_examined: undo the mark.'),
+      writes: z.array(z.object({
+        action: z.enum(['link', 'unlink', 'mark_examined']),
+        source: z.string().min(1).describe('The source document (path in the case), or the premise title for involves. mark_examined: the document.'),
+        relation: z.enum(relations).optional().describe('link, unlink: a relation of the ontology, or states (document → premise) or involves (premise → party).'),
+        target: z.string().min(1).optional().describe('link, unlink: the target document, premise title or party code.'),
+        citation: z.string().min(1).optional().describe('link: the exact sentence of the source that proves the link. Not for involves.'),
+        value: z.string().optional().describe('link states: the value of the premise.'),
+        single: z.boolean().optional().describe('link states: the premise has a single value.'),
+        reason: z.string().min(1).optional().describe('mark_examined: why no link is justified.'),
+        remove: z.boolean().optional().describe('mark_examined: undo the mark.'),
+      })).min(1).max(50).describe('The operations, run in order.'),
     },
-  }, async ({ action, source, relation, target, citation, value, single, reason, remove }) => {
+  }, async ({ writes }) => {
+    let argvs;
     try {
-      if (action === 'mark_examined') {
-        if (!remove) required(reason, 'reason', action);
-        return pmResult(await pm(caseArgs(pmArgv('index', action, { document: source, reason, remove })), root));
-      }
-      required(relation, 'relation', action);
-      required(target, 'target', action);
-      if (action === 'link' && relation !== 'involves') required(citation, 'citation', action);
-      const args = action === 'link' ? { source, relation, target, citation, value, single } : { source, relation, target };
-      return pmResult(await pm(caseArgs(pmArgv('index', action, args)), root));
+      argvs = writes.map(okfArgv);
     } catch (error) {
       return failure(error);
     }
+    const reports = [];
+    for (const [index, argv] of argvs.entries()) {
+      const result = pmResult(await pm(caseArgs(argv), root));
+      reports.push(`${index + 1}. ${result.content[0].text}`);
+      if (result.isError) {
+        if (index + 1 < argvs.length) reports.push(`Stopped: operations ${index + 2} to ${argvs.length} not run.`);
+        return text(reports.join('\n'), true);
+      }
+    }
+    return text(reports.join('\n'));
   });
 
   return server;

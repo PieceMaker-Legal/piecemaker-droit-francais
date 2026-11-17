@@ -109,16 +109,34 @@ test('Feature read projects lists the case files, Word documents first', async (
 
 test('OkfWrite enforces the ontology and the required fields', async () => {
   const { call, calls, root } = await connect();
-  assert.equal((await call('OkfWrite', { action: 'link', source: 'Pièces/avenant.pdf', relation: 'amends', target: 'Pièces/contrat.pdf', citation: 'Le présent avenant modifie le contrat.' })).error, false);
-  assert.deepEqual(calls[0], ['okf', 'link', 'Pièces/avenant.pdf', 'amends', 'Pièces/contrat.pdf', '--citation', 'Le présent avenant modifie le contrat.', '--dossier', root]);
-  await call('OkfWrite', { action: 'link', source: 'Loyer mensuel', relation: 'involves', target: 'JEAN_DUPONT' });
-  assert.deepEqual(calls[1], ['okf', 'link', 'Loyer mensuel', 'involves', 'JEAN_DUPONT', '--dossier', root]);
-  await call('OkfWrite', { action: 'mark_examined', source: 'Pièces/note.pdf', reason: 'Aucun lien' });
-  assert.deepEqual(calls[2], ['okf', 'examinee', 'Pièces/note.pdf', '--motif', 'Aucun lien', '--dossier', root]);
-  assert.equal((await call('OkfWrite', { action: 'link', source: 'a', relation: 'contests', target: 'b', citation: 'x' })).error, true);
-  assert.match((await call('OkfWrite', { action: 'link', source: 'a', relation: 'amends', target: 'b' })).text, /^invalid_argument: link needs "citation"/);
-  assert.match((await call('OkfWrite', { action: 'mark_examined', source: 'a' })).text, /^invalid_argument/);
+  const okf = (...writes) => call('OkfWrite', { writes });
+  const result = await okf(
+    { action: 'link', source: 'Pièces/avenant.pdf', relation: 'amends', target: 'Pièces/contrat.pdf', citation: 'Le présent avenant modifie le contrat.' },
+    { action: 'link', source: 'Loyer mensuel', relation: 'involves', target: 'JEAN_DUPONT' },
+    { action: 'mark_examined', source: 'Pièces/note.pdf', reason: 'Aucun lien' },
+  );
+  assert.equal(result.error, false);
+  assert.match(result.text, /^1\. .*\n2\. .*\n3\. /);
+  assert.deepEqual(calls, [
+    ['okf', 'link', 'Pièces/avenant.pdf', 'amends', 'Pièces/contrat.pdf', '--citation', 'Le présent avenant modifie le contrat.', '--dossier', root],
+    ['okf', 'link', 'Loyer mensuel', 'involves', 'JEAN_DUPONT', '--dossier', root],
+    ['okf', 'examinee', 'Pièces/note.pdf', '--motif', 'Aucun lien', '--dossier', root],
+  ]);
+  assert.equal((await okf({ action: 'link', source: 'a', relation: 'contests', target: 'b', citation: 'x' })).error, true);
+  assert.match((await okf({ action: 'unlink', source: 'a', relation: 'amends', target: 'b' }, { action: 'link', source: 'a', relation: 'amends', target: 'b' })).text, /^invalid_argument: link needs "citation"/);
+  assert.match((await okf({ action: 'mark_examined', source: 'a' })).text, /^invalid_argument/);
+  assert.equal((await call('OkfWrite', { writes: [] })).error, true);
   assert.equal(calls.length, 3);
+});
+
+test('OkfWrite stops at the first failure', async () => {
+  const seen = [];
+  const { call } = await connect({ pm: async (args) => { seen.push(args); return seen.length === 2 ? { code: 1, stdout: '', stderr: 'Citation introuvable' } : { code: 0, stdout: 'Lien posé', stderr: '' }; } });
+  const link = { action: 'link', source: 'a', relation: 'amends', target: 'b', citation: 'x' };
+  const result = await call('OkfWrite', { writes: [link, link, link] });
+  assert.equal(result.error, true);
+  assert.equal(result.text, '1. Lien posé\n2. Citation introuvable\nStopped: operations 3 to 3 not run.');
+  assert.equal(seen.length, 2);
 });
 
 test('okfRelations reads the ontology and adds the system relations', async () => {
