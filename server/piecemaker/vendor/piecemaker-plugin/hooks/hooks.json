@@ -40,7 +40,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__features__Feature",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__features__Feature|mcp__features__OkfWrite",
         "hooks": [
           {
             "type": "command",

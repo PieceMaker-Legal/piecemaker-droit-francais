@@ -13,7 +13,7 @@ async function connect({ pm } = {}) {
   const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
   const { createServer } = await import('./server.mjs');
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await createServer({ root, pm: fakePm }).connect(serverSide);
+  await createServer({ root, pm: fakePm, relations: ['amends', 'refers-to', 'states', 'involves'] }).connect(serverSide);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(clientSide);
   const call = async (name, args) => {
@@ -23,10 +23,10 @@ async function connect({ pm } = {}) {
   return { root, calls, call, client };
 }
 
-test('the server exposes three tools', async () => {
+test('the server exposes four tools', async () => {
   const { client } = await connect();
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['Feature', 'FeatureComments', 'FeatureData']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['Feature', 'FeatureComments', 'FeatureData', 'OkfWrite']);
   assert.doesNotMatch(JSON.stringify(tools), /"items":\[/);
 });
 
@@ -105,4 +105,26 @@ test('Feature read projects lists the case files, Word documents first', async (
   const files = (await call('Feature', { action: 'read', name: 'projects' })).text.split('## Files of the case')[1].split('\n').filter((line) => line.startsWith('- '));
   assert.deepEqual(files.map((line) => line.split(' (')[0]), ['- Contrat-exemple.docx', `- ${path.join('Pièces', 'Contrat-exemple.pdf')}`]);
   assert.match(files[0], /\(1 KiB, \d{4}-\d{2}-\d{2}\)$/);
+});
+
+test('OkfWrite enforces the ontology and the required fields', async () => {
+  const { call, calls, root } = await connect();
+  assert.equal((await call('OkfWrite', { action: 'link', source: 'Pièces/avenant.pdf', relation: 'amends', target: 'Pièces/contrat.pdf', citation: 'Le présent avenant modifie le contrat.' })).error, false);
+  assert.deepEqual(calls[0], ['okf', 'link', 'Pièces/avenant.pdf', 'amends', 'Pièces/contrat.pdf', '--citation', 'Le présent avenant modifie le contrat.', '--dossier', root]);
+  await call('OkfWrite', { action: 'link', source: 'Loyer mensuel', relation: 'involves', target: 'JEAN_DUPONT' });
+  assert.deepEqual(calls[1], ['okf', 'link', 'Loyer mensuel', 'involves', 'JEAN_DUPONT', '--dossier', root]);
+  await call('OkfWrite', { action: 'mark_examined', source: 'Pièces/note.pdf', reason: 'Aucun lien' });
+  assert.deepEqual(calls[2], ['okf', 'examinee', 'Pièces/note.pdf', '--motif', 'Aucun lien', '--dossier', root]);
+  assert.equal((await call('OkfWrite', { action: 'link', source: 'a', relation: 'contests', target: 'b', citation: 'x' })).error, true);
+  assert.match((await call('OkfWrite', { action: 'link', source: 'a', relation: 'amends', target: 'b' })).text, /^invalid_argument: link needs "citation"/);
+  assert.match((await call('OkfWrite', { action: 'mark_examined', source: 'a' })).text, /^invalid_argument/);
+  assert.equal(calls.length, 3);
+});
+
+test('okfRelations reads the ontology and adds the system relations', async () => {
+  const { okfRelations } = await import('./server.mjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'features-ontology-'));
+  assert.deepEqual(okfRelations(home), ['amends', 'responds-to', 'refers-to', 'supersedes', 'states', 'involves']);
+  fs.writeFileSync(path.join(home, 'ontologie.json'), JSON.stringify({ relations: [{ name: 'contests' }] }));
+  assert.deepEqual(okfRelations(home), ['contests', 'states', 'involves']);
 });

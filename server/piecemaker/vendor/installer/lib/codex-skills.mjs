@@ -196,7 +196,7 @@ function isPieceMakerHerisson(handler) {
 function codexHerissonGroup(repoRoot) {
   const script = path.join(pluginRoot(repoRoot), 'scripts', 'herisson.mjs');
   return {
-    matcher: '^(Bash|apply_patch|mcp__features__Feature)$',
+    matcher: '^(Bash|apply_patch|mcp__features__Feature|mcp__features__OkfWrite)$',
     hooks: [{
       type: 'command',
       command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,

@@ -4,14 +4,13 @@ import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
 import { proposalMessage } from './lib/proposition-edit.mjs';
 import { shellSegments } from './lib/shell-segments.mjs';
-import { FEATURES, featureOf, formatErrors } from './lib/herisson.mjs';
+import { featureOf, formatErrors } from './lib/herisson.mjs';
 
 const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const KEY_REASON = 'Only the PieceMaker server can access the seal key of the ontology (~/.piecemaker/ontologie.cle).';
-const OKF_REASON = FEATURES.find((feature) => feature.nom === 'okf').motif;
 const SHELL_KEY = /\.piecemaker[\\/]ontologie\.cle\b|\bontologie\.cle\b/;
-const SHELL_MENTION = /\.piecemaker[\\/]((?:ontologie|arborescence)(?:\.proposition)?\.json|etapes\.json|protection\.json|okf\b)/;
+const SHELL_MENTION = /\.piecemaker[\\/]((?:ontologie|arborescence)(?:\.proposition)?\.json|etapes\.json|protection\.json)/;
 const READ_COMMANDS = new Set(['cat', 'head', 'tail', 'less', 'more', 'grep', 'egrep', 'fgrep', 'rg', 'ls', 'wc', 'file', 'stat', 'diff', 'sort', 'uniq', 'cut', 'tr', 'jq', 'find', 'echo', 'printf', 'test', 'cd', 'pwd', 'pm', 'true', 'for', 'done', 'fi']);
 const CONTROL_PREFIX = /^\s*(?:(?:do|then|else|if|elif|while|until)\s+)+/;
 const UNSAFE_ARGUMENT = /(^|\s)(-i\b|--in-place|-delete\b|-exec\b|-execdir\b|-ok\b|-fprint)/;
@@ -61,7 +60,7 @@ export function ontologyDecision(payload) {
   const shell = tool === 'Bash' ? shellSegments(command).filter((segment) => !segment.okf).map((segment) => segment.text).join('\n') : command;
   const mention = shell.match(SHELL_MENTION);
   if (!mention || (tool === 'Bash' && readOnlyShell(shell))) return null;
-  return denial(guardedReason(`/.piecemaker/${mention[1]}`) || OKF_REASON);
+  return denial(guardedReason(`/.piecemaker/${mention[1]}`));
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;

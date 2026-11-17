@@ -49,10 +49,10 @@ test('protect-originals refuse la lecture d’une pièce protégée', () => {
   assert.ok(decision.reason);
 });
 
-test('guard-ontologie refuse l’écriture dans .piecemaker/okf avec son motif', () => {
-  const decision = hook('guard-ontologie.mjs', pre('write_file', { file_path: '.piecemaker/okf/Pièces/contrat fictif.pdf.md', content: 'x' }));
+test('guard-ontologie refuse l’écriture dans .piecemaker/etapes.json avec son motif', () => {
+  const decision = hook('guard-ontologie.mjs', pre('write_file', { file_path: '.piecemaker/etapes.json', content: 'x' }));
   assert.equal(decision.decision, 'deny');
-  assert.match(decision.reason, /okf/i);
+  assert.ok(decision.reason);
 });
 
 test('guard-legal-search réserve Search_* au sous-agent research-maker', () => {

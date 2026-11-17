@@ -58,7 +58,7 @@ test('un apply_patch Codex vérifie chaque feature touchée une seule fois', asy
 test('rien à vérifier hors des features écrites par l’agent', async () => {
   const { featureReport } = await load();
   const pm = fakePm('ignoré');
-  for (const file_path of ['pieces/note.md', '.piecemaker/raisonnements/indemnite.yaml', '.piecemaker/okf/pieces/a.md', '.piecemaker/arborescence.json']) {
+  for (const file_path of ['pieces/note.md', '.piecemaker/raisonnements/indemnite.yaml', '.piecemaker/arborescence.json']) {
     assert.equal(await featureReport({ tool_name: 'Edit', cwd: root, tool_input: { file_path } }, { run: pm.run }), null);
   }
   assert.equal(await featureReport({ tool_name: 'Bash', cwd: root, tool_input: { command: 'cat .piecemaker/appel-suivi.json' } }, { run: pm.run }), null);
@@ -179,6 +179,8 @@ test('un appel MCP Feature run déclenche le même contrôle que la commande pm'
   assert.deepEqual(await call({ ...link, action: 'read' }), []);
   assert.deepEqual(await call({ action: 'run', name: 'index', command: 'verify_index' }), []);
   assert.deepEqual(await call(link, 'mcp__autre__Feature'), []);
+  assert.deepEqual(await call({ action: 'link', ...link.args }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await call({ action: 'mark_examined', source: 'pieces/a.md', reason: 'Aucun lien' }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
 });
 
 test('une commande pm tabular_review preparer ou lancer vérifie le brouillon', async () => {

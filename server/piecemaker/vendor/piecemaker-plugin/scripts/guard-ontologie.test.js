@@ -7,24 +7,30 @@ const load = () => import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mj
 const cwd = '/tmp/Dossier Exemple';
 const decision = async (tool_name, tool_input) => (await load()).ontologyDecision({ tool_name, tool_input, cwd })?.hookSpecificOutput.permissionDecision ?? null;
 
-test('refuse l’écriture directe de l’ontologie, de l’arborescence et des fiches OKF', async () => {
+test('refuse l’écriture directe de l’ontologie, de l’arborescence et des étapes', async () => {
   assert.equal(await decision('Write', { file_path: '.piecemaker/ontologie.json', content: '{}' }), 'deny');
   assert.equal(await decision('Edit', { file_path: `${cwd}/.piecemaker/arborescence.json` }), 'deny');
-  assert.equal(await decision('MultiEdit', { file_path: '.piecemaker/okf/Pièces/Contrat.pdf.md' }), 'deny');
+  assert.equal(await decision('MultiEdit', { file_path: '.piecemaker/etapes.json' }), 'deny');
   assert.equal(await decision('Bash', { command: 'echo "{}" > .piecemaker/ontologie.json' }), 'deny');
-  assert.equal(await decision('Bash', { command: "sed -i '' 's/a/b/' .piecemaker/okf/Pièces/Contrat.pdf.md" }), 'deny');
-  assert.equal(await decision('Bash', { command: 'rm -rf .piecemaker/okf' }), 'deny');
+  assert.equal(await decision('Bash', { command: "sed -i '' 's/a/b/' .piecemaker/etapes.json" }), 'deny');
+  assert.equal(await decision('Bash', { command: 'rm -f .piecemaker/etapes.json' }), 'deny');
   assert.equal(await decision('apply_patch', { command: '*** Begin Patch\n*** Update File: .piecemaker/ontologie.json\n' }), 'deny');
 });
 
 test('refuse les commandes shell qui ne sont pas de simple lecture', async () => {
   assert.equal(await decision('Bash', { command: 'python3 -c "import json" .piecemaker/ontologie.json' }), 'deny');
-  assert.equal(await decision('Bash', { command: 'cat a.md | xargs -I{} cp {} .piecemaker/okf/b.md' }), 'deny');
+  assert.equal(await decision('Bash', { command: 'cat a.md | xargs -I{} cp {} .piecemaker/etapes.json' }), 'deny');
   assert.equal(await decision('Bash', { command: 'jq -i . ~/.piecemaker/ontologie.json' }), 'deny');
-  assert.equal(await decision('Bash', { command: 'find .piecemaker/okf -name "*.md" -delete' }), 'deny');
-  assert.equal(await decision('Bash', { command: 'grep x .piecemaker/okf/a.md 2>.piecemaker/okf/b.md' }), 'deny');
-  assert.equal(await decision('Bash', { command: 'echo $(cp a.md .piecemaker/okf/b.md)' }), 'deny');
-  assert.equal(await decision('Bash', { command: 'awk 1 .piecemaker/okf/a.md' }), 'deny');
+  assert.equal(await decision('Bash', { command: 'find .piecemaker/etapes.json -name "*.md" -delete' }), 'deny');
+  assert.equal(await decision('Bash', { command: 'grep x .piecemaker/etapes.json 2>.piecemaker/etapes.json' }), 'deny');
+  assert.equal(await decision('Bash', { command: 'echo $(cp a.md .piecemaker/etapes.json)' }), 'deny');
+  assert.equal(await decision('Bash', { command: 'awk 1 .piecemaker/etapes.json' }), 'deny');
+});
+
+test('laisse écrire les fiches OKF', async () => {
+  assert.equal(await decision('Write', { file_path: '.piecemaker/okf/Pièces/Contrat.pdf.md', content: 'x' }), null);
+  assert.equal(await decision('Bash', { command: 'cp a.md .piecemaker/okf/b.md' }), null);
+  assert.equal(await decision('apply_patch', { command: '*** Begin Patch\n*** Add File: .piecemaker/okf/Pièces/Note.md\n+x\n*** End Patch' }), null);
 });
 
 test('interdit tout accès à la clé de sceau', async () => {
@@ -34,16 +40,16 @@ test('interdit tout accès à la clé de sceau', async () => {
 });
 
 test('suit le format Codex : apply_patch avec le patch dans tool_input.command', async () => {
-  assert.equal(await decision('apply_patch', { command: '*** Begin Patch\n*** Add File: .piecemaker/okf/Pièces/Note.md\n+x\n*** End Patch' }), 'deny');
+  assert.equal(await decision('apply_patch', { command: '*** Begin Patch\n*** Add File: .piecemaker/etapes.json\n+x\n*** End Patch' }), 'deny');
   assert.equal(await decision('apply_patch', { command: '*** Begin Patch\n*** Update File: notes.md\n*** End Patch' }), null);
-  assert.equal(await decision('Bash', { command: ['bash', '-lc', 'cp a .piecemaker/okf/b.md'] }), 'deny');
+  assert.equal(await decision('Bash', { command: ['bash', '-lc', 'cp a .piecemaker/etapes.json'] }), 'deny');
 });
 
 test('laisse lire ces fichiers et écrire ailleurs', async () => {
   assert.equal(await decision('Bash', { command: 'cat .piecemaker/ontologie.json 2>&1 | head -20' }), null);
   assert.equal(await decision('Bash', { command: "cat a.json; sed -n '1,180p' .piecemaker/okf/index.md" }), null);
-  assert.equal(await decision('Bash', { command: "sed -n '1,5w .piecemaker/okf/b.md' a.md" }), 'deny');
-  assert.equal(await decision('Bash', { command: "sed -i -n '1,5p' .piecemaker/okf/index.md" }), 'deny');
+  assert.equal(await decision('Bash', { command: "sed -n '1,5w .piecemaker/etapes.json' a.md" }), 'deny');
+  assert.equal(await decision('Bash', { command: "sed -i -n '1,5p' .piecemaker/etapes.json" }), 'deny');
   assert.equal(await decision('Bash', { command: 'grep -r "amends" .piecemaker/okf' }), null);
   assert.equal(await decision('Bash', { command: 'pm okf link Pièces/Courrier.pdf amends Pièces/Contrat.pdf --citation "Il est résilié."' }), null);
   assert.equal(await decision('Write', { file_path: '.piecemaker/raisonnements/bail.yaml' }), null);
@@ -69,15 +75,15 @@ test('laisse lire les fiches dans une boucle et une substitution de commande', a
 
 test('refuse une écriture dans une boucle ou une substitution de commande', async () => {
   for (const command of [
-    'for d in a b; do rm -rf "$d/.piecemaker/okf"; done',
-    'for d in a b; do ls "$d/.piecemaker/okf" > "$d/.piecemaker/okf/liste.md"; done',
-    'for d in a b; do ls .piecemaker/okf; done > .piecemaker/okf/liste.md',
-    'echo "fiches: $(ls .piecemaker/okf | tee .piecemaker/okf/liste.md)"',
-    'echo "$(echo "$(mv a.md .piecemaker/okf/b.md)")"',
-    '$(echo rm) -rf .piecemaker/okf',
-    'if true; then cp a.md .piecemaker/okf/b.md; fi',
-    'ls `cp a.md .piecemaker/okf/b.md`',
-    'for f in .piecemaker/okf/*.md; do sed -i "" s/a/b/ "$f"; done',
+    'for d in a b; do rm -rf "$d/.piecemaker/etapes.json"; done',
+    'for d in a b; do ls "$d/.piecemaker/etapes.json" > "$d/.piecemaker/etapes.json"; done',
+    'for d in a b; do ls .piecemaker/etapes.json; done > .piecemaker/etapes.json',
+    'echo "fiches: $(ls .piecemaker/etapes.json | tee .piecemaker/etapes.json)"',
+    'echo "$(echo "$(mv a.md .piecemaker/etapes.json)")"',
+    '$(echo rm) -rf .piecemaker/etapes.json',
+    'if true; then cp a.md .piecemaker/etapes.json; fi',
+    'ls `cp a.md .piecemaker/etapes.json`',
+    'for f in .piecemaker/etapes.json; do sed -i "" s/a/b/ "$f"; done',
   ]) {
     assert.equal(await decision('Bash', { command }), 'deny', command);
   }
@@ -85,10 +91,10 @@ test('refuse une écriture dans une boucle ou une substitution de commande', asy
 
 test('refuse une écriture cachée après une chaîne entre guillemets', async () => {
   for (const command of [
-    'grep "a|b" x; echo y > .piecemaker/okf/z.md',
-    'grep "a;b" x; rm .piecemaker/okf/z.md',
-    'grep "a|b" x | tee .piecemaker/okf/z.md',
-    'grep "a&b" x && sed -i "" s/a/b/ .piecemaker/okf/z.md',
+    'grep "a|b" x; echo y > .piecemaker/etapes.json',
+    'grep "a;b" x; rm .piecemaker/etapes.json',
+    'grep "a|b" x | tee .piecemaker/etapes.json',
+    'grep "a&b" x && sed -i "" s/a/b/ .piecemaker/etapes.json',
   ]) {
     assert.equal(await decision('Bash', { command }), 'deny', command);
   }
@@ -110,11 +116,11 @@ test('ne refuse jamais un appel pm okf qui cite des fiches, quelle que soit sa f
 
 test('un segment pm okf ne couvre pas le reste de la commande', async () => {
   for (const command of [
-    'pm okf verify; cp a.md .piecemaker/okf/b.md',
-    'pm okf verify\nrm -rf .piecemaker/okf',
-    'pm okf verify > .piecemaker/okf/b.md',
-    'pm okf link a.pdf amends b.pdf --citation "$(cp a.md .piecemaker/okf/b.md)"',
-    'pm okf verify | tee .piecemaker/okf/b.md',
+    'pm okf verify; cp a.md .piecemaker/etapes.json',
+    'pm okf verify\nrm -f .piecemaker/etapes.json',
+    'pm okf verify > .piecemaker/etapes.json',
+    'pm okf link a.pdf amends b.pdf --citation "$(cp a.md .piecemaker/etapes.json)"',
+    'pm okf verify | tee .piecemaker/etapes.json',
   ]) {
     assert.equal(await decision('Bash', { command }), 'deny', command);
   }
@@ -123,7 +129,7 @@ test('un segment pm okf ne couvre pas le reste de la commande', async () => {
 test('explique la voie autorisée', async () => {
   const { ontologyDecision } = await load();
   assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /Index › Ontologie tab/);
-  assert.match(ontologyDecision({ tool_name: 'Bash', tool_input: { command: 'cp a.md .piecemaker/okf/b.md' }, cwd }).hookSpecificOutput.permissionDecisionReason, /pm okf link/);
+  assert.match(ontologyDecision({ tool_name: 'Bash', tool_input: { command: 'cp a.md .piecemaker/etapes.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /case steps/);
 });
 
 const fs = require('node:fs');

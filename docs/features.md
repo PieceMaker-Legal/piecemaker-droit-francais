@@ -19,6 +19,7 @@ flowchart LR
 | `Feature` | `quickstart`, `list`, `read`, `run`, `open` | catalogue, skills, commandes `pm`, onglets |
 | `FeatureData` | `get`, `list`, `query`, `set`, `update`, `str_replace`, `delete`, `batch` | base de données par feature, mêmes paramètres qu'`ArtifactData` |
 | `FeatureComments` | `read`, `reply`, `resolve` | fils de commentaires de l'avocat, mêmes paramètres qu'`ArtifactComments` |
+| `OkfWrite` | `link`, `unlink`, `mark_examined` | liens cités de l'index OKF ; le schéma impose les relations de l'ontologie (`~/.piecemaker/ontologie.json`, lue au démarrage du MCP) |
 
 `FeatureData` et `FeatureComments` reprennent les paramètres des outils `ArtifactData` et `ArtifactComments` de Claude. `feature` remplace `url`. Non repris : `profiles`, `as_level`, `file_path`, `out_dir`, `cursor` de `read`, `watch`.
 
@@ -69,7 +70,7 @@ Feature du fil : `catala` pour le volet Catala, `case` sinon.
 
 ## Hérisson
 
-Le hook PostToolUse traite `mcp__features__Feature` avec `action: run` comme la commande `pm …` équivalente. Les matchers Claude (`hooks/hooks.json`) et Codex (`codex-skills.mjs`) incluent l'outil MCP.
+Le hook PostToolUse traite `mcp__features__Feature` avec `action: run`, et `mcp__features__OkfWrite`, comme la commande `pm …` équivalente. Les matchers Claude (`hooks/hooks.json`) et Codex (`codex-skills.mjs`) incluent l'outil MCP.
 
 ## Déclaration
 

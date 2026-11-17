@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16,6 +17,18 @@ const CHECK_LINES = 40;
 const FILE_LINES = 200;
 
 export const INTENTS = { case: 'case', index: 'index', review: 'tabular_review', stamp: 'exhibits', reasoning: 'reasoning', deadlines: 'deadlines', catala: 'catala', draft: 'projects', other: 'case' };
+
+const DEFAULT_RELATIONS = ['amends', 'responds-to', 'refers-to', 'supersedes'];
+const SYSTEM_RELATIONS = ['states', 'involves'];
+
+export function okfRelations(home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker')) {
+  let names = DEFAULT_RELATIONS;
+  try {
+    const found = JSON.parse(fs.readFileSync(path.join(home, 'ontologie.json'), 'utf8')).relations?.map((relation) => relation.name).filter(Boolean);
+    if (found?.length) names = found;
+  } catch {}
+  return [...new Set([...names, ...SYSTEM_RELATIONS])];
+}
 
 export function runPmScript(args, cwd) {
   return new Promise((resolve) => {
@@ -61,7 +74,7 @@ function featureText(name, root) {
   ].join('\n');
 }
 
-export function createServer({ root = process.cwd(), pm = runPmScript } = {}) {
+export function createServer({ root = process.cwd(), pm = runPmScript, relations = okfRelations() } = {}) {
   const server = new McpServer({ name: 'features', version: '0.1.0' });
   const store = openStore(root);
   const comments = openComments(root);
@@ -173,6 +186,35 @@ export function createServer({ root = process.cwd(), pm = runPmScript } = {}) {
       required(threadId, 'thread_id', action);
       if (action === 'reply') return text(await comments.reply(feature, threadId, required(answer, 'text', action)));
       return text(await comments.resolve(feature, threadId));
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  server.registerTool('OkfWrite', {
+    description: 'Writes the OKF index of the case, with the ontology enforced and the citation checked against the source by the server. link adds a cited link: between documents (a relation of the ontology), document states premise (citation, optional value and single), premise involves party code (no citation). unlink removes a link. mark_examined records that a document was read and nothing justifies a link (reason), or undoes it (remove). Read the ontology with Feature run index read_ontology.',
+    inputSchema: {
+      action: z.enum(['link', 'unlink', 'mark_examined']),
+      source: z.string().min(1).describe('The source document (path in the case), or the premise title for involves. mark_examined: the document.'),
+      relation: z.enum(relations).optional().describe('link, unlink: a relation of the ontology, or states (document → premise) or involves (premise → party).'),
+      target: z.string().min(1).optional().describe('link, unlink: the target document, premise title or party code.'),
+      citation: z.string().min(1).optional().describe('link: the exact sentence of the source that proves the link. Not for involves.'),
+      value: z.string().optional().describe('link states: the value of the premise.'),
+      single: z.boolean().optional().describe('link states: the premise has a single value.'),
+      reason: z.string().min(1).optional().describe('mark_examined: why no link is justified.'),
+      remove: z.boolean().optional().describe('mark_examined: undo the mark.'),
+    },
+  }, async ({ action, source, relation, target, citation, value, single, reason, remove }) => {
+    try {
+      if (action === 'mark_examined') {
+        if (!remove) required(reason, 'reason', action);
+        return pmResult(await pm(caseArgs(pmArgv('index', action, { document: source, reason, remove })), root));
+      }
+      required(relation, 'relation', action);
+      required(target, 'target', action);
+      if (action === 'link' && relation !== 'involves') required(citation, 'citation', action);
+      const args = action === 'link' ? { source, relation, target, citation, value, single } : { source, relation, target };
+      return pmResult(await pm(caseArgs(pmArgv('index', action, args)), root));
     } catch (error) {
       return failure(error);
     }
