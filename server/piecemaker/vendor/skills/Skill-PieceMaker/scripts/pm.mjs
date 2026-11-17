@@ -337,7 +337,9 @@ async function confirmPanel(api, request, target) {
   if (api.waitPanel && await api.waitPanel(target, 0)) return { opened: true, alreadyOpen: true };
   let id;
   try {
-    if (api.openPanel) ({ id } = await api.openPanel(request));
+    let listening;
+    if (api.openPanel) ({ id, listening } = await api.openPanel(request));
+    if (listening === false) return { opened: false, alreadyOpen: false, absent: true };
   } catch {
     const opened = api.waitPanel ? await api.waitPanel(target, timeoutMs) : false;
     return { opened, alreadyOpen: false };
@@ -424,12 +426,14 @@ function asText(result) {
 }
 
 function withNotice(result, notice) {
+  if (!notice) return asText(result);
   return `${asText(result).replace(/\n$/, '')}\n${notice}`;
 }
 
 async function followPanel(api, request, target) {
   const label = panelNoticeLabel(target);
-  const { opened, alreadyOpen } = await confirmPanel(api, request, target);
+  const { opened, alreadyOpen, absent } = await confirmPanel(api, request, target);
+  if (absent) return '';
   if (!opened) return 'Le volet n’a pas suivi (PieceMaker n’a pas confirmé l’ouverture).';
   return alreadyOpen ? `Déjà visible : ${label}.` : `Visible : ${label}.`;
 }

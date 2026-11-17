@@ -57,6 +57,21 @@ test('dossier sql passe par sqlFn et suit l’index après une écriture', async
   await assert.rejects(() => run(['dossier', 'sql'], { deps }), /requête SQL/);
 });
 
+test('dossier sql n’attend ni n’avertit quand aucune interface n’est ouverte sur le dossier', async () => {
+  const update = "UPDATE piecemaker_nodes SET doc_date='2024-03-01' WHERE id='p:1'";
+  const deps = (listening) => ({
+    sqlFn: async () => 'ok',
+    waitPanel: async () => false,
+    panelCompleted: async () => false,
+    openPanel: async () => ({ id: '1', listening }),
+    openPanelsTimeoutMs: 300,
+  });
+  const started = Date.now();
+  assert.equal(await run(['dossier', 'sql', update], { deps: deps(false) }), 'ok');
+  assert.ok(Date.now() - started < 250);
+  assert.match(await run(['dossier', 'sql', update], { deps: deps(true) }), /Le volet n’a pas suivi/);
+});
+
 test('tab liste, ouvre et ferme chaque cible', async () => {
   const opened = [];
   const deps = {

@@ -19,6 +19,8 @@ type Delivery = { project: string; receivedAt: number; completedAt?: number };
 const pendingPanelRequests = new Map<string, PanelRequest[]>();
 const deliveredPanelRequests = new Map<string, Delivery>();
 const pendingCloseRequests = new Map<string, PanelRequest[]>();
+const lastListenerPoll = new Map<string, number>();
+const LISTENER_WINDOW_MS = 90_000;
 const deliveredCloseRequests = new Map<string, Delivery>();
 
 function resolveKnownProject(project: string, knownProjects: KnownProjects) {
@@ -139,7 +141,7 @@ export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = def
       ...(typeof document === 'string' ? { document } : {}),
     });
     if (!panelRequest) return response.status(429).json({ error: 'Too many pending panel requests' });
-    response.json({ id: panelRequest.id });
+    response.json({ id: panelRequest.id, listening: Date.now() - (lastListenerPoll.get(knownProject) ?? -Infinity) < LISTENER_WINDOW_MS });
   });
 
   router.get('/open-panel', (request: Request, response: Response) => {
@@ -150,6 +152,7 @@ export function createOpenPanelRequestsRouter(knownProjects: KnownProjects = def
     if (typeof request.query.id === 'string') {
       return response.json({ completed: completedRequest(deliveredPanelRequests, knownProject, request.query.id) });
     }
+    lastListenerPoll.set(knownProject, Date.now());
     response.json({ request: takeRequest(pendingPanelRequests, deliveredPanelRequests, knownProject) });
   });
 

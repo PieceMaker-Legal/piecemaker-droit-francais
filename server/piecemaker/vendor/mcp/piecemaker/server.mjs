@@ -91,7 +91,9 @@ async function openPanelAndWait(request, timeoutMs, panelsPath) {
   if (await waitForOpenPanel({ cwd: project, ...target }, panelsPath, 0)) return true;
   let id;
   try {
-    ({ id } = await requestPanelOpen(request));
+    let listening;
+    ({ id, listening } = await requestPanelOpen(request));
+    if (listening === false) return false;
   } catch {
     return waitForOpenPanel({ cwd: project, ...target }, panelsPath, timeoutMs);
   }
