@@ -10,6 +10,11 @@
       "empty": "이 사건에서 사용할 수 있는 명령어가 없습니다."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "사건 정렬",
@@ -31,6 +36,11 @@
       "steps": {
         "initCommand": "사건 디렉토리에서 task-master init을 사용하세요"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "PieceMaker에 포함되어 있으며 PieceMaker와 함께 업데이트됩니다."
     }
   },
   "permissions": {

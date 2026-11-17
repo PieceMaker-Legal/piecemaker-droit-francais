@@ -7,5 +7,10 @@
   },
   "projectSelection": {
     "startChatWithProvider": "{{provider}} ile sohbet etmeye başlamak için bir dava seç"
+  },
+  "misc": {
+    "fallbackCommands": {
+      "memory": "Davanın CLAUDE.md hafıza dosyasını açın."
+    }
   }
 }

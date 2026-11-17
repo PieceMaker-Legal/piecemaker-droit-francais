@@ -10,6 +10,11 @@
       "empty": "Для этого досье нет доступных команд."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Сортировка досье",
@@ -31,6 +36,11 @@
       "steps": {
         "initCommand": "Используйте task-master init в каталоге вашего досье"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "Поставляется вместе с PieceMaker и обновляется вместе с ним."
     }
   },
   "permissions": {

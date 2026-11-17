@@ -4,6 +4,11 @@
       "project": "Spis"
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Řazení spisů",
@@ -34,6 +39,11 @@
       "steps": {
         "initCommand": "V adresáři spisu spusťte task-master init"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "Dodává se s PieceMaker a aktualizuje se spolu s ním."
     }
   },
   "permissions": {

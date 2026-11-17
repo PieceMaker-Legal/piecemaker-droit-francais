@@ -304,6 +304,7 @@ test('the status reports a missing Vibe, a Vibe without key, and a Vibe with a k
   assert.deepEqual(missing, {
     installed: false,
     provider: 'mistral',
+    installedVersion: null,
     authenticated: false,
     email: null,
     method: null,
@@ -316,6 +317,7 @@ test('the status reports a missing Vibe, a Vibe without key, and a Vibe with a k
   assert.deepEqual(signedOut, {
     installed: true,
     provider: 'mistral',
+    installedVersion: null,
     authenticated: false,
     email: null,
     method: null,
@@ -330,6 +332,7 @@ test('the status reports a missing Vibe, a Vibe without key, and a Vibe with a k
   assert.deepEqual(windowsSignedIn, {
     installed: true,
     provider: 'mistral',
+    installedVersion: null,
     authenticated: true,
     email: 'Mistral API key',
     method: 'api_key',
