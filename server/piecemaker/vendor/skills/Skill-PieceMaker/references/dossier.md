@@ -31,6 +31,10 @@ La colonne de classement range chaque pièce dans l’arborescence, sans confirm
 
 `pm dossier arborescence` lit l’arborescence et la proposition en attente. Pour proposer un changement, modifiez `.piecemaker/arborescence.json` avec l’outil Edit ou Write (Codex : apply_patch), jamais par le shell : le hook `guard-ontologie` refuse l’écriture, fusionne la modification dans la proposition en attente (`arborescence.proposition.json`) et vous répond ce qui a changé. Chaque modification s’ajoute à la proposition en attente. `--dossiers JSON` propose aussi une arborescence complète : `[{nom, explication}]`, un « / » crée un sous-dossier ; `--motif` dit pourquoi. La proposition ne change rien : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Index › Classement, puis enregistre. Une nouvelle proposition remplace la précédente. Sans arborescence, la base est Projets, Pièces, Archives, Notes et recherches. Les dossiers de premier niveau sont les types de documents. Aucun fichier n’est déplacé.
 
+## classer
+
+`pm dossier classer <document> <dossier>` range un document dans un dossier de l’arborescence. Le document prend le type de ce dossier ; son Markdown et son nœud suivent. `pm check` nomme les documents sans type.
+
 ## sql
 
 Noms réels masqués. `dossier()` = affaire courante ; `dossier('nom ou id')` = une autre.

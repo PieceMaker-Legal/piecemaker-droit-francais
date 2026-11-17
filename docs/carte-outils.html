@@ -256,6 +256,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td><code>pm dossier index lancer</code></td><td>Crée l'index s'il manque et l'analyse (modèle medium par défaut). S'il existe, analyse les pièces converties qui en sont absentes.</td><td>oui</td></tr>
         <tr><td><code>pm dossier index lire|colonnes</code></td><td>Résume l'index, ou ajoute, modifie, retire une question.</td><td>non</td></tr>
         <tr><td><code>pm dossier arborescence [--dossiers JSON] [--motif]</code></td><td>Lit l'arborescence et la proposition en attente ; avec <code>--dossiers</code>, propose une arborescence que l'avocat accepte, refuse ou modifie dans Index › Classement.</td><td>non</td></tr>
+        <tr><td><code>pm dossier classer &lt;document&gt; &lt;dossier&gt;</code></td><td>Range un document dans un dossier de l'arborescence : il prend le type de ce dossier. <code>pm check</code> nomme les documents sans type.</td><td>non</td></tr>
         <tr><td><code>pm dossier sql "REQUÊTE"</code></td><td>Lit ou modifie les dates et les libellés des pièces en base (requêtes d'exemple dans la skill).</td><td>non</td></tr>
         <tr><td><code>pm check</code></td><td>Bilan du dossier : anonymisation, mapping, conversion, index OKF, prémisses, programmes Catala, suivi, revues de recherche, étape. Chaque défaut donne la commande ou le sous-agent qui le corrige.</td><td>non</td></tr>
       </table></div>

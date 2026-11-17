@@ -220,6 +220,14 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier, dossiers: [{ nom: 'Contrats' }], motif: 'Regrouper les baux' });
   await run(['dossier', 'arborescence', '--dossier', dossier], { deps });
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier });
+  fs.mkdirSync(path.join(dossier, '.piecemaker'), { recursive: true });
+  fs.writeFileSync(path.join(dossier, '.piecemaker', 'arborescence.json'), '[{"name":"Pièces"}]');
+  const moves = [];
+  deps.moveFn = async (input) => { moves.push(input); return { previous: 'Note.docx', current: 'Pièces/Note.docx' }; };
+  assert.match(await run(['dossier', 'classer', 'Note.docx', 'Pièces', '--dossier', dossier], { deps }), /^Classé : Note\.docx → Pièces\/Note\.docx/);
+  assert.deepEqual(moves, [{ folder: dossier, path: 'Note.docx', directory: 'Pièces' }]);
+  await assert.rejects(() => run(['dossier', 'classer', 'Note.docx', 'Brouillons', '--dossier', dossier], { deps }), (error) => error.exitCode === 2 && /Pièces/.test(error.message));
+  assert.equal(moves.length, 1);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
@@ -267,7 +275,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
-    '4° Index : attribuer un type à Note.docx : le déplacer dans un dossier de pm dossier arborescence, 1 erreur(s), 1 manque(s) → pm okf verify (sous-agent index-maker)',
+    '4° Index : attribuer un type à Note.docx : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence), 1 erreur(s), 1 manque(s) → pm okf verify (sous-agent index-maker)',
     '5° Raisonnement',
     '  5.A bail',
     '    5.A.1 Programme Catala (.piecemaker/catala/bail/) : valide',

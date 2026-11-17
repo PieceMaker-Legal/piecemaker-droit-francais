@@ -175,6 +175,11 @@ export async function runSql({ requete, cwd }) {
   return response.resultat;
 }
 
+export async function movePiece(body) {
+  await adoptRunningServerPort();
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/rename`, body });
+}
+
 export async function runReasoning(body) {
   await adoptRunningServerPort();
   const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/reasoning`, body, timeout: 180_000 });

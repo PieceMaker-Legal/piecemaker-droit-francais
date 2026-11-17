@@ -12,7 +12,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
 const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'catala', 'fichier'];
-const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'index'];
+const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
@@ -51,6 +51,8 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       attend 90 s au plus, puis renvoie l’avancée : relancez pour suivre
   dossier arborescence [--dossiers '[{"nom":"…","explication":"…"}]'] [--motif "raison"]
       lit l’arborescence ; avec --dossiers, propose une arborescence que l’avocat accepte, refuse ou modifie
+  dossier classer <document> <dossier>
+      range le document dans un dossier de l’arborescence : il prend le type de ce dossier
   dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
       crée l’index s’il manque ; sinon analyse les pièces absentes de l’index
   dossier index lire
@@ -295,6 +297,7 @@ async function defaultDeps(cwd) {
   return {
     sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
+    moveFn: client.movePiece,
     reasoningFn: client.runReasoning,
     catalaUpdated: client.notifyCatalaUpdated,
     catalaCitations: client.verifyCatalaCitations,
@@ -603,7 +606,7 @@ function indexPoint({ erreurs = [], contradictions = [], manques = [] }) {
   const untyped = erreurs.filter((entry) => /^type « Non classé »/.test(entry.erreur)).map((entry) => String(entry.fiche).replace(/^\//, '').replace(/\.md$/, ''));
   const faults = erreurs.length - untyped.length;
   const defauts = [
-    untyped.length ? `attribuer un type à ${untyped.join(', ')} : le déplacer dans un dossier de pm dossier arborescence` : '',
+    untyped.length ? `attribuer un type à ${untyped.join(', ')} : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence)` : '',
     faults ? `${faults} erreur(s)` : '',
     forAgent.length ? `${forAgent.length} manque(s)` : '',
     forLawyer ? `${forLawyer} manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier)` : '',
@@ -759,6 +762,15 @@ async function dossier(api, positional, flags, resolved) {
     const proposal = value(flags.dossiers) ? { dossiers: parseJson(flags.dossiers, 'dossiers'), ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) } : {};
     const result = await api.tabularIndex(api.tabularFn, { action: 'arborescence', project, ...proposal });
     return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, target), target));
+  }
+  if (commande === 'classer') {
+    const [document, directory] = positional.slice(2);
+    if (!document || !directory) usage('dossier classer attend <document> <dossier>.');
+    const stored = fs.existsSync(path.join(project, '.piecemaker', 'arborescence.json')) ? JSON.parse(fs.readFileSync(path.join(project, '.piecemaker', 'arborescence.json'), 'utf8')) : [];
+    const names = stored.map((entry) => String(entry.name));
+    if (names.length && !names.some((name) => directory === name || directory.startsWith(`${name}/`))) usage(`dossier classer attend un dossier de l’arborescence : ${names.join(', ')}.`);
+    const moved = await api.moveFn({ folder: project, path: document, directory });
+    return withNotice(`Classé : ${moved.previous} → ${moved.current}`, await followPanel(api, panelRequest(project, target), target));
   }
   const action = positional[2];
   if (!INDEX_ACTIONS.includes(action)) usage(`dossier index attend ${INDEX_ACTIONS.join(', ')}.`);
