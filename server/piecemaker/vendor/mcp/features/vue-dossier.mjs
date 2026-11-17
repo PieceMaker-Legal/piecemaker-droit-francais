@@ -5,6 +5,9 @@ import { parse } from 'yaml';
 export const VIEW_FEATURE = 'case';
 const COLLECTIONS = ['okf', 'deadlines', 'memories'];
 
+const SAFE_ID = /^[A-Za-z0-9_\-.~:@+]{1,200}$/;
+const idOf = (name) => (SAFE_ID.test(name) && name !== '.' && name !== '..' ? name : Buffer.from(name).toString('base64url'));
+
 const versionOf = (file) => Math.floor(fs.statSync(file).mtimeMs);
 const updatedOf = (file) => fs.statSync(file).mtime.toISOString();
 
@@ -27,11 +30,11 @@ function sources(root) {
   const folder = path.join(root, '.piecemaker');
   return {
     okf: () => walk(path.join(folder, 'okf')).filter((file) => file.endsWith('.md') && file !== 'index.md')
-      .map((file) => ({ id: encodeURIComponent(file), file: path.join(folder, 'okf', file), read: (text) => okfData(text) })),
+      .map((file) => ({ id: idOf(file), file: path.join(folder, 'okf', file), read: (text) => okfData(text) })),
     deadlines: () => (fs.existsSync(folder) ? fs.readdirSync(folder) : []).filter((file) => file.endsWith('-suivi.json'))
-      .map((file) => ({ id: file.slice(0, -'-suivi.json'.length), file: path.join(folder, file), read: (text) => JSON.parse(text) })),
+      .map((file) => ({ id: idOf(file.slice(0, -'-suivi.json'.length)), file: path.join(folder, file), read: (text) => JSON.parse(text) })),
     memories: () => walk(path.join(folder, 'memoires')).filter((file) => file.endsWith('.md') && !file.includes('/'))
-      .map((file) => ({ id: file.slice(0, -3), file: path.join(folder, 'memoires', file), read: (text) => ({ text }) })),
+      .map((file) => ({ id: idOf(file.slice(0, -3)), file: path.join(folder, 'memoires', file), read: (text) => ({ text }) })),
   };
 }
 

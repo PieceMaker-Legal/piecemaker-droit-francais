@@ -496,7 +496,7 @@
       ],
       "demarrage": [
         "Feature run deadlines verify_deadlines",
-        "FeatureData list case deadlines"
+        "FeatureData list feature=case collection=deadlines"
       ],
       "commandes": [
         {

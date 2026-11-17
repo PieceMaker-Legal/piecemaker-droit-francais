@@ -4,10 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { isView, viewGet, viewList, VIEW_WRITE_HINT } from './vue-dossier.mjs';
 
-export const LIMITS = { bytes: 256 * 1024, depth: 32, documents: 25000, batch: 500, listDefault: 100, listMax: 1000 };
+export const LIMITS = { bytes: 256 * 1024, depth: 32, documents: 25000, batch: 50, where: 10, segments: 16, listDefault: 100, listMax: 1000, reply: 4096 };
 const FEATURE_NAME = /^[a-z][a-z0-9_]{0,63}$/;
-const SEGMENT = /^[\p{L}\p{N}_%][\p{L}\p{N}_.%\- ]{0,199}$/u;
-const OPERATORS = ['==', '!=', '<', '<=', '>', '>=', 'in', 'not-in', 'array-contains', 'array-contains-any'];
+export const SEGMENT = /^[A-Za-z0-9_\-.~:@+]{1,200}$/;
+const ALIASES = { eq: '==', ne: '!=', lt: '<', lte: '<=', gt: '>', gte: '>=' };
+const OPERATORS = ['==', '!=', '<', '<=', '>', '>=', 'in', 'not-in', 'array-contains', ...Object.keys(ALIASES)];
 const LOCK_STALE_MS = 10000;
 const LOCK_TIMEOUT_MS = 5000;
 
@@ -22,7 +23,8 @@ const fail = (code, message) => { throw new FeatureDataError(code, message); };
 
 function segmentsOf(feature, docPath, kind) {
   if (!FEATURE_NAME.test(String(feature || ''))) fail('invalid_argument', `invalid feature name "${feature}".`);
-  const segments = String(docPath || '').normalize('NFC').split('/');
+  const segments = String(docPath || '').split('/');
+  if (segments.length > LIMITS.segments) fail('invalid_argument', `"${docPath}" has more than ${LIMITS.segments} segments.`);
   for (const segment of segments) {
     if (!SEGMENT.test(segment) || segment === '.' || segment === '..') fail('invalid_argument', `invalid path segment "${segment}" in "${docPath}".`);
   }
@@ -44,29 +46,28 @@ function checkData(data) {
   return data;
 }
 
-const isDelete = (value) => value && typeof value === 'object' && !Array.isArray(value) && value.__delete__ === true && Object.keys(value).length === 1;
+const isObject = (value) => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+const isDelete = (value) => isObject(value) && value.__delete__ === true && Object.keys(value).length === 1;
 
-function stripDeletes(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  return Object.fromEntries(Object.entries(value).filter(([, item]) => !isDelete(item)).map(([key, item]) => [key, stripDeletes(item)]));
+function findDelete(value, inArray = false) {
+  if (isDelete(value)) return inArray ? 'array' : 'object';
+  if (Array.isArray(value)) return value.map((item) => findDelete(item, true)).find(Boolean);
+  if (isObject(value)) return Object.values(value).map((item) => findDelete(item, inArray)).find(Boolean);
+  return undefined;
 }
 
-function applyUpdate(data, changes) {
-  const next = structuredClone(data);
-  for (const [field, value] of Object.entries(changes)) {
-    const keys = field.split('.');
-    let target = next;
-    for (const key of keys.slice(0, -1)) {
-      if (!target[key] || typeof target[key] !== 'object' || Array.isArray(target[key])) {
-        if (isDelete(value)) { target = null; break; }
-        target[key] = {};
-      }
-      target = target[key];
-    }
-    if (!target) continue;
-    const last = keys.at(-1);
-    if (isDelete(value)) delete target[last];
-    else target[last] = stripDeletes(value);
+function checkDeletes(data, op) {
+  const found = findDelete(data);
+  if (found && op === 'set') fail('invalid_argument', 'set rejects {"__delete__": true}: use update to remove a field.');
+  if (found === 'array') fail('invalid_argument', '{"__delete__": true} is rejected inside arrays.');
+  return data;
+}
+
+function merge(target, changes) {
+  const next = { ...target };
+  for (const [key, value] of Object.entries(changes)) {
+    if (isDelete(value)) delete next[key];
+    else next[key] = isObject(value) && isObject(next[key]) ? merge(next[key], value) : isObject(value) ? merge({}, value) : value;
   }
   return next;
 }
@@ -94,22 +95,27 @@ function matches(doc, [field, operator, expected]) {
     case 'in': return Array.isArray(expected) && expected.some((item) => same(item, value));
     case 'not-in': return value !== undefined && Array.isArray(expected) && !expected.some((item) => same(item, value));
     case 'array-contains': return Array.isArray(value) && value.some((item) => same(item, expected));
-    case 'array-contains-any': return Array.isArray(value) && Array.isArray(expected) && value.some((item) => expected.some((wanted) => same(item, wanted)));
     default: return false;
   }
 }
 
-function runQuery(docs, { where = [], orderBy, limit } = {}) {
+function page(docs, { limit, cursor } = {}) {
+  const start = cursor ? docs.findIndex((doc) => doc.id === cursor) + 1 : 0;
+  const size = Math.min(Number(limit) || LIMITS.listDefault, LIMITS.listMax);
+  const documents = docs.slice(start, start + size);
+  return { documents, next_cursor: start + size < docs.length ? documents.at(-1)?.id : null };
+}
+
+function runQuery(docs, { where = [], order_by: orderBy, limit, cursor } = {}) {
+  if (where.length > LIMITS.where) fail('invalid_argument', `a query has at most ${LIMITS.where} where clauses.`);
   for (const clause of where) {
     if (!Array.isArray(clause) || clause.length !== 3 || !OPERATORS.includes(clause[1])) fail('invalid_argument', `a where clause is [field, operator, value] with operator in ${OPERATORS.join(', ')}.`);
   }
-  let result = docs.filter((doc) => where.every((clause) => matches(doc, clause)));
-  if (orderBy) {
-    const [field, direction = 'asc'] = Array.isArray(orderBy) ? orderBy : [orderBy];
-    const sign = direction === 'desc' ? -1 : 1;
-    result = result.sort((a, b) => sign * compare(fieldValue(a.data, field), fieldValue(b.data, field)));
-  }
-  return result.slice(0, Math.min(Number(limit) || LIMITS.listDefault, LIMITS.listMax));
+  const result = docs.filter((doc) => where.every(([field, operator, value]) => matches(doc, [field, ALIASES[operator] ?? operator, value])));
+  if (!orderBy) return page(result, { limit, cursor });
+  const sign = orderBy.direction === 'desc' ? -1 : 1;
+  result.sort((a, b) => sign * compare(fieldValue(a.data, orderBy.field), fieldValue(b.data, orderBy.field)));
+  return { documents: result.slice(0, Math.min(Number(limit) || LIMITS.listDefault, LIMITS.listMax)) };
 }
 
 async function locked(lockFile, work) {
@@ -168,10 +174,14 @@ export function openStore(root) {
     if (isView(feature, segments)) fail('permission_denied', `case/${segments[0]} is read-only here. ${VIEW_WRITE_HINT[segments[0]]}`);
   }
 
-  function checkVersion(current, ifVersion) {
-    if (ifVersion === undefined || ifVersion === null) return;
-    const actual = current?.version ?? 0;
-    if (actual !== ifVersion) fail('conflict', `version mismatch: expected ${ifVersion}, found ${actual}. Read the document again before writing.`);
+  function checkVersion(docPath, current, ifVersion) {
+    if (ifVersion === undefined || ifVersion === null) {
+      if (current) fail('conflict', `"${docPath}" exists at version ${current.version}: a write to an existing document needs if_version. Read it, then write.`);
+      return;
+    }
+    if (!Number.isInteger(ifVersion) || ifVersion < 1) fail('invalid_argument', 'if_version is an integer from 1.');
+    if (!current) fail('conflict', `"${docPath}" does not exist: omit if_version to create it.`);
+    if (current.version !== ifVersion) fail('conflict', `"${docPath}" is at version ${current.version}, not ${ifVersion}. Read it again and redo the write.`);
   }
 
   function plan(feature, operation) {
@@ -179,22 +189,23 @@ export function openStore(root) {
     const segments = segmentsOf(feature, docPath, 'document');
     guardWrite(feature, segments);
     const current = readDoc(feature, segments);
-    checkVersion(current, ifVersion);
+    checkVersion(docPath, current, ifVersion);
     const now = new Date().toISOString();
     const write = (next) => ({ file: docFile(feature, segments), segments, previous: current, next: { data: checkData(next), version: (current?.version ?? 0) + 1, updatedAt: now } });
-    if (op === 'set') return write(stripDeletes(checkData(data)));
+    if (op === 'set') return write(checkDeletes(checkData(data), op));
     if (op === 'update') {
       if (!current) fail('invalid_argument', `update needs an existing document: "${docPath}" does not exist. Use set to create it.`);
-      return write(applyUpdate(current.data, checkData(data)));
+      return write(merge(current.data, checkDeletes(checkData(data), op)));
     }
     if (op === 'str_replace') {
       if (!current) fail('not_found', `"${docPath}" does not exist.`);
-      const { field, old_str: oldText, new_str: newText } = operation;
-      const text = fieldValue(current.data, String(field || ''));
-      if (typeof text !== 'string') fail('invalid_argument', `field "${field}" is not a string.`);
-      const count = text.split(String(oldText ?? '')).length - 1;
-      if (!oldText || count !== 1) fail('invalid_argument', `old_str must occur exactly once in "${field}" (found ${count}).`);
-      return write(applyUpdate(current.data, { [field]: text.replace(oldText, () => String(newText ?? '')) }));
+      const { field, old_str: oldText, new_str: newText, replace_all: replaceAll } = operation;
+      const text = Object.hasOwn(current.data, String(field)) ? current.data[field] : undefined;
+      if (typeof text !== 'string') fail('invalid_argument', `"${field}" is not a top-level string field.`);
+      const count = oldText ? text.split(oldText).length - 1 : 0;
+      if (!count) fail('invalid_argument', `old_str is absent from "${field}".`);
+      if (count > 1 && !replaceAll) fail('invalid_argument', `old_str is not unique in "${field}" (${count} times): give more context or replace_all.`);
+      return write({ ...current.data, [field]: replaceAll ? text.split(oldText).join(String(newText ?? '')) : text.replace(oldText, () => String(newText ?? '')) });
     }
     if (op === 'delete') {
       if (!current) fail('not_found', `"${docPath}" does not exist.`);
@@ -243,21 +254,20 @@ export function openStore(root) {
       if (!doc) fail('not_found', `"${docPath}" does not exist.`);
       return doc;
     },
-    list(feature, collection, { limit, after } = {}) {
-      const docs = listDocs(feature, segmentsOf(feature, collection, 'collection'));
-      const start = after ? docs.findIndex((doc) => doc.id === after) + 1 : 0;
-      const size = Math.min(Number(limit) || LIMITS.listDefault, LIMITS.listMax);
-      const page = docs.slice(start, start + size);
-      return { documents: page, next: start + size < docs.length ? page.at(-1)?.id : null };
+    list(feature, collection, query = {}) {
+      return page(listDocs(feature, segmentsOf(feature, collection, 'collection')), query);
     },
-    query(feature, collection, options = {}) {
-      return { documents: runQuery(listDocs(feature, segmentsOf(feature, collection, 'collection')), options) };
+    query(feature, collection, query = {}) {
+      return runQuery(listDocs(feature, segmentsOf(feature, collection, 'collection')), query);
     },
     async set(feature, docPath, data, options = {}) { return (await commit(feature, [{ op: 'set', path: docPath, data, ...options }]))[0]; },
     async update(feature, docPath, data, options = {}) { return (await commit(feature, [{ op: 'update', path: docPath, data, ...options }]))[0]; },
     async strReplace(feature, docPath, field, oldText, newText, options = {}) { return (await commit(feature, [{ op: 'str_replace', path: docPath, field, old_str: oldText, new_str: newText, ...options }]))[0]; },
     async delete(feature, docPath, options = {}) { return (await commit(feature, [{ op: 'delete', path: docPath, ...options }]))[0]; },
-    batch: commit,
+    async batch(feature, writes) {
+      if (Array.isArray(writes) && writes.some((write) => !['set', 'update', 'delete'].includes(write?.op))) fail('invalid_argument', 'a batch entry is set, update or delete.');
+      return commit(feature, writes);
+    },
   };
 }
 
@@ -282,8 +292,9 @@ export function openComments(root) {
     return { author, text: String(text), at: new Date().toISOString() };
   };
   return {
-    read(feature, { resolved = false } = {}) {
-      return load(fileOf(feature)).threads.filter((thread) => resolved || !thread.resolved);
+    read(feature, threadId) {
+      const { threads } = load(fileOf(feature));
+      return threadId === undefined ? threads : [find({ threads }, threadId)];
     },
     open(feature, anchor, text, author = 'lawyer', id = randomUUID().slice(0, 8)) {
       return mutate(feature, (state) => {
@@ -296,9 +307,9 @@ export function openComments(root) {
     },
     reply(feature, id, text, author = 'assistant') {
       return mutate(feature, (state) => {
+        if (Buffer.byteLength(String(text ?? '')) > LIMITS.reply) fail('invalid_argument', `a reply is at most ${LIMITS.reply} bytes.`);
         const thread = find(state, id);
         thread.messages.push(message(author, text));
-        thread.resolved = false;
         return thread;
       });
     },

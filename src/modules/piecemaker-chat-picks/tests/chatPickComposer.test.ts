@@ -86,7 +86,7 @@ it('ouvre un fil de commentaire ancré sur l’élément marqué Commenter et no
     assert.equal(url, '/api/piecemaker/feature-comments?projectId=exemple');
     assert.deepEqual(body, { feature: 'catala', id: body.id, text: 'Vérifier ce délai', anchor: { tab: 'plugin:piecemaker-catala', title: card.titre, file: card.fichier, start: 3, end: 5 } });
     assert.match(String(body.id), /^[a-z0-9-]{8}$/);
-    assert.equal(sent[0], `Vérifier ce délai\n\n${cardReference(card)} — commentaire ${body.id} : FeatureComments read catala`);
+    assert.equal(sent[0], `Vérifier ce délai\n\n${cardReference(card)} — commentaire : FeatureComments read feature=catala thread_id=${body.id}`);
     assert.equal(document.querySelector('[data-comment="0"]')!.getAttribute('aria-pressed'), 'false');
   } finally { stop(); }
 });

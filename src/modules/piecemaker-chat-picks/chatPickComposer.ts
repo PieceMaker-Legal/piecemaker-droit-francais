@@ -28,7 +28,7 @@ const escape = (text: string) => text.replace(/[&<>"]/g, (sign) => ({ '&': '&amp
 const heading = (card: Card) => `${card.nature || 'Carte'} « ${card.titre.replace(/[[\]]/g, '')} »`;
 const lines = (card: Card) => (card.debut ? (card.fin && card.fin > card.debut ? `lignes ${card.debut} à ${card.fin}` : `ligne ${card.debut}`) : '');
 const featureOf = (card: Card) => (card.tab === CATALA_TAB ? 'catala' : 'case');
-const threadLine = (thread: Thread) => `${cardReference(thread.card)} — commentaire ${thread.id} : FeatureComments read ${thread.feature}`;
+const threadLine = (thread: Thread) => `${cardReference(thread.card)} — commentaire : FeatureComments read feature=${thread.feature} thread_id=${thread.id}`;
 const place = (card: Card) => [card.fichier, card.fichier && lines(card)].filter(Boolean).join(', ');
 
 export function cardReference(card: Card): string {

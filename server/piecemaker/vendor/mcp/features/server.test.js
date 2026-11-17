@@ -48,13 +48,17 @@ test('Feature list, read and open', async () => {
 
 test('FeatureData round trip and errors', async () => {
   const { call } = await connect();
-  assert.equal((await call('FeatureData', { action: 'set', feature: 'reasoning', path: 'notes/n1', data: { a: 1 } })).error, false);
-  assert.equal(JSON.parse((await call('FeatureData', { action: 'get', feature: 'reasoning', path: 'notes/n1' })).text).data.a, 1);
-  const missing = await call('FeatureData', { action: 'update', feature: 'reasoning', path: 'notes/absent', data: { a: 1 } });
+  assert.equal((await call('FeatureData', { action: 'set', feature: 'reasoning', collection: 'notes', doc_id: 'n1', data: { a: 1 } })).error, false);
+  assert.equal(JSON.parse((await call('FeatureData', { action: 'get', feature: 'reasoning', collection: 'notes', doc_id: 'n1' })).text).data.a, 1);
+  assert.match((await call('FeatureData', { action: 'set', feature: 'reasoning', collection: 'notes', doc_id: 'n1', data: { a: 2 } })).text, /^conflict.*if_version/);
+  assert.equal((await call('FeatureData', { action: 'update', feature: 'reasoning', collection: 'notes', doc_id: 'n1', data: { a: 2 }, if_version: 1 })).error, false);
+  const missing = await call('FeatureData', { action: 'update', feature: 'reasoning', collection: 'notes', doc_id: 'absent', data: { a: 1 } });
   assert.match(missing.text, /^invalid_argument/);
-  const denied = await call('FeatureData', { action: 'set', feature: 'case', path: 'deadlines/assignation', data: { a: 1 } });
+  const denied = await call('FeatureData', { action: 'set', feature: 'case', collection: 'deadlines', doc_id: 'assignation', data: { a: 1 } });
   assert.match(denied.text, /^permission_denied/);
-  const batch = await call('FeatureData', { action: 'batch', feature: 'reasoning', operations: [{ op: 'delete', path: 'notes/n1' }] });
+  const query = JSON.parse((await call('FeatureData', { action: 'query', feature: 'reasoning', collection: 'notes', query: { where: [['a', 'eq', 2]] } })).text);
+  assert.equal(query.documents.length, 1);
+  const batch = await call('FeatureData', { action: 'batch', feature: 'reasoning', writes: [{ op: 'delete', collection: 'notes', doc_id: 'n1', if_version: 2 }] });
   assert.equal(batch.error, false);
 });
 
@@ -63,22 +67,22 @@ test('FeatureComments read, reply and resolve', async () => {
   const { openComments } = await import('./store.mjs');
   const thread = await openComments(root).open('reasoning', { tab: 'raisonnement', file: '.piecemaker/raisonnements/assignation.yaml', start: 2, end: 4 }, 'Citer l’article');
   assert.equal(JSON.parse((await call('FeatureComments', { action: 'read', feature: 'reasoning' })).text).length, 1);
-  assert.equal((await call('FeatureComments', { action: 'reply', feature: 'reasoning', id: thread.id, text: 'Fait' })).error, false);
-  await call('FeatureComments', { action: 'resolve', feature: 'reasoning', id: thread.id });
-  assert.equal(JSON.parse((await call('FeatureComments', { action: 'read', feature: 'reasoning' })).text).length, 0);
+  assert.equal((await call('FeatureComments', { action: 'reply', feature: 'reasoning', thread_id: thread.id, text: 'Fait' })).error, false);
+  await call('FeatureComments', { action: 'resolve', feature: 'reasoning', thread_id: thread.id });
+  const [read] = JSON.parse((await call('FeatureComments', { action: 'read', feature: 'reasoning', thread_id: thread.id })).text);
+  assert.equal(read.resolved, true);
+  assert.equal(read.messages.length, 2);
 });
 
-test('Feature run, close and quickstart', async () => {
+test('Feature run and quickstart', async () => {
   const { call, calls, root } = await connect({ pm: undefined });
   assert.equal((await call('Feature', { action: 'run', name: 'reasoning', command: 'verify_reasoning', args: { reasoning: 'assignation' } })).error, false);
   assert.deepEqual(calls[0], ['raisonnement', 'verifier', '--raisonnement', 'assignation', '--dossier', root]);
   assert.match((await call('Feature', { action: 'run', name: 'reasoning', command: 'stamp_exhibits' })).text, /^invalid_argument: unknown command/);
-  await call('Feature', { action: 'close', name: 'exhibits' });
-  assert.deepEqual(calls[1], ['tab', 'fermer', 'bordereau', '--dossier', root]);
   const { INTENTS } = await import('./server.mjs');
   const { readFeature } = await import('./catalogue.mjs');
   for (const [intent, feature] of Object.entries(INTENTS)) {
-    const quick = await call('Feature', { action: 'quickstart', intent, request: 'Préparer le bordereau' });
+    const quick = await call('Feature', { action: 'quickstart', intent });
     assert.equal(quick.error, false);
     const read = readFeature(feature);
     assert.match(quick.text, new RegExp(`# Feature ${feature} `));
