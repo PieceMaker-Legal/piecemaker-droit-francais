@@ -13,6 +13,7 @@ const {
   documentKey,
   isProtectedFile,
   isResourceFile,
+  memoizedRealpath,
   readProtection,
   WORKSPACE_SUBDIR,
 } = require('./protection.cjs');
@@ -624,7 +625,7 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
   );
   const anonymizationState = readAnonymizationState(root);
   const conversionFailures = readConversionFailures(root);
-  const protection = readProtection(root);
+  const protection = { ...readProtection(root), resolve: memoizedRealpath() };
   const originals = [];
   let truncated = false;
 
@@ -1520,10 +1521,12 @@ function listCases(casesRoot) {
   };
 }
 
-async function caseOverview(casesRoot, homeDir, caseName) {
+async function caseOverview(casesRoot, homeDir, caseName, { listOriginals = null } = {}) {
   const startedAt = performance.now();
   const state = await workingState(casesRoot, homeDir, caseName);
-  const originals = await originalFilesOverview(state.legalCase.root, { safeFiles: state.current.files });
+  const originals = listOriginals
+    ? await listOriginals(state.legalCase.root)
+    : await originalFilesOverview(state.legalCase.root, { safeFiles: state.current.files });
   const enrichedChanges = await Promise.all(state.changes.map(async (change) => {
     if (change.kind === 'deleted') return change;
     try {

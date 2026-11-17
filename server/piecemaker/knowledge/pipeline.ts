@@ -69,12 +69,12 @@ const { renamePiece } = require(path.join(
   'websocket-server',
   'renamed-originals.cjs',
 )) as { renamePiece(caseRoot: string, piecePath: string, name: unknown, directory?: unknown): Promise<RenamedPiece> };
-const { invalidateOriginals } = require(path.join(
+const { invalidateOriginals, listOriginalsCached } = require(path.join(
   findApplicationRoot(getModuleDirectory(import.meta.url)),
   'server',
   'piecemaker',
   'originals-cache.cjs',
-)) as { invalidateOriginals(caseRoot: string): void };
+)) as { invalidateOriginals(caseRoot: string): void; listOriginalsCached: OriginalsPipeline['listOriginals'] };
 const { markdownCounterpart } = require(path.join(
   findApplicationRoot(getModuleDirectory(import.meta.url)),
   'server',
@@ -288,6 +288,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
           },
         }));
       } catch (error) {
+        invalidateOriginals(projectPath);
         if (ocrRequired) throw new OcrRequiredError(ocrRequired);
         if (received) persistScanResult({ projectId, mapping: received, documents: [] }, options.store);
         throw error;
@@ -309,7 +310,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const project = options.projects.getProjectById(projectId);
       if (!project) throw new Error('Project not found.');
       const projectPath = fs.realpathSync(project.project_path);
-      return (await listOriginals(projectPath)).map((file) => {
+      return (await listOriginalsCached(projectPath)).map((file) => {
         const markdown = markdownCounterpart(path.join(projectPath, file.path), projectPath);
         return {
           path: file.path,

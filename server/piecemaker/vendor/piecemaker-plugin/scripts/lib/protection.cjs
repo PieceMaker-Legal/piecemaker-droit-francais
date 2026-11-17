@@ -167,8 +167,8 @@ function realpathOrParent(target) {
  * Les deux côtés sont résolus : comparer un `/var/…` à un `/private/var/…`
  * (macOS) donnait un chemin remontant hors du dossier, donc « non protégé ».
  */
-function relativeKey(absolutePath, caseRoot) {
-  const relative = path.relative(realpathOrParent(path.resolve(caseRoot)), realpathOrParent(path.resolve(absolutePath)));
+function relativeKey(absolutePath, caseRoot, resolve = realpathOrParent) {
+  const relative = path.relative(resolve(path.resolve(caseRoot)), resolve(path.resolve(absolutePath)));
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
   return relative.split(path.sep).join('/');
 }
@@ -287,8 +287,16 @@ function mutateProtection(caseRoot, mutate) {
 }
 
 /** Vrai pour un chemin recevable dans une des deux listes d'exceptions. */
-function exceptionKey(absolutePath, caseRoot) {
-  const key = relativeKey(absolutePath, caseRoot);
+function memoizedRealpath() {
+  const resolved = new Map();
+  return (target) => {
+    if (!resolved.has(target)) resolved.set(target, realpathOrParent(target));
+    return resolved.get(target);
+  };
+}
+
+function exceptionKey(absolutePath, caseRoot, resolve = realpathOrParent) {
+  const key = relativeKey(absolutePath, caseRoot, resolve);
   if (!key) return null;
   // Les dotfiles sont de la configuration du dossier, jamais des pièces —
   // `.piecemaker/protection.json` inclus, qui doit rester lisible par l'admin.
@@ -308,7 +316,10 @@ function exceptionKey(absolutePath, caseRoot) {
  */
 function isOoxmlWorkspacePath(absolutePath, caseRoot) {
   const key = relativeKey(absolutePath, caseRoot);
-  if (!key) return false;
+  return Boolean(key) && isOoxmlWorkspaceKey(key);
+}
+
+function isOoxmlWorkspaceKey(key) {
   const segments = key.split('/');
   if (segments[0] !== WORKSPACE_SUBDIR) return false;
   return segments.slice(1, -1).some((segment) => segment.toLowerCase().endsWith(OOXML_WORKDIR_SUFFIX));
@@ -323,11 +334,11 @@ function isOoxmlWorkspacePath(absolutePath, caseRoot) {
  */
 function isProtectedFile(absolutePath, caseRoot, state = null) {
   if (!absolutePath || !caseRoot) return false;
-  const key = exceptionKey(absolutePath, caseRoot);
+  const key = exceptionKey(absolutePath, caseRoot, state?.resolve);
   if (!key) return false;
   if (!PROTECTED_EXTENSIONS.has(path.extname(key).toLowerCase())) return false;
   // Copie extraite d'un .docx : espace de travail implicite, jamais coffre-fort.
-  if (isOoxmlWorkspacePath(absolutePath, caseRoot)) return false;
+  if (isOoxmlWorkspaceKey(key)) return false;
   const current = state || readProtection(caseRoot);
   if (current.bypass) return false;
   const { unprotected, resources } = current;
@@ -340,7 +351,7 @@ function isProtectedFile(absolutePath, caseRoot, state = null) {
  */
 function isResourceFile(absolutePath, caseRoot, state = null) {
   if (!absolutePath || !caseRoot) return false;
-  const key = exceptionKey(absolutePath, caseRoot);
+  const key = exceptionKey(absolutePath, caseRoot, state?.resolve);
   if (!key) return false;
   const { resources } = state || readProtection(caseRoot);
   return Boolean(resources && resources.has(key));
@@ -424,6 +435,7 @@ module.exports = {
   isOoxmlWorkspacePath,
   isResourceFile,
   markdownCounterpart,
+  memoizedRealpath,
   normalizeOriginalName,
   protectionFile,
   protectionBypassFile,
