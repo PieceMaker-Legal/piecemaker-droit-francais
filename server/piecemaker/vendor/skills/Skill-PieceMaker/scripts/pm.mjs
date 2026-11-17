@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CATALA_COMMANDS, listPrograms, runCatala, sourceFiles } from './catala.mjs';
+import { scenarioFacts } from './catala-documentation.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'raisonnement', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
@@ -633,11 +634,20 @@ function catalaState(folder, name) {
   return `${(report.checks ?? []).filter((entry) => !entry.passed).length || 1} contrôle(s) en échec`;
 }
 
-function attachedPremises(folder, name) {
+function programPremises(folder, name) {
   const directory = path.join(folder, '.piecemaker', 'catala', name);
-  return sourceFiles(directory)
-    .flatMap((file) => [...fs.readFileSync(path.join(directory, file), 'utf8').matchAll(/okf:\/(_premises\/\S+\.md)/g)])
-    .filter((cited) => fs.existsSync(path.join(folder, '.piecemaker', 'okf', cited[1]))).length;
+  const exists = (source) => fs.existsSync(path.join(folder, '.piecemaker', 'okf', source.replace(/^okf:\/+/, '')));
+  const conditions = new Set();
+  const settled = new Set();
+  let cited = 0;
+  for (const file of sourceFiles(directory)) {
+    const content = fs.readFileSync(path.join(directory, file), 'utf8');
+    cited += [...content.matchAll(/okf:\/_premises\/\S+\.md/g)].filter((match) => exists(match[0])).length;
+    for (const match of content.matchAll(/^\s*(?:contexte|context)\s+([\p{L}\p{N}_]+)\s+condition\s*$/gmu)) conditions.add(match[1]);
+    for (const match of content.matchAll(/^\s*(?:règle|rule)\s+[\p{L}\p{N}_.]+\.([\p{L}\p{N}_]+)\s+(?:non rempli|not fulfilled)\s*$/gmu)) settled.add(match[1]);
+    for (const fact of scenarioFacts(content, { test: /^test_/.test(path.basename(file)) })) if (fact.source && exists(fact.source)) settled.add(fact.variable.split('.').pop());
+  }
+  return { cited, missing: [...conditions].filter((condition) => !settled.has(condition)) };
 }
 
 async function suiviState(api, folder, suivi) {
@@ -679,7 +689,9 @@ async function reasoningPoints(api, folder, manques) {
     if (programs.includes(nom)) {
       add(`Programme Catala (.piecemaker/catala/${nom}/)`, catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
       const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
-      if (gaps || attachedPremises(folder, nom)) add('Prémisses OKF du programme', gaps ? `${gaps} manque(s)` : '', 'pm okf verify (sous-agent premise-maker)');
+      const { cited, missing } = programPremises(folder, nom);
+      const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} condition(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
+      if (defauts || cited) add('Prémisses OKF du programme', defauts, gaps ? 'pm okf verify (sous-agent premise-maker)' : 'sous-agent premise-maker');
       else add('Prémisses OKF du programme', 'aucune', 'sous-agent premise-maker');
     } else add('Programme Catala', 'à écrire', 'skill catala');
     for (const document of suite?.documents ?? []) {

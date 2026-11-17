@@ -8,7 +8,7 @@ Bilan court du dossier. La première ligne dit « Dossier : valide. » ou donne 
 
 1. Anonymisation, mapping, conversion.
 2. Index OKF, prémisses, contradictions, autres manques du graphe.
-3. Chaque programme Catala.
+3. Chaque programme Catala, et ses conditions (`contexte … condition`) sans prémisse citée dans un scénario.
 4. Chaque suivi : erreurs, manques, échéances dépassées, du jour ou sans date.
 5. Revues de tabular review en mode recherche.
 6. Étape du dossier au tableau (`.piecemaker/etapes.json`).

@@ -286,6 +286,24 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
   write('.piecemaker/catala/bail/bail.catala_fr', '## okf:/_premises/date-du-bail.md\n');
   write('.piecemaker/okf/_premises/date-du-bail.md', '');
   assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : valide/);
+  write('.piecemaker/catala/bail/bail.catala_fr', [
+    'déclaration champ d\'application Bail:',
+    '  contexte bail_signé condition',
+    '  contexte congé_donné condition',
+    '  contexte loyer_impayé condition',
+    '  contexte caution_versée condition',
+    '  contexte loyer contenu argent',
+  ].join('\n'));
+  write('.piecemaker/catala/bail/test_bail.catala_fr', [
+    'champ d\'application Exemple:',
+    '  ## okf:/_premises/date-du-bail.md',
+    '  règle calcul.bail_signé rempli',
+    '  ## okf:/_premises/fiche-absente.md',
+    '  règle calcul.congé_donné rempli',
+    '  règle calcul.loyer_impayé rempli',
+    '  règle calcul.caution_versée non rempli',
+  ].join('\n'));
+  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 2 condition\(s\) sans prémisse : congé_donné, loyer_impayé → sous-agent premise-maker\n/);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
   await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });
