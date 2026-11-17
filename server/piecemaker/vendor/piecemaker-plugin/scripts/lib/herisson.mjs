@@ -4,7 +4,43 @@ import { fileURLToPath } from 'node:url';
 
 const REGISTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'herisson.json');
 
-export const FEATURES = JSON.parse(fs.readFileSync(REGISTRY, 'utf8')).features.map((feature) => ({ ...feature, pattern: new RegExp(feature.cible) }));
+const REGISTRY_DATA = JSON.parse(fs.readFileSync(REGISTRY, 'utf8'));
+
+export const FEATURES = REGISTRY_DATA.features.map((feature) => ({ ...feature, pattern: new RegExp(feature.cible) }));
+
+export const CATALOGUE = REGISTRY_DATA.catalogue;
+
+const invalid = (message) => Object.assign(new Error(message), { code: 'invalid_argument' });
+
+export function commandOf(featureName, commandName) {
+  const feature = CATALOGUE.find((entry) => entry.nom === featureName);
+  if (!feature) throw invalid(`unknown feature "${featureName}". Features: ${CATALOGUE.map((entry) => entry.nom).join(', ')}.`);
+  const command = (feature.commandes ?? []).find((entry) => entry.nom === commandName);
+  if (!command) throw invalid(`unknown command "${commandName}" for feature ${featureName}. Commands: ${(feature.commandes ?? []).map((entry) => entry.nom).join(', ') || 'none'}.`);
+  return { ...command, parametres: command.parametres ?? feature.parametres ?? {} };
+}
+
+const flagValue = (value) => (typeof value === 'object' ? JSON.stringify(value) : String(value));
+
+export function pmArgv(featureName, commandName, args = {}) {
+  const command = commandOf(featureName, commandName);
+  const unknown = Object.keys(args).filter((key) => !(key in command.parametres));
+  if (unknown.length) throw invalid(`${commandName}: unknown parameter(s) ${unknown.join(', ')}. Parameters: ${Object.keys(command.parametres).join(', ') || 'none'}.`);
+  const positional = [];
+  const flags = [];
+  for (const [name, spec] of Object.entries(command.parametres)) {
+    const value = args[name];
+    if (spec.startsWith('#')) {
+      if (value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length)) {
+        if (spec === '#') throw invalid(`${commandName} needs "${name}".`);
+        continue;
+      }
+      positional.push(...(Array.isArray(value) ? value : [value]).map(String));
+    } else if (value === true) flags.push(spec);
+    else if (value !== undefined && value !== null && value !== false) flags.push(spec, flagValue(value));
+  }
+  return [...command.pm, ...positional, ...flags];
+}
 
 export function featureOf(absolute) {
   const parts = String(absolute).replace(/\\/g, '/').split('/.piecemaker/');

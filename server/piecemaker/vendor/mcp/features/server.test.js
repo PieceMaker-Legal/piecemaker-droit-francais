@@ -67,3 +67,25 @@ test('FeatureComments read, reply and resolve', async () => {
   await call('FeatureComments', { action: 'resolve', feature: 'reasoning', id: thread.id });
   assert.equal(JSON.parse((await call('FeatureComments', { action: 'read', feature: 'reasoning' })).text).length, 0);
 });
+
+test('Feature run, close and quickstart', async () => {
+  const { call, calls, root } = await connect({ pm: undefined });
+  assert.equal((await call('Feature', { action: 'run', name: 'reasoning', command: 'verify_reasoning', args: { reasoning: 'assignation' } })).error, false);
+  assert.deepEqual(calls[0], ['raisonnement', 'verifier', '--raisonnement', 'assignation', '--dossier', root]);
+  assert.match((await call('Feature', { action: 'run', name: 'reasoning', command: 'stamp_exhibits' })).text, /^invalid_argument: unknown command/);
+  await call('Feature', { action: 'close', name: 'exhibits' });
+  assert.deepEqual(calls[1], ['tab', 'fermer', 'bordereau', '--dossier', root]);
+  const { INTENTS } = await import('./server.mjs');
+  const { readFeature } = await import('./catalogue.mjs');
+  for (const [intent, feature] of Object.entries(INTENTS)) {
+    const quick = await call('Feature', { action: 'quickstart', intent, request: 'Préparer le bordereau' });
+    assert.equal(quick.error, false);
+    const read = readFeature(feature);
+    assert.match(quick.text, new RegExp(`# Feature ${feature} `));
+    for (const skill of read.skills) assert.ok(quick.text.includes(`## Skill ${skill.name}`));
+    for (const command of read.commands) assert.ok(quick.text.includes(`- ${command.name}(`));
+    assert.match(quick.text, /## Case state \(pm check\)/);
+    assert.ok(quick.text.includes(`1. ${read.start[0]}`));
+  }
+  assert.deepEqual(calls.at(-1), ['check', '--dossier', root]);
+});

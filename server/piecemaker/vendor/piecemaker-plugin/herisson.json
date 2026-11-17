@@ -95,6 +95,108 @@
             "dossier.md"
           ]
         }
+      ],
+      "demarrage": [
+        "Feature run case check_case",
+        "Feature read case path=piecemaker/references/dossier.md"
+      ],
+      "commandes": [
+        {
+          "nom": "check_case",
+          "pm": [
+            "check"
+          ],
+          "role": "Numbered state of the case, in work order; each defect names its fix."
+        },
+        {
+          "nom": "query_database",
+          "pm": [
+            "dossier",
+            "sql"
+          ],
+          "role": "SQL query on the case database (masked data).",
+          "parametres": {
+            "query": "#"
+          }
+        },
+        {
+          "nom": "convert_documents",
+          "pm": [
+            "dossier",
+            "conversion"
+          ],
+          "role": "Convert the documents to Markdown (all pending ones without documents).",
+          "parametres": {
+            "documents": "#?",
+            "force": "--force"
+          }
+        },
+        {
+          "nom": "read_folder_tree",
+          "pm": [
+            "dossier",
+            "arborescence"
+          ],
+          "role": "Read the folder tree of the case."
+        },
+        {
+          "nom": "propose_folder_tree",
+          "pm": [
+            "dossier",
+            "arborescence"
+          ],
+          "role": "Propose a folder tree to the lawyer: folders = [{\"nom\",\"explication\"}].",
+          "parametres": {
+            "folders": "--dossiers",
+            "reason": "--motif"
+          }
+        },
+        {
+          "nom": "file_document",
+          "pm": [
+            "dossier",
+            "classer"
+          ],
+          "role": "File a document in a folder of the tree; it takes the folder type.",
+          "parametres": {
+            "document": "#",
+            "folder": "#"
+          }
+        },
+        {
+          "nom": "build_index",
+          "pm": [
+            "dossier",
+            "index",
+            "lancer"
+          ],
+          "role": "Build the document index, or add the missing documents.",
+          "parametres": {
+            "ai": "--ia",
+            "ai_model": "--modele-ia"
+          }
+        },
+        {
+          "nom": "read_index",
+          "pm": [
+            "dossier",
+            "index",
+            "lire"
+          ],
+          "role": "Read the document index."
+        },
+        {
+          "nom": "add_index_columns",
+          "pm": [
+            "dossier",
+            "index",
+            "colonnes"
+          ],
+          "role": "Add question columns to the document index.",
+          "parametres": {
+            "questions": "--questions"
+          }
+        }
       ]
     },
     {
@@ -105,6 +207,95 @@
       "skills": [
         {
           "chemin": "vendor/skills/okf"
+        }
+      ],
+      "demarrage": [
+        "Feature run index verify_index",
+        "Feature run index read_ontology"
+      ],
+      "commandes": [
+        {
+          "nom": "verify_index",
+          "pm": [
+            "okf",
+            "verify"
+          ],
+          "role": "Rebuild the OKF records and list errors, contradictions and missing elements."
+        },
+        {
+          "nom": "read_ontology",
+          "pm": [
+            "okf",
+            "ontologie"
+          ],
+          "role": "Relations allowed between documents (read-only)."
+        },
+        {
+          "nom": "propose_ontology",
+          "pm": [
+            "okf",
+            "ontologie",
+            "proposer"
+          ],
+          "role": "Propose relations and/or document types to the lawyer.",
+          "parametres": {
+            "ontology": "--json",
+            "reason": "--motif"
+          }
+        },
+        {
+          "nom": "propose_document_types",
+          "pm": [
+            "okf",
+            "types"
+          ],
+          "role": "Propose the full catalogue of document types to the lawyer.",
+          "parametres": {
+            "types": "--json",
+            "reason": "--motif"
+          }
+        },
+        {
+          "nom": "link",
+          "pm": [
+            "okf",
+            "link"
+          ],
+          "role": "Cited link: document relation document, document states \"premise\", or \"premise\" involves PARTY.",
+          "parametres": {
+            "source": "#",
+            "relation": "#",
+            "target": "#",
+            "citation": "--citation",
+            "value": "--value",
+            "single": "--single"
+          }
+        },
+        {
+          "nom": "unlink",
+          "pm": [
+            "okf",
+            "unlink"
+          ],
+          "role": "Remove a link.",
+          "parametres": {
+            "source": "#",
+            "relation": "#",
+            "target": "#"
+          }
+        },
+        {
+          "nom": "mark_examined",
+          "pm": [
+            "okf",
+            "examinee"
+          ],
+          "role": "Mark a document as read with nothing to link (remove = undo).",
+          "parametres": {
+            "document": "#",
+            "reason": "--motif",
+            "remove": "--retirer"
+          }
         }
       ]
     },
@@ -120,6 +311,97 @@
             "tabular.md"
           ]
         }
+      ],
+      "demarrage": [
+        "Feature run tabular_review list_reviews",
+        "Feature run tabular_review list_templates"
+      ],
+      "parametres": {
+        "file": "--fichier",
+        "project": "--projet",
+        "mode": "--mode",
+        "name": "--nom",
+        "template": "--modele",
+        "description": "--description",
+        "questions": "--questions",
+        "documents": "--documents",
+        "search": "--recherche",
+        "ai": "--ia",
+        "ai_model": "--modele-ia"
+      },
+      "commandes": [
+        {
+          "nom": "list_reviews",
+          "pm": [
+            "tabular_review",
+            "lister"
+          ],
+          "role": "List the reviews of the case."
+        },
+        {
+          "nom": "list_templates",
+          "pm": [
+            "tabular_review",
+            "modeles"
+          ],
+          "role": "List the review templates."
+        },
+        {
+          "nom": "create_template",
+          "pm": [
+            "tabular_review",
+            "create_template"
+          ],
+          "role": "Create a review template."
+        },
+        {
+          "nom": "prepare_review",
+          "pm": [
+            "tabular_review",
+            "preparer"
+          ],
+          "role": "Prepare a review (analysis or research mode)."
+        },
+        {
+          "nom": "run_review",
+          "pm": [
+            "tabular_review",
+            "lancer"
+          ],
+          "role": "Run a prepared review."
+        },
+        {
+          "nom": "read_review",
+          "pm": [
+            "tabular_review",
+            "lire"
+          ],
+          "role": "Read the answers of a review."
+        },
+        {
+          "nom": "add_columns",
+          "pm": [
+            "tabular_review",
+            "colonnes"
+          ],
+          "role": "Add question columns to a review."
+        },
+        {
+          "nom": "rerun_review",
+          "pm": [
+            "tabular_review",
+            "relancer"
+          ],
+          "role": "Run a review again."
+        },
+        {
+          "nom": "verify_review",
+          "pm": [
+            "tabular_review",
+            "verifier"
+          ],
+          "role": "Verify the quotations of a review."
+        }
       ]
     },
     {
@@ -134,6 +416,22 @@
             "bordereau.md"
           ]
         }
+      ],
+      "demarrage": [
+        "Feature open exhibits",
+        "Feature run exhibits stamp_exhibits exhibits=[...]"
+      ],
+      "commandes": [
+        {
+          "nom": "stamp_exhibits",
+          "pm": [
+            "bordereau"
+          ],
+          "role": "Stamp the exhibits in this order: Pièces tamponnées/Pièce n°N.pdf.",
+          "parametres": {
+            "exhibits": "#"
+          }
+        }
       ]
     },
     {
@@ -147,6 +445,31 @@
           "references": [
             "raisonnement.md"
           ]
+        }
+      ],
+      "demarrage": [
+        "Feature run reasoning list_reasonings",
+        "Feature read reasoning path=piecemaker/references/raisonnement.md"
+      ],
+      "commandes": [
+        {
+          "nom": "list_reasonings",
+          "pm": [
+            "raisonnement",
+            "lister"
+          ],
+          "role": "List the reasonings of the case."
+        },
+        {
+          "nom": "verify_reasoning",
+          "pm": [
+            "raisonnement",
+            "verifier"
+          ],
+          "role": "Verify a reasoning file line by line.",
+          "parametres": {
+            "reasoning": "--raisonnement"
+          }
         }
       ]
     },
@@ -163,6 +486,57 @@
             "tableau.md"
           ]
         }
+      ],
+      "demarrage": [
+        "Feature run deadlines verify_deadlines",
+        "FeatureData list case deadlines"
+      ],
+      "commandes": [
+        {
+          "nom": "verify_deadlines",
+          "pm": [
+            "suivi_dossiers",
+            "verifier"
+          ],
+          "role": "Verify a deadline file and recompute the deadlines.",
+          "parametres": {
+            "deadlines": "--suivi"
+          }
+        },
+        {
+          "nom": "read_board",
+          "pm": [
+            "suivi_dossiers",
+            "lire"
+          ],
+          "role": "Read a document of the Matter board.",
+          "parametres": {
+            "path": "#"
+          }
+        },
+        {
+          "nom": "write_board",
+          "pm": [
+            "suivi_dossiers",
+            "ecrire"
+          ],
+          "role": "Write a document of the Matter board.",
+          "parametres": {
+            "path": "#",
+            "data": "--json"
+          }
+        },
+        {
+          "nom": "verify_project_memory",
+          "pm": [
+            "memoire",
+            "verifier"
+          ],
+          "role": "Verify the project memories.",
+          "parametres": {
+            "memory": "--memoire"
+          }
+        }
       ]
     },
     {
@@ -173,6 +547,110 @@
       "skills": [
         {
           "chemin": "vendor/skills/catala"
+        }
+      ],
+      "demarrage": [
+        "Feature run catala list_programs",
+        "Feature run catala verify_program"
+      ],
+      "parametres": {
+        "program": "--programme",
+        "file": "--fichier",
+        "scope": "--scope",
+        "variable": "--variable",
+        "date": "--au",
+        "source": "--source",
+        "excerpt": "--extrait",
+        "title": "--titre"
+      },
+      "commandes": [
+        {
+          "nom": "verify_program",
+          "pm": [
+            "catala",
+            "verifier"
+          ],
+          "role": "Format, type-check, test, prove and check the citations of a program."
+        },
+        {
+          "nom": "list_programs",
+          "pm": [
+            "catala",
+            "lister"
+          ],
+          "role": "List the Catala programs of the case."
+        },
+        {
+          "nom": "show_environment",
+          "pm": [
+            "catala",
+            "env"
+          ],
+          "role": "Show the Catala tools installed."
+        },
+        {
+          "nom": "format_program",
+          "pm": [
+            "catala",
+            "formater"
+          ],
+          "role": "Format a program."
+        },
+        {
+          "nom": "prove",
+          "pm": [
+            "catala",
+            "preuve"
+          ],
+          "role": "Prove a scope with Z3."
+        },
+        {
+          "nom": "explain",
+          "pm": [
+            "catala",
+            "expliquer"
+          ],
+          "role": "Graph of formulas and conditions for a scope without inputs."
+        },
+        {
+          "nom": "show_exceptions",
+          "pm": [
+            "catala",
+            "exceptions"
+          ],
+          "role": "Exception tree of a variable."
+        },
+        {
+          "nom": "run_scenario",
+          "pm": [
+            "catala",
+            "executer"
+          ],
+          "role": "Run a scenario and show its trace."
+        },
+        {
+          "nom": "test_skeleton",
+          "pm": [
+            "catala",
+            "squelette"
+          ],
+          "role": "Test skeleton, inputs at their default value."
+        },
+        {
+          "nom": "check_articles",
+          "pm": [
+            "catala",
+            "catleg"
+          ],
+          "role": "Check that the cited articles are in force at a date."
+        },
+        {
+          "nom": "add_section",
+          "pm": [
+            "catala",
+            "section"
+          ],
+          "role": "Add a section with a verified excerpt and the official text."
         }
       ]
     },
@@ -188,7 +666,12 @@
         {
           "chemin": "vendor/piecemaker-plugin/skills/style-redaction-cabinet"
         }
-      ]
+      ],
+      "demarrage": [
+        "Feature read projects",
+        "Feature open projects file=<document>.docx"
+      ],
+      "commandes": []
     }
   ]
 }

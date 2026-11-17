@@ -7,9 +7,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { featureNamed, listFeatures, readFeature, readReference } from './catalogue.mjs';
 import { openComments, openStore } from './store.mjs';
+import { pmArgv } from '../../piecemaker-plugin/scripts/lib/herisson.mjs';
 
 export const PM_SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs');
 const PM_TIMEOUT_MS = 10 * 60 * 1000;
+const CHECK_LINES = 40;
+
+export const INTENTS = { case: 'case', index: 'index', review: 'tabular_review', stamp: 'exhibits', reasoning: 'reasoning', deadlines: 'deadlines', catala: 'catala', draft: 'projects', other: 'case' };
 
 export function runPmScript(args, cwd) {
   return new Promise((resolve) => {
@@ -34,6 +38,7 @@ function featureText(name) {
     `# Feature ${feature.name} — ${feature.title}`,
     feature.description,
     feature.tab ? `Tab: open it with Feature open ${feature.name}.` : 'No tab of its own: Feature open needs a file.',
+    ...(feature.commands.length ? ['\n## Commands (Feature run name=' + feature.name + ' command=<name> args={...})\n', ...feature.commands.map((command) => `- ${command.name}(${command.parameters.join(', ')}): ${command.role} [pm ${command.pm}]`)] : []),
     ...feature.skills.flatMap((skill) => [
       `\n## Skill ${skill.name}\n`,
       skill.instructions.trim(),
@@ -49,21 +54,39 @@ export function createServer({ root = process.cwd(), pm = runPmScript } = {}) {
   const caseArgs = (args) => [...args, '--dossier', root];
 
   server.registerTool('Feature', {
-    description: 'PieceMaker features: the tabs of the case (case, index, tabular_review, exhibits, reasoning, deadlines, catala, projects). Call list first, then read a feature before you work with it: read returns its skill instructions and references. open shows its tab to the lawyer.',
+    description: 'PieceMaker features: the tabs of the case. For new work, call quickstart first: it returns the feature, its skills, its commands, the case state and the first calls. Otherwise list, then read a feature before you work with it. run executes a command of the feature (instead of the pm shell command); open and close show or hide its tab.',
     inputSchema: {
-      action: z.enum(['list', 'read', 'open']),
+      action: z.enum(['quickstart', 'list', 'read', 'run', 'open', 'close']),
+      intent: z.enum(Object.keys(INTENTS)).optional().describe('quickstart: what the lawyer asks for (review = tabular review, stamp = exhibits, draft = write a document).'),
+      request: z.string().optional().describe('quickstart: the request in one sentence.'),
       name: z.string().optional().describe('Feature name, from list.'),
       path: z.string().optional().describe('read: one reference of the feature, as listed by read.'),
-      file: z.string().optional().describe('open: a file of the case to show, relative to the case folder.'),
+      command: z.string().optional().describe('run: command name, as listed by read.'),
+      args: z.record(z.string(), z.any()).optional().describe('run: parameters of the command, by name.'),
+      file: z.string().optional().describe('open, close: a file of the case, relative to the case folder.'),
     },
-  }, async ({ action, name, path: reference, file }) => {
+  }, async ({ action, intent, request, name, path: reference, command, args, file }) => {
     try {
       if (action === 'list') return text(listFeatures());
+      if (action === 'quickstart') {
+        const feature = INTENTS[required(intent, 'intent', action)];
+        const check = await pm(caseArgs(['check']), root);
+        const lines = String(check.stdout || check.stderr).trim().split('\n');
+        return text([
+          ...(request ? [`Request: ${request}`] : []),
+          featureText(feature),
+          `\n## Case state (pm check)\n`,
+          ...lines.slice(0, CHECK_LINES), ...(lines.length > CHECK_LINES ? [`… ${lines.length - CHECK_LINES} more line(s): Feature run case check_case.`] : []),
+          `\n## First calls\n`,
+          ...readFeature(feature).start.map((call, index) => `${index + 1}. ${call}`),
+        ].join('\n'));
+      }
       required(name, 'name', action);
       if (action === 'read') return text(reference ? readReference(name, reference) : featureText(name));
+      if (action === 'run') return pmResult(await pm(caseArgs(pmArgv(name, required(command, 'command', action), args ?? {})), root));
       const feature = featureNamed(name);
-      const target = file && feature.volet === 'tabular_review' ? ['tabular_review', file] : file || !feature.volet ? ['fichier', required(file, 'file', 'open')] : [feature.volet];
-      return pmResult(await pm(caseArgs(['tab', 'afficher', ...target]), root));
+      const target = file && feature.volet === 'tabular_review' ? ['tabular_review', file] : file || !feature.volet ? ['fichier', required(file, 'file', action)] : [feature.volet];
+      return pmResult(await pm(caseArgs(['tab', action === 'open' ? 'afficher' : 'fermer', ...target]), root));
     } catch (error) {
       return failure(error);
     }

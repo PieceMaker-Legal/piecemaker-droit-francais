@@ -166,6 +166,21 @@ test('une commande pm okf link vérifie l’index, et les programmes Catala qui 
   assert.deepEqual(await link('pm okf verify'), []);
 });
 
+test('un appel MCP Feature run déclenche le même contrôle que la commande pm', async (t) => {
+  const fs = require('node:fs');
+  const os = require('node:os');
+  const { featureReport } = await load();
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-'));
+  t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dossier, '.piecemaker'));
+  const call = (tool_input, tool_name = 'mcp__features__Feature') => { const pm = fakePm('Index OKF : 0 erreur(s).'); return featureReport({ tool_name, cwd: dossier, tool_input }, { run: pm.run }).then(() => pm.calls.map((entry) => entry.args)); };
+  const link = { action: 'run', name: 'index', command: 'link', args: { source: 'pieces/a.md', relation: 'amends', target: 'pieces/b.md', citation: 'Texte fictif.' } };
+  assert.deepEqual(await call(link), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await call({ ...link, action: 'read' }), []);
+  assert.deepEqual(await call({ action: 'run', name: 'index', command: 'verify_index' }), []);
+  assert.deepEqual(await call(link, 'mcp__autre__Feature'), []);
+});
+
 test('une commande pm tabular_review preparer ou lancer vérifie le brouillon', async () => {
   const { featureReport } = await load();
   const dossier = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-'));

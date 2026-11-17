@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { noop, readHookPayload, runHook } from './lib/hook-io.mjs';
-import { FEATURES, featureOf, verifierArgs, writtenTexts } from './lib/herisson.mjs';
+import { FEATURES, featureOf, pmArgv, verifierArgs, writtenTexts } from './lib/herisson.mjs';
 import { runPm } from './verify-subagent.mjs';
 
 const MAX_LINES = 40;
@@ -53,10 +53,18 @@ function citingPrograms(root, cite) {
   return names.filter((name) => fs.readdirSync(path.join(folder, name)).some((file) => file.endsWith('.catala_fr') && fs.readFileSync(path.join(folder, name, file), 'utf8').includes(cite)));
 }
 
+const FEATURE_TOOL = /^mcp__features__Feature$/;
+
+function issuedCommand(payload) {
+  const input = payload?.tool_input || {};
+  if (payload?.tool_name === 'Bash') return String(Array.isArray(input.command) ? input.command.join(' ') : input.command || '');
+  if (!FEATURE_TOOL.test(String(payload?.tool_name || '')) || input.action !== 'run') return '';
+  try { return `pm ${pmArgv(input.name, input.command, input.args ?? {}).join(' ')}`; } catch { return ''; }
+}
+
 export function commandChecks(payload) {
-  if (payload?.tool_name !== 'Bash') return [];
-  const input = payload.tool_input || {};
-  const command = String(Array.isArray(input.command) ? input.command.join(' ') : input.command || '');
+  const command = issuedCommand(payload);
+  if (!command) return [];
   const root = payload.cwd || process.cwd();
   if (!fs.existsSync(path.join(root, '.piecemaker'))) return [];
   return FEATURES.filter((feature) => feature.commande && feature.verifier && new RegExp(feature.commande).test(command))

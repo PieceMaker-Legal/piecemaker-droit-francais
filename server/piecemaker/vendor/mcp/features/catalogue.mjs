@@ -37,6 +37,8 @@ export function readFeature(name) {
     title: feature.titre,
     description: feature.description,
     tab: feature.volet,
+    start: feature.demarrage ?? [],
+    commands: (feature.commandes ?? []).map((command) => ({ name: command.nom, role: command.role, parameters: Object.keys(command.parametres ?? feature.parametres ?? {}), pm: command.pm.join(' ') })),
     skills: feature.skills.map((skill) => ({
       name: skillName(skill),
       instructions: fs.readFileSync(path.join(skillFolder(skill), 'SKILL.md'), 'utf8'),
