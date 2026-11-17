@@ -185,6 +185,18 @@ test('une requête déjà démasquée par le proxy retrouve les mêmes lignes qu
   assert.equal(await run("SELECT id FROM piecemaker_nodes WHERE json_extract(data_json,'$.code')='Jean Dupont'"), `id\n${PERSON}`);
 }));
 
+test('une entité homonyme garde dans son libellé le code de son propre identifiant', () => withFixture(async ({ run, store }) => {
+  const twin = 'entity:PERSONNE_MORALE_02';
+  store.update({ projectId: PROJECT_TWO, operations: [
+    { op: 'upsertNode', node: { id: twin, kind: 'company', label: 'Société Exemple SAS', aliases: [], data: { code: 'PERSONNE_MORALE_02' } } },
+    { op: 'upsertMapping', mapping: { nodeId: twin, real: 'Société Exemple SAS', masked: 'PERSONNE_MORALE_02' } },
+  ] });
+  assert.equal(
+    await run("SELECT id, label FROM piecemaker_nodes WHERE kind='company' ORDER BY id"),
+    `id\tlabel\n${COMPANY}\tPERSONNE_MORALE_01\n${twin}\tPERSONNE_MORALE_02`,
+  );
+}));
+
 test('met en forme la lecture : en-tête, tabulations, NULL écrit ∅, JSON intact', () => withFixture(async ({ run }) => {
   assert.equal(
     await run("SELECT id, doc_date, json_extract(data_json,'$.path') IS NULL AS sans_chemin, data_json FROM piecemaker_nodes WHERE id IN ('document:piece-2') ORDER BY id"),

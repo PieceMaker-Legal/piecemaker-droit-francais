@@ -14,6 +14,7 @@ type DatabaseConnection = InstanceType<typeof Database>;
 type Statement = Database.Statement<unknown[]>;
 type Dictionary = { mapping: Record<string, string>; reverse: Record<string, string | readonly string[]>; empty: boolean };
 type DictionarySource = { getForOutbound(): Dictionary; refresh(): Dictionary; close?(): void };
+type MaskContext = { projectId: string | null; overrides: Map<string, string> | null; key: string };
 type SqlValue = string | number | bigint | Buffer | null;
 type ProjectRow = { project_id: string; project_path: string; custom_project_name: string | null };
 
@@ -29,9 +30,10 @@ export type SqlToolInput = { requete: string; cwd?: string };
 
 const require = createRequire(import.meta.url);
 const applicationRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
-const { anonymize, deanonymize } = require(path.join(applicationRoot, 'server', 'piecemaker', 'anonymizer', 'dictionary.cjs')) as {
-  anonymize(text: string, dictionary: Dictionary): string;
+const { anonymize, deanonymize, resolveContext } = require(path.join(applicationRoot, 'server', 'piecemaker', 'anonymizer', 'dictionary.cjs')) as {
+  anonymize(text: string, dictionary: Dictionary, context?: MaskContext): string;
   deanonymize(text: string, dictionary: Pick<Dictionary, 'empty' | 'reverse'>): string;
+  resolveContext(dictionary: Dictionary, input: { text: string }): MaskContext;
 };
 const { createSqliteDictionaryLoader } = require(path.join(applicationRoot, 'server', 'piecemaker', 'anonymizer', 'sqlite-dictionary.cjs')) as {
   createSqliteDictionaryLoader(options: { databasePath: string }): DictionarySource;
@@ -118,15 +120,20 @@ function isoWeekLabel(date: Date): string {
   return `${year}-S${String(week).padStart(2, '0')}`;
 }
 
-function renderValue(value: SqlValue, dictionary: Dictionary): string {
+function renderValue(value: SqlValue, dictionary: Dictionary, context?: MaskContext): string {
   if (value === null || value === undefined) return '∅';
   if (Buffer.isBuffer(value)) return `[blob ${value.length} octets]`;
   if (typeof value !== 'string') return String(value);
-  return anonymize(value, dictionary).replace(/\t/g, '\\t').replace(/\r?\n/g, '\\n');
+  return anonymize(value, dictionary, context).replace(/\t/g, '\\t').replace(/\r?\n/g, '\\n');
+}
+
+function renderRow(row: SqlValue[], dictionary: Dictionary): string {
+  const context = resolveContext(dictionary, { text: row.filter((value) => typeof value === 'string').join('\n') });
+  return row.map((value) => renderValue(value, dictionary, context)).join('\t');
 }
 
 function renderTable(columns: string[], rows: SqlValue[][], dictionary: Dictionary): string {
-  return [columns.map((column) => renderValue(column, dictionary)).join('\t'), ...rows.map((row) => row.map((value) => renderValue(value, dictionary)).join('\t'))].join('\n');
+  return [columns.map((column) => renderValue(column, dictionary)).join('\t'), ...rows.map((row) => renderRow(row, dictionary))].join('\n');
 }
 
 export function createSqlTool(options: SqlToolOptions) {
