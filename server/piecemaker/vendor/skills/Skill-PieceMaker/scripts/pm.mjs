@@ -5,8 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { CATALA_COMMANDS, listPrograms, runCatala, sourceFiles } from './catala.mjs';
-import { scenarioFacts } from './catala-documentation.mjs';
+import { CATALA_COMMANDS, listPrograms, premiseLinks, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
@@ -624,21 +623,6 @@ function catalaState(folder, name) {
   return `${(report.checks ?? []).filter((entry) => !entry.passed).length || 1} contrôle(s) en échec`;
 }
 
-function programPremises(folder, name) {
-  const directory = path.join(folder, '.piecemaker', 'catala', name);
-  const exists = (source) => fs.existsSync(path.join(folder, '.piecemaker', 'okf', source.replace(/^okf:\/+/, '')));
-  const conditions = new Set();
-  const settled = new Set();
-  let cited = 0;
-  for (const file of sourceFiles(directory)) {
-    const content = fs.readFileSync(path.join(directory, file), 'utf8');
-    cited += [...content.matchAll(/okf:\/_premises\/\S+\.md/g)].filter((match) => exists(match[0])).length;
-    for (const match of content.matchAll(/^\s*(?:contexte|context)\s+([\p{L}\p{N}_]+)\s+condition\s*$/gmu)) conditions.add(match[1]);
-    for (const match of content.matchAll(/^\s*(?:règle|rule)\s+[\p{L}\p{N}_.]+\.([\p{L}\p{N}_]+)\s+(?:non rempli|not fulfilled)\s*$/gmu)) settled.add(match[1]);
-    for (const fact of scenarioFacts(content, { test: /^test_/.test(path.basename(file)) })) if (fact.source && exists(fact.source)) settled.add(fact.variable.split('.').pop());
-  }
-  return { cited, missing: [...conditions].filter((condition) => !settled.has(condition)) };
-}
 
 async function suiviState(api, folder, suivi) {
   let text;
@@ -679,10 +663,13 @@ async function reasoningPoints(api, folder, manques) {
     if (programs.includes(nom)) {
       add(`Programme Catala (.piecemaker/catala/${nom}/)`, catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
       const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
-      const { cited, missing } = programPremises(folder, nom);
-      const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} condition(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
-      if (defauts || cited) add('Prémisses OKF du programme', defauts, gaps ? 'pm okf verify' : 'skill okf');
-      else add('Prémisses OKF du programme', 'aucune', 'skill okf');
+      const links = premiseLinks(folder, nom);
+      const missing = [...new Set(links.errors.map((error) => error.match(/\[ERROR\] input "([^"]+)"/)?.[1]).filter(Boolean))];
+      const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} entrée(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
+      const detail = gaps ? 'pm okf verify' : missing.length ? `pm catala verifier --programme ${nom}` : 'skill okf';
+      if (defauts) add('Prémisses OKF du programme', defauts, detail);
+      else if (!links.inputs && !links.mentions) add('Prémisses OKF du programme', 'aucune', 'skill okf');
+      else children.push({ ...point(`${numero}.${children.length + 1}`, 'Prémisses OKF du programme', '', '', 2), ...(links.unlinked.length ? { texte: `Prémisses OKF du programme : valide, ${links.unlinked.length} prémisse(s) de l’index sans entrée (alerte) → pm catala verifier --programme ${nom}` } : {}) });
     } else add('Programme Catala', 'à écrire', 'skill catala');
     for (const document of suite?.documents ?? []) {
       const state = documentState(folder, document);

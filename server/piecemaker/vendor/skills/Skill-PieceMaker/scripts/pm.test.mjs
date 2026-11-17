@@ -311,7 +311,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '  règle calcul.loyer_impayé rempli',
     '  règle calcul.caution_versée non rempli',
   ].join('\n'));
-  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 2 condition\(s\) sans prémisse : congé_donné, loyer_impayé → skill okf\n/);
+  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 3 entrée\(s\) sans prémisse : loyer, congé_donné, loyer_impayé → pm catala verifier --programme bail\n/);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
   await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });

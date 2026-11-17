@@ -195,7 +195,10 @@ champ d'application TestResolution:
 - Déclarez chaque fait du dossier comme un `contexte` titré : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur.
 - Une `condition` est fausse tant qu'aucune règle ne la remplit. Dans le test, écrivez `règle calcul.fait rempli` pour un fait établi, `définition calcul.prix égal à …` pour une valeur.
 - Justifiez chaque fait du scénario : écrivez `## okf:/_premises/<fiche>.md` juste au-dessus. `pm catala verifier` refuse un fait sans ce lien, une fiche sans pièce citée et une valeur différente de celle de la prémisse. Il avertit quand le lien de la pièce a été posé par l'avocat.
-- Une constante d'énumération (`Inconnu`, une thèse) est une hypothèse du scénario : elle ne demande pas de lien.
+- Chaque entrée et chaque `contexte` fait du champ métier est fixé, dans le scénario du dossier (le champ qui cite des prémisses), par un fait sous `## okf:/_premises/<fiche>.md` ou par une expression calculée à partir de tels faits. Une constante (`Inconnu`, `Établi`, `vrai`, un montant) posée sans prémisse est refusée, même enveloppée dans une définition ou un champ de structure : le contrôle `premisses` de `pm catala verifier` remonte jusqu'à la ligne qui l'écrit.
+- Si aucune pièce n'établit le fait, écrivez `## Sans prémisse : <ce qui manque>` juste au-dessus de la ligne qui le fixe. Le contrôle l'accepte avec une alerte, que l'avocat lit.
+- Une prémisse ne sert que si son fait calcule une entrée. Une liste de prémisses en prose, ou un fait qui ne nourrit qu'une liste documentaire, ne relie rien : `pm catala verifier` signale chaque prémisse de l'index qui ne fixe aucune entrée.
+- Les scénarios d'hypothèse, sans prémisse citée, fixent librement leurs entrées.
 - Établissez les prémisses avec le skill `okf` : cherchez-les dans les pièces et reliez-les par des liens `states` cités.
 - Gardez les déclarations dans un bloc ` ```catala-metadata ` : un module n'expose que ces blocs.
 

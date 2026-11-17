@@ -23,6 +23,8 @@ Les liens fictifs de l’exemple ne constituent pas des références vérifiées
 
 Au-dessus de chaque fait du scénario, écrivez `## okf:/_premises/<fiche>.md`. La prémisse porte les pièces et leurs citations ; `pm catala verifier` les contrôle.
 
+Chaque entrée du champ métier se calcule à partir des faits ainsi justifiés : qualifiez-la par une règle qui lit ces faits, ne la figez pas à `Inconnu`. Le contrôle `premisses` de `pm catala verifier` refuse une entrée qui n'en dérive pas, et alerte sur chaque prémisse de l'index qui ne fixe aucune entrée.
+
 Le graphe est un arbre lu de gauche à droite : la conclusion, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
 La couleur donne l’état de chaque case : vert pour validé, orange pour à établir ou à justifier, rouge pour non rempli.
 

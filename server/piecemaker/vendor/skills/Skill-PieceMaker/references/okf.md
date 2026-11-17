@@ -85,9 +85,10 @@ Les colonnes de revue tabulaire marquées « Index du dossier » posent aussi de
 
 ## Prémisse et raisonnement Catala
 
-1. Une condition Catala se justifie par une prémisse : `source: okf:/_premises/<titre normalisé>.md` dans son `#[doc]`, sans `quote`.
+1. Une condition Catala se justifie par une prémisse : `## okf:/_premises/<titre normalisé>.md` juste au-dessus du fait qui la fixe dans le scénario du dossier.
 2. Une prémisse se justifie par des pièces citées (`states`).
 3. Une condition ne cite jamais une pièce directement.
+4. Une prémisse utile alimente une entrée du programme : son fait calcule la condition qu'elle établit. La citer dans une liste ne suffit pas ; `pm catala verifier` signale chaque prémisse qui ne fixe aucune entrée.
 
 Pour un contrat, chaque clause utile est une prémisse : titre = objet de la clause, citation = texte de la clause, valeur = ce qu'elle stipule.
 
