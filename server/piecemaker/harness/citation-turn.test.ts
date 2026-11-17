@@ -118,18 +118,13 @@ test('une instruction répétée sans fermeture est retirée de la réponse visi
   assert.doesNotMatch(await turn.finish(), /texte confidentiel|CITATIONS/);
 });
 
-test('un Markdown du dossier cité comme code est lu hors du dépôt applicatif', async (t) => {
-  const { cwd, turn, store } = await fixture(t);
+test('un fichier technique du dossier cité comme code est écarté des sources', async (t) => {
+  const { cwd, turn } = await fixture(t);
   await mkdir(path.join(cwd, '.agents', 'skills', 'docx-cli'), { recursive: true });
   const source = '`docx` is a command-line tool for reading, editing, redlining, and commenting on Microsoft Word `.docx` files.\n';
   await writeFile(path.join(cwd, '.agents', 'skills', 'docx-cli', 'SKILL.md'), source);
-  turn.text(block([{ ref: 1, kind: 'code', doc_id: '.agents/skills/docx-cli/SKILL.md', quotes: [{ quote: '`docx` is a command-line tool for reading, editing, redlining, and commenting on Microsoft Word `.docx` files.' }] }]));
-  const suffix = await turn.finish();
-  assert.doesNotMatch(suffix, /🔴/);
-  assert.match(suffix, /SKILL\.md, l\. 1/);
-  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
-  assert.ok(token);
-  assert.equal((await store.read(token))?.source, source);
+  turn.text(block([{ ref: 1, kind: 'code', doc_id: '.agents/skills/docx-cli/SKILL.md', quotes: [{ quote: source.trim() }] }]));
+  assert.equal(await turn.finish(), '');
 });
 
 test('une pièce citée par son Markdown converti enregistre le chemin de l’original', async (t) => {

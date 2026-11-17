@@ -75,8 +75,11 @@ test('updates the old suivi rule in an existing AGENTS.md and nothing else', () 
   const oldRule = '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans le suivi du dossier, .piecemaker/suivi.yaml, vérifié par pm suivi verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans l’onglet Échéances.';
   await writeFile(path.join(root, 'AGENTS.md'), `Ma règle sur suivi.yaml\n${oldRule}\n`);
   await ensureAgentInstructionFiles(root, SHARED);
-  const rule = agentInstructionsTemplate().split('\n').at(-1);
-  assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n`);
+  const [rule, discretion] = agentInstructionsTemplate().split('\n').slice(-2);
+  assert.match(discretion, /^6° Discrétion/);
+  assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n${discretion}\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await readFile(path.join(root, 'AGENTS.md'), 'utf8'), `Ma règle sur suivi.yaml\n${rule}\n${discretion}\n`);
 }));
 
 test('points the rules of an existing AGENTS.md to arborescence.json and keeps custom lines', () => withProject(async (root) => {
