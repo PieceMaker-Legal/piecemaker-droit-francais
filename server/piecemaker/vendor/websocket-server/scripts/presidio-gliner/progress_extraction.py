@@ -3,7 +3,7 @@ from gliner2.processing.word_splitter import word_splitter_from
 
 CHUNK_SIZE = 384
 CHUNK_OVERLAP = 64
-BATCH_SIZE = 8
+BATCH_SIZE = 1
 
 
 def extract_entities_with_progress(model, text, labels, threshold, on_progress=None):
