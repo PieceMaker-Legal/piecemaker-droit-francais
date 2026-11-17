@@ -327,7 +327,7 @@ test('rename moves the piece, its markdown and its document node with its links'
     const movedNode = store.snapshot('project-1').nodes.find((entry) => entry.id === `document:${hash(moved.current)}`);
     assert.equal(movedNode?.data.path, path.join(root, 'Procédure', '2024-01-09_Jugement du Tribunal judiciaire de Paris.pdf'));
     assert.deepEqual(await pipeline.pieces('project-1'), [
-      { path: moved.current, status: 'awaiting-scan', markdown: 'Fichiers convertis PieceMaker/2024-01-09_Jugement du Tribunal judiciaire de Paris.md', conversionFailure: null },
+      { path: moved.current, status: 'awaiting-scan', protected: true, markdown: 'Fichiers convertis PieceMaker/2024-01-09_Jugement du Tribunal judiciaire de Paris.md', conversionFailure: null },
     ]);
   } finally {
     database.close();
