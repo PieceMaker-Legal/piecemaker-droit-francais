@@ -58,7 +58,8 @@ comparaisons sur `masked_value` ou `$.code`) ; après, chaque valeur du résulta
 est masquée (`applyMapping`) avec le dictionnaire du proxy
 (`createSqliteDictionaryLoader`). Un nom porté par plusieurs nœuds (homonymes)
 reçoit, ligne par ligne, le code déjà présent dans la ligne (`resolveContext`) :
-`entity:CODE` et son libellé portent le même code. Dans une session qui passe par hudsucker, les
+`entity:CODE` et son libellé portent le même code. Un nom contenu dans le nom
+partagé (un prénom seul, par exemple) ne compte pas pour ce choix. Dans une session qui passe par hudsucker, les
 deux opérations ne changent plus rien : les codes ne sont pas des valeurs du
 dictionnaire.
 

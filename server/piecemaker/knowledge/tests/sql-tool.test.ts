@@ -197,6 +197,20 @@ test('une entité homonyme garde dans son libellé le code de son propre identif
   );
 }));
 
+test("un nom partagé n'est pas attribué à l'autre personne par le prénom qu'il contient", () => withFixture(async ({ run, store }) => {
+  const [first, second] = ['entity:PERSONNE_PHYSIQUE_05', 'entity:PERSONNE_PHYSIQUE_06'];
+  store.update({ projectId: PROJECT_TWO, operations: [
+    { op: 'upsertNode', node: { id: first, kind: 'person', label: 'Paul Lefèvre', aliases: [], data: { code: 'PERSONNE_PHYSIQUE_05' } } },
+    { op: 'upsertMapping', mapping: { nodeId: first, real: 'Paul Lefèvre', masked: 'PERSONNE_PHYSIQUE_05' } },
+    { op: 'upsertMapping', mapping: { nodeId: first, real: 'Paul', masked: 'PERSONNE_PHYSIQUE_05' } },
+  ] });
+  store.update({ projectId: PROJECT_THREE, operations: [
+    { op: 'upsertNode', node: { id: second, kind: 'person', label: 'Paul Lefèvre', aliases: [], data: { code: 'PERSONNE_PHYSIQUE_06' } } },
+    { op: 'upsertMapping', mapping: { nodeId: second, real: 'Paul Lefèvre', masked: 'PERSONNE_PHYSIQUE_06' } },
+  ] });
+  assert.equal(await run(`SELECT id, label FROM piecemaker_nodes WHERE id='${second}'`), `id\tlabel\n${second}\tPERSONNE_PHYSIQUE_06`);
+}));
+
 test('met en forme la lecture : en-tête, tabulations, NULL écrit ∅, JSON intact', () => withFixture(async ({ run }) => {
   assert.equal(
     await run("SELECT id, doc_date, json_extract(data_json,'$.path') IS NULL AS sans_chemin, data_json FROM piecemaker_nodes WHERE id IN ('document:piece-2') ORDER BY id"),
