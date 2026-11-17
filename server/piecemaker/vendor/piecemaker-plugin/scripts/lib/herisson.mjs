@@ -95,8 +95,8 @@ function programNameErrors(file, content) {
 }
 
 const REFUSALS = {
-  catala: ['the program does not follow the Catala format or does not compile. Nothing was written.', 'Correct only the lines shown, keep the rest of the file, then write again. Start from the model of references/format.md (catala skill), which compiles; its table "Fautes fréquentes" gives the fix of common errors.'],
-  suivi: ['the tracking file does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Full model: piecemaker skill, references/suivi.md.'],
+  catala: ['the program does not follow the Catala format or does not compile. Nothing was written.', 'Correct only the lines shown, keep the rest of the file, then write again. Start from the model of references/format.md (Feature read catala path=catala/references/format.md), which compiles; its table "Fautes fréquentes" gives the fix of common errors.'],
+  suivi: ['the tracking file does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Full model: Feature read deadlines path=piecemaker/references/suivi.md.'],
   memoire: ['the project memory does not have the expected structure. Nothing was written.', 'Correct the memory, then write it again: plain Markdown, no frontmatter.'],
 };
 const FORMATS = {

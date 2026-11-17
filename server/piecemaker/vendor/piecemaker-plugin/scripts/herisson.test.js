@@ -120,7 +120,7 @@ test('la garde refuse une erreur de compilation nouvelle, garde les erreurs déj
   const reason = async (content) => (await hookDecision({ cwd: dossier, tool_name: 'Write', tool_input: { file_path, content } }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
   process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'pack');
   assert.equal(await reason('> Module Prime\n\nTexte fictif.\n'), null);
-  assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), 'Write refused by Le Hérisson: the program does not follow the Catala format or does not compile. Nothing was written.\nprime.catala_fr:3: compilation: Unknown identifier inconnu_nouveau\n    line 3 is: inconnu_nouveau\nCorrect only the lines shown, keep the rest of the file, then write again. Start from the model of references/format.md (catala skill), which compiles; its table "Fautes fréquentes" gives the fix of common errors.');
+  assert.equal(await reason('> Module Prime\n\ninconnu_nouveau\n'), 'Write refused by Le Hérisson: the program does not follow the Catala format or does not compile. Nothing was written.\nprime.catala_fr:3: compilation: Unknown identifier inconnu_nouveau\n    line 3 is: inconnu_nouveau\nCorrect only the lines shown, keep the rest of the file, then write again. Start from the model of references/format.md (Feature read catala path=catala/references/format.md), which compiles; its table "Fautes fréquentes" gives the fix of common errors.');
   fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '> Module Prime\n\ninconnu_present\n');
   assert.equal(await reason('> Module Prime\n\nTexte.\n\ninconnu_present\n'), null);
   process.env.PIECEMAKER_COMPONENTS_HOME = path.join(dossier, 'absent');
@@ -262,7 +262,7 @@ test('la garde refuse, avant l’écriture, un suivi ou une mémoire hors format
     '    line 3 is: "echeance": {},',
     'bail-suivi.json:4: "evenements" must be an object { "name in French": {…} }, not a list.',
     '    line 4 is: "evenements": []',
-    'Correct these lines, then write the file again. Full model: piecemaker skill, references/suivi.md.',
+    'Correct these lines, then write the file again. Full model: Feature read deadlines path=piecemaker/references/suivi.md.',
   ].join('\n'));
   assert.match(await reason('.piecemaker/bail-suivi.json', '{ "matter": {}, }'), /bail-suivi\.json:1: invalid JSON/);
   assert.equal(await reason('.piecemaker/bail-suivi.json', '{ "matter": {}, "evenements": {}, "echeances": {} }'), null);

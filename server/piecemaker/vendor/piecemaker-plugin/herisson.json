@@ -26,6 +26,13 @@
       "delai": 30
     },
     {
+      "nom": "features",
+      "cible": "^features(/|$)",
+      "ecriture": "serveur",
+      "skill": "piecemaker",
+      "motif": "Only the features MCP writes the feature data and comments (.piecemaker/features/). Use FeatureData to write a document and FeatureComments to answer a comment of the lawyer. Never write these files with Edit, Write or the shell."
+    },
+    {
       "nom": "etapes",
       "cible": "^etapes\\.json$",
       "ecriture": "serveur",

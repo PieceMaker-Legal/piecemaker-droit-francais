@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -12,6 +13,7 @@ import { pmArgv } from '../../piecemaker-plugin/scripts/lib/herisson.mjs';
 export const PM_SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs');
 const PM_TIMEOUT_MS = 10 * 60 * 1000;
 const CHECK_LINES = 40;
+const FILE_LINES = 200;
 
 export const INTENTS = { case: 'case', index: 'index', review: 'tabular_review', stamp: 'exhibits', reasoning: 'reasoning', deadlines: 'deadlines', catala: 'catala', draft: 'projects', other: 'case' };
 
@@ -32,8 +34,19 @@ function required(value, name, action) {
   return value;
 }
 
-function featureText(name) {
+export function caseFiles(root) {
+  const walk = (folder) => fs.readdirSync(path.join(root, folder), { withFileTypes: true })
+    .filter((entry) => !entry.name.startsWith('.'))
+    .flatMap((entry) => (entry.isDirectory() ? walk(path.join(folder, entry.name)) : entry.isFile() ? [path.join(folder, entry.name)] : []));
+  return walk('')
+    .map((file) => ({ file, stat: fs.statSync(path.join(root, file)) }))
+    .sort((a, b) => Number(b.file.endsWith('.docx')) - Number(a.file.endsWith('.docx')) || a.file.localeCompare(b.file))
+    .map(({ file, stat }) => `- ${file} (${Math.ceil(stat.size / 1024)} KiB, ${stat.mtime.toISOString().slice(0, 10)})`);
+}
+
+function featureText(name, root) {
   const feature = readFeature(name);
+  const files = name === 'projects' ? caseFiles(root) : [];
   return [
     `# Feature ${feature.name} — ${feature.title}`,
     feature.description,
@@ -44,6 +57,7 @@ function featureText(name) {
       skill.instructions.trim(),
       ...(skill.references.length ? [`\nReferences (Feature read ${feature.name} path=<reference>):`, ...skill.references.map((reference) => `- ${reference}`)] : []),
     ]),
+    ...(name === 'projects' ? ['\n## Files of the case (Feature open projects file=<path>)\n', ...(files.length ? files.slice(0, FILE_LINES) : ['(none)']), ...(files.length > FILE_LINES ? [`… ${files.length - FILE_LINES} more file(s).`] : [])] : []),
   ].join('\n');
 }
 
@@ -74,7 +88,7 @@ export function createServer({ root = process.cwd(), pm = runPmScript } = {}) {
         const lines = String(check.stdout || check.stderr).trim().split('\n');
         return text([
           ...(request ? [`Request: ${request}`] : []),
-          featureText(feature),
+          featureText(feature, root),
           `\n## Case state (pm check)\n`,
           ...lines.slice(0, CHECK_LINES), ...(lines.length > CHECK_LINES ? [`… ${lines.length - CHECK_LINES} more line(s): Feature run case check_case.`] : []),
           `\n## First calls\n`,
@@ -82,7 +96,7 @@ export function createServer({ root = process.cwd(), pm = runPmScript } = {}) {
         ].join('\n'));
       }
       required(name, 'name', action);
-      if (action === 'read') return text(reference ? readReference(name, reference) : featureText(name));
+      if (action === 'read') return text(reference ? readReference(name, reference) : featureText(name, root));
       if (action === 'run') return pmResult(await pm(caseArgs(pmArgv(name, required(command, 'command', action), args ?? {})), root));
       const feature = featureNamed(name);
       const target = file && feature.volet === 'tabular_review' ? ['tabular_review', file] : file || !feature.volet ? ['fichier', required(file, 'file', action)] : [feature.volet];

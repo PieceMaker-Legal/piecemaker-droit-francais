@@ -89,3 +89,15 @@ test('Feature run, close and quickstart', async () => {
   }
   assert.deepEqual(calls.at(-1), ['check', '--dossier', root]);
 });
+
+test('Feature read projects lists the case files, Word documents first', async () => {
+  const { call, root } = await connect();
+  fs.mkdirSync(path.join(root, 'Pièces'));
+  fs.writeFileSync(path.join(root, 'Pièces', 'Contrat-exemple.pdf'), 'pdf');
+  fs.writeFileSync(path.join(root, 'Contrat-exemple.docx'), 'docx');
+  fs.writeFileSync(path.join(root, '.cache'), 'x');
+  fs.writeFileSync(path.join(root, '.piecemaker', 'notes.md'), 'x');
+  const files = (await call('Feature', { action: 'read', name: 'projects' })).text.split('## Files of the case')[1].split('\n').filter((line) => line.startsWith('- '));
+  assert.deepEqual(files.map((line) => line.split(' (')[0]), ['- Contrat-exemple.docx', `- ${path.join('Pièces', 'Contrat-exemple.pdf')}`]);
+  assert.match(files[0], /\(1 KiB, \d{4}-\d{2}-\d{2}\)$/);
+});
