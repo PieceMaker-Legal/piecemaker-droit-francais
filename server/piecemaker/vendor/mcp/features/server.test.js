@@ -27,6 +27,7 @@ test('the server exposes three tools', async () => {
   const { client } = await connect();
   const { tools } = await client.listTools();
   assert.deepEqual(tools.map((tool) => tool.name).sort(), ['Feature', 'FeatureComments', 'FeatureData']);
+  assert.doesNotMatch(JSON.stringify(tools), /"items":\[/);
 });
 
 test('Feature list, read and open', async () => {

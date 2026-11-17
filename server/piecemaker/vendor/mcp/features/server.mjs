@@ -126,7 +126,7 @@ export function createServer({ root = process.cwd(), pm = runPmScript } = {}) {
       query: z.object({
         limit: z.number().int().min(1).max(1000).optional(),
         cursor: z.string().optional().describe('next_cursor of a previous result.'),
-        where: z.array(z.tuple([z.string(), z.enum(['eq', 'ne', 'in', 'not-in', 'lt', 'lte', 'gt', 'gte', 'array-contains', '==', '!=', '<', '<=', '>', '>=']), z.any()])).max(10).optional(),
+        where: z.array(z.array(z.any()).length(3)).max(10).optional().describe('[field, operator, value] triples; operator: eq, ne, in, not-in, lt, lte, gt, gte, array-contains, ==, !=, <, <=, >, >=.'),
         order_by: z.object({ field: z.string(), direction: z.enum(['asc', 'desc']).optional() }).optional().describe('query only: a single page, no next_cursor.'),
       }).optional(),
       writes: z.array(z.object({
