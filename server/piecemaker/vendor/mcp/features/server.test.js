@@ -35,8 +35,8 @@ test('Feature list, read and open', async () => {
   const list = JSON.parse((await call('Feature', { action: 'list' })).text);
   assert.ok(list.some((feature) => feature.name === 'reasoning'));
   const read = await call('Feature', { action: 'read', name: 'reasoning' });
-  assert.match(read.text, /## Skill piecemaker/);
-  assert.match(read.text, /piecemaker\/references\/raisonnement\.md/);
+  assert.match(read.text, /- Before you write or complete a reasoning: Feature read reasoning path=piecemaker\/references\/raisonnement\.md/);
+  assert.doesNotMatch(read.text, /## Skill/);
   const reference = await call('Feature', { action: 'read', name: 'reasoning', path: 'piecemaker/references/raisonnement.md' });
   assert.equal(reference.error, false);
   assert.equal((await call('Feature', { action: 'open', name: 'exhibits' })).error, false);
@@ -87,7 +87,7 @@ test('Feature run and quickstart', async () => {
     assert.equal(quick.error, false);
     const read = readFeature(feature);
     assert.match(quick.text, new RegExp(`# Feature ${feature} `));
-    for (const skill of read.skills) assert.ok(quick.text.includes(`## Skill ${skill.name}`));
+    for (const skill of read.skills) assert.ok(quick.text.includes(`path=${skill.references[0]?.path ?? `${skill.name}/SKILL.md`}`));
     for (const command of read.commands) assert.ok(quick.text.includes(`- ${command.name}(`));
     assert.match(quick.text, /## Case state \(pm check\)/);
     assert.ok(quick.text.includes(`1. ${read.start[0]}`));

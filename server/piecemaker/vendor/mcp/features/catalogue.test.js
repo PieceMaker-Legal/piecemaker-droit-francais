@@ -17,8 +17,7 @@ test('every feature has a unique English name, a known tab and existing skills',
     const read = readFeature(feature.nom);
     assert.ok(read.skills.length > 0);
     for (const skill of read.skills) {
-      assert.ok(skill.instructions.length > 0);
-      for (const reference of skill.references) assert.ok(skill.instructions.length && reference.includes('/references/'));
+      for (const reference of skill.references) assert.ok(reference.path.includes('/references/') && reference.when.startsWith('before '), reference.path);
     }
   }
 });
@@ -27,7 +26,7 @@ test('every listed reference can be read', async () => {
   const { CATALOGUE, readFeature, readReference } = await load();
   for (const feature of CATALOGUE) {
     for (const skill of readFeature(feature.nom).skills) {
-      for (const reference of skill.references) assert.ok(readReference(feature.nom, reference).length > 0, reference);
+      for (const reference of [...skill.references.map((entry) => entry.path), `${skill.name}/SKILL.md`]) assert.ok(readReference(feature.nom, reference).length > 0, reference);
     }
   }
 });

@@ -76,11 +76,10 @@ function featureText(name, root) {
     feature.description,
     feature.tab ? `Tab: open it with Feature open ${feature.name}.` : 'No tab of its own: Feature open needs a file.',
     ...(feature.commands.length ? ['\n## Commands (Feature run name=' + feature.name + ' command=<name> args={...})\n', ...feature.commands.map((command) => `- ${command.name}(${command.parameters.join(', ')}): ${command.role} [pm ${command.pm}]`)] : []),
-    ...feature.skills.flatMap((skill) => [
-      `\n## Skill ${skill.name}\n`,
-      skill.instructions.trim(),
-      ...(skill.references.length ? [`\nReferences (Feature read ${feature.name} path=<reference>):`, ...skill.references.map((reference) => `- ${reference}`)] : []),
-    ]),
+    '\n## Read before you act\n',
+    ...feature.skills.flatMap((skill) => (skill.references.length
+      ? skill.references.map((reference) => `- ${reference.when[0].toUpperCase()}${reference.when.slice(1)}: Feature read ${feature.name} path=${reference.path}`)
+      : [`- Before you start: Feature read ${feature.name} path=${skill.name}/SKILL.md`])),
     ...(name === 'projects' ? ['\n## Files of the case (Feature open projects file=<path>)\n', ...(files.length ? files.slice(0, FILE_LINES) : ['(none)']), ...(files.length > FILE_LINES ? [`… ${files.length - FILE_LINES} more file(s).`] : [])] : []),
   ].join('\n');
 }
@@ -92,7 +91,7 @@ export function createServer({ root = process.cwd(), pm = runPmScript, relations
   const caseArgs = (args) => [...args, '--dossier', root];
 
   server.registerTool('Feature', {
-    description: 'PieceMaker features: the tabs of the case. For new work, call quickstart first: it returns the feature, its skills, its commands, the case state and the first calls. Otherwise list, then read a feature before you work with it. run executes a command of the feature (instead of the pm shell command); open shows its tab.',
+    description: 'PieceMaker features: the tabs of the case. For new work, call quickstart first: it returns the feature, its commands, the reference to read before each task, the case state and the first calls. Otherwise list, then read a feature before you work with it. run executes a command of the feature (instead of the pm shell command); open shows its tab.',
     inputSchema: {
       action: z.enum(['quickstart', 'list', 'read', 'run', 'open']),
       intent: z.enum(Object.keys(INTENTS)).optional().describe('quickstart: what the lawyer asks for (review = tabular review, stamp = exhibits, draft = write a document).'),

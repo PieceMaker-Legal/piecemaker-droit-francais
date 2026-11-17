@@ -97,8 +97,8 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            "check.md",
-            "dossier.md"
+            { "fichier": "check.md", "quand": "before you act on a defect reported by check_case" },
+            { "fichier": "dossier.md", "quand": "before you query the database, convert or file documents, build the index or propose a folder tree" }
           ]
         }
       ],
@@ -213,6 +213,12 @@
       "skills": [
         {
           "chemin": "vendor/skills/okf"
+        },
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            { "fichier": "okf.md", "quand": "before your first write to the index" }
+          ]
         }
       ],
       "demarrage": [
@@ -314,7 +320,7 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            "tabular.md"
+            { "fichier": "tabular.md", "quand": "before you prepare, run or complete a review" }
           ]
         }
       ],
@@ -419,7 +425,7 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            "bordereau.md"
+            { "fichier": "bordereau.md", "quand": "before you stamp exhibits" }
           ]
         }
       ],
@@ -449,7 +455,7 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            "raisonnement.md"
+            { "fichier": "raisonnement.md", "quand": "before you write or complete a reasoning" }
           ]
         }
       ],
@@ -488,8 +494,8 @@
         {
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
-            "suivi.md",
-            "tableau.md"
+            { "fichier": "suivi.md", "quand": "before you write a tracking file (.piecemaker/<name>-suivi.json) or a project memory" },
+            { "fichier": "tableau.md", "quand": "before you handle a board request (projects/cabinet/requests/<id>) or report on the state of the cases" }
           ]
         }
       ],

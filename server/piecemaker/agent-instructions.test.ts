@@ -88,6 +88,17 @@ test('replaces the old project memory rule, which kept deadlines and stage in a 
   assert.equal(await read(root, 'AGENTS.md'), `Ma règle\r\n${rule}\r\n`);
 }));
 
+test('points rules 3° to 6° of a previous template to the references of the Feature tool', () => withProject(async (root) => {
+  const template = agentInstructionsTemplate();
+  const previous = template
+    .replace(/\(avant [^)]*, lis Feature read [^)]*\)/g, '(voir la skill piecemaker)')
+    .replace('→ outil Feature : quickstart, puis lis la référence qu’il indique avant d’agir', '→ skill piecemaker');
+  assert.equal(previous.split('(voir la skill piecemaker)').length, 4);
+  await writeFile(path.join(root, 'AGENTS.md'), `${previous}\n`);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await read(root, 'AGENTS.md'), `${template}\n`);
+}));
+
 test('adds the tools rule once to an AGENTS.md written from the template and keeps custom lines', () => withProject(async (root) => {
   const template = agentInstructionsTemplate();
   const withoutToolsRule = template.slice(0, template.indexOf('\n6° Outils:'));
