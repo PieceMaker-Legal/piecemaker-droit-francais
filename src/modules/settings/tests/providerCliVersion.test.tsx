@@ -164,7 +164,7 @@ describe('ProviderCliVersion', () => {
       updateUnavailableReason: 'bundled',
     })];
     const { unmount } = renderRow('0.156.1');
-    expect(await screen.findByText('Ships with CloudCLI and is updated together with it.')).toBeTruthy();
+    expect(await screen.findByText('Ships with PieceMaker and is updated together with it.')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
     unmount();
 

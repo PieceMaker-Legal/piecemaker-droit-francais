@@ -222,6 +222,8 @@ test('the announcement never lands in the transcript', () => {
     streamTimerRef: { current: null },
     accumulatedStreamRef: { current: '' },
     lastSeqRef: { current: new Map() },
+    watchedRunSessionsRef: { current: new Map() },
+    onIdleAckMissedRun: () => {},
     statusCheckSentAtRef: { current: new Map() },
     requestLatestMessages: async () => {},
     sessionStore: { appendRealtime: (...args: unknown[]) => appended.push(args) } as unknown as SessionStore,

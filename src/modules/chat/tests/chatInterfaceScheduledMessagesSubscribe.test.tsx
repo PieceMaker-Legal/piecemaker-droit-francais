@@ -64,6 +64,11 @@ vi.mock('@/modules/chat/hooks/useSessionStore', () => ({ useSessionStore: () => 
 vi.mock('@/modules/chat/transcript/ChatMessagesPane', () => ({ default: () => null }));
 vi.mock('@/modules/chat/composer/ChatComposer', () => ({ default: () => null }));
 vi.mock('@/modules/chat/modals/CommandResultModal', () => ({ default: () => null }));
+vi.mock('@/piecemaker/chat/useSlashCommandPills', () => ({ useSlashCommandPills: () => ({ renderInputWithCommandPills: () => null }) }));
+vi.mock('@/piecemaker/chat/useDocxCommentQuestions', () => ({ useDocxCommentQuestions: () => {} }));
+vi.mock('@/piecemaker/chat/prepareCommandMenuCommands', () => ({ prepareCommandMenuCommands: () => [] }));
+vi.mock('@/modules/piecemaker-context-suggestions', () => ({ useContextSuggestion: () => ({ placeholder: '', onKeyDown: () => {} }) }));
+vi.mock('@/piecemaker/chat/useMistralSessionStore', () => ({ useSessionStore: () => ({}) }));
 
 const { default: ChatInterface } = await import('@/modules/chat/ChatInterface');
 

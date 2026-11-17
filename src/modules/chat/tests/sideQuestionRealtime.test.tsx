@@ -78,6 +78,8 @@ const renderHandlers = () => {
     streamTimerRef: { current: null },
     accumulatedStreamRef: { current: '' },
     lastSeqRef: { current: new Map() },
+    watchedRunSessionsRef: { current: new Map() },
+    onIdleAckMissedRun: () => {},
     statusCheckSentAtRef: { current: new Map() },
     onSessionIdle: () => {},
     onSessionBackground: () => {},

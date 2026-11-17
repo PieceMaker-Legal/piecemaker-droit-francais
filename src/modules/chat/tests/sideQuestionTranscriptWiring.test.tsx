@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, it, vi } from 'vitest';
 import { useChatSessionState } from '@/modules/chat/hooks/useChatSessionState';
 import { useSessionStore } from '@/modules/chat/hooks/useSessionStore';
 import { sideQuestionStore } from '@/modules/chat/hooks/useSideQuestions';
-import type { ChatMessage, NormalizedMessage, Project, ProjectSession, SideQuestion } from '@/shared/types';
+import type { ChatMessage, NormalizedMessage, Project, ProjectSession, RunReplayPosition, SideQuestion } from '@/shared/types';
 import type * as SharedApiModule from '@/shared/api';
 
 /**
@@ -81,7 +81,7 @@ const renderSessionState = () => {
   const sendMessage = vi.fn();
   const resetStreamingState = vi.fn();
   const statusCheckSentAtRef = { current: new Map<string, number>() };
-  const lastSeqRef = { current: new Map<string, number>() };
+  const lastSeqRef = { current: new Map<string, RunReplayPosition>() };
   return renderHook(() => {
     const sessionStore = useSessionStore();
     const state = useChatSessionState({
@@ -93,6 +93,7 @@ const renderSessionState = () => {
       resetStreamingState,
       statusCheckSentAtRef,
       lastSeqRef,
+      watchedRunSessionsRef: { current: new Map() },
       sessionStore,
     });
     return { sessionStore, state };

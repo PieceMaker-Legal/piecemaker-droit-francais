@@ -12,8 +12,11 @@ import { api } from '@/shared/api';
 import { inheritSessionPermissionMode } from '@/shared/utils';
 import type {
   ChatMessage,
+  MarkSessionProcessing,
   Project,
   ProjectSession,
+  RunReplayPosition,
+  WatchedRunSource,
   SessionEstablishedContext,
   SessionNavigationOptions,
 } from '@/shared/types';
@@ -96,8 +99,14 @@ function ChatInterface({
   const statusCheckSentAtRef = useRef(new Map<string, number>());
   // Highest live `seq` observed per session. Written by the realtime handler
   // on every sequenced frame, read whenever a `chat.subscribe` is sent so the
-  // server replays only the events this client actually missed.
-  const lastSeqRef = useRef(new Map<string, number>());
+  // server replays only the events this client actually missed. Kept with the
+  // run it counts in: every run restarts at seq 1.
+  const lastSeqRef = useRef(new Map<string, RunReplayPosition>());
+  // Sessions whose current run already streams to this socket (or has a
+  // subscribe in flight), and why. A busy session missing from it is running
+  // a turn this tab never attached to — a queued or scheduled message the
+  // server sent — and gets subscribed so that turn shows live.
+  const watchedRunSessionsRef = useRef(new Map<string, WatchedRunSource>());
 
   const resetStreamingState = useCallback(() => {
     if (streamTimerRef.current) {
@@ -144,6 +153,10 @@ function ChatInterface({
     addMessage,
     sessionActivity,
     isProcessing,
+    followClaimedQueuedMessage,
+    markRunStartedHere,
+    resubscribeAfterReconnect,
+    subscribeToUnwatchedRun,
     canAbortSession,
     currentSessionId,
     setCurrentSessionId,
@@ -184,8 +197,18 @@ function ChatInterface({
     resetStreamingState,
     statusCheckSentAtRef,
     lastSeqRef,
+    watchedRunSessionsRef,
     sessionStore,
   });
+
+  // The composer's send is a run this socket starts, so it is watched from
+  // the moment it is dispatched rather than re-subscribed to.
+  const markOwnSendProcessing = useCallback<MarkSessionProcessing>((sessionId, activity) => {
+    if (sessionId) {
+      markRunStartedHere(sessionId);
+    }
+    onSessionProcessing(sessionId, activity);
+  }, [markRunStartedHere, onSessionProcessing]);
 
   // Brand-new conversation: the composer allocated a stable session id via
   // the session gateway before the first send. Record it locally and put it
@@ -314,7 +337,10 @@ function ChatInterface({
     isConnected,
     sendByCtrlEnter,
     supportsSteering,
-    onSessionProcessing,
+    onSessionProcessing: markOwnSendProcessing,
+    // The card goes when the server claims the message, and the run it then
+    // starts is the one to watch.
+    onQueuedMessageSent: followClaimedQueuedMessage,
     onSessionEstablished: handleSessionEstablished,
     onFileOpen,
     onShowSettings,
@@ -346,23 +372,6 @@ function ChatInterface({
     [frequentCommands],
   );
 
-  // On WebSocket reconnect, request a bounded persisted-tail sync (deferred
-  // while Chat is hidden), then re-subscribe — the
-  // `chat_subscribed` ack restores or clears the activity indicator, replays
-  // missed live events, and re-attaches a still-running stream to this socket.
-  const handleWebSocketReconnect = useCallback(async () => {
-    if (!selectedProject || !selectedSession) return;
-    await requestLatestMessages(selectedSession.id, isActive);
-    statusCheckSentAtRef.current.set(selectedSession.id, Date.now());
-    sendMessage({
-      type: 'chat.subscribe',
-      sessions: [{
-        sessionId: selectedSession.id,
-        lastSeq: lastSeqRef.current.get(selectedSession.id) ?? 0,
-      }],
-    });
-  }, [isActive, requestLatestMessages, selectedProject, selectedSession, sendMessage]);
-
   useChatRealtimeHandlers({
     isActive,
     subscribe,
@@ -376,11 +385,13 @@ function ChatInterface({
     accumulatedStreamRef,
     lastSeqRef,
     statusCheckSentAtRef,
+    watchedRunSessionsRef,
     onSessionProcessing,
     onSessionIdle,
     onSessionBackground,
     getSessionActivity,
-    onWebSocketReconnect: handleWebSocketReconnect,
+    onWebSocketReconnect: resubscribeAfterReconnect,
+    onIdleAckMissedRun: subscribeToUnwatchedRun,
     requestLatestMessages,
     sessionStore,
     onSteerOutcome: handleSteerOutcome,
