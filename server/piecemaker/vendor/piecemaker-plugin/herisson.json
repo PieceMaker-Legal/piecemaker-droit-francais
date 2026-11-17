@@ -80,5 +80,115 @@
       "erreur": ": bloquée",
       "delai": 30
     }
+  ],
+  "catalogue": [
+    {
+      "nom": "case",
+      "titre": "Dossier",
+      "volet": "dossier",
+      "description": "Case state, document conversion, folder tree, filing and the case database: start here with check_case.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "check.md",
+            "dossier.md"
+          ]
+        }
+      ]
+    },
+    {
+      "nom": "index",
+      "titre": "Index",
+      "volet": "index",
+      "description": "OKF index of the case documents: cited links between documents, premises, parties and the link ontology.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/okf"
+        }
+      ]
+    },
+    {
+      "nom": "tabular_review",
+      "titre": "Analyse tabulaire",
+      "volet": "tabular_review",
+      "description": "Tabular review: one question per column, one document per row, each answer with a verified quotation.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "tabular.md"
+          ]
+        }
+      ]
+    },
+    {
+      "nom": "exhibits",
+      "titre": "Bordereau",
+      "volet": "bordereau",
+      "description": "Exhibit list (bordereau) and stamping of the exhibits.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "bordereau.md"
+          ]
+        }
+      ]
+    },
+    {
+      "nom": "reasoning",
+      "titre": "Raisonnement",
+      "volet": "raisonnement",
+      "description": "Legal reasoning written in .piecemaker/raisonnements/<name>.yaml and checked line by line.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "raisonnement.md"
+          ]
+        }
+      ]
+    },
+    {
+      "nom": "deadlines",
+      "titre": "Suivi des dossiers",
+      "volet": "suivi_dossiers",
+      "description": "Procedural events and deadlines of each act, project memories and the Matter board.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "suivi.md",
+            "tableau.md"
+          ]
+        }
+      ]
+    },
+    {
+      "nom": "catala",
+      "titre": "Catala",
+      "volet": "catala",
+      "description": "A legal rule as a Catala program, run and proved on the case premises.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/catala"
+        }
+      ]
+    },
+    {
+      "nom": "projects",
+      "titre": "Projets",
+      "volet": null,
+      "description": "Files of the case folder, Word documents first: read, draft and edit them.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/docx-cli"
+        },
+        {
+          "chemin": "vendor/piecemaker-plugin/skills/style-redaction-cabinet"
+        }
+      ]
+    }
   ]
 }
