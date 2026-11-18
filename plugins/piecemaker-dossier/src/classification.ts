@@ -4,7 +4,7 @@ import { modal } from './editors.js';
 import { applyKeyedChange, changesMarkup, decisionOf, keyedChanges, type ChangeDecision, type ProposalShape } from './proposal.js';
 import { escapeHtml } from './views.js';
 
-const ASK_NOTE = 'arborescence du dossier, lue avec pm dossier arborescence ; pour la changer, modifiez .piecemaker/arborescence.json avec Edit ou Write : le hook en fait une proposition, l’avocat décide';
+const ASK_NOTE = 'arborescence commune à tous les dossiers, lue avec pm dossier arborescence ; pour la changer, modifiez la clé « arborescence » de ~/.piecemaker/ontologie.json avec Edit ou Write : le hook en fait une proposition, l’avocat décide';
 
 export const TREE_SHAPE: ProposalShape<ClassificationFolder> = {
   key: (folder) => folder.name,

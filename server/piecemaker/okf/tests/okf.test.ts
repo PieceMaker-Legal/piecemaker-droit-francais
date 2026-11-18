@@ -15,7 +15,7 @@ import { graphGaps, graphReport, premiseEvidence } from '../premises.js';
 import type { ExamInput, LinkInput, OkfTarget } from '../links.js';
 import { addLink as addLinkTo, markExamined as markExaminedOf, removeLink as removeLinkOf, unmarkExamined as unmarkExaminedOf } from '../links.js';
 import { createOkfStore } from '../store.js';
-import { graphTypesOf, ontologyFile, readOntology, saveOntology } from '../ontology.js';
+import { graphTypesOf, ontologyFile, readOntology, migrateArborescence, saveOntology } from '../ontology.js';
 import { createOkfBackend } from '../index.js';
 import { proposalFile, proposeOntology, readProposal, storedOntologyErrors } from '../ontology-proposal.js';
 import { contradictions, quoted, verifyBundle } from '../verify.js';
@@ -70,7 +70,7 @@ function dossier(): { projectPath: string; documents: SourceDocument[]; markdown
     fs.writeFileSync(path.join(projectPath, resource), '');
   }
   fs.mkdirSync(path.join(projectPath, '.piecemaker'));
-  fs.writeFileSync(path.join(projectPath, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }]));
+  saveOntology(projectPath, { arborescence: [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }] });
   const documents: SourceDocument[] = [
     { resource: CONTRACT, title: 'Contrat.pdf', nature: 'Contrat de prestation', date: '2021-03-12', parties: [{ code: PERSON, citation: MARKDOWN[CONTRACT] }, { code: COMPANY, citation: MARKDOWN[CONTRACT] }] },
     { resource: LETTER, title: 'Courrier.pdf', nature: 'Courrier', date: '2021-06-01', parties: [] },
@@ -402,6 +402,7 @@ test('contradictions normalise les dates avant de comparer', () => {
 
 test('l\'ontologie par défaut reprend les quatre relations entre pièces', () => {
   const { projectPath } = dossier();
+  fs.rmSync(ontologyFile(), { force: true });
   const ontology = readOntology(projectPath);
   assert.equal(ontology.personnalisee, false);
   assert.deepEqual(ontology.relations.map((relation) => [relation.name, relation.source, relation.target]), [
@@ -451,11 +452,10 @@ test('l\'ontologie globale est commune aux dossiers et ne s\'applique qu\'aux ty
   assert.match(verifyBundle({ projectPath, resources, markdownOf })[0].erreur, /ontologie illisible, ontologie par défaut appliquée/);
   assert.ok(verifyBundle({ projectPath, resources, markdownOf }).some((entry) => entry.erreur === 'relation Conteste : clé « label » absente.'));
   const other = dossier().projectPath;
-  saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', source: ['Courriers', 'Projets'], target: ['Pièces'] }] });
-  fs.writeFileSync(path.join(other, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Courriers', explanation: '' }, { name: 'Pièces', explanation: '' }]));
+  saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', source: ['Courriers', 'Projets'], target: ['Pièces'] }], arborescence: [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }] });
   assert.deepEqual(readOntology(other).relations.map((relation) => relation.name), ['conteste']);
   assert.deepEqual(graphTypesOf(projectPath), ['Projets', 'Pièces']);
-  assert.deepEqual(graphTypesOf(other), ['Courriers', 'Pièces']);
+  assert.deepEqual(graphTypesOf(other), ['Projets', 'Pièces']);
   buildBundle({ projectPath, documents, markdownOf });
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
@@ -563,11 +563,11 @@ test('le catalogue conserve ses icônes à une sauvegarde des relations et déte
 
 test('le type principal suit le dossier choisi et ses sous-dossiers sans déplacer les pièces', () => {
   const { projectPath, documents, markdownOf } = dossier();
-  fs.writeFileSync(path.join(projectPath, '.piecemaker', 'arborescence.json'), JSON.stringify([
+  saveOntology(projectPath, { arborescence: [
     { name: 'Pièces', type: 'Archives', explanation: '' },
     { name: 'Pièces/Contrats', explanation: '' },
     { name: 'Projets', type: 'Pièces', explanation: '' },
-  ]));
+  ] });
   buildBundle({ projectPath, documents, markdownOf });
   assert.deepEqual(readTypes(projectPath), ['Archives', 'Pièces']);
   assert.equal(concept(projectPath, CONTRACT).frontmatter.type, 'Archives');
@@ -603,4 +603,22 @@ test('une revue tabulaire ne crée ni ne supprime de prémisse', () => {
   fs.rmSync(folder, { recursive: true });
   buildBundle({ projectPath, documents, markdownOf, now: NOW });
   assert.equal(fs.existsSync(conceptFile(projectPath, '/_premises/statut-du-contrat.md')), true);
+});
+
+test('l\'arborescence est commune, scellée avec l\'ontologie, et reprise une fois des anciens dossiers', () => {
+  const { projectPath } = dossier();
+  fs.rmSync(ontologyFile(), { force: true });
+  const older = dossier().projectPath;
+  fs.rmSync(ontologyFile(), { force: true });
+  fs.writeFileSync(path.join(older, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Anciens', explanation: '' }]));
+  fs.utimesSync(path.join(older, '.piecemaker', 'arborescence.json'), new Date('2020-01-01'), new Date('2020-01-01'));
+  fs.writeFileSync(path.join(projectPath, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Pièces', type: 'Archives', explanation: '' }]));
+  assert.equal(migrateArborescence([older, projectPath]), path.join(projectPath, '.piecemaker', 'arborescence.json'));
+  assert.deepEqual(readTypes(older), ['Archives']);
+  assert.equal(migrateArborescence([older]), null);
+  const stored = JSON.parse(fs.readFileSync(ontologyFile(), 'utf8'));
+  stored.arborescence[0].type = 'Pièces';
+  fs.writeFileSync(ontologyFile(), JSON.stringify(stored));
+  assert.match(readOntology(projectPath).erreur || '', /modifiée hors/);
+  assert.deepEqual(readTypes(projectPath), ['Projets', 'Pièces', 'Archives', 'Notes et recherches']);
 });

@@ -5,6 +5,7 @@ import { getConnection, getDatabasePath, projectsDb } from '@/modules/database/i
 import { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledge.js';
 
 import { createOkfBackend } from '../okf/index.js';
+import { migrateArborescence } from '../okf/ontology.js';
 import { createOkfStore } from '../okf/store.js';
 
 import { importLegacyKnowledge } from './legacy-import.js';
@@ -80,6 +81,13 @@ export function createKnowledgeBackend(applicationRoot: string) {
       console.warn(`[piecemaker] index OKF non mis à jour : ${error instanceof Error ? error.message : String(error)}`);
     }
   };
+
+  try {
+    const migrated = migrateArborescence((getConnection().prepare('SELECT project_path FROM projects').all() as Array<{ project_path: string }>).map((row) => row.project_path));
+    if (migrated) console.info(`[piecemaker] arborescence commune reprise de ${migrated}`);
+  } catch (error) {
+    console.warn(`[piecemaker] reprise de l'arborescence impossible : ${error instanceof Error ? error.message : String(error)}`);
+  }
 
   try {
     importDocumentIndexOverrides(getStore(), { listProjects: () => getConnection().prepare('SELECT project_id, project_path FROM projects').all() as Array<{ project_id: string; project_path: string }> });

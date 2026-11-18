@@ -43,7 +43,7 @@ La cible de `involves` est le code d'une partie : `pm okf link "<titre de la pr�
 ## Lire et écrire
 
 1. Lisez les fiches directement avec Read et Grep dans `.piecemaker/okf/`.
-2. N'écrivez pas une fiche à la main. Posez et retirez les liens avec l'outil MCP `OkfWrite` (`link`, `unlink`, `mark_examined`), plusieurs liens en un appel par la liste `writes`, ou `pm okf` sans MCP : le schéma impose une relation de l'ontologie et la citation. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json` et `.piecemaker/arborescence.json`.
+2. N'écrivez pas une fiche à la main. Posez et retirez les liens avec l'outil MCP `OkfWrite` (`link`, `unlink`, `mark_examined`), plusieurs liens en un appel par la liste `writes`, ou `pm okf` sans MCP : le schéma impose une relation de l'ontologie et la citation. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json`, qui porte aussi l'arborescence commune à tous les dossiers.
 3. Avant la première écriture, lisez `references/okf.md` du skill `piecemaker` (`.agents/skills/Skill-PieceMaker/references/okf.md`). Cette référence décrit les sous-commandes à jour.
 4. Pour régler les natures et icônes, lisez `pm okf ontologie`. Proposez la liste complète avec `pm okf types --json`. Comme les relations, elle reste une proposition jusqu’à la décision de l’avocat.
 5. Le Hérisson lance `pm okf verify` après chaque `pm okf link` ou `unlink` : corrigez chaque erreur qu'il rend, sans relancer la commande.

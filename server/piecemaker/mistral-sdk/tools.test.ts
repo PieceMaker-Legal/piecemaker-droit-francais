@@ -77,7 +77,7 @@ test('green-shield original and mapping guards apply to SDK reads, edits and she
   await assert.rejects(toolbox.tools.get('Read')!.execute({ file_path: 'mapping_default.json' }), /mapping/);
   await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cat contrat-fictif.pdf' }), /protégée/);
   assert.equal(await toolbox.tools.get('Read')!.execute({ file_path: 'notes.md' }), 'Notes fictives.');
-  await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cp notes.md .piecemaker/arborescence.json' }), /pm dossier arborescence/);
+  await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cp notes.md ~/.piecemaker/ontologie.json' }), /pm dossier arborescence/);
   await toolbox.tools.get('Bash')!.execute({ command: "printf 'PDF fictif' > note-ia.pdf" });
   assert.equal(await toolbox.tools.get('Read')!.execute({ file_path: 'note-ia.pdf' }), 'PDF fictif');
   await assert.rejects(toolbox.tools.get('Read')!.execute({ file_path: path.join(home, '.piecemaker', 'ontologie.cle') }), /seal key/);

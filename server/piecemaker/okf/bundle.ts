@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import { parse, stringify } from 'yaml';
 
-import { DEFAULT_CLASSIFICATION } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+import { readArborescence } from './sealed.js';
 
 export const OKF_VERSION = '0.2';
 export const STATES = 'states';
@@ -93,21 +93,9 @@ export function readBundle(projectPath: string): Concept[] {
   });
 }
 
-function readJson(filePath: string): unknown {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^﻿/, ''));
-  } catch {
-    return null;
-  }
-}
-
-function typeFolders(projectPath: string): Array<{ name?: unknown; type?: unknown }> {
-  const stored = readJson(path.join(projectPath, '.piecemaker', 'arborescence.json'));
-  return Array.isArray(stored) && stored.length ? stored : DEFAULT_CLASSIFICATION;
-}
-
-export function readTypes(projectPath: string): string[] {
-  const folders = typeFolders(projectPath);
+/** Types principaux, communs à tous les dossiers : ceux de l'arborescence de l'ontologie. */
+export function readTypes(_projectPath?: string): string[] {
+  const folders = readArborescence();
   return [...new Set(folders.map((folder) => folderType(`${text(folder.name)}/_`, folders)).filter(Boolean))];
 }
 
@@ -117,7 +105,7 @@ function folderType(resource: string, folders: Array<{ name?: unknown; type?: un
 }
 
 export function typeOf(resource: string, types: string[], projectPath?: string): string {
-  const type = projectPath ? folderType(resource, typeFolders(projectPath)) : resource.split('/')[0];
+  const type = projectPath ? folderType(resource, readArborescence()) : resource.split('/')[0];
   return resource.includes('/') && types.includes(type) ? type : UNCLASSIFIED;
 }
 

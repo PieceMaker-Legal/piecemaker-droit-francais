@@ -154,7 +154,7 @@ const QUESTIONS_SCHEMA = z.array(z.object({
   supprimer: z.boolean().optional(),
 })).optional().describe('Avec modele dans preparer : ajoutées à ses questions.');
 
-const DOSSIERS_SCHEMA = z.array(z.object({ nom: z.string(), explication: z.string().optional() })).optional().describe('arborescence : propose une liste complète ; l’avocat accepte, refuse ou modifie chaque changement. Un « / » crée un sous-dossier.');
+const DOSSIERS_SCHEMA = z.array(z.object({ nom: z.string(), explication: z.string().optional(), type: z.string().optional() })).optional().describe('arborescence : propose une liste complète ; l’avocat accepte, refuse ou modifie chaque changement. Un « / » crée un sous-dossier.');
 
 const DOSSIER_SCHEMA = z.string()
   .optional()

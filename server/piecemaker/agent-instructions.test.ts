@@ -93,10 +93,12 @@ test('replaces the old project memory rule, which kept deadlines and stage in a 
   assert.equal(await read(root, 'AGENTS.md'), `Ma règle\r\n${rule}\r\n`);
 }));
 
+const SKILL_TREE_RULE = '3° Arborescence: Respecte l’arborescence du dossier, enregistrée dans .piecemaker/arborescence.json : l’avocat la règle dans l’index du dossier, tu la lis dans ce fichier ; pour proposer un changement, modifie ce fichier avec l’outil Edit ou Write, jamais par le shell : le hook en fait une proposition, seul l’avocat l’accepte (voir la skill piecemaker). Un « / » dans un nom crée un sous-dossier. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
+
 test('points rule 6° of a previous template to the Feature tool', () => withProject(async (root) => {
   const template = agentInstructionsTemplate();
   const previous = template
-    .replace('seul l’avocat l’accepte.', 'seul l’avocat l’accepte (voir la skill piecemaker).')
+    .replace(/^3° .*$/m, () => SKILL_TREE_RULE)
     .replace('pm memoire verifier la contrôle.', 'pm memoire verifier la contrôle (voir la skill piecemaker).')
     .replace('pm suivi_dossiers verifier ;', 'pm suivi_dossiers verifier (voir la skill piecemaker) ;')
     .replace('échéances → outil Feature : quickstart, puis lis les pages qu’il indique', 'échéances, raisonnement → skill piecemaker');
@@ -160,13 +162,13 @@ test('leaves a tools rule rewritten by the lawyer untouched',() => withProject(a
   assert.equal(await read(root, 'AGENTS.md'), content);
 }));
 
-test('points the rules of an existing AGENTS.md to arborescence.json and keeps custom lines', () => withProject(async (root) => {
+test('points the rules of an existing AGENTS.md to the common folder tree and keeps custom lines', () => withProject(async (root) => {
   const oldGeneralRule = '2° Instructions générales: Au début de chaque session, lis ~/.piecemaker/custom/perso.md. Ce fichier, hors dépôt, contient les instructions générales de l’utilisateur, son arborescence habituelle dans ses dossiers, ses méthodes de travail. S’il manque, propose de le créer ; il commence toujours par la mention « Pour remplir ce document, lire @cold-start-interview.md ». Maintiens-le lorsque l’utilisateur précise ou modifie une consigne générale. 200 lignes max, synthétique.';
   const oldTreeRule = '3° Arborescence: Respecte arborescence convenue dans perso.md. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
   await writeFile(path.join(root, 'AGENTS.md'), `Ma règle sur perso.md\r\n${oldGeneralRule}\r\n${oldTreeRule}\r\n`);
   await ensureAgentInstructionFiles(root, SHARED);
   const [, , generalRule, treeRule] = agentInstructionsTemplate().split('\n');
-  assert.match(treeRule, /\.piecemaker\/arborescence\.json/);
+  assert.match(treeRule, /~\/\.piecemaker\/ontologie\.json/);
   assert.doesNotMatch(generalRule, /arborescence/);
   assert.equal(await read(root, 'AGENTS.md'), `Ma règle sur perso.md\r\n${generalRule}\r\n${treeRule}\r\n`);
 }));

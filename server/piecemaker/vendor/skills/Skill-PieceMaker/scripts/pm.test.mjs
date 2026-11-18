@@ -196,6 +196,7 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
       calls.push(input);
       if (input.action === 'index') return found;
       if (input.action === 'lister') return { analyses: [{ fichier: 'index.json', index: true }] };
+      if (input.action === 'arborescence' && !input.dossiers) return { dossiers: [{ nom: 'Pièces', explication: '' }] };
       return { ok: true };
     },
   };
@@ -220,8 +221,6 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier, dossiers: [{ nom: 'Contrats' }], motif: 'Regrouper les baux' });
   await run(['dossier', 'arborescence', '--dossier', dossier], { deps });
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier });
-  fs.mkdirSync(path.join(dossier, '.piecemaker'), { recursive: true });
-  fs.writeFileSync(path.join(dossier, '.piecemaker', 'arborescence.json'), '[{"name":"Pièces"}]');
   const moves = [];
   deps.moveFn = async (input) => { moves.push(input); return { previous: 'Note.docx', current: 'Pièces/Note.docx' }; };
   assert.match(await run(['dossier', 'classer', 'Note.docx', 'Pièces', '--dossier', dossier], { deps }), /^Classé : Note\.docx → Pièces\/Note\.docx/);

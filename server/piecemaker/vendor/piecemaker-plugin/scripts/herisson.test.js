@@ -18,12 +18,12 @@ test('le registre classe chaque fichier dans sa feature', async () => {
   const { featureOf } = await loadFeatures();
   const of = (relative) => featureOf(path.join(root, '.piecemaker', relative));
   assert.equal(of('okf/pieces/a.md').feature.nom, 'okf');
-  assert.equal(of('arborescence.json').feature.nom, 'arborescence');
+  assert.equal(of('arborescence.json'), null);
   assert.equal(of('notes/indemnite.md'), null);
   assert.deepEqual([of('appel-suivi.json').feature.nom, of('appel-suivi.json').nom], ['suivi', 'appel-suivi.json']);
   assert.deepEqual([of('catala/indemnite/indemnite.catala_fr').feature.nom, of('catala/indemnite/indemnite.catala_fr').nom], ['catala', 'indemnite']);
   assert.equal(of('catala/indemnite/_build/x.catala_fr'), null);
-  assert.deepEqual(['protection.json', 'etapes.json', 'ontologie.proposition.json', 'arborescence.proposition.json'].map((file) => of(file).feature.nom), ['protection', 'etapes', 'ontologie', 'arborescence']);
+  assert.deepEqual(['protection.json', 'etapes.json', 'ontologie.proposition.json'].map((file) => of(file).feature.nom), ['protection', 'etapes', 'ontologie']);
   assert.equal(of('modeles.json'), null);
   assert.equal(featureOf(path.join(root, 'pieces', 'a.md')), null);
   assert.equal(featureOf(path.join(root, '.piecemaker', 'okf')).feature.nom, 'okf');
@@ -277,7 +277,7 @@ test('la garde refuse d’écrire les étapes, la protection et une proposition 
   const reason = async (tool_name, tool_input) => (await hookDecision({ cwd: root, tool_name, tool_input }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
   assert.match(await reason('Write', { file_path: '.piecemaker/etapes.json', content: '{}' }), /Only the lawyer sets the case steps[\s\S]*pm check/);
   assert.match(await reason('Bash', { command: 'echo {} > .piecemaker/protection.json' }), /Only the lawyer removes the protection/);
-  assert.match(await reason('Bash', { command: 'rm .piecemaker/arborescence.proposition.json' }), /arborescence/);
+  assert.match(await reason('Bash', { command: 'rm ~/.piecemaker/ontologie.proposition.json' }), /ontologie/);
   assert.match(await reason('Write', { file_path: '.piecemaker/ontologie.proposition.json', content: '{}' }), /ontologie/);
   assert.equal(await reason('Bash', { command: 'cat .piecemaker/etapes.json' }), null);
 });

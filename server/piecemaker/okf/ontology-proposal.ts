@@ -3,12 +3,16 @@ import fs from 'node:fs';
 import { DEFAULT_DOCUMENT_TYPES } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 import type { DocumentType } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 
+import type { ClassificationFolder } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+
 import { text } from './bundle.js';
 import type { OntologyRelation } from './ontology.js';
-import { normalizeDocumentTypes, normalizeOntology, ontologyErrors, ontologyFile, readOntology } from './ontology.js';
+import { normalizeArborescence, normalizeDocumentTypes, normalizeOntology, ontologyErrors, ontologyFile, readOntology } from './ontology.js';
+import { readArborescence } from './sealed.js';
 
-export type OntologyProposal = { relations?: OntologyRelation[]; documentTypes?: DocumentType[]; motif: string; date: string };
-export type ProposalPart = 'relations' | 'documentTypes';
+export type OntologyProposal = { relations?: OntologyRelation[]; documentTypes?: DocumentType[]; arborescence?: ClassificationFolder[]; motif: string; date: string };
+export type ProposalPart = 'relations' | 'documentTypes' | 'arborescence';
+const PARTS: ProposalPart[] = ['relations', 'documentTypes', 'arborescence'];
 export type OntologyLines = { lignes: Record<string, { debut: number; fin: number }>; total: number };
 
 export const proposalFile = (): string => ontologyFile().replace(/\.json$/, '.proposition.json');
@@ -31,6 +35,7 @@ export function readProposal(): OntologyProposal | null {
     return {
       ...(stored.relations === undefined ? {} : { relations: normalizeOntology(stored) }),
       ...(stored.documentTypes === undefined ? {} : { documentTypes: normalizeDocumentTypes(stored.documentTypes) }),
+      ...(stored.arborescence === undefined ? {} : { arborescence: normalizeArborescence(stored.arborescence) }),
       motif: text(stored.motif),
       date: text(stored.date),
     };
@@ -44,18 +49,20 @@ const differs = (next: unknown, current: unknown): boolean => next !== undefined
 export function proposeOntology(projectPath: string, value: unknown): OntologyProposal {
   const errors = ontologyErrors(value);
   if (errors.length) throw new TypeError(errors.join('\n'));
-  const supplied = value as { relations?: unknown; documentTypes?: unknown; motif?: unknown };
+  const supplied = value as { relations?: unknown; documentTypes?: unknown; arborescence?: unknown; motif?: unknown };
   const current = readOntology(projectPath);
   const pending = readProposal();
   const relations = supplied.relations === undefined ? pending?.relations : normalizeOntology(supplied);
   const documentTypes = supplied.documentTypes === undefined ? pending?.documentTypes : normalizeDocumentTypes(supplied.documentTypes);
+  const arborescence = supplied.arborescence === undefined ? pending?.arborescence : normalizeArborescence(supplied.arborescence);
   const proposal: OntologyProposal = {
     ...(differs(relations, current.relations) ? { relations } : {}),
     ...(differs(documentTypes, current.documentTypes || DEFAULT_DOCUMENT_TYPES) ? { documentTypes } : {}),
+    ...(differs(arborescence, readArborescence()) ? { arborescence } : {}),
     motif: text(supplied.motif) || pending?.motif || '',
     date: new Date().toISOString(),
   };
-  if (proposal.relations || proposal.documentTypes) writeProposal(proposal);
+  if (PARTS.some((part) => proposal[part])) writeProposal(proposal);
   else dropProposal();
   return proposal;
 }
@@ -63,7 +70,7 @@ export function proposeOntology(projectPath: string, value: unknown): OntologyPr
 export function dropProposal(part?: ProposalPart): void {
   const pending = part && readProposal();
   if (pending) delete pending[part];
-  if (pending && (pending.relations || pending.documentTypes)) writeProposal(pending);
+  if (pending && PARTS.some((key) => pending[key])) writeProposal(pending);
   else fs.rmSync(proposalFile(), { force: true });
 }
 

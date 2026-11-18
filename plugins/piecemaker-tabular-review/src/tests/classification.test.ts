@@ -115,8 +115,16 @@ describe('arborescence du dossier', () => {
   it('situe chaque dossier dans le fichier pour le chat', async () => {
     await saveClassification(project, [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: 'Actes.' }]);
     const lines = classificationLines(project, readClassification(project));
-    expect(lines.lignes).toEqual({ Pièces: { debut: 2, fin: 5 }, Projets: { debut: 6, fin: 9 } });
-    expect(lines.total).toBe(10);
+    expect(lines.fichier).toBe(path.join(home, '.piecemaker', 'ontologie.json'));
+    const text = fs.readFileSync(lines.fichier!, 'utf8').split('\n');
+    expect(Object.keys(lines.lignes)).toEqual(['Pièces', 'Projets']);
+    for (const [name, { debut, fin }] of Object.entries(lines.lignes)) {
+      const block = text.slice(debut - 1, fin).join('\n');
+      expect(block.trim().startsWith('{')).toBe(true);
+      expect(block).toContain(`"name": ${JSON.stringify(name)}`);
+      expect(text.slice(0, debut).some((line) => line.trim().startsWith('"arborescence"'))).toBe(true);
+    }
+    expect(lines.total).toBe(text.length - 1);
     dropClassificationProposal(project);
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
@@ -267,7 +275,6 @@ describe('outil tabular_review', () => {
 
   it('lit l’arborescence et la proposition en attente', async () => {
     const run = launchers();
-    fs.rmSync(path.join(project, '.piecemaker', 'arborescence.json'), { force: true });
     await assistant({ action: 'arborescence', project, dossiers: [{ nom: 'Clients', explication: 'Échanges.' }] }, run);
     const read = await assistant({ action: 'arborescence', project }, run) as { dossiers: unknown; proposition: { dossiers: unknown } };
     expect(read.dossiers).toEqual(DEFAULT_CLASSIFICATION.map((folder) => ({ nom: folder.name, explication: folder.explanation })));

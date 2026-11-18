@@ -24,7 +24,7 @@ Le message reçoit : ``[Nature « titre »](fichier:ligne "lignes N à M") — n
 |---|---|
 | Catala | cartes (ciblage propre, événement `piecemaker:catala-card-pick`) |
 | Index › Ontologie | l'ontologie entière, chaque relation (`ontologie.json` et ses lignes) |
-| Index › Classement | l'arborescence entière, chaque dossier (`arborescence.json` et ses lignes) |
+| Index › Classement | l'arborescence entière, chaque dossier (clé `arborescence` de `ontologie.json` et ses lignes) |
 | Index › Chronologie | chaque document (fichier de la pièce) |
 | Index › Graphe | le graphe entier (`index.md`), la fiche ouverte (fichier de la fiche ou de la pièce), chaque pièce source ou citation |
 

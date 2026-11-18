@@ -210,13 +210,13 @@ async function editColumns(project: string, input: Input, launchers: AssistantLa
 }
 
 function classificationTree(project: string, input: Input) {
-  const out = (folders: ClassificationFolder[]) => folders.map((folder) => ({ nom: folder.name, explication: folder.explanation }));
+  const out = (folders: ClassificationFolder[]) => folders.map((folder) => ({ nom: folder.name, explication: folder.explanation, ...(folder.type ? { type: folder.type } : {}) }));
   const dossiers = out(readClassification(project));
   if (input.dossiers === undefined) {
     const proposal = readClassificationProposal(project);
     return { dossiers, ...(proposal ? { proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date } } : {}) };
   }
-  const proposal = proposeClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication })) : input.dossiers, input.motif);
+  const proposal = proposeClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication, type: entry?.type })) : input.dossiers, input.motif);
   return { dossiers, proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date }, message: 'Proposition enregistrée, arborescence inchangée : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Index › Classement.' };
 }
 

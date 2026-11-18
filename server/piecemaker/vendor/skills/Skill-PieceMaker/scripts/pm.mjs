@@ -737,8 +737,8 @@ async function dossier(api, positional, flags, resolved) {
   if (commande === 'classer') {
     const [document, directory] = positional.slice(2);
     if (!document || !directory) usage('dossier classer attend <document> <dossier>.');
-    const stored = fs.existsSync(path.join(project, '.piecemaker', 'arborescence.json')) ? JSON.parse(fs.readFileSync(path.join(project, '.piecemaker', 'arborescence.json'), 'utf8')) : [];
-    const names = stored.map((entry) => String(entry.name));
+    const { dossiers = [] } = await api.tabularIndex(api.tabularFn, { action: 'arborescence', project });
+    const names = dossiers.map((entry) => String(entry.nom));
     if (names.length && !names.some((name) => directory === name || directory.startsWith(`${name}/`))) usage(`dossier classer attend un dossier de l’arborescence : ${names.join(', ')}.`);
     const moved = await api.moveFn({ folder: project, path: document, directory });
     return withNotice(`Classé : ${moved.previous} → ${moved.current}`, await followPanel(api, panelRequest(project, target), target));
