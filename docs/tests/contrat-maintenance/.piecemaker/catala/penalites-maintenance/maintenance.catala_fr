@@ -1,0 +1,112 @@
+> Module Maintenance
+
+# Contrat de maintenance — exemple fictif
+
+Objectif : Fixer la pénalité due pour un retard d’intervention
+
+Contrat de maintenance entre Société Exemple SAS, le client, et Prestataire
+Fictif SARL, le prestataire. Les parties et les montants sont fictifs.
+
+Ce fichier suit la programmation littéraire du livre Catala : le texte du
+contrat est la spécification, et chaque clause porte, juste dessous, le code
+qui la traduit. Les cas de figure sont dans `test_maintenance.catala_fr`.
+
+```catala-metadata
+déclaration champ d'application PénalitéDeRetard:
+  ## Signalement écrit de la panne
+  contexte signalement_écrit condition
+  ## Heures écoulées avant l’intervention
+  contexte heures_avant_intervention contenu entier
+  ## Retard dû à une force majeure
+  contexte force_majeure condition
+  interne prix_annuel contenu argent
+  interne délai_contractuel contenu entier
+  interne retard_constaté contenu booléen
+  interne heures_de_retard contenu entier
+  interne pénalité_avant_plafond contenu argent
+  interne plafond_des_pénalités contenu argent
+  résultat pénalité_due contenu argent
+```
+
+## Article 2 — Prix
+
+« Le prix forfaitaire de la maintenance est de 24 000 euros hors taxes par an. »
+
+Le prix forfaitaire de la maintenance est de 24 000 euros hors taxes par an.
+Il est payable par trimestre, à terme échu.
+
+```catala
+champ d'application PénalitéDeRetard:
+  ## Fixer le prix annuel
+  définition prix_annuel égal à 24 000 €
+```
+
+## Article 4 — Délai d’intervention
+
+« Le prestataire intervient dans un délai de quarante-huit heures à compter du signalement écrit de la panne par le client. »
+
+Le prestataire intervient dans un délai de quarante-huit heures à compter du
+signalement écrit de la panne par le client. Le signalement est adressé par
+courriel à l’adresse désignée en annexe.
+
+```catala
+champ d'application PénalitéDeRetard:
+  ## Fixer le délai d’intervention
+  définition délai_contractuel égal à 48
+
+  # Sans signalement écrit, le délai ne court pas : aucun retard n'est constaté.
+  ## Constater le retard d’intervention
+  définition retard_constaté égal à
+    signalement_écrit et heures_avant_intervention > délai_contractuel
+
+  ## Compter les heures de retard
+  définition heures_de_retard égal à
+    si retard_constaté alors heures_avant_intervention - délai_contractuel
+    sinon 0
+```
+
+## Article 5 — Pénalités de retard
+
+« Tout retard d’intervention donne lieu à une pénalité égale à 0,1 % du prix annuel par heure de retard, dans la limite de 10 % du prix annuel. »
+
+Tout retard d’intervention donne lieu à une pénalité égale à 0,1 % du prix
+annuel par heure de retard, dans la limite de 10 % du prix annuel. La pénalité
+est déduite de la facture du trimestre suivant.
+
+```catala
+champ d'application PénalitéDeRetard:
+  ## Calculer la pénalité avant plafond
+  définition pénalité_avant_plafond égal à
+    prix_annuel * (0,001 * (décimal de heures_de_retard))
+
+  ## Fixer le plafond des pénalités
+  définition plafond_des_pénalités égal à prix_annuel * 10%
+
+  # La pénalité suit l'article 5 tant qu'aucune clause ne l'écarte.
+  ## Appliquer la pénalité plafonnée
+  étiquette pénalité_contractuelle
+  définition pénalité_due égal à
+    si
+      pénalité_avant_plafond > plafond_des_pénalités
+    alors
+      plafond_des_pénalités
+    sinon pénalité_avant_plafond
+```
+
+## Article 6 — Force majeure
+
+« Aucune pénalité n’est due lorsque le retard résulte d’un cas de force majeure. »
+
+Aucune pénalité n’est due lorsque le retard résulte d’un cas de force majeure,
+au sens du code civil. Le prestataire en informe le client sans délai.
+
+```catala
+champ d'application PénalitéDeRetard:
+  # Dérogation à l'article 5 : la force majeure écarte toute pénalité.
+  ## Écarter la pénalité pour force majeure
+  exception pénalité_contractuelle
+  définition pénalité_due
+  sous condition force_majeure
+  conséquence égal à
+    0 €
+```
