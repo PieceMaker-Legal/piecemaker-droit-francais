@@ -260,7 +260,7 @@ const children = (clause: Clause) => inner(clause).kind === 'leaf' ? [] : inner(
 const lawOf = (clause: Clause, steps: Map<string, Step>) => unique(leaves(clause).flatMap((leaf) => leaf.refs.flatMap((id) => steps.get(id)?.sources.filter(legal) ?? [])));
 
 export function reasoning(dot: string, files: File[] = [], citations: Citation[] = [], coverage?: Coverage, provenance?: NativeProvenance): Reasoning {
-  const native = provenance ? nativeExecution(provenance) : null;
+  const native = provenance ? nativeExecution(provenance, files) : null;
   const fallback = !dot.trim() || dot.trim() === 'digraph G {}' || Boolean(native?.variables.length);
   const { nodes, edges } = parseDot(fallback && native?.variables.length ? native.dot : dot);
   const linked = new Map<string, Source[]>();

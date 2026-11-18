@@ -103,7 +103,8 @@ p.pmc-scenario{margin:0}
 .pmc-wires{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.pmc-wires path{--tint:var(--muted);fill:none;stroke:var(--tint);stroke-width:2;stroke-linecap:round;transition:opacity .15s}
 .pmc-map-node{--tint:var(--muted);position:relative;flex:none;width:290px;padding:10px 12px;border:1.5px solid color-mix(in srgb,var(--tint) 70%,transparent);border-left-width:5px;border-radius:12px;background:color-mix(in srgb,var(--tint) 9%,var(--surface));color:var(--ink);transition:opacity .15s,outline-color .15s}
 .pmc-map [data-state=ok]{--tint:var(--ok-line)}.pmc-map [data-state=warn]{--tint:var(--warn-line)}.pmc-map [data-state=ko]{--tint:var(--ko-line)}
-.pmc-branch>.pmc-map-node,.pmc-branch>.pmc-gate{position:sticky;top:30%;bottom:30%}
+.pmc-branch>.pmc-map-node,.pmc-branch>.pmc-gate,.pmc-root-results{position:sticky;top:30%;bottom:30%}
+.pmc-root-results{display:grid;gap:8px}.pmc-root-results>.pmc-branch{padding:0}
 .pmc-map-node[data-state=warn]{border-style:dashed;border-left-style:solid}
 .pmc-map-node[data-kind=answer]{border-width:2.5px;border-left-width:7px}
 .pmc-gate{--tint:var(--muted);flex:none;width:290px;padding:10px 12px;border:1.5px dashed color-mix(in srgb,var(--tint) 70%,transparent);border-left:5px solid color-mix(in srgb,var(--tint) 70%,transparent);border-radius:12px;background:var(--surface);color:var(--ink);font-size:13px;line-height:1.35}.pmc-gate p{margin:0 0 4px}

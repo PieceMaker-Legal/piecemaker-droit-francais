@@ -51,7 +51,8 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   const steps = new Map(model.steps.map((step) => [step.id, step]));
   const rules = model.steps.filter((step) => step.kind === 'rule' && !container(step));
   const incomplete = new Set<string>();
-  for (const step of model.steps) if (step.issue || (step.kind === 'fact' && !step.sources.some((source) => source.kind === 'piece')) || step.notes.recherche || step.sources.some((source) => source.status === 'failed') || step.parents.some((id) => incomplete.has(id))) incomplete.add(step.id);
+  const fact = (step: Step) => step.kind === 'fact' && !step.parents.length;
+  for (const step of model.steps) if (step.issue || (fact(step) && !step.sources.some((source) => source.kind === 'piece')) || step.notes.recherche || step.sources.some((source) => source.status === 'failed') || step.parents.some((id) => incomplete.has(id))) incomplete.add(step.id);
   const links: Array<{ from: string; to: string }> = [];
   const warn = (text: string) => `<p class="pmc-warn">${escape(text)}</p>`;
   const docTitle = (step: Step) => (['definition', 'declaration'] as const).map((role) => step.origins.find((origin) => origin.selected && origin.role === role && origin.title)?.title).find(Boolean) ?? '';
@@ -87,6 +88,21 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   ].filter((id) => id !== step.id)));
   const roots = candidates.filter((step) => !dependencies.has(step.id));
   const goal = roots.find((step) => step.answer) ?? roots.at(-1) ?? candidates.at(-1);
+  const resultGroups = new Map<string, Step[]>();
+  for (const step of only ? [] : roots) {
+    if (step.clause || step.parents.length !== 1 || steps.get(step.parents[0])?.kind !== 'rule') continue;
+    const parent = step.parents[0];
+    resultGroups.set(parent, [...resultGroups.get(parent) ?? [], step]);
+  }
+  const sharedResults = new Map<string, Step[]>();
+  const grouped = new Set<string>();
+  for (const results of resultGroups.values()) {
+    if (results.length < 2) continue;
+    const primary = results.find((step) => step === goal) ?? results[0];
+    const others = results.filter((step) => step !== primary);
+    sharedResults.set(primary.id, others);
+    others.forEach((step) => grouped.add(step.id));
+  }
   const active = new Set<string>();
   const rendered = new Set<string>();
   const condition = (clause: Clause, owner: Step, negated: boolean): string => {
@@ -96,7 +112,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const text = clause.kind === 'leaf' ? `<p>${escape(human(clause.text).replace(/>=/g, '≥').replace(/<=/g, '≤'))}</p>` : '';
     return branch(`<div class="pmc-gate" data-op="${clause.kind}" data-state="${met}"><span class="pmc-box-kind">${GATES[clause.kind]}</span>${text}<span class="pmc-met pmc-${met}" data-met="${met}">${MET[met][clause.kind === 'not' ? 1 : 0]}</span></div>`, references(clause, negated).map(([step, flipped]) => node(step, owner, flipped, true)), met);
   };
-  const node = (step: Step, owner: Step | null, negated = false, parsed = false): string => {
+  const node = (step: Step, owner: Step | null, negated = false, parsed = false, expand = true): string => {
     if (container(step) || active.has(step.id)) return '';
     active.add(step.id);
     rendered.add(step.id);
@@ -108,16 +124,24 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const stated = new Set((owner?.sources ?? []).map(identity));
     const foundation = step.kind === 'rule' ? step.sources.filter((source) => source.kind !== 'origin' && source.kind !== 'piece') : (application?.basis ?? []).filter((source) => !stated.has(identity(source)));
     const pieces = step.sources.filter((source) => source.kind === 'piece');
-    const evidence = step.kind === 'rule' ? documents(pieces, '', 'evidence') : documents(pieces, step.issue || 'Pièce à rattacher', 'evidence');
+    const evidence = documents(pieces, fact(step) ? step.issue || 'Pièce à rattacher' : '', 'evidence');
     const calculation = step.kind === 'rule' ? formula(step, human) : '';
     const top = step.clause?.kind === 'all' ? step.clause.members : step.clause ? [step.clause] : [];
     const explained = new Set(top.flatMap((member) => references(member, false).map(([reference]) => reference.id)));
-    const children = [...top.map((member) => condition(member, step, false)), ...step.parents.filter((id) => !explained.has(id)).map((id) => node(steps.get(id)!, step))];
+    const children = expand ? [...top.map((member) => condition(member, step, false)), ...step.parents.filter((id) => !explained.has(id)).map((id) => node(steps.get(id)!, step))] : [];
     active.delete(step.id);
-    const kind = step === goal ? 'Objectif' : step.kind === 'rule' ? `${rank(step)}${exception ? ' · Exception' : ''}` : exception ? 'Exception' : step.kind === 'fact' ? 'Fait' : 'Condition';
-    return branch(`<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}" data-kind="${conclusion ? 'answer' : exception ? 'exception' : step.kind}" data-state="${current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === goal && model.objective || named(step))}</h3><p class="pmc-result">${status(step, negated, current)}</p>${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, step.kind === 'rule' ? 'Source de la règle à indiquer' : '', 'law')}${evidence}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? warn(`À rechercher : ${step.notes.recherche}`) : ''}</article>`, children, current);
+    const kind = step === goal ? 'Objectif' : step.kind === 'rule' ? `${rank(step)}${exception ? ' · Exception' : ''}` : exception ? 'Exception' : fact(step) ? 'Fait' : 'Condition';
+    const category = conclusion ? 'answer' : exception ? 'exception' : step.kind === 'rule' ? 'rule' : fact(step) ? 'fact' : 'condition';
+    const card = `<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}" data-kind="${category}" data-state="${current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === goal && model.objective || named(step))}</h3><p class="pmc-result">${status(step, negated, current)}</p>${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, step.kind === 'rule' ? 'Source de la règle à indiquer' : '', 'law')}${evidence}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? warn(`À rechercher : ${step.notes.recherche}`) : ''}</article>`;
+    const others = !owner && sharedResults.get(step.id);
+    if (!others) return branch(card, children, current);
+    const cards = others.map((result) => {
+      links.push({ from: step.parents[0], to: result.id });
+      return node(result, null, false, false, false);
+    });
+    return branch(`<div class="pmc-root-results">${card}${cards.join('')}</div>`, children, current);
   };
-  const trees = [...roots.map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) ? '' : node(step, null))].join('');
+  const trees = [...roots.filter((step) => !grouped.has(step.id)).map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) ? '' : node(step, null))].join('');
   if (only) return `<div class="pmc-map" data-layout="columns"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;
   const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, '', 'other')}</details>` : '';
   const legend = '<p class="pmc-map-legend"><span data-state="ok">Validé</span><span data-state="warn">À établir ou à justifier</span><span data-state="ko">Non rempli</span></p>';
