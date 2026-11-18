@@ -182,6 +182,7 @@ function getProviderLabel(provider: LLMProvider): string {
     cursor: 'Cursor CLI',
     opencode: 'OpenCode',
     mistral: 'Mistral Vibe',
+    hermes: 'Hermes Agent',
   };
   return labels[provider];
 }

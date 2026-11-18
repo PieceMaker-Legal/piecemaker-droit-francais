@@ -26,6 +26,7 @@ export type UserPreferences = {
   codexPermissions: unknown;
   mistralPermissions: unknown;
   opencodePermissions: unknown;
+  hermesPermissions: unknown;
   codeEditorSettings: unknown;
   uiPreferences: unknown;
   selectedProvider: string;
@@ -64,6 +65,7 @@ const LEGACY_STORAGE_KEYS: Record<UserPreferenceKey, string> = {
   codexPermissions: 'codex-settings',
   mistralPermissions: 'mistral-settings',
   opencodePermissions: 'opencode-settings',
+  hermesPermissions: 'hermes-settings',
   // Unused: the four code-editor settings never shared one key, so they are
   // read by readLegacyCodeEditorSettings instead.
   codeEditorSettings: '',

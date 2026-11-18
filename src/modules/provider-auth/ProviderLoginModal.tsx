@@ -28,6 +28,7 @@ type ProviderLoginModalProps = {
   provider?: LLMProvider;
   onComplete?: (exitCode: number) => void;
   customCommand?: string;
+  customTitle?: string;
   isAuthenticated?: boolean;
 };
 
@@ -60,6 +61,10 @@ const getProviderCommand = ({
     return 'opencode auth login';
   }
 
+  if (provider === 'hermes') {
+    return 'hermes model';
+  }
+
   return 'claude --dangerously-skip-permissions /login';
 };
 
@@ -69,6 +74,7 @@ const getProviderTitle = (provider: LLMProvider) => {
   if (provider === 'codex') return 'Codex CLI Login';
   if (provider === 'mistral') return 'Connexion Mistral';
   if (provider === 'opencode') return 'OpenCode CLI Login';
+  if (provider === 'hermes') return 'Hermes Agent Setup';
   return 'Claude CLI Login';
 };
 
@@ -79,6 +85,7 @@ export default function ProviderLoginModal({
   provider = 'claude',
   onComplete,
   customCommand,
+  customTitle,
   isAuthenticated = false,
 }: ProviderLoginModalProps) {
   const { t } = useTranslation();
@@ -87,7 +94,7 @@ export default function ProviderLoginModal({
   }
 
   const command = getProviderCommand({ provider, customCommand, isAuthenticated });
-  const title = getProviderTitle(provider);
+  const title = customTitle || getProviderTitle(provider);
 
   const handleComplete = (exitCode: number) => {
     onComplete?.(exitCode);

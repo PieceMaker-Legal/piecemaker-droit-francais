@@ -8,7 +8,7 @@ import type { ProviderRunFunction } from '@/shared/types.js';
 import { normalizeProjectPath } from '../../shared/utils.js';
 
 /** The providers an Agent API run can start: the ones with a runtime and a model catalog. */
-const AGENT_RUN_PROVIDERS = ['claude', 'cursor', 'codex', 'opencode'];
+const AGENT_RUN_PROVIDERS = ['claude', 'cursor', 'codex', 'opencode', 'hermes'];
 
 /** What the route reads off a session row it continues: the row, not the request, says which provider and project a session belongs to. */
 type AgentSessionRow = {
@@ -41,6 +41,7 @@ type AgentRouterDependencies = {
   queryCursor: ProviderRunFunction;
   queryCodex: ProviderRunFunction;
   queryOpenCode: ProviderRunFunction;
+  queryHermes: ProviderRunFunction;
   GithubClient: typeof import('@octokit/rest').Octokit;
 };
 
@@ -65,6 +66,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
   const spawnCursor = dependencies.queryCursor;
   const queryCodex = dependencies.queryCodex;
   const spawnOpenCode = dependencies.queryOpenCode;
+  const spawnHermes = dependencies.queryHermes;
   const Octokit = dependencies.GithubClient;
   const router = express.Router();
 
@@ -631,7 +633,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
    *                          - Source for auto-generated branch names (if createBranch=true and no branchName)
    *                          - Fallback for PR title if no commits are made
    *
-   * @param {string} provider - (Optional) AI provider to use. Options: 'claude' | 'cursor' | 'codex' | 'opencode'
+   * @param {string} provider - (Optional) AI provider to use. Options: 'claude' | 'cursor' | 'codex' | 'opencode' | 'hermes'
    *                           Default: 'claude'
    *
    * @param {boolean} stream - (Optional) Enable Server-Sent Events (SSE) streaming for real-time updates.
@@ -772,7 +774,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
    * Input Validations (400 Bad Request):
    *   - Either githubUrl OR projectPath must be provided (not neither)
    *   - message must be non-empty string
-   *   - provider must be 'claude', 'cursor', 'codex', or 'opencode'
+   *   - provider must be 'claude', 'cursor', 'codex', 'opencode', or 'hermes'
    *   - createBranch/createPR requires githubUrl OR projectPath (not neither)
    *   - branchName must pass Git naming rules (if provided)
    *
@@ -907,7 +909,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
     }
 
     if (requestedProvider !== null && !AGENT_RUN_PROVIDERS.includes(requestedProvider)) {
-      return res.status(400).json({ error: 'provider must be "claude", "cursor", "codex", or "opencode"' });
+      return res.status(400).json({ error: 'provider must be "claude", "cursor", "codex", "opencode", or "hermes"' });
     }
 
     // Validate GitHub branch/PR creation requirements
@@ -1098,6 +1100,15 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           model: model || providerModels?.DEFAULT,
           effort,
           permissionMode: 'bypassPermissions' // Agent runs are non-interactive, like the other providers above
+        }, run.writer);
+      } else if (provider === 'hermes') {
+        console.log('Starting Hermes ACP session');
+
+        await spawnHermes(message.trim(), {
+          projectPath: finalProjectPath,
+          cwd: finalProjectPath,
+          sessionId: appSessionId,
+          model: model || providerModels?.DEFAULT,
         }, run.writer);
       }
 

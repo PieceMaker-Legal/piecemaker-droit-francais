@@ -58,6 +58,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   codex: 'Codex',
   mistral: 'Mistral',
   opencode: 'OpenCode',
+  hermes: 'Hermes',
 };
 
 const FALLBACK_COMMANDS: CommandEntry[] = [

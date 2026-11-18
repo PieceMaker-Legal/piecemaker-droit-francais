@@ -94,6 +94,7 @@ DialogTrigger.displayName = 'DialogTrigger';
 type DialogContentProps = {
   onEscapeKeyDown?: () => void;
   onPointerDownOutside?: () => void;
+  overlayClassName?: string;
   wrapperClassName?: string;
   animationClassName?: string;
 } & React.HTMLAttributes<HTMLDivElement>;
@@ -102,7 +103,16 @@ const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), input:not([disabled
 
 /** Focus-trapped panel of Dialog, used by the chat, command-palette, sidebar and skills modules. */
 export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
-  ({ className, children, onEscapeKeyDown, onPointerDownOutside, wrapperClassName, animationClassName, ...props }, ref) => {
+  ({
+    className,
+    children,
+    onEscapeKeyDown,
+    onPointerDownOutside,
+    overlayClassName,
+    wrapperClassName,
+    animationClassName,
+    ...props
+  }, ref) => {
     const { open, onOpenChange, triggerRef } = useDialog();
     const contentRef = React.useRef<HTMLDivElement | null>(null);
     const previousFocusRef = React.useRef<HTMLElement | null>(null);
@@ -179,7 +189,7 @@ export const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps
       <div className={cn('fixed inset-0 z-50', wrapperClassName)}>
         {/* Overlay */}
         <div
-          className="fixed inset-0 animate-dialog-overlay-show bg-black/50 backdrop-blur-sm"
+          className={cn('fixed inset-0 animate-dialog-overlay-show bg-black/50 backdrop-blur-sm', overlayClassName)}
           onClick={() => {
             onPointerDownOutside?.();
             onOpenChange(false);

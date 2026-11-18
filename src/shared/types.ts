@@ -5,7 +5,7 @@ import type { NavigateFunction } from 'react-router-dom';
 //----------------- LLM PROVIDER MODEL CATALOG ------------
 
 /** Identifies which coding-agent CLI backs a session, project selection or model list. */
-export type LLMProvider = 'claude' | 'cursor' | 'codex' | 'opencode' | 'mistral';
+export type LLMProvider = 'claude' | 'cursor' | 'codex' | 'opencode' | 'mistral' | 'hermes';
 
 /** One selectable model in a provider's model menu, including its optional reasoning-effort choices. */
 export type ProviderModelOption = {
@@ -1440,6 +1440,7 @@ export type ProviderAuthSubscriptionOverride = {
 
 /** Sign-in state of one LLM provider CLI - whether it is authenticated, the account email and method, plus in-flight loading and error state - polled by the provider-auth module and rendered by the settings and onboarding account views. `subscriptionOverride` is only present when an API key is bypassing a valid subscription login. */
 export type ProviderAuthStatus = {
+  installed?: boolean;
   authenticated: boolean;
   email: string | null;
   method: string | null;
@@ -1517,7 +1518,7 @@ export type AgentContextByProvider = Record<AgentProvider, AgentContext>;
 /** The per-provider data the agents settings tab hands to its sections: that provider's auth status and the callback that starts its login flow. */
 export type AgentContext = {
   authStatus: ProviderAuthStatus;
-  onLogin: () => void;
+  onLogin: (customCommand?: string, customTitle?: string) => void;
 };
 
 /** Identifier of a top-level section in the settings dialog; use it whenever a tab is stored, compared or requested so deep links, the sidebar and the command palette all agree on the same set of names. */
@@ -1527,7 +1528,7 @@ export type SettingsMainTab = 'agents' | 'appearance' | 'git' | 'api' | 'voice' 
 export type AgentProvider = LLMProvider;
 
 /** One category of per-agent configuration in the agents settings tab (account, permissions, MCP servers or skills); use it to key which panel the tab renders. */
-export type AgentCategory = 'account' | 'permissions' | 'mcp' | 'skills';
+export type AgentCategory = 'account' | 'permissions' | 'gateway' | 'mcp' | 'skills';
 
 /** How much Codex may do without asking, from prompting on every edit to bypassing permission checks entirely; persisted as the Codex agent's permission setting. */
 export type CodexPermissionMode = 'default' | 'acceptEdits' | 'bypassPermissions';
@@ -1926,6 +1927,28 @@ export type ProviderSkill = {
   pluginId?: string;
   projectDisplayName?: string;
   projectPath?: string;
+};
+
+export type ProviderSkillRegistryResult = {
+  name: string;
+  identifier: string;
+  source?: string;
+  trustLevel?: string;
+  description?: string;
+};
+
+export type ProviderSkillRegistrySearchResponse = {
+  provider: SkillsProvider;
+  results: ProviderSkillRegistryResult[];
+};
+
+export type ProviderSkillRegistryActionResponse = {
+  provider: SkillsProvider;
+  result: {
+    ok: boolean;
+    stdout: string;
+    stderr: string;
+  };
 };
 
 /** One skill to upload, holding its SKILL.md content, the directory and file names to write it under, and any accompanying base64-encoded support files. */

@@ -320,6 +320,8 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                           : provider === 'mistral' ? t('messageTypes.mistral', { defaultValue: 'Mistral' })
                           : provider === 'opencode'
                               ? t('messageTypes.opencode', { defaultValue: 'OpenCode' })
+                              : provider === 'hermes'
+                                ? t('messageTypes.hermes', { defaultValue: 'Hermes' })
                               : t('messageTypes.claude'))}
               </div>
             </div>
@@ -524,4 +526,3 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
 });
 
 export default MessageComponent;
-
