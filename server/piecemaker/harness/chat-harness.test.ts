@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -61,9 +61,6 @@ test('Claude : annotations avant complete, pas de bloc JSON visible ni de doublo
   assert.doesNotMatch(assistant[0].content ?? '', /<CITATIONS>|doc_id/);
   assert.match(assistant[0].content ?? '', /#piecemaker-citation=/);
   assert.equal(sent.filter((event) => event.kind === 'stream_delta').map((event) => event.content).join(''), assistant[0].content);
-  const log = await readFile(path.join(cwd, 'citations-verifiees.jsonl'), 'utf8');
-  assert.doesNotMatch(log, /préavis|La clause/);
-  assert.equal(JSON.parse(log).session_id, 'session');
 });
 
 test('Codex : même vérification via getRunner, sources accessibles et historique paginé cohérent', async (t) => {

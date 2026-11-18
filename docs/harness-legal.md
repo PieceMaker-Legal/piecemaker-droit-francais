@@ -56,9 +56,9 @@ Deux points de branchement distincts :
 - `server/piecemaker/harness/citation-store.ts` — snapshots locaux privés des
   textes ayant servi à vérifier les extraits, avec leurs positions. Les liens
   utilisent des empreintes opaques ; la route de lecture est authentifiée et
-  refuse les sessions supprimées. Ces snapshots contiennent du texte réel,
-  contrairement au journal `citations-verifiees.jsonl` qui ne contient
-  **aucun extrait ni texte source**, et utilise l'identifiant de session.
+  refuse les sessions supprimées. Ces snapshots contiennent du texte réel.
+  C'est le seul cache des citations vérifiées : `citation-sources/validees/`
+  y garde les citations Catala de textes officiels déjà retrouvées.
   Lorsqu'une décision n'avait pas été lue dans le tour, la visionneuse peut
   ouvrir sa copie déjà présente dans `decisions/` : elle cherche mécaniquement
   le passage pour la consultation, sans modifier le `verified: false` initial.

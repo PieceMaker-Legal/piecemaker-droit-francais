@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -14,12 +13,6 @@ import { scenarioFacts } from './vendor/skills/Skill-PieceMaker/scripts/catala-d
 
 type Validated = { token: string; title: string; verified: true; status: 'passed'; message: string; recours?: Array<{ id: string; date: string; juridiction: string }>; mention?: string };
 
-const validatedFile = (cwd: string) => path.join(cwd, '.piecemaker', 'catala', 'citations-validees.json');
-
-function readValidated(cwd: string): Record<string, Validated> {
-  try { return JSON.parse(fs.readFileSync(validatedFile(cwd), 'utf8')); } catch { return {}; }
-}
-
 const MONTHS = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 const DECISION = /^(?:JURITEXT|CETATEXT|CONSTEXT)\d+$|^[0-9a-f]{24}$/i;
 export function historyNeeded(id: string, title: string, now = new Date()) {
@@ -29,12 +22,6 @@ export function historyNeeded(id: string, title: string, now = new Date()) {
   const limit = new Date(now);
   limit.setFullYear(limit.getFullYear() - 5);
   return new Date(Number(found[3]), MONTHS.indexOf(found[2].toLowerCase()), Number(found[1])) > limit;
-}
-
-function writeValidated(cwd: string, entries: Record<string, Validated>) {
-  const file = validatedFile(cwd);
-  const temporary = `${file}.${process.pid}.tmp`;
-  try { fs.writeFileSync(temporary, `${JSON.stringify(entries, null, 2)}\n`); fs.renameSync(temporary, file); } catch { fs.rmSync(temporary, { force: true }); }
 }
 
 export function createCatalaCitation(connectors: Pick<SourceConnectors, 'source' | 'match'>, store: ReturnType<typeof createCitationStore>) {
@@ -77,8 +64,6 @@ export function createCatalaCitation(connectors: Pick<SourceConnectors, 'source'
     },
     async verify(cwd: string, files: Array<{ nom: string; chemin: string; contenu: string }>) {
       const results = [];
-      const validated = readValidated(cwd);
-      let learned = false;
       for (const ref of entries(files)) {
         try {
           if (!ref.target) { results.push({ ...ref, verified: false, status: 'missing', message: 'Lien de source absent.' }); continue; }
@@ -111,15 +96,13 @@ export function createCatalaCitation(connectors: Pick<SourceConnectors, 'source'
             if (!id.startsWith(path.resolve(cwd) + path.sep)) throw new Error('Pièce hors du dossier.');
           }
           const file = files.find((file) => file.chemin === ref.origin)!;
-          const key = JSON.stringify([id, ref.quote]);
-          const known = !path.isAbsolute(id) && validated[key];
+          const known = path.isAbsolute(id) ? null : await store.validated<Validated>(id, ref.quote);
           if (known && !historyNeeded(id, known.title) && await store.read(known.token)) { results.push({ ...ref, id, ...known }); continue; }
           const inspected = await inspect(cwd, id, ref.quote, file.contenu);
-          if (!path.isAbsolute(id) && inspected.verified && !inspected.correction) { validated[key] = { ...inspected, verified: true, status: 'passed' }; learned = true; }
+          if (!path.isAbsolute(id) && inspected.verified && !inspected.correction) await store.remember(id, ref.quote, { ...inspected, verified: true, status: 'passed' });
           results.push({ ...ref, id, ...inspected });
         } catch (error) { results.push({ ...ref, verified: false, status: 'failed', message: error instanceof Error ? error.message : String(error) }); }
       }
-      if (learned) writeValidated(cwd, validated);
       const passed = results.length > 0 && results.every((entry) => entry.verified);
       const warnings = results.flatMap((entry) => 'warning' in entry && entry.warning ? [entry.warning] : []);
       return { passed, status: passed ? 'passed' : results.some((entry) => entry.status === 'failed') ? 'failed' : 'missing', message: results.length ? `${results.filter((entry) => entry.verified).length}/${results.length} citation(s) vérifiée(s).` : 'Aucune citation déclarée.', results, warnings };
