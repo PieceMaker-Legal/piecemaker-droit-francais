@@ -677,6 +677,72 @@ def add_bare_person_variants(merged_mapping: Dict, merged_reverse: Dict,
             entry["variants"] = list(dict.fromkeys([*(entry.get("variants") or []), bare]))
 
 
+NAME_PARTICLES = frozenset({
+    "de", "du", "des", "d", "le", "la", "les", "van", "von", "der", "den",
+    "di", "da", "del", "della", "dos", "das", "y", "et",
+})
+
+
+def person_name_parts(text: str) -> List[str]:
+    """« Jean Dupont » → « Jean », « Dupont » ; « Jean de La Fontaine » → « Jean », « Fontaine », « de La Fontaine »."""
+    bare = strip_civility(text)
+    tokens = [token.strip(".,;:()[]") for token in bare.split()]
+    tokens = [token for token in tokens if token]
+    if len(tokens) < 2:
+        return []
+    words = [
+        token for token in tokens
+        if token.lower().rstrip("'’") not in NAME_PARTICLES
+        and len(re.findall(r"[^\W\d_]", token)) >= 3
+    ]
+    tail = [" ".join(tokens[1:])] if len(tokens) > 2 else []
+    return [part for part in dict.fromkeys([*words, *tail]) if part != bare]
+
+
+def add_person_name_part_variants(merged_mapping: Dict, merged_reverse: Dict,
+                                  merged_extracted: Dict, ignored_lower: Set[str]) -> None:
+    """Every part of a person's name (first name, surname) becomes a variant of that person.
+
+    A part found in several persons' names goes to each of them, so the
+    proxy resolves it by context as any shared variant. A part already
+    held by another entity, or removed by the lawyer, is left alone.
+    """
+    person_entries = merged_extracted.setdefault("personnes_physiques", {})
+    person_codes = set(person_entries)
+    mapping_texts: Dict[str, List[str]] = {}
+    for text, code in merged_mapping.items():
+        mapping_texts.setdefault(code, []).append(text)
+    codes = [
+        code for code in dict.fromkeys([*person_entries, *merged_reverse, *merged_mapping.values()])
+        if _is_person_code(str(code), person_codes)
+    ]
+    owners: Dict[str, Dict[str, List[str]]] = {}
+    for code in codes:
+        texts = _person_entry_texts(code, person_entries.get(code, {}), merged_reverse, mapping_texts.get(code))
+        for text in texts:
+            for part in person_name_parts(text):
+                owners.setdefault(part.lower(), {}).setdefault(code, []).append(part)
+    holder_by_lower = {text.lower(): code for text, code in merged_mapping.items()}
+    for folded, parts_by_code in owners.items():
+        if folded in ignored_lower:
+            continue
+        holder = holder_by_lower.get(folded)
+        if holder is not None and holder not in parts_by_code:
+            continue
+        for code, parts in parts_by_code.items():
+            part = parts[0]
+            if holder is None:
+                merged_mapping[part] = code
+                holder = code
+            known = merged_reverse.get(code) or mapping_texts.get(code) or []
+            if any(str(value).lower() == folded for value in known):
+                continue
+            merged_reverse[code] = list(dict.fromkeys([*known, part]))
+            entry = person_entries.get(code)
+            if entry is not None:
+                entry["variants"] = list(dict.fromkeys([*(entry.get("variants") or []), part]))
+
+
 def _person_entry_texts(code: str, entry: Dict, reverse_mapping: Dict,
                         mapping_texts: Optional[List[str]] = None) -> List[str]:
     values = [entry.get("original", ""), *(entry.get("variants") or [])]
@@ -1781,6 +1847,7 @@ def merge_with_existing_mapping(new_mapping: Dict, existing_mapping: Optional[Di
         ignored + [str(text).strip() for text in new_mapping.get('ignored', []) if str(text).strip()] + left_visible
     ))
     add_bare_person_variants(merged_mapping, merged_reverse, merged_extracted, ignored_lower)
+    add_person_name_part_variants(merged_mapping, merged_reverse, merged_extracted, ignored_lower)
     return {
         "mapping": merged_mapping,
         "reverse_mapping": merged_reverse,
