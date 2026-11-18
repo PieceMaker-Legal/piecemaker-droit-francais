@@ -200,23 +200,6 @@ test('shows a native JSON graph when the scenario has no DOT and keeps its prove
   } finally { view.close(); }
 });
 
-test('shows the program text with each Catala block drawn as a graph', async () => {
-  const view = await open([program()]);
-  try {
-    view.click(view.container.querySelector('[role="tab"][data-mode="program"]'));
-    const panel = view.container.querySelector('.pmc-program');
-    assert.equal(panel.hidden, false);
-    assert.equal(view.container.querySelector('.pmc-explanation').hidden, true);
-    const file = panel.querySelector('.pmc-program-file[data-file="demo.catala_fr"]');
-    assert.deepEqual([...file.querySelectorAll(':scope > h3')].map((heading) => heading.textContent), ['Article 1217', 'Pièce 1', 'Hors dossier']);
-    assert.match(file.textContent, /Société Exemple SAS n’a pas livré/);
-    const graph = file.querySelector('h3 ~ .pmc-program-graph .pmc-map');
-    assert.ok(graph.querySelector(':scope > .pmc-branch > [data-node="x002"]'));
-    assert.ok(graph.querySelector('.pmc-children [data-node="x001"]'));
-    assert.match(file.querySelector('.pmc-program-code code').textContent, /définition sanction_possible/);
-  } finally { view.close(); }
-});
-
 test('lays the graph out in columns: steps on the left, a shared fact repeated under each step', async () => {
   const shared = `digraph G {
   x001 [label=<<table><tr><td>inexécution</td><td>true</td></tr></table>>, URL="https://catala.local/test_demo.catala_fr#L9", style="filled"];
@@ -285,11 +268,11 @@ test('the pick mode sends the clicked card with its file and lines and stops', a
   } finally { close(); }
 });
 
-test('keeps one toolbar line and shows the drafted text with its Catala blocks folded', async () => {
+test('keeps the graph and written views and drafts from the toolbar', async () => {
   const view = await open([program()]);
   try {
     const bar = view.container.querySelector('.pmc-bar');
-    assert.deepEqual([...bar.querySelectorAll('[role=tab]')].map((tab) => tab.textContent.trim().replace(/\s*\d+$/, '')), ['Graphe', 'Raisonnement', 'Programme']);
+    assert.deepEqual([...bar.querySelectorAll('[role=tab]')].map((tab) => tab.textContent.trim().replace(/\s*\d+$/, '')), ['Graphe', 'Raisonnement']);
     assert.equal(view.container.querySelector('[data-refresh]'), null);
     assert.equal(bar.querySelectorAll('[data-map-zoom]').length, 3);
     assert.equal(bar.querySelector('[data-verify]'), null);

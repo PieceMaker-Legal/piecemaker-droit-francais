@@ -10,8 +10,16 @@ const ratio = (text: string) => { const [a, b] = text.split('/').map(Number); re
 
 const bare = (value: string) => value.trim().replace(/\s*\(\)$/, '');
 
+export const structured = (value: string) => /^(?:\[|(?:[\p{L}_][\p{L}\p{N}_]*\s*)?\{)/u.test(value);
+
 export function display(step: Step) {
   const value = bare(step.value);
+  if (structured(value)) {
+    try {
+      const qualification = JSON.parse(value)?.qualification;
+      return typeof qualification === 'string' ? qualification : '';
+    } catch { return ''; }
+  }
   const type = step.type.toLowerCase();
   if (/^vrai$/i.test(value)) return 'Oui';
   if (/^faux$/i.test(value)) return 'Non';
@@ -40,13 +48,13 @@ const definition = (step: Step) => step.origins.find((origin) => origin.selected
 export function formula(step: Step, human: (text: string) => string) {
   const text = definition(step).replace(/\s+/g, ' ').match(/(?:^|\s)égal à\s+(.+)$/)?.[1]?.trim() ?? step.expression;
   const plain = text.replace(/^qualifier de\s*\((.*)\)$/, '$1').replace(/^qualifier de\s+/, '');
-  if (!plain || /\b(?:cumul|qualifier|selon|si|soit|existe|pour)\b/.test(plain)) return '';
+  if (!plain || structured(step.value) || structured(plain) || /\b(?:cumul|qualifier|selon|si|soit|existe|pour)\b/.test(plain)) return '';
   return date(plain).replace(/[\p{L}_][\p{L}\p{N}_]*/gu, (word) => /^(?:et|ou|non)$/.test(word) || /^(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|1er)$/.test(word) ? word : /_/.test(word) ? human(word) : word)
     .replace(/(\d+) jour\b/g, (_, n) => `${n} jour${n === '1' ? '' : 's'}`).replace(/(\d+) an\b/g, (_, n) => `${n} an${n === '1' ? '' : 's'}`).replace(/(\d+) mois\b/g, '$1 mois')
     .replace(/>=/g, '≥').replace(/<=/g, '≤').replace(/\s\*\s/g, ' × ').replace(/\s\/\s/g, ' ÷ ').replace(/\s=\s/g, ' = ');
 }
 
-export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source) => string, only?: Step[]) {
+export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source) => string) {
   if (!model.steps.length) return '';
   const steps = new Map(model.steps.map((step) => [step.id, step]));
   const rules = model.steps.filter((step) => step.kind === 'rule' && !container(step));
@@ -80,7 +88,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   const references = (clause: Clause, negated: boolean): Array<[Step, boolean]> => clause.kind !== 'leaf'
     ? clause.members.flatMap((member) => references(member, clause.kind === 'not' ? !negated : negated))
     : (steps.has(clause.ref) ? [clause.ref] : clause.refs).map((id) => steps.get(id)).filter((step): step is Step => Boolean(step)).map((step) => [step, negated]);
-  const candidates = (only ?? spine).filter((step) => !container(step));
+  const candidates = spine.filter((step) => !container(step));
   const dependencies = new Set(model.steps.filter((step) => !container(step)).flatMap((step) => [
     ...step.parents,
     ...(step.clause ? references(step.clause, false).map(([reference]) => reference.id) : []),
@@ -118,7 +126,6 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     return branch(`<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}" data-kind="${conclusion ? 'answer' : exception ? 'exception' : step.kind}" data-state="${current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === goal && model.objective || named(step))}</h3><p class="pmc-result">${status(step, negated, current)}</p>${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, step.kind === 'rule' ? 'Source de la règle à indiquer' : '', 'law')}${evidence}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? warn(`À rechercher : ${step.notes.recherche}`) : ''}</article>`, children, current);
   };
   const trees = [...roots.map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) ? '' : node(step, null))].join('');
-  if (only) return `<div class="pmc-map" data-layout="columns"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;
   const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, '', 'other')}</details>` : '';
   const legend = '<p class="pmc-map-legend"><span data-state="ok">Validé</span><span data-state="warn">À établir ou à justifier</span><span data-state="ko">Non rempli</span></p>';
   return `<div class="pmc-map-summary">${legend}</div>${unused}<div class="pmc-map" data-layout="columns" aria-label="Graphe du raisonnement : objectif à gauche, étapes, conditions et faits vers la droite"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;
