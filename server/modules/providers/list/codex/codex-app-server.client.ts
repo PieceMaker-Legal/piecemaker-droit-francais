@@ -53,6 +53,17 @@ type JsonRpcLine = {
   error?: { code?: number; message?: string };
 };
 
+/** One entry of the app-server's `model/list` answer, reduced to the fields read here. */
+export type CodexAppServerModel = {
+  model?: unknown;
+  displayName?: unknown;
+  description?: unknown;
+  hidden?: unknown;
+  isDefault?: unknown;
+  defaultReasoningEffort?: unknown;
+  supportedReasoningEfforts?: unknown;
+};
+
 /** Handler for a notification the app-server sent us (never a reply). */
 type NotificationHandler = (method: string, params: unknown) => void;
 
@@ -294,6 +305,33 @@ export const codexAppServer = {
    * omitting it would file every fork under whatever directory this server
    * happens to be running from.
    */
+  /**
+   * Lists the models this Codex CLI offers, the same list its own model picker
+   * shows: the bundled catalog, refreshed from OpenAI's remote catalog when the
+   * user is signed in to ChatGPT. Hidden models are left in; callers filter.
+   */
+  async listModels(): Promise<CodexAppServerModel[]> {
+    return withAppServer(async ({ call }) => {
+      const models: CodexAppServerModel[] = [];
+      let cursor: string | null = null;
+      // A guard against a server that keeps handing back a cursor.
+      for (let page = 0; page < 20; page += 1) {
+        const result = await call('model/list', cursor ? { cursor } : {}) as {
+          data?: unknown;
+          nextCursor?: unknown;
+        } | undefined;
+        if (Array.isArray(result?.data)) {
+          models.push(...(result.data as CodexAppServerModel[]));
+        }
+        cursor = typeof result?.nextCursor === 'string' && result.nextCursor ? result.nextCursor : null;
+        if (!cursor) {
+          break;
+        }
+      }
+      return models;
+    });
+  },
+
   async forkThread(input: {
     threadId: string;
     lastTurnId?: string;

@@ -6,7 +6,11 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { CODEX_PREDEFINED_MODELS } from '@/modules/providers/list/codex/codex-models.provider.js';
+import {
+  buildCodexModelsFromAppServer,
+  CODEX_PREDEFINED_MODELS,
+  CodexProviderModels,
+} from '@/modules/providers/list/codex/codex-models.provider.js';
 
 const require = createRequire(import.meta.url);
 
@@ -115,4 +119,82 @@ test('bundles a Codex CLI new enough to know the GPT-6 Sol and Luna models', () 
   const { version } = require('@openai/codex/package.json') as { version: string };
   const [major, minor] = version.split('.').map(Number);
   assert.ok(major > 0 || minor >= 155, `bundled @openai/codex ${version} predates 0.155.0`);
+});
+
+test('lists the GPT-6.2 models and defaults to the one the Codex CLI marks as default', () => {
+  assert.equal(findCodexModel('gpt-6.2-sol')?.label, 'GPT-6.2 Sol');
+  assert.equal(findCodexModel('gpt-6.2-astra')?.label, 'GPT-6.2 Astra');
+  assert.equal(CODEX_PREDEFINED_MODELS.DEFAULT, 'gpt-6.2-sol');
+});
+
+test('builds the picker from the Codex CLI model list, skipping hidden models', () => {
+  const catalog = buildCodexModelsFromAppServer([
+    {
+      model: 'gpt-7-sol',
+      displayName: 'GPT-7-Sol',
+      description: 'A model this build of CloudCLI has never heard of.',
+      hidden: false,
+      isDefault: true,
+      defaultReasoningEffort: 'medium',
+      supportedReasoningEfforts: [{ reasoningEffort: 'low' }, { reasoningEffort: 'medium' }],
+    },
+    { model: 'gpt-6.2-sol', displayName: 'GPT-6.2-Sol', hidden: false, isDefault: false },
+    { model: 'codex-auto-review', displayName: 'Codex Auto Review', hidden: true },
+  ]);
+
+  assert.deepEqual(catalog?.OPTIONS.map((option) => option.value), ['gpt-7-sol', 'gpt-6.2-sol']);
+  assert.equal(catalog?.DEFAULT, 'gpt-7-sol');
+  assert.equal(catalog?.OPTIONS[0].label, 'GPT-7 Sol');
+  assert.deepEqual(catalog?.OPTIONS[0].effort, { default: 'medium', values: [{ value: 'low' }, { value: 'medium' }] });
+  // A model the curated list knows keeps its label and, without CLI efforts, its effort control.
+  assert.equal(catalog?.OPTIONS[1].label, 'GPT-6.2 Sol');
+  assert.equal(catalog?.OPTIONS[1].effort?.default, 'low');
+  assert.equal(buildCodexModelsFromAppServer([]), null);
+});
+
+test('falls back to the curated catalog when the Codex CLI cannot list models, and caches a live answer', async () => {
+  const previous = process.env.CLOUDCLI_CODEX_LIVE_MODELS;
+  delete process.env.CLOUDCLI_CODEX_LIVE_MODELS;
+  try {
+    const failing = new CodexProviderModels(async () => {
+      throw new Error('spawn failed');
+    });
+    assert.equal(await failing.getSupportedModels(), CODEX_PREDEFINED_MODELS);
+
+    let calls = 0;
+    const live = new CodexProviderModels(async () => {
+      calls += 1;
+      return [{ model: 'gpt-7-sol', displayName: 'GPT-7-Sol', isDefault: true }];
+    });
+    assert.equal((await live.getSupportedModels()).DEFAULT, 'gpt-7-sol');
+    assert.equal((await live.getSupportedModels()).DEFAULT, 'gpt-7-sol');
+    assert.equal(calls, 1);
+  } finally {
+    if (previous === undefined) {
+      delete process.env.CLOUDCLI_CODEX_LIVE_MODELS;
+    } else {
+      process.env.CLOUDCLI_CODEX_LIVE_MODELS = previous;
+    }
+  }
+});
+
+test('the bundled Codex CLI answers model/list with the curated models', async () => {
+  const { codexAppServer } = await import('@/modules/providers/list/codex/codex-app-server.client.js');
+  const codexHome = await mkdtemp(path.join(os.tmpdir(), 'cloudcli-codex-model-list-'));
+  const previousHome = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = codexHome;
+  try {
+    const catalog = buildCodexModelsFromAppServer(await codexAppServer.listModels());
+    assert.ok(catalog, 'model/list returned no usable model');
+    const listed = new Set(catalog.OPTIONS.map((option) => option.value));
+    assert.deepEqual(CODEX_PREDEFINED_MODELS.OPTIONS.map((option) => option.value).filter((value) => !listed.has(value)), []);
+    assert.equal(catalog.DEFAULT, CODEX_PREDEFINED_MODELS.DEFAULT);
+  } finally {
+    if (previousHome === undefined) {
+      delete process.env.CODEX_HOME;
+    } else {
+      process.env.CODEX_HOME = previousHome;
+    }
+    await rm(codexHome, { recursive: true, force: true });
+  }
 });

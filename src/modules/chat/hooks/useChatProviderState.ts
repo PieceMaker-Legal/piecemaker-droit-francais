@@ -41,7 +41,7 @@ const FALLBACK_DEFAULT_MODEL: Record<LLMProvider, string> = {
   // The server catalog's DEFAULT. A new browser keeps this model for as long
   // as the catalog lists it, so it must be one the bundled Codex CLI knows;
   // any other model runs on the CLI's fallback metadata.
-  codex: 'gpt-5.6-sol',
+  codex: 'gpt-6.2-sol',
   mistral: 'mistral-medium-3.5',
   opencode: 'anthropic/claude-sonnet-4-5',
 };
@@ -125,6 +125,8 @@ type SessionSelectionApiResponse = {
      * which the composer replaces with the user's per-provider selection.
      */
     source?: 'session' | 'provider' | 'default';
+    /** Exact model id that served the latest turn (e.g. `claude-opus-5-5` behind `default`). */
+    servedModel?: string | null;
   };
 };
 
@@ -133,6 +135,11 @@ type SessionProviderSelection = {
   sessionId: string;
   model: string | null;
   effort: string | null;
+  /**
+   * The model the provider reports for the latest turn. Dropped when the
+   * model choice changes, since it then describes a model no longer selected.
+   */
+  servedModel?: string | null;
 };
 
 const getSessionSelectionKey = (provider: LLMProvider, sessionId: string): string => (
@@ -531,6 +538,12 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     ? sessionSelection
     : null;
   const sessionModel = activeSessionSelection?.model ?? null;
+  const currentServedModel = activeSessionSelection?.servedModel ?? null;
+  // Bumped after each finished turn so the served model is read again.
+  const [sessionSelectionRefreshKey, setSessionSelectionRefreshKey] = useState(0);
+  const refreshSessionSelection = useCallback(() => {
+    setSessionSelectionRefreshKey((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     const requestId = sessionSelectionLoadRequestIdRef.current + 1;
@@ -564,6 +577,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
           sessionId: selectedSessionId,
           model: body.success && resolvedModel && body.data?.source !== 'default' ? resolvedModel : null,
           effort: body.success ? resolvedEffort : null,
+          servedModel: body.success ? body.data?.servedModel?.trim() || null : null,
         });
       } catch (error) {
         if (
@@ -586,7 +600,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     return () => {
       cancelled = true;
     };
-  }, [selectedSessionId, selectedSessionProvider]);
+  }, [selectedSessionId, selectedSessionProvider, sessionSelectionRefreshKey]);
 
   /**
    * Applies a model choice.
@@ -673,6 +687,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       sessionId: normalizedSessionId,
       model: previousSelection?.model ?? null,
       effort,
+      servedModel: previousSelection?.servedModel ?? null,
     });
 
     try {
@@ -698,6 +713,9 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
             ? current.model
             : previousSelection?.model ?? null,
           effort: storedEffort,
+          servedModel: current?.provider === targetProvider && current.sessionId === normalizedSessionId
+            ? current.servedModel ?? null
+            : previousSelection?.servedModel ?? null,
         }));
       }
 
@@ -867,6 +885,8 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     currentProviderEffortOptions,
     currentProviderModel,
     currentProviderModelOptions,
+    currentServedModel,
+    refreshSessionSelection,
     permissionMode,
     pendingPermissionRequests,
     setPendingPermissionRequests,

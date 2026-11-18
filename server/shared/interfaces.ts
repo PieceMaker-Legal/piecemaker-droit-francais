@@ -153,6 +153,15 @@ export interface IProviderModels {
    * provider-specific lookup finds nothing.
    */
   getCurrentActiveModel(sessionId?: string): Promise<ProviderCurrentActiveModel>;
+
+  /**
+   * Reads the exact model id that served one session's latest turn, as the
+   * provider's own transcript records it (`claude-opus-5-5` for a session
+   * started on the `default` or `opus` alias). Null when the session has no
+   * turn yet. Optional: only providers whose aliases resolve to a concrete
+   * model per turn implement it.
+   */
+  getServedModel?(sessionId: string): Promise<string | null>;
 }
 
 // ---------------------------

@@ -82,7 +82,14 @@ const resolveCommandModel = async (modelsService, provider, context) => {
 const executeModelsCommand = async (args, context, modelsService) => {
   const currentProvider = readModelProvider(context?.provider);
   const catalog = await modelsService.getProviderModels(currentProvider);
-  const currentModel = await resolveCommandModel(modelsService, currentProvider, context);
+  const resolved = await modelsService.resolveSessionModel(currentProvider, {
+    sessionId: context?.sessionId,
+    requestedModel: context?.model,
+  });
+  const currentModel = resolved.model;
+  // An alias such as `default` or `opus` says nothing about the release that
+  // answered; the transcript's model id does.
+  const servedModel = resolved.servedModel && resolved.servedModel !== currentModel ? resolved.servedModel : null;
   const availableModels = catalog.OPTIONS.map((option) => option.value);
   const availableOptions = catalog.OPTIONS.map((option) => ({
     value: option.value,
@@ -100,6 +107,7 @@ const executeModelsCommand = async (args, context, modelsService) => {
         provider: currentProvider,
         providerLabel: MODEL_PROVIDER_LABELS[currentProvider],
         model: currentModel,
+        ...(servedModel ? { servedModel } : {}),
       },
       available: {
         [currentProvider]: availableModels,
@@ -107,7 +115,7 @@ const executeModelsCommand = async (args, context, modelsService) => {
       availableModels,
       availableOptions,
       defaultModel: catalog.DEFAULT,
-      message: `Current model: ${currentModel}`,
+      message: servedModel ? `Current model: ${currentModel} (${servedModel})` : `Current model: ${currentModel}`,
     },
   };
 };

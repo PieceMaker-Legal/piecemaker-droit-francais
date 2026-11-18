@@ -205,6 +205,12 @@ export type ProviderSessionModel = {
   /** NULL means this session has not recorded an effort choice yet. */
   effort: string | null;
   source: ProviderSessionModelSource;
+  /**
+   * The exact model that served the session's latest turn when the provider
+   * reports one (e.g. `claude-opus-5-5` behind the `default` alias). Absent
+   * when unknown.
+   */
+  servedModel?: string | null;
 };
 
 /**

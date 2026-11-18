@@ -6,6 +6,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { ProviderModelOption } from '@/shared/types';
 import { DEFAULT_EFFORT_VALUE } from '@/shared/constants';
 import { useComposerMenuAnchor } from '@/modules/chat/hooks/useComposerMenuAnchor';
+import { formatAnsweringModelLabel } from '@/modules/chat/utils/modelLabel';
 import {
   ComposerMenuHeading,
   ComposerMenuItem,
@@ -21,6 +22,12 @@ type ComposerModelMenuProps = {
   effortOptions: EffortOption[];
   onSelectEffort: (effort: string) => void;
   model: string;
+  /**
+   * Exact model id that served the session's latest turn (`claude-opus-5-5`),
+   * when the provider reports one. Shown when the selection is an alias such as
+   * `default` or `opus`, which alone does not say which release answers.
+   */
+  servedModel?: string | null;
   /** Model catalog for the active provider; empty hides the section. */
   modelOptions: ProviderModelOption[];
   onSelectModel: (model: string) => void;
@@ -36,6 +43,7 @@ function ComposerModelMenu({
   effortOptions,
   onSelectEffort,
   model,
+  servedModel,
   modelOptions,
   onSelectModel,
   modelsLoading,
@@ -67,13 +75,29 @@ function ComposerModelMenu({
   );
   const modelLabel = selectedModelOption?.label || model;
 
+  // The release behind an alias: a pinned catalog entry's label when there is
+  // one (`Opus 5.5`), otherwise the id shortened the way reply footers show it.
+  const normalizedServedModel = servedModel?.trim() || '';
+  const servedModelLabel = normalizedServedModel && normalizedServedModel !== model
+    ? modelOptions.find((option) => option.value === normalizedServedModel)?.label
+      || formatAnsweringModelLabel(normalizedServedModel)
+    : null;
+  const showServedModel = Boolean(servedModelLabel && servedModelLabel !== modelLabel);
+  const activeModelText = showServedModel
+    ? t('composer.activeModel', {
+      model: servedModelLabel,
+      id: normalizedServedModel,
+      defaultValue: 'Active model: {{model}} ({{id}})',
+    })
+    : null;
+
   const hasEffortSection = resolvedEffortOptions.length > 0;
   const hasModelSection = modelOptions.length > 0 || modelsLoading;
   if (!hasEffortSection && !hasModelSection) {
     return null;
   }
 
-  const triggerLabel = hasModelSection ? modelLabel : effortLabel;
+  const triggerLabel = hasModelSection ? (showServedModel ? servedModelLabel : modelLabel) : effortLabel;
   const ariaLabel = t('composer.modelMenu', {
     defaultValue: 'Select model and reasoning effort',
   });
@@ -90,8 +114,8 @@ function ComposerModelMenu({
         className="flex h-8 max-w-20 shrink-0 items-center gap-1 rounded-lg border border-border/60 bg-muted/40 px-2 text-xs font-medium text-foreground transition-colors hover:bg-muted sm:max-w-56"
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        aria-label={ariaLabel}
-        title={ariaLabel}
+        aria-label={activeModelText ? `${ariaLabel}. ${activeModelText}` : ariaLabel}
+        title={activeModelText ? `${activeModelText}\n${modelLabel}` : ariaLabel}
       >
         <span className="truncate">{triggerLabel}</span>
         {hasModelSection && hasEffortSection && effort !== DEFAULT_EFFORT_VALUE && (
@@ -128,6 +152,7 @@ function ComposerModelMenu({
               <ComposerMenuItem
                 role="menuitem"
                 label={modelLabel}
+                description={activeModelText ?? undefined}
                 isSelected={false}
                 onSelect={() => setIsModelSectionOpen((current) => !current)}
                 trailing={
