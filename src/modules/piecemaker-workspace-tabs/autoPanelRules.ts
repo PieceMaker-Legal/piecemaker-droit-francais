@@ -114,6 +114,21 @@ function writeDocxTarget(toolName: string, input: Input): AutoPanelTarget | null
 
 const DRAFT_ID = /"projet":"([\w-]{1,80})"/;
 
+const ARTIFACT_LINK = /piecemaker:\/\/artifact\/([a-z][a-z0-9-]{2,63})/;
+
+/** Un publish réussi de l'outil Artifact montre l'artifact, comme Claude : pas besoin d'open. */
+export function isArtifactPublish(toolName: string, input: unknown): boolean {
+  if (!/(^|__)artifacts__Artifact$/.test(toolName)) return false;
+  const value = (input && typeof input === 'object' ? input : {}) as { action?: unknown; asset?: unknown };
+  return (value.action === undefined || value.action === 'publish') && value.asset !== true;
+}
+
+export function artifactFromResult(content: unknown): string | null {
+  const value = Array.isArray(content) ? content.map((entry) => text((entry as Input | null)?.text)).join('\n') : text(content);
+  if (/^[a-z_]+: /.test(value)) return null;
+  return ARTIFACT_LINK.exec(value)?.[1] ?? null;
+}
+
 export function draftFromResult(content: unknown): string | null {
   const value = Array.isArray(content) ? content.map((entry) => text((entry as Input | null)?.text)).join('\n') : text(content);
   if (/"index":true/.test(value)) return null;

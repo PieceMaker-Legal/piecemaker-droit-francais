@@ -1,0 +1,1 @@
+{ "title": "Présentation", "description": "Diaporama 16:9 : une diapositive par section, navigation au clavier, impression une diapositive par page.", "intent": "slides", "icon": "slides", "entry": "index.html", "read_first": ["README.md"] }
