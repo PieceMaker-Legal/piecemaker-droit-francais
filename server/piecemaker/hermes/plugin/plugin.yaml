@@ -1,0 +1,5 @@
+name: piecemaker
+version: 1.0.0
+description: Commandes PieceMaker pour les dossiers et les documents.
+provides_tools: [piecemaker]
+provides_hooks: [pre_tool_call, post_tool_call]

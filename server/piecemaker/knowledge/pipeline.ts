@@ -186,7 +186,7 @@ export function pythonExecutable(explicit: string | undefined): string {
   return process.platform === 'win32' ? 'python' : 'python3';
 }
 
-function mappingSeed(projectId: string, store: KnowledgeStore): GlinerMappingDocument {
+function mappingSeed(projectId: string, store: KnowledgeStore) {
   const snapshot = store.snapshot(projectId);
   const mapping: Record<string, string> = {};
   const reverseMapping: Record<string, string[]> = {};

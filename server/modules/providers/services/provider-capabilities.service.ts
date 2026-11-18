@@ -171,6 +171,23 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
     supportsSteering: false,
     supportsContextClearing: false,
   },
+  hermes: {
+    provider: 'hermes',
+    permissionModes: ['default'],
+    defaultPermissionMode: 'default',
+    supportsImages: false,
+    supportsFiles: false,
+    supportsAbort: true,
+    supportsPermissionRequests: true,
+    supportsTokenUsage: false,
+    supportsEffort: false,
+    effortLevels: [],
+    supportsMessageEditing: false,
+    supportsSessionForking: false,
+    supportsSideQuestions: false,
+    supportsSteering: false,
+    supportsContextClearing: false,
+  },
 };
 
 /**

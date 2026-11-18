@@ -4,6 +4,7 @@ import { providerAuthService } from '@/modules/providers/services/provider-auth.
 import { claudeSettingsPermissionsService } from '@/modules/providers/services/claude-settings-permissions.service.js';
 import { providerCapabilitiesService } from '@/modules/providers/services/provider-capabilities.service.js';
 import { providerCliService } from '@/modules/providers/services/provider-cli.service.js';
+import { hermesGatewayService } from '@/modules/providers/services/hermes-gateway.service.js';
 import { providerMcpService } from '@/modules/providers/services/mcp.service.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { providerTokenUsageService } from '@/modules/providers/services/provider-token-usage.service.js';
@@ -325,6 +326,48 @@ const parseProviderSkillCreatePayload = (payload: unknown): ProviderSkillCreateI
   return { entries };
 };
 
+const parseSkillRegistryLimit = (value: unknown): number => {
+  const raw = readOptionalQueryString(value);
+  if (!raw) {
+    return 10;
+  }
+
+  const parsed = Number.parseInt(raw, 10);
+  if (Number.isNaN(parsed)) {
+    throw new AppError('limit must be a valid integer.', {
+      code: 'INVALID_QUERY_PARAMETER',
+      statusCode: 400,
+    });
+  }
+
+  return Math.max(1, Math.min(parsed, 50));
+};
+
+const parseSkillRegistryInstallPayload = (payload: unknown) => {
+  if (!payload || typeof payload !== 'object') {
+    throw new AppError('Request body must be an object.', {
+      code: 'INVALID_REQUEST_BODY',
+      statusCode: 400,
+    });
+  }
+
+  const body = payload as Record<string, unknown>;
+  const identifier = readOptionalQueryString(body.identifier);
+  if (!identifier) {
+    throw new AppError('identifier is required.', {
+      code: 'SKILL_IDENTIFIER_REQUIRED',
+      statusCode: 400,
+    });
+  }
+
+  return {
+    identifier,
+    category: readOptionalQueryString(body.category),
+    name: readOptionalQueryString(body.name),
+    force: body.force === true,
+  };
+};
+
 const parseProvider = (value: unknown): LLMProvider => {
   const normalized = normalizeProviderParam(value);
   if (
@@ -333,6 +376,7 @@ const parseProvider = (value: unknown): LLMProvider => {
     || normalized === 'cursor'
     || normalized === 'mistral'
     || normalized === 'opencode'
+    || normalized === 'hermes'
   ) {
     return normalized;
   }
@@ -363,6 +407,18 @@ const parseSessionForkPayload = (payload: unknown): { upToAnchorId?: string; tit
     ...(upToAnchorId ? { upToAnchorId } : {}),
     ...(title ? { title } : {}),
   };
+};
+
+const parseHermesProvider = (value: unknown): 'hermes' => {
+  const provider = parseProvider(value);
+  if (provider !== 'hermes') {
+    throw new AppError('Gateway controls are only available for Hermes.', {
+      code: 'HERMES_GATEWAY_UNSUPPORTED_PROVIDER',
+      statusCode: 404,
+    });
+  }
+
+  return provider;
 };
 
 const parseSessionRenameSummary = (payload: unknown): string => {
@@ -798,6 +854,77 @@ router.delete(
   }),
 );
 
+router.get(
+  '/:provider/skills/registry/search',
+  asyncHandler(async (req: Request, res: Response) => {
+    const provider = parseProvider(req.params.provider);
+    const query = readOptionalQueryString(req.query.query);
+    if (!query) {
+      throw new AppError('query is required.', {
+        code: 'SKILL_SEARCH_QUERY_REQUIRED',
+        statusCode: 400,
+      });
+    }
+
+    const results = await providerSkillsService.searchSkillRegistry(provider, query, {
+      source: readOptionalQueryString(req.query.source),
+      limit: parseSkillRegistryLimit(req.query.limit),
+    });
+    res.json(createApiSuccessResponse({ provider, results }));
+  }),
+);
+
+router.post(
+  '/:provider/skills/registry/install',
+  asyncHandler(async (req: Request, res: Response) => {
+    const provider = parseProvider(req.params.provider);
+    const result = await providerSkillsService.installRegistrySkill(
+      provider,
+      parseSkillRegistryInstallPayload(req.body),
+    );
+    res.status(201).json(createApiSuccessResponse({ provider, result }));
+  }),
+);
+
+router.post(
+  '/:provider/skills/registry/check',
+  asyncHandler(async (req: Request, res: Response) => {
+    const provider = parseProvider(req.params.provider);
+    const result = await providerSkillsService.checkRegistryUpdates(provider);
+    res.json(createApiSuccessResponse({ provider, result }));
+  }),
+);
+
+router.post(
+  '/:provider/skills/registry/update',
+  asyncHandler(async (req: Request, res: Response) => {
+    const provider = parseProvider(req.params.provider);
+    const result = await providerSkillsService.updateRegistrySkills(provider);
+    res.json(createApiSuccessResponse({ provider, result }));
+  }),
+);
+
+router.post(
+  '/:provider/skills/registry/audit',
+  asyncHandler(async (req: Request, res: Response) => {
+    const provider = parseProvider(req.params.provider);
+    const result = await providerSkillsService.auditRegistrySkills(provider);
+    res.json(createApiSuccessResponse({ provider, result }));
+  }),
+);
+
+router.delete(
+  '/:provider/skills/registry/:name',
+  asyncHandler(async (req: Request, res: Response) => {
+    const provider = parseProvider(req.params.provider);
+    const result = await providerSkillsService.uninstallRegistrySkill(
+      provider,
+      readPathParam(req.params.name, 'name'),
+    );
+    res.json(createApiSuccessResponse({ provider, result }));
+  }),
+);
+
 // ----------------- MCP routes -----------------
 router.get(
   '/:provider/mcp/servers',
@@ -886,6 +1013,51 @@ router.get(
   asyncHandler(async (_req: Request, res: Response) => {
     const sources = await claudeSettingsPermissionsService.listRuleSources();
     res.json(createApiSuccessResponse({ sources }));
+  }),
+);
+
+// ----------------- Hermes gateway routes -----------------
+router.get(
+  '/:provider/gateway/status',
+  asyncHandler(async (req: Request, res: Response) => {
+    parseHermesProvider(req.params.provider);
+    const status = await hermesGatewayService.getStatus();
+    res.json(createApiSuccessResponse(status));
+  }),
+);
+
+router.get(
+  '/:provider/gateway/logs',
+  asyncHandler(async (req: Request, res: Response) => {
+    parseHermesProvider(req.params.provider);
+    res.json(createApiSuccessResponse({ logs: hermesGatewayService.getLogs() }));
+  }),
+);
+
+router.post(
+  '/:provider/gateway/start',
+  asyncHandler(async (req: Request, res: Response) => {
+    parseHermesProvider(req.params.provider);
+    const status = await hermesGatewayService.start();
+    res.json(createApiSuccessResponse(status));
+  }),
+);
+
+router.post(
+  '/:provider/gateway/stop',
+  asyncHandler(async (req: Request, res: Response) => {
+    parseHermesProvider(req.params.provider);
+    const status = await hermesGatewayService.stop();
+    res.json(createApiSuccessResponse(status));
+  }),
+);
+
+router.post(
+  '/:provider/gateway/restart',
+  asyncHandler(async (req: Request, res: Response) => {
+    parseHermesProvider(req.params.provider);
+    const status = await hermesGatewayService.restart();
+    res.json(createApiSuccessResponse(status));
   }),
 );
 

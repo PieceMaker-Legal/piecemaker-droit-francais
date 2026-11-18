@@ -8,7 +8,7 @@ import type {
   ProviderAuthSubscriptionOverride,
 } from '@/shared/types';
 
-const CLI_PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'mistral', 'opencode'];
+const CLI_PROVIDERS: LLMProvider[] = ['claude', 'cursor', 'codex', 'mistral', 'opencode', 'hermes'];
 
 const createInitialProviderAuthStatusMap = (loading = true): ProviderAuthStatusMap => ({
   claude: { authenticated: false, email: null, method: null, error: null, loading },
@@ -16,9 +16,11 @@ const createInitialProviderAuthStatusMap = (loading = true): ProviderAuthStatusM
   codex: { authenticated: false, email: null, method: null, error: null, loading },
   mistral: { authenticated: false, email: null, method: null, error: null, loading },
   opencode: { authenticated: false, email: null, method: null, error: null, loading },
+  hermes: { authenticated: false, email: null, method: null, error: null, loading },
 });
 
 type ProviderAuthStatusPayload = {
+  installed?: boolean;
   authenticated?: boolean;
   email?: string | null;
   method?: string | null;
@@ -43,6 +45,7 @@ const toProviderAuthStatus = (
   payload: ProviderAuthStatusPayload,
   fallbackError: string | null = null,
 ): ProviderAuthStatus => ({
+  installed: Boolean(payload.installed),
   authenticated: Boolean(payload.authenticated),
   email: payload.email ?? null,
   method: payload.method ?? null,
@@ -94,6 +97,7 @@ export function useProviderAuthStatus(
 
       if (!response.ok) {
         const status: ProviderAuthStatus = {
+          installed: false,
           authenticated: false,
           email: null,
           method: null,
@@ -111,6 +115,7 @@ export function useProviderAuthStatus(
     } catch (caughtError) {
       console.error(`Error checking ${provider} auth status:`, caughtError);
       const status: ProviderAuthStatus = {
+        installed: false,
         authenticated: false,
         email: null,
         method: null,

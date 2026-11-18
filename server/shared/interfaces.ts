@@ -8,6 +8,10 @@ import type {
   McpScope,
   NormalizedMessage,
   ProviderSkill,
+  ProviderSkillRegistryActionResult,
+  ProviderSkillRegistryInstallInput,
+  ProviderSkillRegistrySearchOptions,
+  ProviderSkillRegistrySearchResult,
   ProviderSkillListOptions,
   ProviderAuthStatus,
   ProviderCurrentActiveModel,
@@ -204,6 +208,21 @@ export interface IProviderSkills {
   removeSkill(
     input: ProviderSkillRemoveInput,
   ): Promise<{ removed: boolean; provider: LLMProvider; directoryName: string }>;
+
+  searchRegistry?(
+    query: string,
+    options?: ProviderSkillRegistrySearchOptions,
+  ): Promise<ProviderSkillRegistrySearchResult[]>;
+
+  installRegistrySkill?(input: ProviderSkillRegistryInstallInput): Promise<ProviderSkillRegistryActionResult>;
+
+  uninstallRegistrySkill?(name: string): Promise<ProviderSkillRegistryActionResult>;
+
+  checkRegistryUpdates?(): Promise<ProviderSkillRegistryActionResult>;
+
+  updateRegistrySkills?(): Promise<ProviderSkillRegistryActionResult>;
+
+  auditRegistrySkills?(): Promise<ProviderSkillRegistryActionResult>;
 }
 
 // ---------------------------

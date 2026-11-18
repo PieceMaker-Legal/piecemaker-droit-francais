@@ -204,6 +204,12 @@ type ShellLaunch = {
   claudeFollowsAppTheme: boolean;
 };
 
+function getHermesShellCommand(): string {
+  return (process.env.HERMES_COMMAND_PATH || process.env.HERMES_CLI_PATH || 'hermes')
+    .trim()
+    .split(/\s+/)[0] || 'hermes';
+}
+
 /**
  * Resolves provider command line for plain shell and agent-backed shell modes.
  */
@@ -249,6 +255,14 @@ function buildShellCommand(
       return otherProgram(`opencode --session "${resumeSessionId}"`);
     }
     return otherProgram(initialCommand || 'opencode');
+  }
+
+  if (provider === 'hermes') {
+    const command = initialCommand || getHermesShellCommand();
+    if (resumeSessionId) {
+      return otherProgram(`${command} --resume "${resumeSessionId}"`);
+    }
+    return otherProgram(command);
   }
 
   // Launching with the flag is what unlocks "bypass permissions" in the CLI's
@@ -795,6 +809,8 @@ export function handleShellConnection(
                 ? 'Codex'
                 : provider === 'opencode'
                     ? 'OpenCode'
+                    : provider === 'hermes'
+                      ? 'Hermes'
                   : 'Claude';
           welcomeMsg = hasSession && resumeSessionId
             ? `\x1b[36mResuming ${providerName} session ${resumeSessionId} in: ${projectPath}\x1b[0m\r\n`

@@ -518,6 +518,8 @@ function ChatInterface({
         : provider === 'mistral' ? t('messageTypes.mistral', { defaultValue: 'Mistral' })
         : provider === 'opencode'
             ? t('messageTypes.opencode', { defaultValue: 'OpenCode' })
+          : provider === 'hermes'
+            ? t('messageTypes.hermes', { defaultValue: 'Hermes' })
           : t('messageTypes.claude');
   const contextSuggestion = useContextSuggestion({ projectPath: selectedProject?.fullPath ?? null, input: input.trim(), placeholder: t('input.placeholder', { provider: selectedProviderLabel }), onKeyDown: handleKeyDown });
 
