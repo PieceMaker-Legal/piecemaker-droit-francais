@@ -21,7 +21,7 @@ Chaque fiche a un frontmatter YAML et un corps Markdown.
 
 Aucun champ de statut n'existe (projet, signé). Ne l'ajoutez pas.
 
-Les prémisses viennent des colonnes de revue tabulaire marquées « Index du dossier », des sélections de texte de l'avocat dans la visionneuse et de `pm okf link`.
+Les prémisses viennent des sélections de texte de l'avocat dans la visionneuse et de `pm okf link`. La revue tabulaire n'en crée pas.
 
 ## Liens
 

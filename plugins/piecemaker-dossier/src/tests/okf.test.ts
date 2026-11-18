@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { spreadBoxes, premiseReviewDraft, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
+import { spreadBoxes, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
 import { chronologyView, graphView, shell } from '../views.js';
@@ -204,11 +204,8 @@ describe('fiches du graphe', () => {
     expect(html).toContain('data-open-fiche="/Parties/Jean Dupont.md"');
   });
 
-  it('premiseReviewDraft prépare une revue à une colonne qui porte la prémisse', () => {
-    expect(ficheCardMarkup(premiseIndex, '/_premises/Prix.md')).toContain('data-premise-review');
-    expect(premiseReviewDraft(premiseIndex, '/_premises/Prix.md', '/dossier-fictif')).toEqual({ project: '/dossier-fictif', title: 'Prix', templateName: '', columns: [{ name: 'Prix', prompt: 'Prix', format: 'text', premise: 'checkpoint' }], rows: [] });
-    expect(premiseReviewDraft({ ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, single: true })) }, '/_premises/Prix.md', '/dossier-fictif')?.columns[0].premise).toBe('single');
-    expect(premiseReviewDraft(premiseIndex, '/_premises/Inconnue.md', '/dossier-fictif')).toBeNull();
+  it('la carte d’une prémisse ne propose plus de revue tabulaire', () => {
+    expect(ficheCardMarkup(premiseIndex, '/_premises/Prix.md')).not.toContain('data-premise-review');
   });
 });
 

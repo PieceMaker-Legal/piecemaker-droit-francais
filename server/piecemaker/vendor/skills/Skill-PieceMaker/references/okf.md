@@ -81,7 +81,7 @@ pm okf unlink "Pièces/Courrier.pdf" states "Date de résiliation"
 - `involves` relie une prémisse à une partie, sans citation. La cible est le code de la partie.
 - Sans partie qualifiée dans le dossier, `verify` marque le manque `involves` « attend l'avocat » (champ `avocat: true`) et `pm check` le compte à part. L'avocat désigne une partie cliente ou adverse dans l'onglet Dossier, vue générale. Ne la qualifie pas toi-même ; signale-lui ce manque.
 
-Les colonnes de revue tabulaire marquées « Index du dossier » posent aussi des liens `states`. L'avocat en pose dans la visionneuse.
+L'avocat pose aussi des liens `states` dans la visionneuse. La revue tabulaire n'en pose pas.
 
 ## Prémisse et raisonnement Catala
 

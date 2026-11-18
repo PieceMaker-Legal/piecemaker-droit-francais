@@ -4,9 +4,9 @@ L'index du dossier suit Open Knowledge Format 0.2, avec les relations typées d'
 
 ## Autorité
 
-L'OKF fait autorité sur les types, les liens entre pièces, les prémisses et le lien d'une pièce à une partie. Une prémisse n'existe que par un lien cité dans la fiche d'une pièce.
+SQLite fait foi. Les prémisses, les liens cités et les examens sans lien sont dans les tables `piecemaker_okf_premises`, `piecemaker_okf_relations` et `piecemaker_okf_exams` (`server/piecemaker/okf/store.ts`). Les personnes, pseudonymes, mentions et qualifications de partie sont dans les tables de la connaissance. Les fiches `.md` de `.piecemaker/okf/` sont des vues : le serveur les régénère depuis SQLite après chaque écriture dans la base. Une fiche modifiée ou supprimée à la main est réécrite à la reconstruction suivante. Une prémisse n'existe que par un lien `states` cité.
 
-SQLite garde ce qui sert à l'anonymisation : personnes, pseudonymes, mentions, qualification de partie. L'OKF reflète cette qualification à chaque reconstruction. Les fiches Partie portent des codes, pas des noms. Les citations et les titres de pièces sont en clair et peuvent contenir des identités réelles.
+Les fiches écrites avant que SQLite ne porte ces données sont importées une seule fois par dossier (`piecemaker_okf_imports`). Les fiches Partie portent des codes, pas des noms. Les citations et les titres de pièces sont en clair et peuvent contenir des identités réelles.
 
 ## Périmètre
 
@@ -15,7 +15,7 @@ SQLite garde ce qui sert à l'anonymisation : personnes, pseudonymes, mentions, 
 | Fiche | Identifiant | Origine |
 | --- | --- | --- |
 | Document | `/<chemin du document>.md` | scan |
-| Prémisse (`Premise`) | `/_premises/<titre normalisé>.md` | avocat, agent ou revue tabulaire |
+| Prémisse (`Premise`) | `/_premises/<titre normalisé>.md` | avocat ou agent |
 | Partie | `/_parties/<CODE>.md` | personnes qualifiées client ou adversaire |
 | `index.md` | — | reconstruction |
 
@@ -52,13 +52,13 @@ Dans le frontmatter de la fiche source : `relations: { <relation>: [{ target, ci
 | Relation | Source → cible | Citation | Posée par |
 | --- | --- | --- | --- |
 | relations de l'ontologie (par défaut `amends`, `responds-to`, `refers-to`, `supersedes`) | document → document (types admis par la relation) | oui | scan (`refers-to`), agent, avocat |
-| `states` | document → Premise | oui, plus `value` facultative | avocat (visionneuse), agent, revue tabulaire |
+| `states` | document → Premise | oui, plus `value` facultative | avocat (visionneuse), agent |
 | `mentions` | document → Partie | oui | scan seulement |
 | `involves` | Premise → Partie | non | agent |
 
 `supersedes` relie une version à celle qu'elle remplace. Aucun champ de statut (projet, signé) n'existe.
 
-`origin` vaut `piecemaker/gliner`, `piecemaker/agent`, `piecemaker/avocat` ou `piecemaker/tabular-review`. Un lien dérivé (scan, revue) retiré est marqué `dismissed` et ne revient pas. Un lien manuel retiré est supprimé.
+`origin` vaut `piecemaker/gliner`, `piecemaker/agent` ou `piecemaker/avocat`. Un lien dérivé du scan retiré est marqué `dismissed` et ne revient pas. Un lien manuel retiré est supprimé.
 
 ## Prémisses
 
@@ -66,22 +66,16 @@ Une prémisse est un point que le raisonnement tient pour établi : un fait, ou 
 
 Un index antérieur (`Fait`, `/_faits/`) est migré à la reconstruction suivante : fiches, liens et cibles passent sous `/_premises/`.
 
-Trois sources :
+Deux sources :
 
 1. **Visionneuse** — l'avocat sélectionne un passage, clic droit, « Prémisse », choisit ou crée la prémisse. Le passage devient la citation du lien `states`.
 2. **Agent** — `pm okf link <pièce> states "<titre>" --citation "…" [--value "…"] [--single]`.
-3. **Revue tabulaire** — une colonne de modèle marquée « Index du dossier » porte une prémisse. Chaque cellule avec une citation vérifiée devient un lien : valeur = résumé de la cellule, citation = première citation vérifiée.
 
-Deux usages de la colonne :
+La revue tabulaire ne crée ni ne supprime de prémisse.
 
-| Marquage | Usage | Écart entre pièces |
-| --- | --- | --- |
-| `single` | contentieux : une prémisse vue par plusieurs pièces | contradiction signalée |
-| `checkpoint` | due diligence : un point de contrôle appliqué à chaque contrat | résultat attendu |
+`single_value` marque une prémisse vue par plusieurs pièces qui doit garder une seule valeur : un écart entre pièces est une contradiction. Sans ce marquage, des valeurs différentes sont attendues (un point de contrôle appliqué à chaque contrat).
 
-Une fiche `Premise` vit tant qu'une colonne de revue la porte ou qu'un lien non écarté la vise. Sinon la reconstruction la supprime.
-
-La fiche d'une prémisse porte un bouton « Revue tabulaire ». Il crée un projet de revue à une colonne qui porte la prémisse (`single` si la prémisse est à valeur unique, sinon `checkpoint`) et l'ouvre.
+Une prémisse vit tant qu'un lien `states` la vise. Retirer son dernier lien la supprime.
 
 ## Raisonnement Catala
 
@@ -104,9 +98,9 @@ flowchart LR
 1. Le scan GLiNER remplit SQLite.
 2. `buildBundle` écrit les fiches de documents (titre, nature, date), de parties et de prémisses, et pose `mentions`.
 3. Le scan pose `refers-to` quand une phrase du Markdown converti contient la date et la nature d'un seul autre document.
-4. `premisesFromReviews` lit `Tabular Review/*.json` et pose les liens `states` des colonnes marquées.
+4. `buildBundle` régénère toutes les fiches depuis SQLite et supprime les fichiers qui n'y correspondent pas.
 
-La reconstruction a lieu après un scan, après un renommage (les cibles suivent) et après chaque écriture de lien. La lecture (`GET /okf`) et la vérification (`verify`) ne reconstruisent pas : elles lisent les fiches sur le disque. Un fichier n'est réécrit que si son contenu change.
+La reconstruction a lieu après un scan, après un renommage (les cibles suivent dans SQLite) et après chaque écriture de lien ou d'examen. La lecture (`GET /okf`) et la vérification (`verify`) ne reconstruisent pas : elles lisent les fiches sur le disque. Un fichier n'est réécrit que si son contenu change.
 
 Le serveur refuse une citation absente du document source.
 
@@ -125,7 +119,7 @@ Le serveur refuse une citation absente du document source.
 | Partie | aucune mention dans une pièce ni prémisse qui la concerne |
 | Prémisse | aucune pièce citée ; valeur unique sans valeur ; aucune partie concernée (sans partie qualifiée au dossier : `avocat: true`, en attente de l'avocat, onglet Dossier, vue générale ; compté à part par `pm check`) |
 
-**Pièce examinée sans lien.** Une pièce lue dont aucun passage ne justifie de lien ni de prémisse reste sinon un manque à jamais. L'agent (ou l'avocat) la marque : `pm okf examinee <pièce> --motif "raison"`. Le serveur écrit dans la fiche le champ `examen_sans_lien` : motif, auteur, date et empreinte SHA-256 du document original. La reconstruction conserve ce champ. `verify` renvoie la pièce dans `examinees`, imprimée sous « Examinées sans lien (information, pas un manque) », et non dans les manques. Le manque revient si l'empreinte ne correspond plus au document (« pièce modifiée depuis son examen sans lien ») ou si la marque est retirée (`pm okf examinee <pièce> --retirer`). La fiche de la pièce, dans l'onglet Index, montre la ligne « Examen ». Le Hérisson lance `pm okf verify` après `pm okf examinee`, comme après `link`.
+**Pièce examinée sans lien.** Une pièce lue dont aucun passage ne justifie de lien ni de prémisse reste sinon un manque à jamais. L'agent (ou l'avocat) la marque : `pm okf examinee <pièce> --motif "raison"`. Le serveur écrit dans SQLite le motif, l'auteur, la date et l'empreinte SHA-256 du document original ; la fiche régénérée porte le champ `examen_sans_lien`. `verify` renvoie la pièce dans `examinees`, imprimée sous « Examinées sans lien (information, pas un manque) », et non dans les manques. Le manque revient si l'empreinte ne correspond plus au document (« pièce modifiée depuis son examen sans lien ») ou si la marque est retirée (`pm okf examinee <pièce> --retirer`). La fiche de la pièce, dans l'onglet Index, montre la ligne « Examen ». Le Hérisson lance `pm okf verify` après `pm okf examinee`, comme après `link`.
 
 ## Interface
 
@@ -147,7 +141,7 @@ Le graphe affiche des pastilles avec titre et icône, sur fond uni. Les traits s
 Routes ajoutées : `PUT /api/piecemaker/okf/types`, `POST /api/piecemaker/okf/rebuild`. Catalogue et sélecteur : `plugins/piecemaker-dossier/src/document-types.ts` et `document-types-editor.ts`.
 
 - Tableau : colonne Liens (survol : citation).
-- Graphe (cytoscape), onglet « Graphe » à côté de l'onglet « Index » (qui garde le tableau) : pièces et parties ; les prémisses sont masquées par défaut, la case « Afficher les prémisses » les montre avec leurs liens (choix gardé dans le navigateur) et le placement se recalcule. Nœuds placés au format du cadre (aire cible : trois fois celle des nœuds), écartés d'au moins 24 px en largeur et 12 px en hauteur, sans chevauchement ; les nœuds ne se déplacent pas. Le bouton ⌖ recentre le graphe entier. Un clic ouvre la fiche dans le même cadre, à droite, et cadre la vue sur le nœud et ses voisins ; × ou Échap la ferme. La fiche donne titre, méta, auteur et date de création (`generated`), actions, propriétés en pastilles (valeurs, parties, prémisses, liens), alertes (sources divergentes, aucune pièce), pièces sources avec fichier (un clic l'ouvre dans le volet Fichier), citation, auteur et date du lien (`at`, écrit par `pm okf link`). Prémisse : bouton « Revue tabulaire » ; pièce : « Corriger la pièce » ; partie : « Modifier la partie ». Une pastille ouvre la fiche liée. Fiche : `plugins/piecemaker-dossier/src/okf-card.ts`.
+- Graphe (cytoscape), onglet « Graphe » à côté de l'onglet « Index » (qui garde le tableau) : pièces et parties ; les prémisses sont masquées par défaut, la case « Afficher les prémisses » les montre avec leurs liens (choix gardé dans le navigateur) et le placement se recalcule. Nœuds placés au format du cadre (aire cible : trois fois celle des nœuds), écartés d'au moins 24 px en largeur et 12 px en hauteur, sans chevauchement ; les nœuds ne se déplacent pas. Le bouton ⌖ recentre le graphe entier. Un clic ouvre la fiche dans le même cadre, à droite, et cadre la vue sur le nœud et ses voisins ; × ou Échap la ferme. La fiche donne titre, méta, auteur et date de création (`generated`), actions, propriétés en pastilles (valeurs, parties, prémisses, liens), alertes (sources divergentes, aucune pièce), pièces sources avec fichier (un clic l'ouvre dans le volet Fichier), citation, auteur et date du lien (`at`, écrit par `pm okf link`). Pièce : « Corriger la pièce » ; partie : « Modifier la partie ». Une pastille ouvre la fiche liée. Fiche : `plugins/piecemaker-dossier/src/okf-card.ts`.
 - Visionneuse : texte de la pièce, passages repérés surlignés (parties, date, citations des prémisses), section « Prémisses établies par la pièce » avec retrait. Les prémisses s'écrivent dans l'OKF dès le choix, par `POST /api/piecemaker/okf/link` et `/unlink`.
 
 ## Agent
@@ -172,7 +166,8 @@ L'agent principal écrit lui-même l'index, par l'outil `OkfWrite` du MCP `featu
 | --- | --- |
 | Format, lecture, écriture | `server/piecemaker/okf/bundle.ts` |
 | Construction depuis le scan | `server/piecemaker/okf/build.ts` |
-| Prémisses des revues tabulaires | `server/piecemaker/okf/reviews.ts` |
+| Tables SQLite de l'OKF | `server/piecemaker/okf/store.ts` |
+| Métadonnées lues dans les revues tabulaires | `server/piecemaker/okf/reviews.ts` |
 | Vérification, contradictions | `server/piecemaker/okf/verify.ts` |
 | Pièces d'une prémisse, manques du graphe | `server/piecemaker/okf/premises.ts` |
 | Liens à la demande | `server/piecemaker/okf/links.ts` |
@@ -186,4 +181,3 @@ L'agent principal écrit lui-même l'index, par l'outil `OkfWrite` du MCP `featu
 | Commande `pm okf` | `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/pm.mjs` |
 | Tableau, graphe, appels | `plugins/piecemaker-dossier/src/okf.ts` |
 | Visionneuse | `plugins/piecemaker-dossier/src/editors.ts` (`documentEditor`) |
-| Marquage des colonnes | `plugins/piecemaker-tabular-review/src/shared.ts` (`COLUMN_PREMISES`) |
