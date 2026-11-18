@@ -1,4 +1,4 @@
-import { catalaDocumentation } from '../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
+import { catalaDocumentation, clauseHeading } from '../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
 
 let documented: { content: string; entries: ReturnType<typeof catalaDocumentation>['entries'] } | undefined;
 const documentedEntries = (content: string) => {
@@ -6,7 +6,7 @@ const documentedEntries = (content: string) => {
   return documented.entries;
 };
 
-export function sourceContext(source: string, files: Array<{ nom: string; chemin: string; contenu?: string }>, wholeDocument = false): { text: string; references: Array<{ label: string; target: string; kind: string; origin: string; quote: string }> } {
+export function sourceContext(source: string, files: Array<{ nom: string; chemin: string; contenu?: string }>, wholeDocument = false, contract = false): { text: string; references: Array<{ label: string; target: string; kind: string; origin: string; quote: string }> } {
   let location: URL;
   try { location = new URL(source); } catch { return { text: '', references: [] }; }
   let filename = '';
@@ -39,6 +39,11 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
   }
   if (!catala && !wholeDocument) return { text: '', references: [] };
   const text = sections.map((section) => section.lines.join('\n').trim()).filter(Boolean).join('\n\n');
+  const clause = wholeDocument ? undefined : [...sections].reverse().map((section) => {
+    const title = section.lines[0]?.match(/^#{1,6}\s+(.*)$/)?.[1]?.trim() ?? '';
+    const following = section.lines.slice(1).find((entry) => entry.trim()) ?? '';
+    return clauseHeading(title, following, contract) ? { title, quote: /^«\s*([\s\S]*?)\s*»/.exec(section.lines.slice(1).join('\n').trim())?.[1] ?? '' } : undefined;
+  }).find(Boolean);
   const references: Array<{ label: string; target: string; kind: string }> = [];
   const add = (label: string, target: string, kind?: string) => {
     const category = kind ?? (/^okf:/i.test(target) ? 'premise' : /\bjurisprudence\b|\barrêt\b|\/(?:juri|ceta|cons)\/id\/|courdecassation\.fr\/decision\//i.test(label + ' ' + target) ? 'jurisprudence' : /^pièce\b|\.(?:pdf|docx?)(?:[?#]|$)/i.test(label + ' ' + target) ? 'piece' : /legifrance\.gouv\.fr|\barticle\b/i.test(target + ' ' + label) ? 'article' : /^[a-z][\w+.-]*:/i.test(target) ? 'reference' : 'piece');
@@ -78,5 +83,6 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
     return { ...entry, origin: file.chemin, quote: candidates.map(quoted).find(Boolean) ?? '' };
   });
   const native = wholeDocument ? documentation.flatMap((entry) => documentContext(entry.doc).references) : [];
-  return { text: [text, ...(wholeDocument ? documentation.map((entry) => entry.doc) : [])].filter(Boolean).join('\n\n'), references: [...extracted, ...native].filter((entry, index, all) => all.findIndex((other) => other.target === entry.target && other.label === entry.label && other.quote === entry.quote) === index) };
+  const clauses = clause ? [{ label: clause.title, target: encodeURI(filename), kind: 'clause', origin: file.chemin, quote: clause.quote }] : [];
+  return { text: [text, ...(wholeDocument ? documentation.map((entry) => entry.doc) : [])].filter(Boolean).join('\n\n'), references: [...clauses, ...extracted.filter((entry) => !clause || entry.kind !== 'article' || entry.target || !clause.title.toLowerCase().includes(entry.label.toLowerCase())), ...native].filter((entry, index, all) => all.findIndex((other) => other.target === entry.target && other.label === entry.label && other.quote === entry.quote) === index) };
 }

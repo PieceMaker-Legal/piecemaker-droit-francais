@@ -8,7 +8,18 @@ const ARTICLE_LABEL = /\d[\p{L}\p{N}]*_\p{L}[\p{L}_]*$/u;
 const PREMISE = /^okf:\/\S+$/;
 const DECLARED_TEST = /#\[test\]\s*(?:déclaration|declaration)\s+(?:champ d'application|scope)\s+([\p{L}\p{N}_]+)/gu;
 
-export function catalaDocumentation(content, { test = false } = {}) {
+const CONTRACT_WORDS = /(?<![\p{L}])(?:contrat|convention|clause|statuts|pacte|avenant|bail|protocole|conditions générales|CGV|accord)(?![\p{L}])/iu;
+const CLAUSE_TITLE = /^(?:article|art\.|clause|annexe|préambule|stipulation)(?![\p{L}])/iu;
+
+// Une clause de contrat est une source : son titre ## nomme la clause, son texte exact suit entre « ».
+// Hors mode contrat, le titre doit nommer l'acte (contrat, statuts, bail…) pour éviter de prendre un article de loi sans identifiant pour une clause.
+export function clauseHeading(title, next, contract = false) {
+  const text = String(title ?? '').trim();
+  if (!text || ANCHOR.test(text) || WHOLE_TEXT.test(text) || !String(next ?? '').trim().startsWith('«')) return false;
+  return CONTRACT_WORDS.test(text) || contract && CLAUSE_TITLE.test(text);
+}
+
+export function catalaDocumentation(content, { test = false, contract = false } = {}) {
   const entries = [];
   const errors = [];
   const tests = new Set([...content.matchAll(DECLARED_TEST)].map((match) => match[1]));
@@ -68,7 +79,7 @@ export function catalaDocumentation(content, { test = false } = {}) {
       entries.push(entry);
       previous = entry;
       if (/^(?:entrée|input)$/.test(token[0]) && !meta.title) errors.push({ line, message: 'titre manquant pour cette entrée. Écrivez ## texte court au-dessus.' });
-      if (/^(?:définition|definition|règle|rule)$/.test(token[0]) && !test && !tests.has(scope) && !anchored) errors.push({ line, message: "règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »." });
+      if (/^(?:définition|definition|règle|rule)$/.test(token[0]) && !test && !tests.has(scope) && !anchored) errors.push({ line, message: contract ? "règle sans clause ni texte : placez-la sous le titre de sa clause (## Article N — Intitulé), suivi du texte exact de la clause entre « », ou sous un titre ## Article N | LEGIARTI… suivi de l'extrait." : "règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »." });
       pending = [];
       meta = {};
       pendingLine = 0;
@@ -89,7 +100,7 @@ export function catalaDocumentation(content, { test = false } = {}) {
     const heading = !fence && line.match(/^(#{1,6})\s+(.*)$/);
     if (heading) {
       const next = lines.slice(index + 1).find((following) => following.trim()) ?? '';
-      headings = [...headings.filter((entry) => entry.level < heading[1].length), { level: heading[1].length, anchored: ANCHOR.test(heading[2]) && next.trim().startsWith('«') }];
+      headings = [...headings.filter((entry) => entry.level < heading[1].length), { level: heading[1].length, anchored: ANCHOR.test(heading[2]) && next.trim().startsWith('«') || clauseHeading(heading[2], next, contract) }];
       own = heading[2].match(CITED) ?? [];
       if (own.length > 1) errors.push({ line: index + 1, message: 'une section = une source : ce titre cite plusieurs identifiants. Écrivez une section ## Article N | LEGIARTI… par source, avec son extrait et sa règle.' });
     }
@@ -107,7 +118,7 @@ export function catalaDocumentation(content, { test = false } = {}) {
     } else if (fence && code) block.push(line);
   });
   if (code) inspect();
-  for (const fact of scenarioFacts(content, { test })) if (!fact.source) errors.push({ line: fact.line, message: `fait du scénario sans justification : écrivez ## okf:/_premises/<fiche>.md juste au-dessus de ${fact.variable}.` });
+  if (!contract) for (const fact of scenarioFacts(content, { test })) if (!fact.source) errors.push({ line: fact.line, message: `fait du scénario sans justification : écrivez ## okf:/_premises/<fiche>.md juste au-dessus de ${fact.variable}.` });
   return { entries, errors };
 }
 

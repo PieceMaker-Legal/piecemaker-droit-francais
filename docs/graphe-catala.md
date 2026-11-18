@@ -1,6 +1,6 @@
 # Graphe du raisonnement : Catala et ajouts PieceMaker
 
-Le graphe relie la conclusion d’un scénario à ses conditions, ses données, ses sources et ses points ouverts. Catala fournit le calcul. PieceMaker organise sa lecture et signale les justifications manquantes.
+Le graphe relie la prétention d’un scénario, et la conclusion qui en découle, à ses conditions, ses données, ses sources et ses points ouverts. Catala fournit le calcul. PieceMaker organise sa lecture et signale les justifications manquantes.
 
 L’objectif vient de [05-map-law.md](recherche-memoire-raisonnement/05-map-law.md) : rendre chaque élément et son soutien consultables, puis montrer ce qui reste à rechercher.
 
@@ -103,16 +103,18 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 | Ajout | Comportement |
 |---|---|
 | Graphe à nœuds partagés | Chaque règle ou fait est détaillé une seule fois. Ses autres emplois renvoient à cette case. |
-| Lecture juridique | Un arbre de gauche à droite : la conclusion, ses conditions, leurs propres conditions, puis les faits et les pièces. |
+| Lecture juridique | Un arbre de gauche à droite : la prétention et sa conclusion, ses conditions, leurs propres conditions, puis les faits et les pièces. |
 | Groupes `ET`, `OU`, `NON` | PieceMaker lit les expressions booléennes simples présentes dans la trace pour expliciter les relations. |
 | Conditions d’application | Les dépendances pointillées de la trace restent identifiées. Une négation `NON` reste distincte de la sélection d’une définition conditionnelle. Un lien pointillé ne prouve pas, à lui seul, une exception. |
 | Sources attachées aux éléments | Chaque condition ou exception réunit son fondement juridique, le fait invoqué et sa pièce dans trois parties distinctes. |
 | Origine distinguée | Les références distinguent textes, jurisprudence, pièces et autres références. Une simple page web ne remplace pas un fondement juridique. |
-| Valeur distincte de la preuve | `Vrai` reste « Vrai » et `Faux` reste « Faux ». Aucune de ces valeurs n’est renommée « Établi ». |
-| Données sans pièce | La carte indique « Pièce à rattacher ». Aucune erreur n’est comptée pour ce seul manque. |
+| Valeur distincte de la preuve | La couleur dit seulement la valeur du scénario. Une étiquette séparée dit l’état de la preuve : « Pièce citée », « Relevé par l’agent, à relire », « Relu par l’avocat », « Pièce à rattacher », « Citation introuvable dans la pièce », « Fondement à préciser ». Un fait vrai sans pièce reste vert. |
+| Données sans pièce | L’étiquette indique « Pièce à rattacher ». Aucune erreur n’est comptée pour ce seul manque. |
 | États inconnus ou contestés | Les valeurs correspondantes restent visibles et créent un point ouvert. PieceMaker ne les remplace pas par un booléen. |
 | Points ouverts | Une donnée sans pièce, un fondement absent, une citation à vérifier ou une recherche déclarée est signalé sur sa carte. Aucun nœud technique supplémentaire n’est créé. |
-| Remontée des manques | Un manque dans les appuis fait passer en orange, avec la mention « à justifier », les cases qui en dépendent. |
+| Remontée des manques | Un manque ne change pas la couleur des cases qui en dépendent. La case affiche « N points ouverts en amont », bouton qui mène au premier. La conclusion liste les réserves : faits indéterminés, preuves manquantes, pièces à relire, fondements à préciser, citations introuvables. |
+| Principe écarté | Quand une exception s’applique, la case garde le principe écarté, barré, avec sa source. Une exception non retenue reste visible avec sa condition. |
+| Autres résultats | Les résultats du programme qui ne fondent pas la prétention sont regroupés sous le graphe principal, dans « Autres résultats du programme ». |
 | Choix du scénario | Le volet charge les traces conservées lors de la vérification, sans relancer Catala à chaque sélection. |
 | Test en échec visible | Le scénario reste dans la liste. Si Catala ne produit pas de trace valide, le volet annonce l’absence de graphe. |
 | Sélection d’un nœud | La sélection atténue les éléments sans relation avec le nœud choisi. Aucun panneau ne s’ouvre. Chaque article, décision ou pièce cité s’ouvre directement dans la visionneuse, au passage cité. |
@@ -120,24 +122,43 @@ Ce fichier est livré avec la commande `pm` ; le lecteur partagé `shared/piecem
 
 PieceMaker présente le raisonnement comme un arbre, lu de gauche à droite :
 
-1. La conclusion figure à gauche. Toutes les branches partent d’elle.
-2. Chaque colonne à droite décompose la case précédente en conditions, puis en conditions de ces conditions.
+1. La prétention figure à gauche. Une flèche la relie à la conclusion, affichée dessous : « Prétention fondée », « Prétention non fondée », « Issue indéterminée », ou la valeur calculée (un montant, une date). La conclusion liste ses réserves, chacune cliquable.
+2. Chaque colonne à droite décompose la case précédente en conditions, puis en conditions de ces conditions. Les expressions du code restent entières : conditions cumulatives, alternatives, négatives, calculs et exceptions imbriqués gardent leur profondeur.
 3. Une branche se termine par un fait et sa pièce, avec la citation exacte.
 4. Une case déjà détaillée ailleurs devient un renvoi vers cette case.
 
-Chaque case indique son rôle (« Conclusion », « Condition », « Exception », « Fait »), sa valeur ou son état, puis ses sources. Une condition affiche une source seulement si cette source diffère de celle de la règle. Un calcul simple affiche sa formule.
+Chaque case indique son rôle (« Prétention », « Condition », « Exception », « Fait »), sa valeur, l’étiquette de sa preuve, puis ses sources. Un fait affiche « Oui », « Non », « Indéterminé » ou « Contesté » ; une condition « Remplie », « Non remplie » ou « Indéterminée ». Sous un fait, l’énoncé de sa prémisse OKF reprend ce que la pièce établit. Une condition affiche une source seulement si cette source diffère de celle de la règle. Un calcul simple affiche sa formule, sauf si la condition dessinée la montre déjà.
 
-La couleur d’une case et de son trait donne son état :
+La couleur d’une case et de son trait donne la valeur du scénario, et elle seule :
 
-| Couleur | État |
+| Couleur | Valeur |
 |---|---|
-| Vert | Validé : condition remplie ou fait établi, avec ses sources. |
-| Orange, bord pointillé | À établir : valeur inconnue. À justifier : une source ou une pièce manque dans la case ou dans ses appuis. |
+| Vert | Condition remplie, fait vrai ou valeur calculée. |
+| Orange, bord pointillé | Valeur indéterminée ou contestée. |
 | Rouge | Condition non remplie, ou exception qui fait obstacle. |
 
-L’objectif est la conclusion finale : la case de gauche porte la mention « Objectif » et, s’il est déclaré, le texte de la ligne `Objectif : …`. Des courbes relient chaque case à ses conditions. Pendant le défilement, chaque case reste à hauteur de lecture tant que ses branches sont à l’écran. Chaque source est cliquable : article, décision, doctrine ou pièce s’ouvre dans la visionneuse interne, sur le passage cité. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Les URL ne sont pas affichées. Le graphe signale seulement trois manques : une règle sans source, un fait sans pièce et une citation non retrouvée. Les autres contrôles restent dans `pm catala verifier`. Aucun Graphviz n’est nécessaire.
+La prétention est titrée par l’`objectif` de `tache.json` ou, à défaut, par la ligne `Objectif : …`. Des courbes relient chaque case à ses conditions. Pendant le défilement, chaque case reste à hauteur de lecture tant que ses branches sont à l’écran. Chaque source est cliquable : article, décision, doctrine, clause ou pièce s’ouvre dans la visionneuse interne, sur le passage cité. Le titre d’une pièce est son titre Markdown (`# …`) ; à défaut, son nom de fichier. Les URL ne sont pas affichées. Les dates s’écrivent en français (« 15 janvier 2024 »). Les autres contrôles restent dans `pm catala verifier`. Aucun Graphviz n’est nécessaire.
 
-Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
+## Mode contrat
+
+Quand `tache.json` porte `"type": "transactional"`, le volet présente le programme comme un contrat, et non comme un litige :
+
+| Litige (`litigation`) | Contrat (`transactional`) |
+|---|---|
+| Prétention | Stipulation |
+| Conclusion : « Prétention fondée » | Effet : « La stipulation joue », ou la valeur due |
+| Condition | Condition de la clause |
+| Exception | Dérogation |
+| Principe écarté | Clause écartée |
+| Fait, avec sa pièce | Hypothèse, sans pièce |
+| Scénario | Cas de figure |
+| Fondement à préciser | Clause à rattacher |
+
+Une règle se rattache à une clause du contrat : un titre `## Article 5 — Pénalités de retard` suivi du texte exact de la clause entre « ». La clause apparaît comme source de la règle, avec le symbole ¶, et s’ouvre comme les autres sources. Une règle peut aussi rester sous un article de loi (`| LEGIARTI…`). Les hypothèses d’un cas de figure ne demandent pas de prémisse : le contrat se lit en hypothèses, non en faits prouvés. `pm catala verifier` applique les mêmes contrôles de rattachement, la clause valant source.
+
+L’exemple [contrat-maintenance](tests/contrat-maintenance/README.md) modélise une clause de pénalités plafonnée et sa dérogation pour force majeure.
+
+Le graphe est la vue initiale. La présentation écrite reste disponible dans le même volet. La présentation reprend celle du plugin Raisonnement : prétention et conclusion, règles et conditions, avec leurs appuis sur les cartes. Les lignes du compilateur, traces JSON et définitions alternatives restent dans un détail repliable. Les sources sans rattachement sont regroupées hors du dessin principal.
 
 Un groupe ET, OU ou SAUF imbriqué forme une étiquette entre la condition et ses branches.
 
@@ -154,7 +175,7 @@ Les justifications s’écrivent en commentaires `#` dans le code. Pour les anci
 | Champ | Rôle dans PieceMaker |
 |---|---|
 | `Question : …` | Libellé de la question sur le nœud. |
-| `Objectif : …` | Objectif annoncé par l’avocat. Il titre la conclusion finale du graphe ; sans cette ligne, la conclusion garde son propre titre. Une seule ligne par programme ; elle n’a pas besoin de `Concerne`. |
+| `Objectif : …` | Objectif annoncé par l’avocat. Il titre la prétention du graphe ; sans cette ligne, la prétention garde son propre titre. Une seule ligne par programme ; elle n’a pas besoin de `Concerne`. |
 | `Justification : …` | Explication rédigée par l’agent, visible dans la carte de la vue Raisonnement. |
 | `À rechercher : …` | Démarche nécessaire, affichée comme point ouvert. |
 | `Démarche : …` | Démarche effectuée et résultat déclaré, conservés dans la vue Raisonnement. Plusieurs lignes sont possibles. |
@@ -209,6 +230,6 @@ L’empreinte des fichiers Catala empêche d’utiliser les scénarios, citation
 - Vérification et conservation des traces : `server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala.mjs`.
 - Transmission des résultats actuels : `server/piecemaker/catala.ts`.
 
-Les tests ciblés couvrent les libellés Vrai/Faux, les appuis partagés, les points ouverts, les notes, la couverture, le choix des scénarios et la fraîcheur des résultats. Ils vérifient aussi les origines natives des données, le choix de la définition appliquée, les exceptions, les chemins relatifs et le repli JSON lorsque le DOT échoue.
+Les tests ciblés couvrent la prétention et sa conclusion, la séparation entre valeur et preuve, le mode contrat, les libellés Oui/Non, les appuis partagés, les points ouverts, les notes, la couverture, le choix des scénarios et la fraîcheur des résultats. Ils vérifient aussi les origines natives des données, le choix de la définition appliquée, les exceptions, les chemins relatifs et le repli JSON lorsque le DOT échoue.
 
 Un essai local fictif sous Catala 1.3 a aussi exécuté trois scénarios avec typage, format, tests Clerk, tests Python et preuve réussis. Les contrôles de citations et de vigueur n’ont pas été validés sur cet exemple sans fondement juridique.

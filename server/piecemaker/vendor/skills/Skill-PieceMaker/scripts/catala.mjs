@@ -362,12 +362,14 @@ async function verifier(context, program, flags = {}) {
     return entry;
   };
   const contents = files.map((file) => ({ name: file, content: fs.readFileSync(path.join(program.directory, file), 'utf8') }));
+  const contract = readJson(path.join(program.directory, 'tache.json'))?.type === 'transactional';
   await record('documentation', 'Titres, sources juridiques des règles, faits justifiés, ouverture des blocs', async () => {
-    const errors = contents.flatMap(({ name, content }) => catalaDocumentation(content, { test: /^test_/.test(path.basename(name)) }).errors.map((error) => `${name}:${error.line}: ${error.message}`));
+    const errors = contents.flatMap(({ name, content }) => catalaDocumentation(content, { test: /^test_/.test(path.basename(name)), contract }).errors.map((error) => `${name}:${error.line}: ${error.message}`));
     errors.push(...taskErrors(program.directory, files).map((message) => `tache.json:1: ${message}`));
     return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
   });
   await record('premisses', 'Inputs derived from OKF premises', async () => {
+    if (contract) return { passed: true, exit_code: 0, message: 'Contrat : les cas de figure posent des hypothèses ; aucune prémisse n’est exigée.' };
     const links = premiseLinks(program.root, program.name);
     const message = `${links.inputs - links.underived}/${links.inputs} input(s) derived from OKF premises; ${links.used}/${links.premises} premise(s) of the case index set an input.`;
     return { passed: !links.errors.length, exit_code: links.errors.length ? 1 : 0, message, errors: links.errors, warnings: links.warnings };
@@ -463,7 +465,7 @@ async function verifier(context, program, flags = {}) {
     record('citations', 'Contrôle des citations PieceMaker', async () => {
       if (!context.citations) return missing('Contrôle de citations indisponible : serveur PieceMaker requis.');
       if (cited.error) throw cited.error;
-      const report = cited;
+      const report = contract && !cited.results?.length ? { ...cited, passed: true, status: 'passed', message: 'Aucun texte externe cité : les clauses figurent dans le programme.' } : cited;
       writeResult(program.directory, 'citations.json', { ...report, sources_sha256: digest, started_utc: started, finished_utc: context.now() });
       return { passed: report.passed, status: report.status, message: [report.message, ...(report.warnings ?? []), ...(report.results ?? []).flatMap((result) => result.mention ? [`${result.label || result.target} : ${result.mention}`] : [])].join(' · ') };
     }),

@@ -211,3 +211,28 @@ champ d'application TestResolution:
 - Citez l'article (`LEGIARTI`, `JORFARTI`), jamais le texte entier (`LEGITEXT`, `JORFTEXT`). Une section = une source : un identifiant n'apparaît que dans le titre de sa section, jamais dans le texte d'une autre section ni dans une liste de sources. Le Hérisson refuse l'écriture sinon.
 - Une étiquette qui nomme un article porte aussi son texte : `article_1224_code_civil`, pas `article_1224`.
 - Écrivez les justifications en commentaires `#` au-dessus de la règle, dont l'ordre choisi entre une exception et sa règle de base.
+
+## Contrat
+
+Pour un contrat, `tache.json` porte `"type": "transactional"`. L'exemple `docs/tests/contrat-maintenance/` suit ce modèle.
+
+- Reproduisez la structure du contrat : `# Contrat de maintenance`, puis `## Article 5 — Pénalités de retard`, suivi du texte exact de la clause entre « ». Le bloc ` ```catala ` placé dessous a la clause pour source.
+- Un article de loi qui s'applique au contrat garde sa forme `## Article 1231-5 | LEGIARTI…`.
+- Une dérogation est une `exception` à l'étiquette de la clause générale, placée sous la clause qui la prévoit : `exception pénalité_contractuelle`.
+- Les entrées sont des hypothèses : chaque scénario `#[test]` est un cas de figure qui les fixe librement, sans prémisse OKF.
+- Nommez les scénarios par le cas : `CasRetardSimple`, `CasForceMajeure`.
+
+````
+## Article 6 — Force majeure
+
+« Aucune pénalité n'est due lorsque le retard résulte d'un cas de force majeure. »
+
+```catala
+champ d'application PénalitéDeRetard:
+  ## Écarter la pénalité en cas de force majeure
+  exception pénalité_contractuelle
+  définition pénalité_due
+  sous condition force_majeure
+  conséquence égal à 0 €
+```
+````

@@ -30,3 +30,12 @@ test('binds the extract under the article to the definitions of its section', ()
   assert.deepEqual(sourceContext('https://catala.local/demo.catala_fr#L6', files).references.map((entry) => [entry.kind, entry.target, entry.quote]), [['article', article, 'Passage juridique exact.']]);
   assert.deepEqual(sourceContext('https://catala.local/demo.catala_fr', files, true).references.map((entry) => entry.kind), ['article']);
 });
+
+test('cites the contract clause above a rule, with its exact wording, only in contract mode', () => {
+  const contenu = ['# Contrat de maintenance', '', '## Article 5 — Pénalités de retard', '', '« Tout retard ouvre droit à une pénalité. »', '', '```catala', "champ d'application Pénalité:", '  définition pénalité_due égal à 500 €', '```'].join('\n');
+  const files = [{ nom: 'maintenance.catala_fr', chemin: '/dossier/maintenance.catala_fr', contenu }];
+  const contract = sourceContext('https://catala.local/maintenance.catala_fr#L9', files, false, true).references;
+  assert.deepEqual(contract.filter((entry) => entry.kind === 'clause').map((entry) => [entry.label, entry.quote]), [['Article 5 — Pénalités de retard', 'Tout retard ouvre droit à une pénalité.']]);
+  assert.equal(contract.filter((entry) => entry.kind === 'article').length, 0, 'the clause number is not read as a statute');
+  assert.equal(sourceContext('https://catala.local/maintenance.catala_fr#L9', files).references.some((entry) => entry.kind === 'clause'), false);
+});

@@ -180,8 +180,9 @@ test('changes the graph using stored Catala scenarios without recomputing or hid
     };
     const initial = requests;
     choose('SansDemande');
-    assert.equal(view.container.querySelector('[data-node="x002"] .pmc-met').textContent, 'Non remplie');
-    assert.equal(view.container.querySelector('[data-node="x002"]').dataset.state, 'ko');
+    assert.equal(view.container.querySelector('[data-outcome="x002"] h3').textContent, 'Prétention non fondée');
+    assert.equal(view.container.querySelector('[data-outcome="x002"]').dataset.state, 'ko');
+    assert.match(view.container.querySelector('[data-scenario-choice] option[value$=":TestErrone"]').textContent, /résultat attendu non atteint/);
     choose('TestErrone');
     assert.match(view.container.querySelector('.pmc-explanation').textContent, /ne produit pas de graphe/);
     assert.equal(view.container.querySelectorAll('[data-node]').length, 0);
@@ -234,20 +235,25 @@ test('lays the graph out in columns: steps on the left, a shared fact repeated u
     assert.equal(map.querySelectorAll('svg.pmc-wires path').length, map.querySelectorAll('.pmc-children > .pmc-branch').length);
     assert.match(map.querySelector('svg.pmc-wires path').getAttribute('d'), /^M\S+ \S+C/);
     const roots = [...map.querySelectorAll(':scope > .pmc-branch')];
-    assert.equal(roots.length, 2);
-    const conclusion = roots[1].querySelector(':scope > [data-node]');
+    assert.equal(roots.length, 1, 'the main map holds only the claim');
+    const conclusion = roots[0].querySelector(':scope > .pmc-root > [data-node]');
     assert.equal(conclusion.dataset.kind, 'answer');
-    assert.equal(conclusion.querySelector('.pmc-box-kind').textContent, 'Objectif');
-    const child = roots[1].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]');
+    assert.equal(conclusion.querySelector('.pmc-box-kind').textContent, 'Prétention');
+    assert.equal(roots[0].querySelector(':scope > .pmc-root > .pmc-outcome').dataset.state, 'ko');
+    const child = roots[0].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]');
     assert.ok(child);
     assert.equal(child.dataset.kind, 'fact');
-    assert.equal(map.querySelectorAll('[data-node="x001"]').length, 2);
-    assert.ok(roots[0].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]'));
-    assert.equal(roots[0].querySelector(':scope > [data-node]').dataset.state, 'ok');
-    assert.equal(conclusion.dataset.state, 'ko');
+    const others = view.container.querySelector('.pmc-others-map');
+    assert.match(others.querySelector('h4').textContent, /Autres résultats du programme/);
+    const other = others.querySelector('.pmc-map > .pmc-branch');
+    assert.equal(other.querySelector(':scope > [data-node]').dataset.node, 'x002');
+    assert.equal(other.querySelector(':scope > [data-node]').dataset.state, 'ok');
+    assert.ok(other.querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]'));
+    assert.equal(view.container.querySelectorAll('[data-node="x001"]').length, 2);
+    assert.equal(others.querySelectorAll('svg.pmc-wires path').length, others.querySelectorAll('.pmc-children > .pmc-branch').length);
     assert.deepEqual([...map.querySelectorAll('i[hidden]')].map((edge) => `${edge.dataset.from}>${edge.dataset.to}`).sort(), ['x001>x002', 'x001>x003']);
     view.click(child);
-    assert.deepEqual([...map.querySelectorAll('.is-selected')].map((node) => node.dataset.node), ['x001', 'x001']);
+    assert.deepEqual([...view.container.querySelectorAll('.is-selected')].map((node) => node.dataset.node), ['x001', 'x001']);
   } finally { view.close(); }
 });
 
@@ -322,12 +328,12 @@ test('groups the scenarios of a task by reasoning and drafts from every reasonin
   try {
     const options = (name) => [...view.container.querySelectorAll(`[${name}] option`)].map((option) => option.textContent);
     assert.deepEqual(options('data-part-choice'), ['À titre principal — Rejeter la demande', 'À titre subsidiaire — Réduire le montant']);
-    assert.deepEqual(options('data-scenario-choice'), ['Principal — test réussi']);
-    assert.match(view.container.querySelector('[data-part=task]').textContent, /Tâche : Conclusions en défense Dupont \/ Société Exemple\s*litigation/);
+    assert.deepEqual(options('data-scenario-choice'), ['Scénario : Principal']);
+    assert.match(view.container.querySelector('[data-part=task]').textContent, /Tâche : Conclusions en défense Dupont \/ Société Exemple\s*Contentieux/);
     const select = view.container.querySelector('[data-part-choice]');
     select.value = 'Subsidiaire';
     select.dispatchEvent(new view.dom.window.Event('change', { bubbles: true }));
-    assert.deepEqual(options('data-scenario-choice'), ['Subsidiaire — test réussi']);
+    assert.deepEqual(options('data-scenario-choice'), ['Scénario : Subsidiaire']);
     let demande = '';
     const listen = (event) => { demande = event.detail.demande; };
     window.addEventListener('piecemaker:catala-card-pick', listen);

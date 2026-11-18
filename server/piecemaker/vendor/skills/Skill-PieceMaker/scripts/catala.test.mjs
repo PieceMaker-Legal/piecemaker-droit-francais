@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, premiseLinks, runCatala, selectProgram, sharedPython, toolCommand, typecheckErrors } from './catala.mjs';
-import { catalaDocumentation, premiseCoverage } from './catala-documentation.mjs';
+import { catalaDocumentation, clauseHeading, premiseCoverage } from './catala-documentation.mjs';
 import { run } from './pm.mjs';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
@@ -1023,4 +1023,20 @@ test('verifier fails on underived inputs and warns on premises that set no input
     assert.match(output, /\n  resolution\.catala_fr:37: \[WARNING\] premise okf:\/_premises\/listee\.md/);
     assert.deepEqual(premiseLinks(dossier, 'resolution').unlinked, ['listee.md', 'orpheline.md', 'ouverture.md']);
   } finally { cleanup(); }
+});
+
+test('a contract anchors its rules to clauses and needs no premise for its hypotheses', () => {
+  assert.equal(clauseHeading('Article 5 — Pénalités de retard', '« Tout retard ouvre droit à une pénalité. »', true), true);
+  assert.equal(clauseHeading('Article 5 — Pénalités de retard', '« Tout retard ouvre droit à une pénalité. »', false), false);
+  assert.equal(clauseHeading('Clause 5 du contrat', '« Tout retard ouvre droit à une pénalité. »', false), true);
+  assert.equal(clauseHeading('Article 1224 | LEGIARTI000032041482', '« La résolution résulte… »', true), false);
+  assert.equal(clauseHeading('Article 5 — Pénalités de retard', 'Texte sans guillemets.', true), false);
+  const example = path.resolve(import.meta.dirname, '../../../../../../docs/tests/contrat-maintenance/.piecemaker/catala/penalites-maintenance');
+  const module = fs.readFileSync(path.join(example, 'maintenance.catala_fr'), 'utf8');
+  assert.deepEqual(catalaDocumentation(module, { contract: true }).errors, []);
+  assert.match(catalaDocumentation(module).errors[0].message, /règle sans source juridique/);
+  const scenarios = fs.readFileSync(path.join(example, 'test_maintenance.catala_fr'), 'utf8');
+  assert.deepEqual(catalaDocumentation(scenarios, { test: true, contract: true }).errors, []);
+  const unanchored = module.replace(/^## Article 5 — .*$/m, '## Pénalités');
+  assert.match(catalaDocumentation(unanchored, { contract: true }).errors.map((error) => error.message).join('\n'), /règle sans clause ni texte/);
 });

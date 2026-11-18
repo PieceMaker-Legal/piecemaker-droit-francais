@@ -1,0 +1,8 @@
+{
+  "tache": "Contrat de maintenance Société Exemple SAS / Prestataire Fictif SARL",
+  "type": "transactional",
+  "date_vigueur": "2026-01-01",
+  "raisonnements": [
+    { "champ": "PénalitéDeRetard", "objectif": "Fixer la pénalité due pour un retard d’intervention", "rang": "Article 5" }
+  ]
+}
