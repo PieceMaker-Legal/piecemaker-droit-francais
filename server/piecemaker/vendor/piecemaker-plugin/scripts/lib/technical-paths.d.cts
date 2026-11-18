@@ -1,0 +1,11 @@
+export declare const CONVERTED_FOLDER: string;
+export declare const GENERATED_FOLDERS: readonly string[];
+export declare const IGNORED_DIRECTORY_NAMES: readonly string[];
+export declare const PIECEMAKER_FOLDER: string;
+export declare const REVIEW_FOLDER: string;
+export declare const STAMPED_FOLDER: string;
+export declare function assertNotTechnicalPath(relativePath: string, what?: string): void;
+export declare function isGeneratedFolderName(name: string): boolean;
+export declare function isIgnoredName(name: string): boolean;
+export declare function isTechnicalName(name: string): boolean;
+export declare function isTechnicalPath(relativePath: string): boolean;

@@ -14,19 +14,16 @@ const {
   markdownCounterpart,
   readProtection,
   relativeKey,
-  WORKSPACE_SUBDIR,
   writeProtection,
 } = require('../piecemaker-plugin/scripts/lib/protection.cjs');
+const { assertNotTechnicalPath, isTechnicalName } = require('../piecemaker-plugin/scripts/lib/technical-paths.cjs');
 const { canonicalMarkdownStem, homonymMarkdownStem, markdownStem } = require('../piecemaker-plugin/scripts/lib/markdown-name.cjs');
 const { documentIndexFile } = require('./document-index.cjs');
-const { STAMPED_PIECES_SUBFOLDER } = require('./lib/stamping.cjs');
 
 const HASH_KEY = /^[a-f0-9]{64}$/i;
 const PIECE_NAME = /^(\d{4}-\d{2}-\d{2})_\S/;
 const FORBIDDEN_NAME_CHARACTERS = /[\\/:*?"<>|\u0000-\u001f]/;
 const MAX_NAME_LENGTH = 150;
-// Dossiers produits par PieceMaker : une pièce n'y est jamais rangée.
-const GENERATED_FOLDERS = new Set([WORKSPACE_SUBDIR, 'Tabular Review', STAMPED_PIECES_SUBFOLDER]);
 
 const fingerprintId = ({ size, mtimeMs }) => `${size}:${mtimeMs}`;
 
@@ -168,7 +165,9 @@ function validatedDirectory(value) {
   if (segments.some((segment) => segment === '..' || segment.startsWith('.') || FORBIDDEN_NAME_CHARACTERS.test(segment))) {
     throw new TypeError(`Dossier de rangement invalide : ${value}`);
   }
-  if (segments.length && GENERATED_FOLDERS.has(segments[0])) throw new TypeError(`Une pièce ne se range pas dans « ${segments[0]} ».`);
+  // Dossiers techniques (`.piecemaker`, pièces converties, exports…) : une pièce n'y est jamais rangée.
+  const technical = segments.find(isTechnicalName);
+  if (technical) throw new TypeError(`Une pièce ne se range pas dans « ${technical} ».`);
   return segments.join('/');
 }
 
@@ -183,6 +182,8 @@ async function renamePiece(caseRoot, piecePath, newName, targetDirectory) {
   const root = fs.realpathSync(caseRoot);
   const renaming = String(newName ?? '').trim() !== '';
   const requested = relativeKey(path.resolve(root, String(piecePath || '')), root)?.normalize('NFC');
+  // Une pièce .md convertie ou un fichier de `.piecemaker` ne se renomme ni ne se déplace.
+  assertNotTechnicalPath(requested ?? String(piecePath || ''), 'Ce fichier');
   const originals = await originalFilesOverview(root);
   const piece = originals.find((file) => file.path.normalize('NFC') === requested);
   if (!piece) throw new TypeError(`Pièce introuvable dans le dossier : ${piecePath}`);

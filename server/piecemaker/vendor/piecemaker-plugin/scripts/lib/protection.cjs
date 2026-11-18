@@ -24,6 +24,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { markdownStemCandidates } = require('./markdown-name.cjs');
+const { CONVERTED_FOLDER } = require('./technical-paths.cjs');
 
 const PROTECTION_DIR = '.piecemaker';
 const PROTECTION_FILE = 'protection.json';
@@ -35,7 +36,7 @@ const PROTECTION_BYPASS_FILE = 'protection-bypass.json';
  * Correspondance et Data Room ; ce repli reste nécessaire aux anciens dossiers
  * et aux espaces de travail OOXML. `mapping.cjs` et `commits.cjs` l'importent.
  */
-const WORKSPACE_SUBDIR = 'Fichiers convertis PieceMaker';
+const WORKSPACE_SUBDIR = CONVERTED_FOLDER;
 
 /**
  * Suffixe d'un sous-dossier de travail OOXML : une copie extraite d'un `.docx`
