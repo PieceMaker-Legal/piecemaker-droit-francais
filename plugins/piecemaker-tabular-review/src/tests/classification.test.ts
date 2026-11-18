@@ -83,6 +83,11 @@ describe('arborescence du dossier', () => {
     await expect(saveClassification(project, [{ name, explanation: '' }])).rejects.toThrow('Nom de dossier invalide');
   });
 
+  it.each(['Fichiers convertis PieceMaker', 'Pièces/Fichiers convertis PieceMaker', 'Pièces tamponnées', 'node_modules', 'Archives/__pycache__'])('refuse le dossier technique « %s »', async (name) => {
+    await expect(saveClassification(project, [{ name, explanation: '' }])).rejects.toThrow(/réservé à PieceMaker|invalide/);
+    await expect(assistant({ action: 'arborescence', project, dossiers: [{ nom: name }] }, launchers())).rejects.toThrow(/réservé à PieceMaker|invalide/);
+  });
+
   it('refuse les doublons et une arborescence vide', async () => {
     await expect(saveClassification(project, [{ name: 'A' }, { name: 'a' }])).rejects.toThrow('même nom');
     await expect(saveClassification(project, [])).rejects.toThrow('au moins un dossier');
@@ -170,6 +175,33 @@ describe('effet du classement', () => {
     expect([first.length, second.length]).toEqual([1, 0]);
     expect(await appendRows(project, 'doublon.json', [{ label: 'bail', documents: ['Notes/bail.md'] }])).toEqual([]);
     expect(readReview(project, 'doublon.json').rows.map((row) => row.label)).toEqual(['bail', 'nouveau']);
+  });
+
+  it('ne range jamais un fichier technique ni vers un dossier technique', () => {
+    for (const piece of ['.piecemaker/cache/bail.pdf', 'Fichiers convertis PieceMaker/bail.md', 'Tabular Review/export.xlsx', 'node_modules/x/bail.pdf']) {
+      const review = reviewOf('Archives');
+      expect(plannedChange(review, { ...review.rows[0], piece }, [], pieces)).toBeNull();
+    }
+    const review = reviewOf('');
+    review.columns = [{ index: 0, name: 'Déplacer', prompt: '', format: 'text', action: 'move' } as never];
+    const moveTo = (summary: string) => {
+      review.cells = { r1: { 0: { summary, flag: 'green', reasoning: '' } } };
+      return plannedChange(review, review.rows[0], [], pieces);
+    };
+    expect(moveTo('Archives')?.directory).toBe('Archives');
+    expect(moveTo('.piecemaker')).toBeNull();
+    expect(moveTo('Fichiers convertis PieceMaker')).toBeNull();
+    expect(moveTo('Pièces/node_modules')).toBeNull();
+  });
+
+  it('ne liste ni .piecemaker, ni les .md convertis, ni les exports parmi les documents à classer', () => {
+    const review = reviewOf('Archives');
+    const technical = ['.piecemaker/cache/x.pdf', 'Tabular Review/export.xlsx', 'Pièces tamponnées/bail.pdf', 'Fichiers convertis PieceMaker/orphelin.pdf']
+      .map((entry) => ({ path: entry, status: 'ready', markdown: null }));
+    expect(newPieces(review, [...pieces, ...technical])).toEqual([]);
+    const orphan = { path: 'Fichiers convertis PieceMaker/orphelin.md', name: 'orphelin', size: 1, updatedAt: '' };
+    const hidden = { path: '.piecemaker/notes.md', name: 'notes', size: 1, updatedAt: '' };
+    expect(newNotes(review, [orphan, hidden] as never, pieces)).toEqual([]);
   });
 
   it('repère les nouveaux documents par leur Markdown', () => {
