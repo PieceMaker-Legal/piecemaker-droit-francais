@@ -4,6 +4,7 @@ import type { ClassificationFolder, Review } from '../shared.js';
 import { saveOntology } from '../../../../server/piecemaker/okf/ontology.js';
 import { dropProposal, proposeOntology, readProposal } from '../../../../server/piecemaker/okf/ontology-proposal.js';
 import { normalizeArborescence, ontologyFile, readArborescence } from '../../../../server/piecemaker/okf/sealed.js';
+import { isTechnicalPath } from '../../../../server/piecemaker/vendor/piecemaker-plugin/scripts/lib/technical-paths.cjs';
 import { classificationColumn, classifyColumn } from '../shared.js';
 import { listDrafts, upsertDraft } from './drafts.js';
 import { registeredProjects, UserError } from './paths.js';
@@ -11,12 +12,17 @@ import { listReviews, readReview, updateReview } from './reviews.js';
 import { MAX_COLUMNS } from './templates.js';
 
 // L'arborescence est commune à tous les dossiers : elle vit dans l'ontologie scellée (~/.piecemaker/ontologie.json).
+// Aucun dossier de l'arborescence ne désigne un dossier technique (`.piecemaker`, pièces converties, exports…).
 function normalizeFolders(value: unknown): ClassificationFolder[] {
+  let folders: ClassificationFolder[];
   try {
-    return normalizeArborescence(value);
+    folders = normalizeArborescence(value);
   } catch (error) {
     throw new UserError(error instanceof Error ? error.message : String(error));
   }
+  const technical = folders.find((folder) => isTechnicalPath(folder.name));
+  if (technical) throw new UserError(`Nom de dossier réservé à PieceMaker : ${technical.name}`);
+  return folders;
 }
 
 export function readClassification(_project?: string): ClassificationFolder[] {
