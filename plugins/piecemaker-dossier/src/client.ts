@@ -1,13 +1,19 @@
-import { openIndexAnalysis } from './index-analysis.js';
-import { editClassification } from './classification.js';
-import { knowledgeApi } from './api.js';
+import { isPieceRow, mountIndexAnalysis } from './index-analysis.js';
+import type { IndexChronology } from './index-analysis.js';
+import { editOntology } from './ontology.js';
+import { pendingProposals } from './pending-proposals.js';
+import { etapesApi, knowledgeApi } from './api.js';
+import { PARTY_TYPE, mountGraph, okfApi } from './okf.js';
+import type { OkfGraph } from './okf.js';
+import { ficheCardMarkup } from './okf-card.js';
+import type { OkfView } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { CUSTOM_NATURE, chronologyView, escapeHtml, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanStatusMarkup, shell } from './views.js';
-import type { BodaccScanState, ChronologySort, Tab, ViewData } from './views.js';
+import { chronologyView, graphView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanProgress, shell } from './views.js';
+import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
 import type { PartySide } from './party-codes.js';
@@ -28,15 +34,25 @@ const PANEL_FOCUS_EVENT = 'piecemaker:panel-focus';
 const KNOWLEDGE_SCAN_EVENT = 'piecemaker:knowledge-scan-job';
 const VIEW_EVENT = 'piecemaker:dossier-view';
 const VIEW_KEY = '__piecemakerDossierView';
+const MAPPING_EVENT = 'piecemaker:mapping-show';
+const MAPPING_KEY = '__piecemakerMappingShow';
+const ANONYMIZATION_STATE_EVENT = 'piecemaker:anonymization-state';
 const SCAN_POLL_INTERVAL_MS = 1000;
 const VERSION_POLL_INTERVAL_MS = 5000;
 const viewCache = new Map<string, ViewData>();
 
-function takeRequestedView(): Tab | null {
+function takeRequestedView(): Tab | 'index-analysis' | null {
   const pending = window as Window & { [VIEW_KEY]?: unknown };
   const view = pending[VIEW_KEY];
   delete pending[VIEW_KEY];
-  return view === 'general' || view === 'chronology' ? view : null;
+  return view === 'general' || view === 'chronology' || view === 'graph' || view === 'index-analysis' ? view : null;
+}
+
+function takeRequestedMapping(): string | null {
+  const pending = window as Window & { [MAPPING_KEY]?: unknown };
+  const project = pending[MAPPING_KEY];
+  delete pending[MAPPING_KEY];
+  return typeof project === 'string' ? project : null;
 }
 
 export function mount(container: HTMLElement, api: PluginApi): void {
@@ -44,15 +60,53 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   style.textContent = PLUGIN_STYLES;
   const root = document.createElement('div');
   root.className = 'pmd-root piecemaker-ui';
+  root.dataset.chatTab = 'plugin:piecemaker-dossier';
   root.style.position = 'relative';
   container.replaceChildren(style, root);
   let context = api.context;
-  let active: Tab = takeRequestedView() ?? 'general';
+  const requestedView = takeRequestedView();
+  let active: Tab = requestedView === 'index-analysis' ? 'chronology' : requestedView ?? 'general';
   let data: ViewData | null = null;
-  let closeIndexAnalysis: (() => void) | null = null;
-  let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
+  // L'Index : la revue tabulaire de l'Index, montée une fois par dossier et rattachée à l'onglet à chaque affichage.
+  let indexHost: HTMLElement | null = null;
+  let indexProject = '';
+  let disposeIndex: (() => void) | null = null;
+  let indexChronology = (() => { try { return localStorage.getItem('pmd-index-chronologie') === '1'; } catch { return false; } })();
+  const chronologyListeners = new Set<() => void>();
+  const notifyChronology = () => chronologyListeners.forEach((listener) => listener());
+  const chronology: IndexChronology = {
+    active: () => indexChronology,
+    isPiece: (row) => isPieceRow(data?.okf, row),
+    subscribe: (callback) => { chronologyListeners.add(callback); return () => chronologyListeners.delete(callback); },
+  };
+  const closeIndex = () => {
+    disposeIndex?.();
+    disposeIndex = null;
+    indexHost = null;
+    indexProject = '';
+  };
+  let okfView: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null };
+  let showPremises = (() => { try { return localStorage.getItem('pmd-okf-premises') === '1'; } catch { return false; } })();
+  const okfHandle = () => {
+    const projectId = context.project?.name || '';
+    return {
+      projectId,
+      refresh: () => void okfApi.read(projectId).then((okf) => {
+        if (!data || context.project?.name !== projectId) return;
+        data = { ...data, okf };
+        viewCache.set(projectId, data);
+        if (active === 'graph') paintContent();
+        else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
+        if (indexChronology) notifyChronology();
+      }, () => undefined),
+    };
+  };
+  let destroyGraph: (() => void) | null = null;
+  let okfDetail: string | null = null;
   let loadSequence = 0;
   let scanJob: ScanJob | null = null;
+  let mappingValidated: string | null = null;
+  let mappingRequested = takeRequestedMapping();
   const bodaccStates = new Map<string, BodaccScanState>();
   let draggedNodeId = '';
   const compactWorkspace = window.matchMedia('(max-width: 1024px)');
@@ -185,15 +239,36 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (cached) {
       data = cached;
       render();
+      openRequestedMapping();
     } else if (!data) {
       render();
     }
     try {
+      void etapesApi.read(context.project.path).then((etapes) => {
+        if (sequence !== loadSequence) return;
+        mappingValidated = etapes.mappingValide ?? null;
+        paintScanStatus();
+      }, () => undefined);
+      void pendingProposals(projectId, context.project.path).then((proposals) => {
+        if (sequence !== loadSequence) return;
+        okfView = { ...okfView, proposals };
+        const host = root.querySelector<HTMLElement>('[data-proposals]');
+        if (host) host.outerHTML = proposalBanner(proposals);
+      }, () => undefined);
       const graph = await knowledgeApi.graph(projectId);
       if (sequence !== loadSequence) return;
-      data = { graph };
+      data = { graph, okf: cached?.okf ?? null };
+      void okfApi.read(projectId).then((okf) => {
+        if (sequence !== loadSequence || !data) return;
+        data = { ...data, okf };
+        viewCache.set(projectId, data);
+        if (active === 'graph') paintContent();
+        else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
+        if (indexChronology) notifyChronology();
+      }, () => undefined);
       viewCache.set(projectId, data);
       render();
+      openRequestedMapping();
     } catch (error) {
       if (sequence !== loadSequence) return;
       showError(error);
@@ -227,10 +302,16 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     return deleteEntity(root, node, nodeVariants(node, data?.graph.mappings || []), save);
   };
 
+  const openRequestedMapping = () => {
+    if (!mappingRequested || !data || mappingRequested !== context.project?.path || root.querySelector('.pmd-modal')) return;
+    mappingRequested = null;
+    openMapping();
+  };
+
   const openMapping = () => {
     if (!data) return;
     const mappingData = data;
-    const layer = modal(root, mappingView(mappingData));
+    const layer = modal(root, mappingView(mappingData, mappingValidated));
     bindAliasEditors(layer);
     const operationsFromRow = (row: HTMLFormElement): KnowledgeUpdateOperation[] => {
       const node = mappingData.graph.nodes.find((candidate) => candidate.id === row.dataset.nodeId);
@@ -264,6 +345,18 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       try {
         await save(operations);
         layer.remove();
+      } catch (error) {
+        showError(error);
+      }
+    });
+    layer.querySelector<HTMLElement>('[data-validate-mapping]')?.addEventListener('click', async () => {
+      if (!context.project || !await askConfirm(root, 'Valider le mapping de pseudonymisation ?', 'Valider')) return;
+      try {
+        const operations = Array.from(layer.querySelectorAll<HTMLFormElement>('[data-mapping-row]')).flatMap(operationsFromRow);
+        if (operations.length) await save(operations);
+        mappingValidated = (await etapesApi.validateMapping(context.project.path)).mappingValide ?? null;
+        layer.remove();
+        paintScanStatus();
       } catch (error) {
         showError(error);
       }
@@ -324,63 +417,121 @@ export function mount(container: HTMLElement, api: PluginApi): void {
 
   const paintScanStatus = () => {
     const status = root.querySelector<HTMLElement>('.pmd-scan-status');
-    if (!status) return;
-    const mappingCount = data?.graph.mappings.length || 0;
-    const scanned = Boolean(data?.graph.anonymizationComplete);
-    const scanning = Boolean(scanJob && scanJob.state === 'running');
-    status.dataset.ready = String(scanned || mappingCount > 0);
-    status.dataset.scanning = String(scanning);
-    status.innerHTML = scanStatusMarkup(mappingCount, scanJob, scanned);
+    const scanning = scanJob?.state === 'running';
+    if (status) status.innerHTML = scanning && scanJob ? scanProgress(scanJob) : '';
+    const ready = Boolean(data?.graph.anonymizationComplete) || Boolean(data?.graph.mappings.length);
+    window.dispatchEvent(new CustomEvent(ANONYMIZATION_STATE_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', project: context.project?.path || null, anonymized: Boolean(data?.graph.anonymizationComplete), pending: ready && !scanning && !mappingValidated } }));
+  };
+
+  const emitFocus = () => {
+    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', view: active } }));
+  };
+
+  const attachIndex = (slot: HTMLElement | null) => {
+    const projectPath = context.project?.path || '';
+    if (!slot || !projectPath) return;
+    if (indexHost && indexProject === projectPath) {
+      slot.replaceWith(indexHost);
+      return;
+    }
+    closeIndex();
+    const host = document.createElement('div');
+    host.className = 'pmd-index-analysis';
+    host.dataset.indexAnalysis = '';
+    indexHost = host;
+    indexProject = projectPath;
+    slot.replaceWith(host);
+    void mountIndexAnalysis(host, api, (resource) => linksMarkup(data?.okf ?? null, resource), chronology).then((dispose) => {
+      if (indexHost === host) disposeIndex = dispose;
+      else dispose();
+    }).catch((error: unknown) => {
+      if (indexHost === host) host.innerHTML = `<div class="pmd-empty">${escapeHtml(error instanceof Error ? error.message : String(error))}</div>`;
+    });
   };
 
   const paintContent = () => {
-    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', view: active } }));
+    emitFocus();
     const content = root.querySelector<HTMLElement>('[data-content]');
     if (!content) return;
+    destroyGraph?.();
+    destroyGraph = null;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
-    else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
-  };
-
-  const saveNature = async (nodeId: string, nature: string) => {
-    const node = data?.graph.nodes.find((entry) => entry.id === nodeId);
-    if (!node) return;
-    await save([{ op: 'upsertNode', node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: nature || null }, date: node.date } }]);
+    else if (active === 'chronology') {
+      content.innerHTML = chronologyView(okfView, indexChronology);
+      attachIndex(content.querySelector<HTMLElement>('[data-index-analysis]'));
+      return;
+    } else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
+    else content.innerHTML = active === 'graph' ? graphView(data.okf ?? null, showPremises) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    const graphHost = content.querySelector<HTMLElement>('[data-okf-graph]');
+    const projectPath = context.project?.path || '';
+    if (!graphHost || !data?.okf) return;
+    const wrap = graphHost.parentElement!;
+    let graph: OkfGraph | null = null;
+    const closeDetail = () => { okfDetail = null; wrap.querySelector('[data-okf-detail]')?.remove(); graph?.select(null); };
+    const showFiche = (id: string) => {
+      const okf = data?.okf;
+      if (!okf) return;
+      const fiche = okf.fiches.find((entry) => entry.id === id);
+      if (!fiche) return closeDetail();
+      okfDetail = id;
+      wrap.querySelector('[data-okf-detail]')?.remove();
+      wrap.insertAdjacentHTML('beforeend', ficheCardMarkup(okf, id));
+      const card = wrap.querySelector<HTMLElement>('[data-okf-detail]')!;
+      graph?.select(id);
+      card.focus({ preventScroll: true });
+      card.querySelector('[data-detail-close]')?.addEventListener('click', closeDetail);
+      card.querySelectorAll<HTMLElement>('[data-open-file]').forEach((button) => button.addEventListener('click', () => api.openFileInEditor(button.dataset.openFile || '')));
+      card.querySelectorAll<HTMLElement>('[data-open-fiche]').forEach((button) => button.addEventListener('click', () => showFiche(button.dataset.openFiche || '')));
+      const projectId = context.project?.name || '';
+      const reloadOkf = () => okfApi.read(projectId).then((okf) => {
+        if (!data || context.project?.name !== projectId) return;
+        data = { ...data, okf };
+        viewCache.set(projectId, data);
+        paintContent();
+      });
+      card.querySelectorAll<HTMLElement>('[data-unlink-review]').forEach((button) => button.addEventListener('click', () => {
+        void okfApi.linkReview(projectId, fiche.title, button.dataset.unlinkReview || '', Number(button.dataset.reviewColumn), true).then(reloadOkf).catch(showError);
+      }));
+      card.querySelector('[data-link-review]')?.addEventListener('click', () => {
+        const picker = card.querySelector<HTMLElement>('[data-review-picker]');
+        if (!picker) return;
+        picker.hidden = false;
+        picker.innerHTML = '<span class="pmd-fact-meta">Chargement des revues…</span>';
+        void okfApi.reviews(projectId).then(({ revues }) => {
+          if (!revues.length) { picker.innerHTML = '<span class="pmd-fact-meta">Aucune revue tabulaire des pièces dans ce dossier.</span>'; return; }
+          const options = revues.flatMap((review) => review.colonnes.map((column) => `<option value="${escapeHtml(JSON.stringify([review.fichier, column.index]))}">${escapeHtml(`${review.titre} › ${column.nom}`)}</option>`)).join('');
+          picker.innerHTML = `<select class="pmd-input" data-review-choice aria-label="Revue et colonne">${options}</select><button type="button" class="pmd-button piecemaker-button piecemaker-button--black piecemaker-button--sm" data-review-confirm>Lier</button><small class="pmd-fact-meta">Les lignes positives de la colonne établissent la prémisse ; celles que vous marquez vérifiées dans la revue comptent comme pièces d’auteur humain.</small>`;
+          picker.querySelector('[data-review-confirm]')?.addEventListener('click', () => {
+            const [fichier, colonne] = JSON.parse(picker.querySelector<HTMLSelectElement>('[data-review-choice]')?.value || '[]') as [string, number];
+            void okfApi.linkReview(projectId, fiche.title, fichier, colonne).then(reloadOkf).catch(showError);
+          });
+        }).catch(showError);
+      });
+      card.querySelector('[data-edit-fiche]')?.addEventListener('click', () => {
+        if (!data) return;
+        if (fiche.type === PARTY_TYPE) {
+          const node = data.graph.nodes.find((entry) => entry.id === `entity:${fiche.title}`);
+          if (node) nodeEditor(root, data, node, save);
+          return;
+        }
+        const node = data.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === fiche.resource);
+        if (node) documentEditor(root, data, node, projectPath, save, renamePiece, okfHandle());
+      });
+    };
+    wrap.querySelector('[data-okf-center]')?.addEventListener('click', () => graph?.center());
+    wrap.addEventListener('keydown', (event) => { if (event.key === 'Escape' && wrap.querySelector('[data-okf-detail]')) closeDetail(); });
+    void mountGraph(graphHost, data.okf, showPremises, (fiche) => showFiche(fiche.id)).then((mounted) => {
+      if (!graphHost.isConnected) return mounted.destroy();
+      graph = mounted;
+      destroyGraph = mounted.destroy;
+      if (okfDetail) showFiche(okfDetail);
+    }).catch(showError);
   };
 
   const bindOnce = () => {
-    root.addEventListener('change', (event) => {
-      const field = event.target as HTMLInputElement;
-      const nodeId = field.dataset?.natureSelect ?? field.dataset?.natureInput;
-      if (!nodeId) return;
-      const value = field.value.trim();
-      if (value === CUSTOM_NATURE) {
-        field.parentElement!.innerHTML = natureInputMarkup(nodeId);
-        root.querySelector<HTMLElement>('[data-nature-input]')?.focus();
-        return;
-      }
-      if (!value && field.dataset.natureInput) {
-        paintContent();
-        return;
-      }
-      void saveNature(nodeId, value).catch(showError);
-    });
     root.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
       if (target.closest('.pmd-modal')) return;
-      if (target.closest('[data-nature-select],[data-nature-input]')) return;
-      if (root.querySelector('[data-nature-select],[data-nature-input]')) {
-        paintContent();
-        return;
-      }
-      const editNature = target.closest<HTMLElement>('[data-edit-nature]');
-      if (editNature) {
-        const node = data?.graph.nodes.find((entry) => entry.id === editNature.dataset.editNature);
-        if (!node) return;
-        editNature.parentElement!.innerHTML = natureSelectMarkup(node);
-        root.querySelector<HTMLElement>('[data-nature-select]')?.focus();
-        return;
-      }
       const nodeMenu = target.closest<HTMLElement>('[data-node-menu]');
       if (nodeMenu) {
         const menu = nodeMenu.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
@@ -396,22 +547,34 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         paintContent();
         return;
       }
-      const sort = target.closest<HTMLElement>('[data-sort]')?.dataset.sort;
-      if (sort === 'document' || sort === 'date' || sort === 'classification') {
-        chronologySort = { column: sort, direction: chronologySort.column === sort && chronologySort.direction === 'ascending' ? 'descending' : 'ascending' };
+      const premisesToggle = target.closest<HTMLInputElement>('[data-okf-premises]');
+      if (premisesToggle) {
+        showPremises = premisesToggle.checked;
+        try { localStorage.setItem('pmd-okf-premises', showPremises ? '1' : '0'); } catch { }
         paintContent();
-        root.querySelector<HTMLElement>(`[data-sort="${sort}"]`)?.focus();
         return;
       }
       const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
-      if (action === 'index-analysis' && context.project) {
-        const button = target.closest<HTMLButtonElement>('button')!;
-        button.disabled = true;
-        void openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); }).then((dispose) => { closeIndexAnalysis = dispose; }).catch(showError).finally(() => { button.disabled = false; });
+      if (action === 'index-chronology') {
+        indexChronology = !indexChronology;
+        try { localStorage.setItem('pmd-index-chronologie', indexChronology ? '1' : '0'); } catch { /* préférence locale seulement */ }
+        paintContent();
+        notifyChronology();
+        return;
+      }
+      if (action === 'okf-verify' && context.project) {
+        void okfApi.verify(context.project.name).then(({ erreurs, contradictions }) => {
+          okfView = { ...okfView, errors: erreurs, contradictions };
+          paintContent();
+        }).catch(showError);
+        return;
+      }
+      if (action === 'edit-ontology' && context.project) {
+        void editOntology(root, context.project.name, () => { okfView = { ...okfView, errors: null, contradictions: [] }; void load(); }, context.project.path).catch(showError);
         return;
       }
       if (action === 'edit-tree' && context.project) {
-        void editClassification(root, context.project.path).catch(showError);
+        void editOntology(root, context.project.name, () => { void load(); }, context.project.path, 'tree').catch(showError);
         return;
       }
       if (action === 'company-search') {
@@ -506,10 +669,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         openMapping();
         return;
       }
-      if (action === 'local-models') {
-        window.dispatchEvent(new Event('piecemaker:pseudonymization-open'));
-        return;
-      }
       if (action === 'agents') {
         if (!context.project) return;
         knowledgeApi.ensureAgentInstructions(context.project.name)
@@ -557,17 +716,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         const nodeId = deleteTrigger.dataset.deleteNode;
         if (nodeId) void deleteNode(nodeId).catch(showError);
         return;
-      }
-      const editDocument = target.closest<HTMLElement>('[data-edit-document]');
-      if (editDocument) {
-        const node = data?.graph.nodes.find((entry) => entry.id === editDocument.dataset.editDocument);
-        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece);
-        return;
-      }
-      const openDocument = target.closest<HTMLElement>('[data-open-document]');
-      if (openDocument) {
-        const node = data?.graph.nodes.find((entry) => entry.id === openDocument.dataset.openDocument);
-        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece);
       }
     });
     root.addEventListener('dragstart', (event) => {
@@ -640,12 +788,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const render = () => {
     root.dataset.theme = context.theme;
     if (!root.querySelector('[data-content]')) {
-      root.innerHTML = shell(active, data?.graph.mappings.length || 0, scanJob, Boolean(data?.graph.anonymizationComplete));
+      root.innerHTML = shell(active, scanJob);
       bindOnce();
     } else {
       paintTabs();
-      paintScanStatus();
     }
+    paintScanStatus();
     paintContent();
   };
 
@@ -679,10 +827,16 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const showRequestedView = () => {
     const view = takeRequestedView();
     if (!view) return;
-    active = view;
+    // « index-analysis » (ancien nom de la revue de l'Index) ouvre l'Index : c'est la même vue.
+    active = view === 'index-analysis' ? 'chronology' : view;
     render();
   };
   window.addEventListener(VIEW_EVENT, showRequestedView);
+  const showRequestedMapping = () => {
+    mappingRequested = takeRequestedMapping();
+    openRequestedMapping();
+  };
+  window.addEventListener(MAPPING_EVENT, showRequestedMapping);
 
   render();
   void load();
@@ -692,8 +846,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const changedTheme = next.theme !== context.theme;
     context = next;
     if (changedProject) {
-      closeIndexAnalysis?.();
-      closeIndexAnalysis = null;
+      closeIndex();
       data = null;
       scanJob = null;
       bodaccStates.clear();
@@ -704,11 +857,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }
   });
   (container as HTMLElement & { pmdUnsubscribe?: () => void }).pmdUnsubscribe = () => {
-    closeIndexAnalysis?.();
+    closeIndex();
+    destroyGraph?.();
     unsubscribe();
     compactWorkspace.removeEventListener('change', syncTiersWithWorkspaceWidth);
     window.clearInterval(versionTimer);
     window.removeEventListener(VIEW_EVENT, showRequestedView);
+    window.removeEventListener(MAPPING_EVENT, showRequestedMapping);
   };
 }
 

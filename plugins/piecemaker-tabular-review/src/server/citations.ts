@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 import type { Cell, CellCitation, CitationSource, ReviewColumn, TextRange } from '../shared.js';
-import { citationIssue } from '../shared.js';
+import { citationIssue, DOCUMENT_TITLE_INDEX, documentTitleCell, sameDocument } from '../shared.js';
 import { assertReviewFile, documentPath, isInside, reviewDirectory, UserError } from './paths.js';
 import { readReview } from './reviews.js';
 
@@ -72,13 +72,6 @@ export function quoteRanges(source: string, quote: string): TextRange[] | null {
   return ranges;
 }
 
-function sameDocument(left: string, right: string): boolean {
-  const normalize = (value: string) => value.trim().toLowerCase().replace(/\\/g, '/');
-  const a = normalize(left);
-  const b = normalize(right);
-  return a === b || a.split('/').pop() === b.split('/').pop();
-}
-
 export function verifyCitation(documents: CitationDocument[], citation: Pick<CellCitation, 'document' | 'quote'>): CellCitation {
   const ordered = [...documents.filter((entry) => sameDocument(entry.name, citation.document)), ...documents.filter((entry) => !sameDocument(entry.name, citation.document))];
   for (const document of ordered) {
@@ -130,11 +123,11 @@ export function correctionPrompt(problems: CitationProblem[], attempt: number, l
 
 const SOURCE_WINDOW = 60_000;
 
-export function citationSource(project: string, file: string, rowId: string, column: number, number: number): CitationSource {
+export async function citationSource(project: string, file: string, rowId: string, column: number, number: number): Promise<CitationSource> {
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const row = review.rows.find((entry) => entry.id === rowId);
-  const citation = review.cells[rowId]?.[String(column)]?.citations?.[number];
+  const citation = (column === DOCUMENT_TITLE_INDEX && row ? documentTitleCell(review, row) : review.cells[rowId]?.[String(column)])?.citations?.[number];
   if (!row || !citation) throw new UserError('Citation introuvable.');
   const document = row.documents.find((entry) => sameDocument(entry.source, citation.document)) ?? row.documents[0];
   if (!document) throw new UserError('Document source introuvable.');

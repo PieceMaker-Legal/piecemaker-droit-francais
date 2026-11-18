@@ -4,7 +4,7 @@ const QUESTION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type CommentQuestion = {
   token: string;
-  sessionId: string;
+  sessionId: string | null;
   providerLabel: string;
   projectId: string;
   filePath: string;
@@ -48,6 +48,10 @@ export function storeQuestion(question: CommentQuestion) {
   writeStored([...readStored(), question]);
 }
 
+export function bindQuestionSession(token: string, sessionId: string) {
+  writeStored(readStored().map((question) => question.token === token ? { ...question, sessionId } : question));
+}
+
 export function removeQuestion(token: string): boolean {
   const stored = readStored();
   const remaining = stored.filter((question) => question.token !== token);
@@ -79,19 +83,27 @@ function quote(text: string) {
   return text.trim().split(/\r?\n/).map((line) => `> ${line}`).join('\n');
 }
 
-export function buildQuestionPrompt({ documentName, filePath, passage, paragraphs, question }: {
+export type ThreadMessage = { author: string; text: string };
+
+export function buildQuestionPrompt({ documentName, filePath, commentId, passage, paragraphs, thread = [], question }: {
   documentName: string;
   filePath: string;
+  commentId: number;
   passage: string;
   paragraphs: string;
+  thread?: ThreadMessage[];
   question: string;
 }) {
   const hasContext = paragraphs.trim() && paragraphs.trim() !== passage.trim();
   return [
-    `Question posée en commentaire du document « ${documentName} » (${filePath}).`,
+    thread.length > 0
+      ? `Réponse dans le fil du commentaire c${commentId} du document « ${documentName} » (${filePath}).`
+      : `Question posée en commentaire du document « ${documentName} » (${filePath}), commentaire c${commentId}.`,
     ...(passage.trim() ? [`Passage commenté :\n${quote(passage)}`] : []),
     ...(hasContext ? [`Paragraphe du passage :\n${quote(paragraphs)}`] : []),
+    ...(thread.length > 0 ? [`Fil du commentaire :\n${thread.map(({ author, text }) => quote(`${author} : ${text}`)).join('\n>\n')}`] : []),
     question.trim(),
+    `Ta réponse dans ce chat est copiée telle quelle en réponse au commentaire : réponds directement, sans décrire ta démarche. Ne modifie le document que si la question le demande, en suivi des modifications, au passage commenté (\`docx comments list\` donne l’ancre de c${commentId}).`,
   ].join('\n\n');
 }
 

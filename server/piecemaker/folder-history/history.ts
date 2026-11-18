@@ -21,6 +21,7 @@ export function createFolderHistory(options: { idleDelayMs?: number; catchUpDela
   const activeTurns = new Map<string, number>();
   const idleTimers = new Map<string, NodeJS.Timeout>();
   const watchers = new Map<string, FSWatcher>();
+  const listeners = new Set<(cwd: string) => void>();
   let turnSequence = 0;
 
   const prepare = async (cwd: string) => {
@@ -56,6 +57,7 @@ export function createFolderHistory(options: { idleDelayMs?: number; catchUpDela
     if (watchers.has(cwd)) return;
     try {
       const watcher = watch(cwd, { recursive: true, persistent: false }, (_event, filename) => {
+        if (!filename || !/^\.git([\\/]|$)/.test(String(filename))) for (const listener of listeners) listener(cwd);
         if (filename && isIgnoredPath(String(filename))) return;
         scheduleManual(cwd);
       });
@@ -102,6 +104,9 @@ export function createFolderHistory(options: { idleDelayMs?: number; catchUpDela
         watchers.delete(cwd);
       }
       for (const cwd of wanted) watchFolder(cwd);
+    },
+    onChange(listener: (cwd: string) => void) {
+      listeners.add(listener);
     },
     idle: () => queue.idle(),
     close() {

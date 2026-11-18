@@ -60,6 +60,26 @@ test('accepte le volet tampon et ferme un volet', async () => {
   assert.equal(closed.status, 200);
   const closeTaken = await (await json('/close-panel?project=/dossiers/Dupont')).json() as { request: { tab: string } | null };
   assert.equal(closeTaken.request?.tab, 'plugin:piecemaker-dossier');
+  for (const tab of ['plugin:piecemaker-echeances', 'plugin:piecemaker-catala']) {
+    assert.equal((await json('/open-panel', { method: 'POST', body: JSON.stringify({ project: '/dossiers/Dupont', tab }) })).status, 200);
+  }
   assert.equal((await json('/open-panel', { method: 'POST', body: JSON.stringify({ project: '/dossiers/Dupont', tab: 'inconnu' }) })).status, 400);
+  await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+});
+
+test('signale si une interface relève les demandes du dossier', async () => {
+  const app = express();
+  app.use(express.json());
+  app.use(createOpenPanelRequestsRouter(() => ['/dossiers/Martin']));
+  const server = app.listen(0);
+  await new Promise((resolve) => server.once('listening', resolve));
+  const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const json = (url: string, init?: RequestInit) => fetch(`${origin}${url}`, { headers: { 'Content-Type': 'application/json' }, ...init });
+  const ask = async () => (await (await json('/open-panel', { method: 'POST', body: JSON.stringify({ project: '/dossiers/Martin/Actes', tab: 'files' }) })).json() as { listening: boolean }).listening;
+  assert.equal(await ask(), false);
+  await json('/open-panel?project=/dossiers/Martin&id=x');
+  assert.equal(await ask(), false);
+  await json('/open-panel?project=/dossiers/Martin');
+  assert.equal(await ask(), true);
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
 });

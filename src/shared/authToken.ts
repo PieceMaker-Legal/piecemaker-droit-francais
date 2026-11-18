@@ -106,3 +106,57 @@ export const storeAuthToken = (token: unknown): boolean => {
   }
   return true;
 };
+
+// Headers are a plain record rather than the full `HeadersInit` union so the
+// defaults below can be merged with a caller's headers by spreading.
+export type ApiRequestOptions = Omit<RequestInit, 'headers'> & {
+  headers?: Record<string, string>;
+};
+
+/**
+ * The one authenticated client, shared by the app and every plugin bundle:
+ * sends the stored token, stores a refreshed one, ends the session on a real
+ * rejection. `withToken: false` is the hosted platform, where a proxy signs in.
+ */
+export const authenticatedFetch = (
+  url: string,
+  options: ApiRequestOptions = {},
+  { withToken = true }: { withToken?: boolean } = {},
+): Promise<Response> => {
+  const token = withToken ? getStoredAuthToken() : null;
+  const defaultHeaders: Record<string, string> = {};
+  // Only set Content-Type for non-FormData requests
+  if (!(options.body instanceof FormData)) defaultHeaders['Content-Type'] = 'application/json';
+  if (token) defaultHeaders.Authorization = `Bearer ${token}`;
+
+  return fetch(url, {
+    ...options,
+    // Every response here can carry X-Refreshed-Token or X-Auth-Error, and a
+    // served-from-cache response replays the headers it was stored with. Those
+    // headers describe one moment in one session, so they must never be reused:
+    // a stale X-Refreshed-Token overwrote the current token with an expired one
+    // on every start, which then got discarded as expired.
+    cache: 'no-store',
+    headers: { ...defaultHeaders, ...options.headers },
+  }).then((response) => {
+    const refreshedToken = response.headers.get('X-Refreshed-Token');
+    if (refreshedToken) storeAuthToken(refreshedToken);
+    // Only a real rejection ends the session: a revalidated response surfaces
+    // its stored status, so the header alone says nothing about this request.
+    if (response.status === 401 && response.headers.get('X-Auth-Error')) expireAuthSession();
+    return response;
+  });
+};
+
+/** JSON request for the plugins: GET without body, otherwise `method` (POST by default) with a JSON or binary body. */
+export async function requestJson<T>(url: string, body?: unknown, method?: string): Promise<T> {
+  const raw = body instanceof Blob;
+  const response = await authenticatedFetch(url, {
+    ...(body !== undefined || method ? { method: method ?? 'POST' } : {}),
+    ...(body !== undefined ? { body: raw ? body : JSON.stringify(body) } : {}),
+    ...(raw ? { headers: { 'Content-Type': 'application/octet-stream' } } : {}),
+  });
+  const data = await response.json().catch(() => ({})) as T & { error?: unknown; reason?: unknown };
+  if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : typeof data.reason === 'string' ? data.reason : `Erreur ${response.status}`);
+  return data;
+}

@@ -64,6 +64,12 @@ test('le bloc est retiré sous ses trois formes stockées, sans toucher au texte
   }
 });
 
+test('une question posée en commentaire d’un .docx part sans le bloc', () => {
+  const commentQuestion = 'Question posée en commentaire du document « acte.docx » (/dossier/acte.docx), commentaire c1.\n\nCe délai est-il exact ?';
+  assert.equal(withCitationInstructions(commentQuestion), commentQuestion);
+  assert.match(withCitationInstructions(`Avant. ${commentQuestion}`), /<CITATION_INSTRUCTION>/);
+});
+
 for (const provider of providers) {
   test(`${provider} : message affiché en direct et rejoué sans le bloc`, async (t) => {
     const { runtime, cwd } = await harness(t, provider, [

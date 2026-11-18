@@ -47,10 +47,13 @@ jobs:
       - name: Test Windows startup
         run: node --experimental-vm-modules --test desktop-bootstrap/overlay/electron-piecemaker/main.test.js desktop-bootstrap/overlay/electron-piecemaker/desktopWindow.test.js desktop-bootstrap/overlay/electron-piecemaker/windowsUpdater.test.js desktop-bootstrap/overlay/electron-piecemaker/updateShutdown.test.js desktop-bootstrap/overlay/electron-piecemaker/asar-runtime.test.mjs desktop-bootstrap/lib/native-uninstall.test.mjs
 
+      - name: Require verified Catala packs for both platforms
+        run: node desktop-bootstrap/composants/catala-release-ready.mjs
+
       - name: Test desktop dependency selection
         run: |
           $env:PSModulePath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\Modules'
-          node --experimental-vm-modules --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/lib/windows-source.test.mjs desktop-bootstrap/lib/prepare-installed.test.mjs desktop-bootstrap/lib/build-sqlite.test.mjs desktop-bootstrap/composants/install.test.mjs desktop-bootstrap/composants/shared-python.test.mjs desktop-bootstrap/overlay/electron-piecemaker/shared-python-update.test.mjs
+          node --experimental-vm-modules --test desktop-bootstrap/lib/compact-package.test.mjs desktop-bootstrap/lib/runtime-dependencies.test.mjs desktop-bootstrap/lib/missing-dependencies.test.mjs desktop-bootstrap/lib/initial-install.test.mjs desktop-bootstrap/lib/windows-source.test.mjs desktop-bootstrap/lib/prepare-installed.test.mjs desktop-bootstrap/lib/build-sqlite.test.mjs desktop-bootstrap/composants/install.test.mjs desktop-bootstrap/composants/shared-python.test.mjs desktop-bootstrap/composants/catala.test.mjs desktop-bootstrap/overlay/electron-piecemaker/catala-pack.test.mjs desktop-bootstrap/overlay/electron-piecemaker/shared-python-update.test.mjs
 
       - name: Build
         run: cargo build --release --manifest-path server/piecemaker/anonymizer/hudsucker-proxy/Cargo.toml

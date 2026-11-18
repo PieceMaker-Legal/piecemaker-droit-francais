@@ -12,6 +12,7 @@ import { initializeCompactRuntime, portablePluginRuntime } from './compact-runti
 import { installUiUpdates } from './ui-updates/index.mjs';
 import { addEmbeddedGit } from './embedded-git.js';
 import { addEmbeddedNode } from './embedded-node.js';
+import { startCatalaPack } from './catala-pack.mjs';
 import { installDesktopPasswords } from './auth/main.mjs';
 
 process.env.ELECTRON_FORCE_OWN_SERVER = '1';
@@ -86,6 +87,11 @@ async function startApplication() {
     }
   } catch (error) {
     console.error(`[PieceMaker] Installation des plugins impossible : ${error.message}`);
+  }
+  try {
+    startCatalaPack({ app, applicationRoot: runtime.applicationRoot });
+  } catch (error) {
+    console.error(`[PieceMaker] Pack Catala non lancé : ${error.message}`);
   }
 
   await import('../electron/main.js');

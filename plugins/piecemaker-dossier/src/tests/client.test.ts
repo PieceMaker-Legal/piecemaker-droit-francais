@@ -1,10 +1,11 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { knowledgeApi } from '../api.js';
+import { etapesApi, knowledgeApi } from '../api.js';
 import { mount, unmount } from '../client.js';
-import { openIndexAnalysis } from '../index-analysis.js';
+import { okfApi } from '../okf.js';
+import { mountIndexAnalysis } from '../index-analysis.js';
 
-vi.mock('../index-analysis.js', () => ({ openIndexAnalysis: vi.fn(async () => vi.fn()) }));
+vi.mock('../index-analysis.js', () => ({ mountIndexAnalysis: vi.fn(async () => vi.fn()) }));
 import type { KnowledgeSnapshot } from '../types.js';
 
 let dom: JSDOM;
@@ -25,30 +26,64 @@ beforeEach(() => {
   vi.stubGlobal('CustomEvent', dom.window.CustomEvent);
   vi.spyOn(knowledgeApi, 'graph').mockResolvedValue(graph);
   vi.spyOn(knowledgeApi, 'scanJob').mockResolvedValue({ job: null });
+  vi.spyOn(okfApi, 'read').mockResolvedValue({ types: [], typesGraphe: [], fiches: [] });
+  vi.spyOn(etapesApi, 'read').mockResolvedValue({});
   container = dom.window.document.getElementById('root')!;
 });
 
 afterEach(() => { unmount(container); dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-describe('Chronologie', () => {
-  it('opens the existing index analysis from Dossier without switching tabs', async () => {
-    vi.stubGlobal('Event', dom.window.Event);
+describe('Index', () => {
+  it('affiche la revue de l’Index dans l’onglet même, sans tableau à part ni fenêtre', async () => {
+    vi.mocked(mountIndexAnalysis).mockClear();
     const shown = vi.fn();
     dom.window.addEventListener('piecemaker:tabular-review-show', shown);
     (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'chronology';
-    vi.spyOn(knowledgeApi, 'graph').mockResolvedValue({ ...graph, nodes: [{ projectId: graph.projectId, id: 'doc', kind: 'document', label: 'Contrat', aliases: [], data: {}, date: '2024-03-05', createdAt: '', updatedAt: '' }] } as never);
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined, rpc: vi.fn(), openFileInEditor: vi.fn() } as never);
-    await vi.waitFor(() => expect(container.querySelector('.pmd-chronology-table')).not.toBeNull());
-    expect(container.querySelector('[data-action="chronology-tabular"]')).toBeNull();
+    await vi.waitFor(() => expect(mountIndexAnalysis).toHaveBeenCalledOnce());
+    const host = vi.mocked(mountIndexAnalysis).mock.calls[0][0];
+    expect(container.contains(host)).toBe(true);
+    expect(host.closest('[data-content]')).not.toBeNull();
+    expect(vi.mocked(mountIndexAnalysis).mock.calls[0][1]).toEqual(expect.objectContaining({ context: expect.objectContaining({ project: { name: graph.projectId, path: '/dossier-exemple' } }) }));
+    expect(container.querySelector('.pmd-modal, .pmd-chronology-table, [data-action="index-analysis"]')).toBeNull();
     expect(shown).not.toHaveBeenCalled();
-    container.querySelector<HTMLButtonElement>('[data-action="index-analysis"]')!.click();
-    await vi.waitFor(() => expect(openIndexAnalysis).toHaveBeenCalledOnce());
-    expect(openIndexAnalysis).toHaveBeenCalledWith(expect.any(dom.window.HTMLElement), expect.objectContaining({ context: expect.objectContaining({ project: { name: graph.projectId, path: '/dossier-exemple' } }) }), expect.any(Function));
-    expect(shown).not.toHaveBeenCalled();
+    container.querySelector<HTMLButtonElement>('[data-tab="general"]')!.click();
+    container.querySelector<HTMLButtonElement>('[data-tab="chronology"]')!.click();
+    expect(container.contains(host)).toBe(true);
+    expect(mountIndexAnalysis).toHaveBeenCalledOnce();
+  });
+
+  it('bascule l’Index en mode chronologie et prévient la revue', async () => {
+    vi.mocked(mountIndexAnalysis).mockClear();
+    vi.stubGlobal('localStorage', dom.window.localStorage);
+    (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'chronology';
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined, rpc: vi.fn(), openFileInEditor: vi.fn() } as never);
+    await vi.waitFor(() => expect(mountIndexAnalysis).toHaveBeenCalledOnce());
+    const chronology = vi.mocked(mountIndexAnalysis).mock.calls[0][3]!;
+    const changed = vi.fn();
+    chronology.subscribe(changed);
+    expect(chronology.active()).toBe(false);
+    container.querySelector<HTMLButtonElement>('[data-action="index-chronology"]')!.click();
+    expect(chronology.active()).toBe(true);
+    expect(changed).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-action="index-chronology"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem('pmd-index-chronologie')).toBe('1');
+    expect(mountIndexAnalysis).toHaveBeenCalledOnce();
+  });
+
+  it('ouvre l’Index quand pm demande l’analyse de l’Index', async () => {
+    vi.mocked(mountIndexAnalysis).mockClear();
+    const focus: unknown[] = [];
+    dom.window.addEventListener('piecemaker:panel-focus', (event) => focus.push((event as CustomEvent).detail.view));
+    (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'index-analysis';
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined, rpc: vi.fn(), openFileInEditor: vi.fn() } as never);
+    await vi.waitFor(() => expect(mountIndexAnalysis).toHaveBeenCalledOnce());
+    expect(focus).toContain('chronology');
+    expect(container.querySelector('.pmd-modal')).toBeNull();
   });
 });
 
-describe('Index : tri et classement', () => {
+describe('Index : classement', () => {
   const documents = [
     { id: 'ten', label: 'Écrit 10.pdf', date: '2024-02-01', data: { path: '/dossier-exemple/10 Archives/Écrit 10.pdf' } },
     { id: 'two', label: 'ecrit 2.pdf', date: '2024-12-01', data: { path: '/dossier-exemple/2 Contrats/ecrit 2.pdf' } },
@@ -59,25 +94,8 @@ describe('Index : tri et classement', () => {
     (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'chronology';
     vi.spyOn(knowledgeApi, 'graph').mockResolvedValue({ ...graph, nodes: documents.map((node) => ({ projectId: graph.projectId, kind: 'document', aliases: [], createdAt: '', updatedAt: '', ...node })) } as KnowledgeSnapshot);
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
-    await vi.waitFor(() => expect(container.querySelector('.pmd-chronology-table')).not.toBeNull());
+    await vi.waitFor(() => expect(container.querySelector('[data-index-analysis]')).not.toBeNull());
   }
-
-  it.each([
-    ['document', ['missing', 'two', 'ten'], ['ten', 'two', 'missing']],
-    ['date', ['ten', 'two', 'missing'], ['two', 'ten', 'missing']],
-    ['classification', ['two', 'ten', 'missing'], ['ten', 'two', 'missing']],
-  ])('sorts %s in both directions, with missing values last', async (column, ascending, descending) => {
-    await openIndex();
-    const ids = () => [...container.querySelectorAll<HTMLElement>('tbody tr')].map((row) => row.dataset.openDocument);
-    const sort = () => container.querySelector<HTMLButtonElement>(`[data-sort="${column}"]`)!.click();
-    if (column !== 'date') sort();
-    expect(ids()).toEqual(ascending);
-    expect(container.querySelector(`[data-sort="${column}"]`)!.closest('th')!.getAttribute('aria-sort')).toBe('ascending');
-    sort();
-    expect(ids()).toEqual(descending);
-    container.querySelector<HTMLButtonElement>('[data-action="refresh"]')!.click();
-    await vi.waitFor(() => expect(ids()).toEqual(descending));
-  });
 
   it('edits the shared classification through authenticated RPC and retains entries after a save error', async () => {
     vi.stubGlobal('localStorage', dom.window.localStorage);
@@ -102,16 +120,16 @@ describe('Index : tri et classement', () => {
     container.querySelector<HTMLButtonElement>('[data-tree-remove="2"]')!.click();
     const submit = () => container.querySelector('form[data-tree-form]')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
     submit();
-    await vi.waitFor(() => expect(container.querySelector('[data-tree-error]')!.textContent).toContain('Nom de dossier invalide'));
+    await vi.waitFor(() => expect(container.querySelector('[data-settings-error]')!.textContent).toContain('Nom de dossier invalide'));
     expect(container.querySelector<HTMLInputElement>('[data-tree-name]')!.value).toBe('Contrats/Signés');
     rejectSave = false;
     submit();
     await vi.waitFor(() => expect(container.querySelector('.pmd-modal')).toBeNull());
-    const [url, init] = fetchMock.mock.calls.at(-1)!;
+    const [url, init] = fetchMock.mock.calls.findLast(([, request]) => request?.method === 'PUT')!;
     expect(url).toBe('/api/plugins/piecemaker-tabular-review/rpc/classification');
     expect(init.headers).toMatchObject({ Authorization: 'Bearer test-token' });
     expect(JSON.parse(init.body as string)).toEqual({ project: '/dossier-exemple', folders: [{ name: 'Contrats/Signés', explanation: 'Les accords' }, { name: 'Courriers', explanation: 'Les échanges' }] });
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/plugins/piecemaker-tabular-review/rpc/classification?project=%2Fdossier-exemple');
+    expect(fetchMock.mock.calls.map(([address]) => address)).toContain('/api/plugins/piecemaker-tabular-review/rpc/classification?project=%2Fdossier-exemple');
     container.querySelector<HTMLButtonElement>('[data-action="edit-tree"]')!.click();
     await vi.waitFor(() => expect(container.querySelector('[data-tree-name]')).not.toBeNull());
     const calls = fetchMock.mock.calls.length;
@@ -135,28 +153,9 @@ describe('Index : tri et classement', () => {
     rows()[3].querySelector<HTMLInputElement>('[data-tree-name]')!.value = 'Résiliés';
     container.querySelector('form[data-tree-form]')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(container.querySelector('.pmd-modal')).toBeNull());
-    const init = (fetchMock.mock.calls.at(-1) as unknown as [string, RequestInit])[1];
+    const init = (fetchMock.mock.calls as unknown as Array<[string, RequestInit]>).findLast(([, request]) => request?.method === 'PUT')![1];
     expect((JSON.parse(init.body as string) as { folders: { name: string }[] }).folders.map((folder) => folder.name))
       .toEqual(['Courriers', 'Contrats', 'Contrats/Signés', 'Contrats/Résiliés']);
-  });
-});
-
-describe('Nature du document', () => {
-  it('changes the nature from the pill without opening the document', async () => {
-    vi.stubGlobal('Event', dom.window.Event);
-    (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'chronology';
-    vi.spyOn(knowledgeApi, 'graph').mockResolvedValue({ ...graph, nodes: [{ projectId: graph.projectId, id: 'doc', kind: 'document', label: 'Contrat', aliases: [], data: { nature: 'contrat', localisation: 'Paris' }, date: '2024-03-05', createdAt: '', updatedAt: '' }], links: [] });
-    const update = vi.spyOn(knowledgeApi, 'update').mockResolvedValue(undefined as never);
-    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined });
-    await vi.waitFor(() => expect(container.querySelector('[data-edit-nature]')).not.toBeNull());
-    container.querySelector<HTMLElement>('[data-edit-nature]')!.click();
-    const select = container.querySelector<HTMLSelectElement>('[data-nature-select]')!;
-    select.click();
-    expect(container.querySelector('.pmd-modal')).toBeNull();
-    select.value = 'facture';
-    select.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-    await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
-    expect(update.mock.calls[0][1]).toEqual([{ op: 'upsertNode', node: expect.objectContaining({ id: 'doc', date: '2024-03-05', data: { nature: 'facture', localisation: 'Paris' } }) }]);
   });
 });
 
@@ -165,24 +164,23 @@ describe('Dossier edit action', () => {
     const openFileInEditor = vi.fn();
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor });
     await vi.waitFor(() => expect(container.querySelector('[data-edit-node]')).not.toBeNull());
-    if (source === 'mapping') container.querySelector<HTMLElement>('[data-action="mapping"]')!.click();
+    if (source === 'mapping') { (window as Window & { __piecemakerMappingShow?: string }).__piecemakerMappingShow = '/dossier-exemple'; window.dispatchEvent(new window.Event('piecemaker:mapping-show')); }
     const scope = source === 'mapping' ? container.querySelector('.pmd-mapping-dialog')! : container;
     scope.querySelector<HTMLElement>('[data-edit-node]')!.click();
     expect(openFileInEditor).toHaveBeenCalledExactlyOnceWith('piecemaker://identity/open/Soci%C3%A9t%C3%A9%20Exemple%20SAS');
     expect(container.querySelector('.pmd-modal')).toBeNull();
   });
 
-  it('opens the mapping from the anonymized count', async () => {
+  it('publishes the anonymization state and opens the mapping on request', async () => {
+    const states: Array<{ anonymized: boolean; project: string }> = [];
+    const listen = (event: Event) => states.push((event as CustomEvent).detail);
+    window.addEventListener('piecemaker:anonymization-state', listen);
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
-    await vi.waitFor(() => expect(container.querySelector('.pmd-status-label')).not.toBeNull());
-    container.querySelector<HTMLButtonElement>('.pmd-status-label')!.click();
-    expect(container.querySelector('.pmd-mapping-dialog')).not.toBeNull();
-  });
-
-  it('opens the mapping from the shield', async () => {
-    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
-    await vi.waitFor(() => expect(container.querySelector('.pmd-status-icon')).not.toBeNull());
-    container.querySelector<HTMLButtonElement>('.pmd-status-icon')!.click();
+    await vi.waitFor(() => expect(container.querySelector('[data-edit-node]')).not.toBeNull());
+    window.removeEventListener('piecemaker:anonymization-state', listen);
+    expect(states.at(-1)?.project).toBe('/dossier-exemple');
+    (window as Window & { __piecemakerMappingShow?: string }).__piecemakerMappingShow = '/dossier-exemple';
+    window.dispatchEvent(new window.Event('piecemaker:mapping-show'));
     expect(container.querySelector('.pmd-mapping-dialog')).not.toBeNull();
   });
 });

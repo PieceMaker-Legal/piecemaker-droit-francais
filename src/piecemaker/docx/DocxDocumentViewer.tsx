@@ -1,5 +1,7 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { parseDocx, type Document as DocxModel } from '@eigenpal/docx-editor-core';
+import { toProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { acceptChange, acceptChangeById, rejectChange, rejectChangeById } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import { ListTree, MessageSquare } from 'lucide-react';
@@ -16,6 +18,7 @@ import { clearDocxCitationHighlight, highlightCitationInDocx } from '@/piecemake
 import { api, authenticatedFetch } from '@/shared/api';
 import { DocxSaveContext } from '@/piecemaker/docx/pendingSaves';
 import { useTheme } from '@/shared/context/ThemeContext';
+import { DocxReviewPanel } from '@/modules/docx-review';
 import type { CodeEditorFile } from '@/shared/types';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -25,6 +28,10 @@ const SAVE_DEBOUNCE_MS = 800;
 const COMMENTS_SIDEBAR_RESERVED_PX = 248;
 const REVISION_MARK_SELECTOR = '.docx-insertion, .docx-deletion, [data-revision-id]';
 const MARKUP_MARK_SELECTOR = `${REVISION_MARK_SELECTOR}, [data-comment-id]`;
+const ADD_COMMENT_BUTTON_SELECTOR = 'button[style*="translate(-50%, -50%)"]';
+const SELECTION_RECT_SELECTOR = '[data-testid="selection-overlay"] > div';
+const ADD_COMMENT_BUTTON_GAP_PX = 18;
+const ADD_COMMENT_BUTTON_HALF_PX = 14;
 
 function isMacPlatform() {
   return typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -157,6 +164,41 @@ function alignNewCommentCard(container: HTMLElement, zoomAtClick: number) {
   card.dataset.alignedTop = card.style.top;
 }
 
+function placeAddCommentButtonAboveSelection(container: HTMLElement) {
+  const button = container.querySelector<HTMLElement>(ADD_COMMENT_BUTTON_SELECTOR);
+  const origin = button?.offsetParent;
+  if (!button || !origin) return;
+  const first = [...container.querySelectorAll(SELECTION_RECT_SELECTOR)]
+    .map((element) => element.getBoundingClientRect())
+    .filter((rect) => rect.width > 2)
+    .sort((a, b) => a.top - b.top || a.left - b.left)[0];
+  if (!first) return;
+  const originRect = origin.getBoundingClientRect();
+  const top = `${Math.round(first.top - originRect.top - ADD_COMMENT_BUTTON_GAP_PX)}px`;
+  const left = `${Math.round(first.left - originRect.left + ADD_COMMENT_BUTTON_HALF_PX)}px`;
+  if (button.style.top !== top) button.style.top = top;
+  if (button.style.left !== left) button.style.left = left;
+}
+
+function applyDocumentDiff(view: EditorView, model: DocxModel) {
+  const next = view.state.schema.nodeFromJSON(toProseDoc(model, { styles: model.package?.styles }).toJSON());
+  const current = view.state.doc;
+  const start = current.content.findDiffStart(next.content);
+  const end = current.content.findDiffEnd(next.content);
+  if (start == null || !end) return;
+  const overlap = start - Math.min(end.a, end.b);
+  const endA = overlap > 0 ? end.a + overlap : end.a;
+  const endB = overlap > 0 ? end.b + overlap : end.b;
+  view.dispatch(view.state.tr.replace(start, endA, next.slice(start, endB)).setMeta('addToHistory', false));
+}
+
+function nextFrames(count: number) {
+  return new Promise<void>((resolve) => {
+    const step = (remaining: number) => (remaining === 0 ? resolve() : requestAnimationFrame(() => step(remaining - 1)));
+    step(count);
+  });
+}
+
 function countThreads(comments: { parentId?: number | null }[]) {
   return comments.filter((comment) => comment.parentId == null).length;
 }
@@ -187,6 +229,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const documentEpochRef = useRef(0);
   const loadingEpochRef = useRef<number | null>(null);
   const resolvedPathRef = useRef(file.path);
+  const shownPathRef = useRef<string | null>(null);
+  const replacingDocumentRef = useRef(false);
   const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number; filePath: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -229,6 +273,9 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       const response = await api.readFileBlob(projectId, filePath);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const buffer = await response.arrayBuffer();
+      const editor = editorRef.current;
+      const inPlace = editor !== null && shownPathRef.current === filePath;
+      const parsed = inPlace ? await parseDocx(buffer).catch(() => null) : null;
       if (epoch !== documentEpochRef.current) return;
       if (!discardChanges && editVersionRef.current !== savedEditVersionRef.current) {
         setConflict(true);
@@ -243,6 +290,20 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       setConflict(false);
       versionRef.current = version;
       setError(null);
+      if (editor && parsed) {
+        const scroller = containerRef.current?.querySelector<HTMLElement>('.docx-editor__scroll-container');
+        const scrollTop = scroller?.scrollTop ?? 0;
+        replacingDocumentRef.current = true;
+        editor.loadDocument(parsed);
+        await nextFrames(1);
+        const view = editor.getEditorRef()?.getView();
+        if (view) applyDocumentDiff(view, parsed);
+        await nextFrames(2);
+        if (scroller) scroller.scrollTop = scrollTop;
+        replacingDocumentRef.current = false;
+        return;
+      }
+      shownPathRef.current = filePath;
       setLoaded({ buffer, version, filePath });
     } finally {
       if (loadingEpochRef.current === epoch) loadingEpochRef.current = null;
@@ -394,6 +455,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       fit();
       setCommentCount(countThreads(editorRef.current?.getComments() ?? []));
       alignNewCommentCard(container, zoomAtClickRef.current);
+      placeAddCommentButtonAboveSelection(container);
     });
     resizeObserver.observe(container);
     mutationObserver.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] });
@@ -461,7 +523,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const markUserEditing = () => { userEditingRef.current = true; };
 
   const markCommentOpenGesture = (event: { target: EventTarget | null; metaKey: boolean; ctrlKey: boolean }) => {
-    commentsOpenFromClickRef.current = isSelectorTarget(event.target, MARKUP_MARK_SELECTOR) && isCommentOpenModifier(event);
+    commentsOpenFromClickRef.current = isSelectorTarget(event.target, ADD_COMMENT_BUTTON_SELECTOR)
+      || (isSelectorTarget(event.target, MARKUP_MARK_SELECTOR) && isCommentOpenModifier(event));
   };
 
   const revisionHintPosition = (event: { clientX: number; clientY: number }) => {
@@ -502,6 +565,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   };
 
   const handleCommentsSidebarOpenChange = (open: boolean) => {
+    if (replacingDocumentRef.current) return;
     if (!open) {
       setCommentsOpen(false);
       return;
@@ -531,8 +595,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       {error && <p className="border-b border-border px-3 py-1.5 text-xs text-destructive">{error}</p>}
       {commentQuestions.notice && <p role="alert" className="border-b border-border px-3 py-1.5 text-xs text-destructive">{commentQuestions.notice}</p>}
       {loaded ? (
+        <div className="flex min-h-0 flex-1">
         <DocxEditor
-          key={loaded.version}
           ref={editorRef}
           documentBuffer={loaded.buffer}
           documentName={loaded.filePath.split(/[\\/]/).pop() || file.name}
@@ -549,6 +613,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           onCommentsSidebarOpenChange={handleCommentsSidebarOpenChange}
           onCommentsChange={(comments) => setCommentCount(countThreads(comments))}
           onCommentAdd={commentQuestions.askComment}
+          onCommentReply={(reply, parent) => { markUserEditing(); scheduleSave(); commentQuestions.askReply(reply, parent); }}
           onCommentDelete={commentQuestions.forgetComment}
           renderLogo={() => (
             <div className="flex items-center gap-1">
@@ -561,6 +626,9 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
           )}
           style={{ flex: 1, minHeight: 0 }}
         />
+        {projectId && <DocxReviewPanel key={`${projectId}:${loaded.filePath}`} projectId={projectId} path={loaded.filePath} beforeChange={flush} onChanged={() => load()}
+          onView={(edit) => { const id = edit.ins_w_id ?? edit.del_w_id; if (id) editorRef.current?.getEditorRef()?.scrollToChangeId(Number(id)); }} />}
+        </div>
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">{error ? file.path : 'Chargement…'}</div>
       )}

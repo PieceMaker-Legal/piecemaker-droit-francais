@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { readWorkspaceContext } from '@/modules/piecemaker-context-suggestions';
+import { OPEN_PANEL_EVENT } from '@/modules/piecemaker-workspace-tabs/requestWorkspacePanel';
 import { autoPanelTarget, draftFromResult, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import type { AutoPanelTarget } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import { closeInEditor, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
@@ -19,6 +20,7 @@ const MAX_AGE_MS = 120_000;
 const DOSSIER_TAB: AppTab = 'plugin:piecemaker-dossier';
 const TABULAR_REVIEW_TAB: AppTab = 'plugin:piecemaker-tabular-review';
 const TAMPON_TAB: AppTab = 'plugin:piecemaker-tampon';
+const PLAIN_TABS: readonly AppTab[] = ['plugin:piecemaker-echeances', 'plugin:piecemaker-catala'];
 const DOSSIER_VIEW_EVENT = 'piecemaker:dossier-view';
 const DOSSIER_VIEW_KEY = '__piecemakerDossierView';
 const TABULAR_REVIEW_SHOW_EVENT = 'piecemaker:tabular-review-show';
@@ -66,6 +68,15 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
   });
 
   useEffect(() => {
+    const open = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: unknown }>).detail?.tab;
+      if (typeof tab === 'string') state.current.openTab(tab as AppTab);
+    };
+    window.addEventListener(OPEN_PANEL_EVENT, open);
+    return () => window.removeEventListener(OPEN_PANEL_EVENT, open);
+  }, []);
+
+  useEffect(() => {
     const seen = new Set<string>();
     const awaitingDraft = new Set<string>();
     return subscribe((event) => {
@@ -108,13 +119,16 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
             openInEditor(request.document);
             handled = true;
           } else if (request.tab === DOSSIER_TAB) {
-            show({ kind: 'dossier', view: request.view === 'chronology' ? 'chronology' : 'general' }, state.current, request.id);
+            show({ kind: 'dossier', view: request.view === 'chronology' || request.view === 'index-analysis' ? request.view : 'general' }, state.current, request.id);
             handled = true;
           } else if (request.tab === TABULAR_REVIEW_TAB) {
             show({ kind: 'tabular-review', review: request.review ?? null, ...(request.draft ? { draft: request.draft } : {}) }, state.current, request.id);
             handled = true;
           } else if (request.tab === TAMPON_TAB) {
             show({ kind: 'tampon', reload: true }, state.current, request.id);
+            handled = true;
+          } else if (PLAIN_TABS.includes(request.tab as AppTab)) {
+            state.current.openTab(request.tab as AppTab);
             handled = true;
           }
           if (handled) await acknowledgeWorkspacePanel(projectPath, request.id);

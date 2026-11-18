@@ -6,7 +6,6 @@ try {
     || positional.some((value) => typeof value !== 'string' || value.startsWith('--')) || !options || Array.isArray(options) || typeof options !== 'object') {
     throw new Error('Commande PieceMaker invalide.');
   }
-  if (outil === 'catala') throw new Error('Utilisez pm catala dans le terminal Hermes.');
   const args = [outil, ...positional];
   for (const [name, value] of Object.entries(options)) {
     if (!/^[a-z][a-z0-9_]*$/.test(name) || name === 'dossier') throw new Error('Option PieceMaker invalide.');

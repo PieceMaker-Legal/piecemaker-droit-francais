@@ -25,7 +25,7 @@ function publishOpenPanels(file, project, entry) {
 test('les outils exposés sont afficher, conversion, sql, tabular_review et tabular_review_index, sans renommage', async () => {
   const { client, close } = await connect({ sqlFn: async () => '' });
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'conversion', 'raisonnement', 'sql', 'suivi', 'tabular_review', 'tabular_review_index']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'conversion', 'sql', 'suivi', 'tabular_review', 'tabular_review_index']);
   const sql = tools.find((tool) => tool.name === 'sql');
   assert.deepEqual(Object.keys(sql.inputSchema.properties), ['requete']);
   assert.deepEqual(sql.annotations, {

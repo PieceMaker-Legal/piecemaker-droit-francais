@@ -105,22 +105,24 @@ function installationFolder(content: string, fallback = '') {
   return componentFolderName(String(data.name || data.metadata?.title || fallback));
 }
 
-function installableComponent(entry: LibraryEntry): LibraryComponent {
+export function installableComponent(entry: LibraryEntry): LibraryComponent {
   const slug = installationFolder(entry.content, entry.name);
   if (entry.kind === 'skill') {
     const files = Object.fromEntries(Object.entries(entry.assets).map(([name, bytes]) => [name, Buffer.from(bytes, 'base64')]));
     return { kind: 'skill', slug, files: { ...files, 'SKILL.md': Buffer.from(entry.content, 'utf8') } };
   }
   const { data, content } = parseFrontMatter(entry.content);
-  const toml = (fields: Record<string, string>) => `${Object.entries(fields).map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n')}\n`;
+  const toml = (fields: Record<string, string | string[] | undefined>) => `${Object.entries(fields).filter(([, value]) => value !== undefined).map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join('\n')}\n`;
+  const text = (value: unknown) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+  const list = (value: unknown) => (Array.isArray(value) && value.length && value.every((item) => typeof item === 'string') ? value as string[] : undefined);
   const name = String(data.name || entry.name);
   const description = entry.description || entry.name;
   return {
     kind: 'agent',
     slug,
     markdown: entry.content,
-    codex: toml({ name, description, developer_instructions: content }),
-    vibe: toml({ display_name: name, description, agent_type: 'subagent', instructions: content }),
+    codex: toml({ name, description, model: text(data.codexModel), model_reasoning_effort: text(data.codexReasoningEffort), developer_instructions: content }),
+    vibe: toml({ display_name: text(data.metadata?.title) ?? name, description, agent_type: 'subagent', active_model: text(data.vibeModel), enabled_skills: list(data.vibeSkills), instructions: content }),
   };
 }
 

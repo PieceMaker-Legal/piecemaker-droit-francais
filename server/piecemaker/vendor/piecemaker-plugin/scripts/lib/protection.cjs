@@ -23,8 +23,8 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
-const { structuredMarkdownCounterpart } = require('./case-folder-structure.cjs');
 const { markdownStemCandidates } = require('./markdown-name.cjs');
+const { CONVERTED_FOLDER } = require('./technical-paths.cjs');
 
 const PROTECTION_DIR = '.piecemaker';
 const PROTECTION_FILE = 'protection.json';
@@ -36,7 +36,7 @@ const PROTECTION_BYPASS_FILE = 'protection-bypass.json';
  * Correspondance et Data Room ; ce repli reste nécessaire aux anciens dossiers
  * et aux espaces de travail OOXML. `mapping.cjs` et `commits.cjs` l'importent.
  */
-const WORKSPACE_SUBDIR = 'Fichiers convertis PieceMaker';
+const WORKSPACE_SUBDIR = CONVERTED_FOLDER;
 
 /**
  * Suffixe d'un sous-dossier de travail OOXML : une copie extraite d'un `.docx`
@@ -167,8 +167,8 @@ function realpathOrParent(target) {
  * Les deux côtés sont résolus : comparer un `/var/…` à un `/private/var/…`
  * (macOS) donnait un chemin remontant hors du dossier, donc « non protégé ».
  */
-function relativeKey(absolutePath, caseRoot) {
-  const relative = path.relative(realpathOrParent(path.resolve(caseRoot)), realpathOrParent(path.resolve(absolutePath)));
+function relativeKey(absolutePath, caseRoot, resolve = realpathOrParent) {
+  const relative = path.relative(resolve(path.resolve(caseRoot)), resolve(path.resolve(absolutePath)));
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
   return relative.split(path.sep).join('/');
 }
@@ -287,8 +287,16 @@ function mutateProtection(caseRoot, mutate) {
 }
 
 /** Vrai pour un chemin recevable dans une des deux listes d'exceptions. */
-function exceptionKey(absolutePath, caseRoot) {
-  const key = relativeKey(absolutePath, caseRoot);
+function memoizedRealpath() {
+  const resolved = new Map();
+  return (target) => {
+    if (!resolved.has(target)) resolved.set(target, realpathOrParent(target));
+    return resolved.get(target);
+  };
+}
+
+function exceptionKey(absolutePath, caseRoot, resolve = realpathOrParent) {
+  const key = relativeKey(absolutePath, caseRoot, resolve);
   if (!key) return null;
   // Les dotfiles sont de la configuration du dossier, jamais des pièces —
   // `.piecemaker/protection.json` inclus, qui doit rester lisible par l'admin.
@@ -308,7 +316,10 @@ function exceptionKey(absolutePath, caseRoot) {
  */
 function isOoxmlWorkspacePath(absolutePath, caseRoot) {
   const key = relativeKey(absolutePath, caseRoot);
-  if (!key) return false;
+  return Boolean(key) && isOoxmlWorkspaceKey(key);
+}
+
+function isOoxmlWorkspaceKey(key) {
   const segments = key.split('/');
   if (segments[0] !== WORKSPACE_SUBDIR) return false;
   return segments.slice(1, -1).some((segment) => segment.toLowerCase().endsWith(OOXML_WORKDIR_SUFFIX));
@@ -323,11 +334,11 @@ function isOoxmlWorkspacePath(absolutePath, caseRoot) {
  */
 function isProtectedFile(absolutePath, caseRoot, state = null) {
   if (!absolutePath || !caseRoot) return false;
-  const key = exceptionKey(absolutePath, caseRoot);
+  const key = exceptionKey(absolutePath, caseRoot, state?.resolve);
   if (!key) return false;
   if (!PROTECTED_EXTENSIONS.has(path.extname(key).toLowerCase())) return false;
   // Copie extraite d'un .docx : espace de travail implicite, jamais coffre-fort.
-  if (isOoxmlWorkspacePath(absolutePath, caseRoot)) return false;
+  if (isOoxmlWorkspaceKey(key)) return false;
   const current = state || readProtection(caseRoot);
   if (current.bypass) return false;
   const { unprotected, resources } = current;
@@ -340,25 +351,22 @@ function isProtectedFile(absolutePath, caseRoot, state = null) {
  */
 function isResourceFile(absolutePath, caseRoot, state = null) {
   if (!absolutePath || !caseRoot) return false;
-  const key = exceptionKey(absolutePath, caseRoot);
+  const key = exceptionKey(absolutePath, caseRoot, state?.resolve);
   if (!key) return false;
   const { resources } = state || readProtection(caseRoot);
   return Boolean(resources && resources.has(key));
 }
 
 /**
- * Le Markdown à lire à la place d'une pièce protégée. Les dossiers structurés
- * l'écrivent dans la zone de conversion de Correspondance ou Data Room ; les
- * anciens dossiers utilisent encore `WORKSPACE_SUBDIR`, la racine ou le dossier
- * de la pièce. À défaut, le chemin attendu rend le refus actionnable.
+ * Le Markdown à lire à la place d'une pièce protégée : dans `WORKSPACE_SUBDIR`,
+ * la racine ou le dossier de la pièce. À défaut, le chemin attendu rend le refus
+ * actionnable.
  */
 function markdownCounterpart(absolutePath, caseRoot) {
   const stems = markdownStemCandidates(absolutePath, caseRoot);
   const stem = stems.at(-1);
-  const structured = structuredMarkdownCounterpart(absolutePath, caseRoot);
   const workspaceMarkdown = path.join(caseRoot, WORKSPACE_SUBDIR, `${stem}.md`);
   const candidates = [
-    ...(structured ? [structured.path] : []),
     ...stems.map((candidate) => path.join(caseRoot, WORKSPACE_SUBDIR, `${candidate}.md`)),
     ...stems.map((candidate) => path.join(path.dirname(absolutePath), `${candidate}.md`)),
     ...stems.map((candidate) => path.join(caseRoot, `${candidate}.md`)),
@@ -378,7 +386,7 @@ function markdownCounterpart(absolutePath, caseRoot) {
       // dossier illisible : on essaie l'emplacement suivant
     }
   }
-  return structured || { path: workspaceMarkdown, exists: false };
+  return { path: workspaceMarkdown, exists: false };
 }
 
 /**
@@ -424,6 +432,7 @@ module.exports = {
   isOoxmlWorkspacePath,
   isResourceFile,
   markdownCounterpart,
+  memoizedRealpath,
   normalizeOriginalName,
   protectionFile,
   protectionBypassFile,

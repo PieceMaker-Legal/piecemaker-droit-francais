@@ -8,8 +8,8 @@ import { installLegalCodeHarness, withLegalCodeInstructions, withoutLegalCodeIns
 
 function setup() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'legal-code-'));
-  fs.mkdirSync(path.join(root, 'server', 'piecemaker', 'legal-code'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'server', 'piecemaker', 'legal-code', 'instructions.md'), 'Tu es Legal Code.\n');
+  fs.mkdirSync(path.join(root, 'server', 'piecemaker', 'vendor', 'skills', 'catala'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'server', 'piecemaker', 'vendor', 'skills', 'catala', 'SKILL.md'), 'Tu es Legal Code.\n');
   const calls: string[] = [];
   const sent: any[] = [];
   const runtime: any = {
@@ -31,7 +31,7 @@ test('ajoute les instructions au premier message Legal Code et les masque Ã  lâ€
   await runtime.run('claude', 'La clause est-elle valable ?', { legalCode: true, cwd: '/dossiers/Dupont c Exemple' }, writer);
   assert.match(calls[0], /Tu es Legal Code\./);
   assert.match(calls[0], /--dossier "\/dossiers\/Dupont c Exemple"/);
-  assert.ok(calls[0].includes(`"${path.join('/dossiers/Dupont c Exemple', '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm')}"`));
+  assert.doesNotMatch(calls[0], /scripts\/pm/);
   assert.equal(sent[0].content, 'La clause est-elle valable ?');
   const history = await sessions.fetchHistory('s1', {});
   assert.equal(history.messages[0].content, 'La clause est-elle valable ?');

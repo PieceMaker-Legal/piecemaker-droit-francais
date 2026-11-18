@@ -1,14 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { readOntology } from '../../../../server/piecemaker/okf/ontology.js';
+
 import type { Cell, Review, ReviewColumn, ReviewRow } from '../shared.js';
-import { emptyColumns, MAX_CITATION_CORRECTIONS } from '../shared.js';
+import { classifyColumn, emptyColumns, MAX_CITATION_CORRECTIONS, DOCUMENT_TITLE_INDEX, citationIssue, citationRequired, reviewCategory, isDocumentTypeColumn } from '../shared.js';
 import type { CitationDocument } from './citations.js';
 import { citationProblems, correctionPrompt, verifyCells } from './citations.js';
+import { sortRow } from './classify.js';
 import { documentPath, reviewDirectory } from './paths.js';
 import { missingCell, parseCells, reviewNote, systemPrompt, userPrompt } from './prompt.js';
 import type { PromptDocument } from './prompt.js';
 import { readReview, reviewKey, updateReview } from './reviews.js';
+import { alignDocumentTypes } from './templates.js';
 import type { Conversation } from './sessions.js';
 import { openSession } from './sessions.js';
 
@@ -27,6 +31,7 @@ type Job = {
   workers: number;
   controller: AbortController;
   environment: NodeJS.ProcessEnv;
+  hostOrigin?: string;
 };
 
 const jobs = new Map<string, Job>();
@@ -78,7 +83,7 @@ async function askWithCorrections(job: Job, rowId: string, session: Conversation
 
 async function runRow(job: Job, task: RowTask): Promise<void> {
   const { rowId } = task;
-  const review = readReview(job.project, job.file);
+  const review = await readReview(job.project, job.file);
   const row = review.rows.find((entry) => entry.id === rowId);
   if (!row) return;
   const targets = emptyColumns(review, rowId, task.columns);
@@ -89,8 +94,11 @@ async function runRow(job: Job, task: RowTask): Promise<void> {
     });
     return;
   }
-  const columns = review.columns.filter((column) => targets.includes(column.index));
+  const columns = alignDocumentTypes(review.columns.filter((column) => targets.includes(column.index)), readOntology(job.project).documentTypes);
+  const withTitle = reviewCategory(review) !== 'recherche-juridique' && row.documents.length === 1 && !row.title;
+  const requested = withTitle ? [{ index: DOCUMENT_TITLE_INDEX, name: 'Nom du document', format: 'text' as const, prompt: 'Donne un titre court qui identifie la nature précise et l’objet du document. Reprends son intitulé s’il existe. Justifie ce titre par une citation du document. Ne reprends pas le nom du fichier et n’invente aucune information. Si aucun titre ne peut être établi, réponds « Non trouvé ».' }, ...columns] : columns;
   const mode = rowMode(row);
+  const sorting = Boolean(job.hostOrigin && classifyColumn(review.columns));
   await updateReview(job.project, job.file, (current) => {
     const target = current.rows.find((entry) => entry.id === rowId);
     if (!target) return;
@@ -108,16 +116,31 @@ async function runRow(job: Job, task: RowTask): Promise<void> {
       environment: job.environment,
       signal: job.controller.signal,
     });
-    const first = userPrompt(row.label, promptDocuments(documents, job.project, row, mode), columns, reviewNote(review));
-    const { cells: parsed, corrections } = await askWithCorrections(job, rowId, session, first, columns, documents);
+    const first = userPrompt(row.label, promptDocuments(documents, job.project, row, mode), requested, reviewNote(review));
+    const { cells: parsed, corrections } = await askWithCorrections(job, rowId, session, first, requested, documents);
     await updateReview(job.project, job.file, (current) => {
       const target = current.rows.find((entry) => entry.id === rowId);
       if (!target) return;
       const cells = { ...current.cells[rowId] };
-      for (const column of columns) cells[String(column.index)] = parsed.get(column.index) ?? missingCell();
+      const title = parsed.get(DOCUMENT_TITLE_INDEX);
+      if (title && citationRequired(title) && !citationIssue(title)) target.title = title;
+      for (const column of columns) {
+        const cell = parsed.get(column.index) ?? missingCell();
+        if (isDocumentTypeColumn(column)) cell.summary = column.tags?.find((tag) => tag.toLocaleLowerCase('fr') === cell.summary.toLocaleLowerCase('fr').trim()) || 'indéterminé';
+        cells[String(column.index)] = cell;
+      }
       current.cells[rowId] = cells;
-      Object.assign(target, { status: 'done', finishedAt: new Date().toISOString(), error: undefined, corrections: corrections || undefined });
+      Object.assign(target, { status: sorting ? 'running' : 'done', finishedAt: sorting ? undefined : new Date().toISOString(), error: undefined, corrections: corrections || undefined });
     });
+    if (sorting && job.hostOrigin) {
+      await sortRow(job.hostOrigin, job.project, job.file, rowId).catch((error: unknown) => {
+        process.stderr.write(`Analyse Tabulaire, classement : ${error instanceof Error ? error.message : String(error)}\n`);
+      });
+      await updateReview(job.project, job.file, (current) => {
+        const target = current.rows.find((entry) => entry.id === rowId);
+        if (target) Object.assign(target, { status: 'done', finishedAt: new Date().toISOString() });
+      });
+    }
   } catch (error) {
     const cancelled = job.controller.signal.aborted;
     await updateReview(job.project, job.file, (current) => {
@@ -177,9 +200,9 @@ export function pendingTasks(review: Review, tasks: RowTask[]): RowTask[] {
   return merged.filter((task) => review.rows.some((row) => row.id === task.rowId) && emptyColumns(review, task.rowId, task.columns).length);
 }
 
-export async function queueTasks(project: string, file: string, tasks: RowTask[], concurrency: number, environment: NodeJS.ProcessEnv): Promise<number> {
+export async function queueTasks(project: string, file: string, tasks: RowTask[], concurrency: number, environment: NodeJS.ProcessEnv, hostOrigin?: string): Promise<number> {
   const key = reviewKey(project, file);
-  const runnable = pendingTasks(readReview(project, file), tasks);
+  const runnable = pendingTasks(await readReview(project, file), tasks);
   const count = runnable.length;
   if (!count) return 0;
   const existing = jobs.get(key);
@@ -190,12 +213,13 @@ export async function queueTasks(project: string, file: string, tasks: RowTask[]
   };
   if (existing && !existing.controller.signal.aborted) {
     await updateReview(project, file, markPending);
+    if (hostOrigin) existing.hostOrigin = hostOrigin;
     for (const task of runnable) mergeTask(existing.queue, task);
     spawnWorkers(existing, Math.max(0, Math.min(concurrency, existing.queue.length) - existing.workers));
     return count;
   }
   await updateReview(project, file, markPending);
-  const job: Job = { project, file, queue: [...runnable], active: new Set(), workers: 0, controller: new AbortController(), environment };
+  const job: Job = { project, file, queue: [...runnable], active: new Set(), workers: 0, controller: new AbortController(), environment, hostOrigin };
   jobs.set(key, job);
   spawnWorkers(job, Math.max(1, Math.min(concurrency, count)));
   return count;

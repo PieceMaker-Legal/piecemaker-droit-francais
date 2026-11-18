@@ -699,12 +699,18 @@ svg {
 }
 
 body.mac .titlebar {
+  display: none;
   padding-left: 92px;
   padding-right: 12px;
 }
 
 body.win .titlebar {
   padding-right: 150px;
+}
+
+body.win .tb-tab[data-cc-tab="home"],
+body.win .tb-tab[data-cc-tab="local"] {
+  display: none;
 }
 
 .titlebar .brand {

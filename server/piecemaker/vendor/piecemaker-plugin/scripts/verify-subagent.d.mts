@@ -1,0 +1,1 @@
+export function subagentReport(payload: unknown, options?: { run?: (args: string[], cwd: string) => Promise<{ code: number; stdout: string; stderr: string }> }): Promise<{ hookSpecificOutput?: { additionalContext?: string } } | null>;

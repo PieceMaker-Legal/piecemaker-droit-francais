@@ -50,6 +50,7 @@ async function loadEntry(startupError, platform = 'win32', preparationWindow = f
       if (startupError) throw startupError;
     } },
     './keepAwake.js': { installDesktopKeepAwake: async () => { calls.push('keep-awake'); } },
+    './catala-pack.mjs': { startCatalaPack: () => { calls.push('catala'); } },
     './ui-updates/index.mjs': { installUiUpdates: async () => { calls.push('ui-updates'); } },
     './auth/main.mjs': { installDesktopPasswords: async () => { calls.push('passwords'); } },
   };
@@ -96,7 +97,7 @@ async function loadEntry(startupError, platform = 'win32', preparationWindow = f
 }
 
 test('Windows entry finishes loading before ready, then starts updater, plugins and desktop', async () => {
-  assert.deepEqual(await loadEntry(), ['waiting-ready', 'updater', 'keep-awake', 'passwords', 'ui-updates', 'plugins', 'desktop']);
+  assert.deepEqual(await loadEntry(), ['waiting-ready', 'updater', 'keep-awake', 'passwords', 'ui-updates', 'plugins', 'catala', 'desktop']);
 });
 
 test('startup failure is reported and quits the app without an unhandled rejection', async () => {
@@ -107,7 +108,7 @@ test('startup failure is reported and quits the app without an unhandled rejecti
 });
 
 test('macOS installs continuous UI before opening the desktop', async () => {
-  assert.deepEqual(await loadEntry(undefined, 'darwin'), ['waiting-ready', 'keep-awake', 'passwords', 'ui-updates', 'plugins', 'desktop']);
+  assert.deepEqual(await loadEntry(undefined, 'darwin'), ['waiting-ready', 'keep-awake', 'passwords', 'ui-updates', 'plugins', 'catala', 'desktop']);
 });
 
 test('a preparation window without the desktop bridge cannot consume the automatic local launch', async () => {

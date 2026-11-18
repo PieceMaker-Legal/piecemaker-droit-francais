@@ -1,3 +1,4 @@
+import { authenticatedFetch, type ApiRequestOptions } from '../../../src/shared/authToken.js';
 import type { KnowledgeSnapshot, KnowledgeUpdateOperation } from './types.js';
 
 export type KnowledgeDocumentPreview = { path: string; content: string };
@@ -63,34 +64,31 @@ type RegisteredCase = { folder: RepositoryCase };
 const BASE = '/api/piecemaker/knowledge';
 const PIECEMAKER_BASE = '/api/piecemaker';
 
-async function request<T>(base: string, path: string, init: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('auth-token');
-  const response = await fetch(`${base}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.headers || {}),
-    },
-  });
-  const refreshed = response.headers.get('X-Refreshed-Token');
-  if (refreshed) {
-    localStorage.setItem('auth-token', refreshed);
-    window.dispatchEvent(new CustomEvent('auth-token-refreshed', { detail: refreshed }));
-  }
+async function request<T>(base: string, path: string, init: ApiRequestOptions = {}): Promise<T> {
+  const response = await authenticatedFetch(`${base}${path}`, init);
   const data = await response.json() as T & { error?: string };
   if (!response.ok) throw new Error(data.error || `Erreur ${response.status}`);
   return data;
 }
 
-export type ClassificationFolder = { name: string; explanation: string };
+const ETAPES_BASE = '/api/piecemaker/etapes';
+
+export const etapesApi = {
+  read: (projectPath: string) => request<{ mappingValide?: string }>(ETAPES_BASE, `/dossier?projectPath=${encodeURIComponent(projectPath)}`),
+  validateMapping: (projectPath: string) => request<{ mappingValide?: string }>(ETAPES_BASE, '/dossier', { method: 'POST', body: JSON.stringify({ projectPath, mappingValide: true }) }),
+};
+
+export type ClassificationFolder = { name: string; explanation: string; type?: string };
 
 const CLASSIFICATION_BASE = '/api/plugins/piecemaker-tabular-review/rpc';
 
 export const tabularReviewRpc = (method: string, path: string, body?: unknown) => request(CLASSIFICATION_BASE, path, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
+export type ClassificationState = { folders: ClassificationFolder[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: { dossiers: ClassificationFolder[]; motif: string; date: string } | null };
+
 export const classificationApi = {
-  read: (project: string) => request<{ folders: ClassificationFolder[] }>(CLASSIFICATION_BASE, `/classification?project=${encodeURIComponent(project)}`),
+  read: (project: string) => request<ClassificationState>(CLASSIFICATION_BASE, `/classification?project=${encodeURIComponent(project)}`),
+  dropProposal: (project: string) => request<ClassificationState>(CLASSIFICATION_BASE, `/classification/proposition?project=${encodeURIComponent(project)}`, { method: 'DELETE' }),
   save: (project: string, folders: ClassificationFolder[]) => request(CLASSIFICATION_BASE, '/classification', { method: 'PUT', body: JSON.stringify({ project, folders }) }),
 };
 

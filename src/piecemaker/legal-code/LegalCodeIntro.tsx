@@ -6,10 +6,9 @@ import { cancelLegalCode, readLegalCodeStart, subscribeToLegalCode } from './leg
 
 const STEPS = [
   'Posez la question juridique du dossier dans la zone de saisie, puis envoyez.',
-  'Legal Code la découpe en conditions, chacune fondée sur un article ou une décision lue sur Légifrance.',
-  'Il rattache chaque fait à une pièce du dossier et à son extrait ; un fait sans pièce reste « à rechercher ».',
-  'Le volet Raisonnement montre le graphe, le détail et le test : la question, en droit, en fait, conclusion.',
-  'Vous validez, écartez ou corrigez chaque élément ; une fois décidé, il est verrouillé pour l’agent.',
+  'Legal Code la code en programme Catala, chaque condition fondée sur un article ou une décision lue sur Légifrance.',
+  'Il rattache chaque prémisse à une pièce du dossier et à son extrait ; une prémisse sans pièce reste à prouver.',
+  'Le volet Catala montre le graphe, les tests et la preuve du programme.',
 ];
 
 export function LegalCodeIntro() {
@@ -32,7 +31,7 @@ export function LegalCodeIntro() {
         </span>
       </p>
       <p className="mt-1 text-[13px] text-muted-foreground">
-        Un agent qui traduit votre analyse juridique en raisonnement vérifiable, élément par élément.
+        Un agent qui traduit votre analyse juridique en programme Catala vérifiable, élément par élément.
       </p>
       <ol className="mt-3 list-decimal space-y-1 pl-5 text-[13px] text-foreground">
         {STEPS.map((step) => (

@@ -23,9 +23,11 @@
  */
 
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { readHookPayload, runHook, noop } from './lib/hook-io.mjs';
+import { shellSegments } from './lib/shell-segments.mjs';
 
 const require = createRequire(import.meta.url);
 const { locateProjectCase } = require('./lib/case-folders.cjs');
@@ -37,6 +39,7 @@ const {
   markdownCounterpart,
   readProtection,
 } = require('./lib/protection.cjs');
+const { applyMapping, resolveMappedPath } = require('./lib/substitution.cjs');
 
 /** Au-delà, on ne cherche pas de chemin : une commande pareille n'en cite pas un. */
 const MAX_COMMAND_LENGTH = 20_000;
@@ -66,8 +69,7 @@ function quotedForShell(value) {
 }
 
 function conversionCommand(caseRoot) {
-  const launcher = path.join(caseRoot, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
-  return `${quotedForShell(launcher)} conversion --dossier ${quotedForShell(caseRoot)}`;
+  return `pm dossier conversion --dossier ${quotedForShell(caseRoot)}`;
 }
 
 function recoveredByGit(absolute, caseRoot) {
@@ -245,6 +247,104 @@ function isDocxReadCommand(command, cwd) {
   return reads.length > 0 && reads.every((words) => isCaseDocxRead(words, cwd));
 }
 
+const SHELL_WORD = /"[^"]*"|'[^']*'|[^\s;|&<>()]+/g;
+
+function missingFileWords(command, cwd) {
+  const text = String(command || '');
+  if (!text || text.length > MAX_COMMAND_LENGTH) return [];
+  return (text.match(SHELL_WORD) || [])
+    .map((word) => word.replace(/^["']|["']$/g, ''))
+    .filter((bare) => bare && !bare.startsWith('-') && /\.[\p{L}\d]{1,8}$/u.test(bare) && !statSafe(absolutePath(bare, cwd)));
+}
+
+async function anonymizationDictionary() {
+  try {
+    const { createSqliteDictionaryLoader } = require('../../../anonymizer/sqlite-dictionary.cjs');
+    const { productDataRoot } = await import('../../../../../shared/product-config.mjs');
+    const databasePath = process.env.DATABASE_PATH || path.join(productDataRoot(path.join(os.homedir(), '.cloudcli')), 'auth.db');
+    if (!statSafe(databasePath)) return null;
+    const loader = createSqliteDictionaryLoader({ databasePath });
+    const dictionary = loader.get();
+    loader.close();
+    return dictionary.empty ? null : dictionary;
+  } catch {
+    return null;
+  }
+}
+
+const SIZE_CHOICE = /^\s*PIECEMAKER_TAILLE=(\d+)\s+/;
+
+function sameMaskedFiles(masked, dictionary, cwd) {
+  const directory = resolveMappedPath(path.dirname(masked), dictionary.mapping, dictionary.reverse, cwd);
+  const expected = path.basename(masked).normalize('NFC');
+  let names;
+  try {
+    names = fs.readdirSync(absolutePath(directory, cwd));
+  } catch {
+    return [];
+  }
+  return names
+    .filter((name) => applyMapping(name, dictionary.mapping).normalize('NFC') === expected)
+    .map((name) => ({ path: path.join(directory, name), stat: statSafe(absolutePath(path.join(directory, name), cwd)) }))
+    .filter((file) => file.stat?.isFile());
+}
+
+function percentDecoded(value) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+async function withExistingFiles(command, cwd) {
+  const text = String(command ?? '');
+  if (missingFileWords(text, cwd).length === 0) return { command };
+  const dictionary = await anonymizationDictionary();
+  if (!dictionary) return { command };
+  const size = text.match(SIZE_CHOICE)?.[1];
+  const ambiguous = [];
+  const resolvedCommand = text.replace(SIZE_CHOICE, '').replace(SHELL_WORD, (word) => {
+    const bare = word.replace(/^["']|["']$/g, '');
+    if (!missingFileWords(bare, cwd).length) return word;
+    const masked = applyMapping(percentDecoded(bare), dictionary.mapping);
+    const resolved = resolveMappedPath(masked, dictionary.mapping, dictionary.reverse, cwd);
+    if (statSafe(absolutePath(resolved, cwd))?.isFile()) return quotedForShell(resolved);
+    const files = sameMaskedFiles(masked, dictionary, cwd);
+    if (files.length < 2) return word;
+    const chosen = files
+      .filter((file) => size !== undefined && file.stat.size === Number(size))
+      .sort((a, b) => b.stat.birthtimeMs - a.stat.birthtimeMs)[0];
+    if (chosen) return quotedForShell(chosen.path);
+    ambiguous.push(files);
+    return word;
+  });
+  return { command: resolvedCommand, ambiguous };
+}
+
+function ambiguityReason(ambiguous) {
+  const lines = ambiguous.flat().map((file) => (
+    `- ${file.stat.size} octets, créé le ${file.stat.birthtime.toISOString()}, modifié le ${file.stat.mtime.toISOString()}`
+  ));
+  return [
+    '[PieceMaker] Plusieurs fichiers du dossier portent ce nom une fois anonymisé :',
+    ...lines,
+    'Relance la même commande précédée de PIECEMAKER_TAILLE=<taille exacte en octets>. Si plusieurs fichiers ont cette taille, le plus récemment créé est retenu. En cas de doute, demande à l’utilisateur.',
+  ].join('\n');
+}
+
+function rewritten(toolInput, command, approved) {
+  const allowed = approved || process.env.PIECEMAKER_HOOK_CLIENT === 'codex';
+  return {
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: allowed ? 'allow' : 'ask',
+      ...(allowed ? {} : { permissionDecisionReason: '[PieceMaker] Chemin corrigé vers le fichier présent sur le disque.' }),
+      updatedInput: { ...toolInput, command },
+    },
+  };
+}
+
 async function main() {
   const payload = await readHookPayload(2000);
   if (!payload) return null;
@@ -253,18 +353,24 @@ async function main() {
   const cwd = payload.cwd || process.cwd();
 
   if (toolName === 'Bash') {
-    const gitReason = gitHistoryReason(payload.tool_input?.command, cwd);
+    const { command, ambiguous } = await withExistingFiles(payload.tool_input?.command, cwd);
+    if (ambiguous?.length) return deny(ambiguityReason(ambiguous));
+    const gitReason = gitHistoryReason(command, cwd);
     if (gitReason) return deny(gitReason);
-    for (const candidate of commandPaths(payload.tool_input?.command, cwd)) {
-      const located = locateProjectCase(candidate);
-      if (!shieldActive(located)) continue;
-      if (isMappingFile(candidate)) return deny(mappingReason(candidate));
-      if (isSecretFile(candidate)) return deny(secretReason(candidate));
-      if (isProtectedFile(candidate, located.caseRoot)) {
-        return deny(protectionReason(candidate, located.caseRoot));
+    for (const segment of shellSegments(command)) {
+      for (const candidate of commandPaths(segment.text, cwd)) {
+        const located = locateProjectCase(candidate);
+        if (!shieldActive(located)) continue;
+        if (isMappingFile(candidate)) return deny(mappingReason(candidate));
+        if (isSecretFile(candidate)) return deny(secretReason(candidate));
+        if (!segment.okf && isProtectedFile(candidate, located.caseRoot)) {
+          return deny(protectionReason(candidate, located.caseRoot));
+        }
       }
     }
-    return isDocxReadCommand(payload.tool_input?.command, cwd) ? allow() : null;
+    const approved = isDocxReadCommand(command, cwd);
+    if (command !== payload.tool_input?.command) return rewritten(payload.tool_input, command, approved);
+    return approved ? allow() : null;
   }
 
   if (!['Read', 'Grep', 'Glob'].includes(toolName)) return null;

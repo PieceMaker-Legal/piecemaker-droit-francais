@@ -6,13 +6,14 @@ import { emptyColumns } from '../shared.js';
 import { assistant } from './assistant.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, upsertDraft } from './drafts.js';
-import { addClassification, readClassification, saveClassification } from './classification.js';
+import { addClassification, classificationLines, dropClassificationProposal, readClassification, readClassificationProposal, saveClassification } from './classification.js';
 import { citationSource } from './citations.js';
 import { exportReview } from './export.js';
 import { pickFiles } from './picker.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
 import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch, updateResearchFilters } from './research.js';
-import { appendRows, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, saveQuestion, updateReview } from './reviews.js';
+import { appendRows, checkCell, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, saveQuestion, updateReview } from './reviews.js';
+import { assertHostOrigin } from './classify.js';
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
 import { assertModel, assertProvider, assertProxyOrigin, probeProxy, sessionEnvironment } from './sessions.js';
@@ -49,9 +50,10 @@ async function createAndLaunch(body: Body) {
   const template = Array.isArray(request.columns) ? normalizeTemplate({ name: request.templateName || 'Questions personnalisées', columns: request.columns }) : findTemplate(request.templateId);
   const settings = { provider: assertProvider(request.provider), model: assertModel(request.model), concurrency: concurrency(request.concurrency) };
   const environment = await launchEnvironment(request.proxyOrigin);
-  const { file, review, created } = createReview(project, template, request.title, request.rows, settings);
+  const hostOrigin = assertHostOrigin(body.hostOrigin);
+  const { file, review, created } = await createReview(project, template, request.title, request.rows, settings);
   if (!created) return reviewDetail(project, file, isRunning(project, file));
-  await queueTasks(project, file, review.rows.map((row) => ({ rowId: row.id })), settings.concurrency, environment);
+  await queueTasks(project, file, review.rows.map((row) => ({ rowId: row.id })), settings.concurrency, environment, hostOrigin);
   return reviewDetail(project, file, isRunning(project, file));
 }
 
@@ -69,7 +71,7 @@ async function retry(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const running = isRunning(project, file);
   const tasks: RowTask[] = review.rows
     .filter((row) => row.status === 'error' || row.status === 'cancelled' || (!running && (row.status === 'pending' || row.status === 'running')) || emptyColumns(review, row.id).length)
@@ -85,7 +87,7 @@ async function run(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const rowId = typeof body.rowId === 'string' ? body.rowId : null;
   const column = body.column === undefined || body.column === null ? null : Number(body.column);
   if (rowId !== null && !review.rows.some((row) => row.id === rowId)) throw new UserError('Ligne introuvable.');
@@ -123,7 +125,7 @@ async function appendUpdate(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const environment = await launchEnvironment(body.proxyOrigin);
   const rows = await appendResearchUpdate(project, file, String(body.id ?? ''));
   if (rows.length) await queueTasks(project, file, rows.map((rowId) => ({ rowId })), review.concurrency || 3, environment);
@@ -142,10 +144,11 @@ async function appendPieces(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const environment = await launchEnvironment(body.proxyOrigin);
+  const hostOrigin = assertHostOrigin(body.hostOrigin);
   const rows = await appendRows(project, file, body.rows as RowRequest[]);
-  if (rows.length) await queueTasks(project, file, rows.map((rowId) => ({ rowId })), review.concurrency || 3, environment);
+  if (rows.length) await queueTasks(project, file, rows.map((rowId) => ({ rowId })), review.concurrency || 3, environment, hostOrigin);
   return reviewDetail(project, file, isRunning(project, file));
 }
 
@@ -170,11 +173,21 @@ function researchRoute(method: string, pathname: string, url: URL, body: Body): 
   throw new UserError('Commande inconnue.');
 }
 
+function classificationState(project: string) {
+  const folders = readClassification(project);
+  return { folders, ...classificationLines(project, folders), proposition: readClassificationProposal(project) };
+}
+
 async function route(method: string, url: URL, body: Body): Promise<unknown> {
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
   if (pathname.startsWith('/research')) return researchRoute(method, pathname, url, body);
   if (method === 'POST' && pathname === '/assistant') return assistant(body, { isRunning, launchAnalysis: createAndLaunch, launchResearch, appendDocuments: appendPieces });
-  if (method === 'GET' && pathname === '/classification') return { folders: readClassification(assertProject(url.searchParams.get('project'))) };
+  if (method === 'GET' && pathname === '/classification') return classificationState(assertProject(url.searchParams.get('project')));
+  if (method === 'DELETE' && pathname === '/classification/proposition') {
+    const project = assertProject(url.searchParams.get('project'));
+    dropClassificationProposal(project);
+    return classificationState(project);
+  }
   if (method === 'PUT' && pathname === '/classification') return { folders: await saveClassification(assertProject(body.project), body.folders) };
   if (method === 'POST' && pathname === '/reviews/classification') {
     const { project, file } = reviewTarget(body);
@@ -202,7 +215,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   if (method === 'POST' && pathname === '/reviews/list') {
     const registered = registeredProjects();
     const projects = (Array.isArray(body.projects) ? body.projects : []).filter((project): project is string => typeof project === 'string' && registered.has(project));
-    return { reviews: listReviews(projects, isRunning) };
+    return { reviews: await listReviews(projects, isRunning) };
   }
   if (method === 'GET' && pathname === '/reviews/item') {
     const project = assertProject(url.searchParams.get('project'));
@@ -219,6 +232,11 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   if (method === 'POST' && pathname === '/reviews/cell') {
     const { project, file } = reviewTarget(body);
     await editCell(project, file, body.rowId, body.column, body.summary);
+    return reviewDetail(project, file, isRunning(project, file));
+  }
+  if (method === 'POST' && pathname === '/reviews/check') {
+    const { project, file } = reviewTarget(body);
+    await checkCell(project, file, body.rowId, body.column, body.checked);
     return reviewDetail(project, file, isRunning(project, file));
   }
   if (method === 'POST' && pathname === '/reviews/column') {
@@ -249,7 +267,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
     const file = String(body.file ?? '');
     assertReviewFile(project, file);
     if (isRunning(project, file)) throw new UserError('Annulez l’analyse tabulaire en cours avant de la supprimer.');
-    deleteReview(project, file);
+    await deleteReview(project, file);
     return { deleted: true };
   }
   if (method === 'POST' && pathname === '/reviews/export') {

@@ -24,9 +24,9 @@ async function setup(t: TestContext) {
   return { home, history: createMistralHistory(home) };
 }
 
-function fixtureTools(execute: (input: Record<string, unknown>) => Promise<string>, readOnly = true) {
+function fixtureTools(execute: (input: Record<string, unknown>) => Promise<string>, readOnly = true, turnEnd = async () => '') {
   return (async () => ({
-    instructions: 'Skills disponibles : fictitious-skill', close: async () => {},
+    instructions: 'Skills disponibles : fictitious-skill', close: async () => {}, turnEnd,
     tools: new Map([['probe', { name: 'probe', readOnly, execute, definition: { type: 'function' as const, function: { name: 'probe', parameters: { type: 'object' } } } }]]),
   })) satisfies typeof createMistralTools;
 }
@@ -62,6 +62,45 @@ test('streamed tool fragments execute once and persisted history resumes after a
   assert.ok(JSON.stringify(requests.at(-1)).includes('Vérifier alpha'));
   await assert.rejects(createMistralSdkRuntime(history, async () => [], home, auth, tools).run('autre utilisateur', { sessionId: 'mistral-sdk-example' }, { ...writer, userId: 2 }, context), /autre utilisateur/);
   assert.equal((await history.load('mistral-sdk-example'))?.userId, 1);
+});
+
+test('the turn goes on once when the turn-end report still lists errors', async t => {
+  const { home, history } = await setup(t);
+  const requests: unknown[] = [];
+  const reports = ['End of turn stopped by Le Hérisson: 1 check(s)'];
+  const tools = fixtureTools(async () => '', true, async () => reports.shift() ?? '');
+  const auth = fixtureClient([[{ content: 'Terminé.' }], [{ content: 'Corrigé.' }]], requests);
+  await createMistralSdkRuntime(history, async () => [], home, auth, tools).run('Écrire le suivi', { sessionId: 'mistral-sdk-fin-de-tour' }, { userId: 1, send() {} } as never, context);
+  assert.equal(requests.length, 2);
+  assert.ok(JSON.stringify(requests[1]).includes('End of turn stopped by Le Hérisson'));
+  assert.equal((await history.load('mistral-sdk-fin-de-tour'))?.transcript.at(-1)?.content, 'Corrigé.');
+});
+
+test('the client turn limit counts model calls, also when it arrives as text', async t => {
+  const { home, history } = await setup(t);
+  const requests: unknown[] = [];
+  const call = [{ toolCalls: [{ id: 'abcdef123', function: { name: 'probe', arguments: '{}' } }] }];
+  const auth = fixtureClient([call, call, call, call], requests);
+  await assert.rejects(
+    createMistralSdkRuntime(history, async () => [], home, auth, fixtureTools(async () => '')).run('boucler', { sessionId: 'mistral-sdk-tours', maxTurns: '3' }, { userId: 1, send() {} } as never, context),
+    /Limite de tours Mistral atteinte/,
+  );
+  assert.equal(requests.length, 3);
+});
+
+test('an exhausted Mistral budget is shown and kept in the session history', async t => {
+  const { home, history } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  const billing = Object.assign(new Error('API error occurred: Status 402'), { statusCode: 402, body: '{"message":"Budget fictif épuisé.","code":"2304"}' });
+  const auth = () => ({ client: { chat: { stream: async () => { throw billing; } } }, close: async () => {} }) as unknown as ReturnType<typeof mistralSdkAuth.createClient>;
+  await assert.rejects(
+    createMistralSdkRuntime(history, async () => [], home, auth, fixtureTools(async () => '')).run('bonjour', { sessionId: 'mistral-sdk-budget' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context),
+    /Status 402/,
+  );
+  const expected = 'Your Mistral credit or budget is exhausted (HTTP 402): Budget fictif épuisé. Top up your Mistral account, then send the message again.';
+  assert.equal(events.find(event => event.kind === 'error')?.content, expected);
+  const saved = (await history.load('mistral-sdk-budget'))?.transcript.at(-1);
+  assert.deepEqual([saved?.kind, saved?.content], ['error', expected]);
 });
 
 test('a fork copies the whole conversation and answers apart from its source', async t => {

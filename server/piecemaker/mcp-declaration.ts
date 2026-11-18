@@ -22,6 +22,7 @@ const CODEX_TOOLS_APPROVAL = 'approve';
 
 const BUNDLED_SERVERS = [
   { name: 'legifrance', skipClaude: false },
+  { name: 'features', skipClaude: false },
 ] as const;
 
 const RETIRED_SERVERS = ['piecemaker'] as const;

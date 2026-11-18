@@ -29,9 +29,11 @@ function createOriginalsCache({
     if (entries.size >= maxEntries) evictLastEntry();
 
     const promise = Promise.resolve().then(() => list(realCaseRoot));
-    const nextEntry = { promise, expiresAt: currentTime + ttlMs };
+    const nextEntry = { promise, expiresAt: Infinity };
     entries.set(realCaseRoot, nextEntry);
-    promise.catch(() => {
+    promise.then(() => {
+      nextEntry.expiresAt = now() + ttlMs;
+    }, () => {
       if (entries.get(realCaseRoot) === nextEntry) entries.delete(realCaseRoot);
     });
     return promise;

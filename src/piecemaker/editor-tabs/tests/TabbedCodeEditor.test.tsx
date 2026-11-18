@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorSidebar } from '@/modules/code-editor';
 import TabbedCodeEditor from '@/piecemaker/editor-tabs/TabbedCodeEditor';
-import { citationPath, identityPath, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
+import { citationPath, identityPath, openInEditor, sessionPath } from '@/piecemaker/editor-tabs/editorPanels';
 import { usePiecemakerEditorBridge } from '@/piecemaker/editor-tabs/usePiecemakerEditorBridge';
 import { DocxSaveContext } from '@/piecemaker/docx/pendingSaves';
 import workspaceMainSource from '@/modules/project-workspace/WorkspaceMain.tsx?raw';
@@ -27,10 +27,19 @@ const { resolveFileRef, saveDocx } = vi.hoisted(() => ({
 
 vi.mock('@/piecemaker/chat/fileRef', () => ({ resolveFileRef }));
 
+vi.mock('@/modules/piecemaker-catala', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/modules/piecemaker-catala')>()),
+  useCatalaUpdates: vi.fn(),
+}));
+
 vi.mock('@/piecemaker/citations/CitationPanel', () => ({
   CitationPanel: ({ token, onClose }: { token: string; onClose: () => void }) => (
     <aside data-testid="citation" data-token={token}><button onClick={onClose}>Fermer la source</button></aside>
   ),
+}));
+
+vi.mock('@/piecemaker/editor-tabs/SessionTab', () => ({
+  SessionTab: ({ id }: { id: string }) => <section data-testid="session">{id}</section>,
 }));
 
 const token = 'b'.repeat(64);
@@ -142,6 +151,13 @@ describe('onglets de l’éditeur latéral', () => {
     expect(screen.getByTestId('citation').dataset.token).toBe(token);
     fireEvent.click(screen.getByRole('button', { name: 'Fermer Citation [2]' }));
     expect(await shown()).toBe('/reel/dossier/notes.md');
+  });
+
+  it('ferme une conversation annexe ouverte seule dans la visionneuse', () => {
+    const onClose = vi.fn();
+    render(<TabbedCodeEditor file={file(sessionPath('conversation-fictive'))} onClose={onClose} isSidebar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer Conversation annexe' }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it('vérifie le fichier avant d’ouvrir l’éditeur et signale un fichier disparu', async () => {

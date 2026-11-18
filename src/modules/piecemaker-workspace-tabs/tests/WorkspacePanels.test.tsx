@@ -81,6 +81,15 @@ it('agrandit puis restaure une card sans perdre son contenu ni les autres volets
   expect(screen.getByText('Fichiers du dossier').closest('[hidden]')).toBeNull();
 });
 
+it('agrandit une card ouverte avant de revenir à la conversation', () => {
+  render(<Harness />);
+  fireEvent.click(screen.getByRole('button', { name: 'plugin:example' }));
+  fireEvent.click(screen.getByRole('button', { name: 'chat' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Agrandir Exemple' }));
+  expect(screen.getByTestId('main').closest('[hidden]')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Réduire Exemple' })).toBeTruthy();
+});
+
 it('garde le volet agrandi à gauche et ouvre le nouvel éditeur à droite', () => {
   render(<Harness />);
   fireEvent.click(screen.getByRole('button', { name: 'plugin:example' }));

@@ -1,3 +1,6 @@
+import { requestJson } from '../../../src/shared/authToken.js';
+export const BOARD_REQUEST = '__piecemakerBoardRequest';
+
 const SHIM = `(() => {
   const API = location.origin + '/api/piecemaker/suivi/board';
   const POLL_MS = 2000;
@@ -15,15 +18,9 @@ const SHIM = `(() => {
     if (q.orderBy) { const [f, d] = q.orderBy, s = d === 'desc' ? -1 : 1; paths.sort((a, b) => { const x = docs.get(a)[f], y = docs.get(b)[f]; return x == null && y == null ? cmp(a, b) : x == null ? 1 : y == null ? -1 : cmp(x, y) * s || cmp(a, b); }); }
     return { docs: paths.slice(0, q.limit || 1000).map(snapDoc), metadata: meta };
   };
-  const call = async (url, init = {}) => {
-    const token = localStorage.getItem('auth-token');
-    const response = await fetch(url, { ...init, headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(init.body ? { 'Content-Type': 'application/json' } : {}) } });
-    const refreshed = response.headers.get('X-Refreshed-Token');
-    if (refreshed) localStorage.setItem('auth-token', refreshed);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw { code: 'invalid_argument', message: data.error || ('Erreur ' + response.status) };
-    return data;
-  };
+  // Le client authentifié de l'application, exposé par le plugin : la page est servie par une URL blob de même origine.
+  const call = (url, init = {}) => parent[${JSON.stringify(BOARD_REQUEST)}](url, init.body ? JSON.parse(init.body) : undefined, init.method)
+    .catch((error) => { throw { code: 'invalid_argument', message: error.message }; });
   const pull = async () => {
     const data = await call(API + (rev ? '?rev=' + rev : ''));
     if (data.docs) { rev = data.rev; docs = new Map(Object.entries(data.docs)); for (const s of subs) s(); }
@@ -38,8 +35,14 @@ const SHIM = `(() => {
   const col = (p, q) => ({ path: p, where: (f, o, v) => col(p, { ...q, where: [...q.where, [f, o, v]] }), orderBy: (f, d) => col(p, { ...q, orderBy: [f, d] }), limit: (n) => col(p, { ...q, limit: n }), get: async () => { await pull(); return list(p, q); }, onSnapshot: (next) => listen(() => next(list(p, q))), doc: (id) => doc(p + '/' + id) });
   const db = { doc, collection: (p) => col(p, { where: [] }) };
   const ready = pull();
-  setInterval(() => { if (document.visibilityState === 'visible') pull().catch(() => undefined); }, POLL_MS);
+  const shown = () => document.visibilityState === 'visible' && (!frameElement || frameElement.getClientRects().length > 0);
+  let pulling = false;
+  setInterval(() => { if (pulling || !shown()) return; pulling = true; pull().catch(() => undefined).finally(() => { pulling = false; }); }, POLL_MS);
   window.claude = { use: async (name) => { if (name !== 'db') return null; await ready; return db; } };
 })();`;
 
-export const withBoardShim = (html: string) => html.replace('<script', () => `<script>${SHIM}</script><script`);
+/** Injecte le shim et expose le client authentifié à la page du tableau. */
+export const withBoardShim = (html: string) => {
+  (window as unknown as Record<string, unknown>)[BOARD_REQUEST] = requestJson;
+  return html.replace('<script', () => `<script>${SHIM}</script><script`);
+};

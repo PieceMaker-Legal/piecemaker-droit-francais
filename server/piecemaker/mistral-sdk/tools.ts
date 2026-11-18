@@ -23,8 +23,10 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
   const applicationRoot = findApplicationRoot(getModuleDirectory(import.meta.url));
   const guardScripts = [
     'server/piecemaker/vendor/piecemaker-plugin/scripts/protect-originals.mjs',
+    'server/piecemaker/vendor/piecemaker-plugin/scripts/guard-ontologie.mjs',
     'server/piecemaker/vendor/installer/assets/claude-hooks/piecemaker-guard-secrets.mjs',
   ].map(file => path.join(applicationRoot, file));
+  const classifyScript = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin/scripts/classify-ai-documents.mjs');
 
   const run = (command: string, args: string[], input?: string, shell = false) => new Promise<string>((resolve, reject) => {
     const child = spawn(command, args, { cwd, env: { ...process.env }, shell, signal, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
@@ -43,13 +45,29 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
   });
 
   const guard = async (toolName: string, input: Record<string, unknown>) => {
+    let guarded = input;
     for (const script of guardScripts) {
-      const result = await run(process.execPath, [script], JSON.stringify({ tool_name: toolName, tool_input: input, cwd }));
+      const result = await run(process.execPath, [script], JSON.stringify({ tool_name: toolName, tool_input: guarded, cwd }));
       if (!result.trim()) continue;
       const decision = JSON.parse(result).hookSpecificOutput;
       if (decision?.permissionDecision === 'deny') throw new Error(decision.permissionDecisionReason || 'Accès refusé par la protection PieceMaker.');
+      if (decision?.updatedInput) guarded = decision.updatedInput;
     }
+    return guarded;
   };
+
+  const featureScript = path.join(applicationRoot, 'server/piecemaker/vendor/piecemaker-plugin/scripts/herisson.mjs');
+  const checked = async (toolName: string, input: Record<string, unknown>, done: string) => {
+    const result = await run(process.execPath, [featureScript], JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: toolName, tool_input: input, cwd })).catch(() => '');
+    let context = '';
+    try { context = result.trim() ? JSON.parse(result).hookSpecificOutput?.additionalContext ?? '' : ''; } catch { context = ''; }
+    return context ? `${done}\n\n${context}` : done;
+  };
+  const turnEnd = async () => {
+    const result = await run(process.execPath, [featureScript], JSON.stringify({ hook_event_name: 'Stop', cwd })).catch(() => '');
+    try { return result.trim() ? String(JSON.parse(result).reason ?? '') : ''; } catch { return ''; }
+  };
+  const classify = (toolName: string, input: Record<string, unknown>) => run(process.execPath, [classifyScript], JSON.stringify({ hook_event_name: 'PostToolUse', tool_name: toolName, tool_input: input, tool_response: { success: true }, cwd })).catch(() => undefined);
 
   const add = (name: string, description: string, properties: Record<string, unknown>, required: string[], readOnly: boolean, execute: (input: Record<string, unknown>) => Promise<string>) => {
     tools.set(name, { name, readOnly, execute, definition: { type: 'function', function: {
@@ -83,7 +101,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     await guard('Write', { ...input, file_path: file });
     await fs.mkdir(path.dirname(file), { recursive: true });
     await fs.writeFile(file, text(input, 'content'), 'utf8');
-    return 'Fichier enregistré.';
+    return checked('Write', { file_path: file }, 'Fichier enregistré.');
   });
   add('Edit', 'Remplacer un texte présent une seule fois dans un fichier.', { file_path: string, old_string: string, new_string: string }, ['file_path', 'old_string', 'new_string'], false, async input => {
     const file = await target(input);
@@ -93,12 +111,13 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
     const old = text(input, 'old_string');
     if (!old || content.split(old).length !== 2) throw new Error('Le texte à remplacer doit être présent une seule fois.');
     await fs.writeFile(file, content.replace(old, () => text(input, 'new_string')), 'utf8');
-    return 'Modification enregistrée.';
+    return checked('Edit', { file_path: file }, 'Modification enregistrée.');
   });
   add('Bash', 'Exécuter une commande dans le dossier courant (shell Windows ou Unix selon le poste).', { command: string }, ['command'], false, async input => {
-    const command = text(input, 'command');
-    await guard('Bash', { command });
-    return run(command, [], undefined, true);
+    const guarded = await guard('Bash', { command: text(input, 'command') });
+    const output = await run(text(guarded, 'command'), [], undefined, true);
+    await classify('Bash', guarded);
+    return checked('Bash', guarded, output);
   });
 
   const disabled = new Set(Array.isArray(disabledSkills) ? disabledSkills.map(item => String(item?.name).toLowerCase()) : []);
@@ -184,6 +203,7 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
 
   return {
     tools,
+    turnEnd,
     instructions: `Skills disponibles (charger avec skill avant utilisation) :\n${skills.map(skill => `${skill.name} : ${skill.description}`).join('\n')}\n${failures.length ? `Serveurs MCP indisponibles :\n${failures.join('\n')}` : ''}`,
     close: async () => { await Promise.allSettled(clients.map(client => client.close())); },
   };

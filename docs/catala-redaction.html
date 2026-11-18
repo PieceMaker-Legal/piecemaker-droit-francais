@@ -1,0 +1,269 @@
+<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Catala : rédaction et ajouts PieceMaker</title><style>*{box-sizing:border-box}html{color-scheme:dark}body{margin:0;background:radial-gradient(90% 24% at 50% 0%,#234b5566,transparent 75%),#0a0a0b;color:#c6c6cb;font:15px/1.65 Inter,system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:55px 28px 90px}h1,h2,h3,strong{color:#f7f7f8}h1{font-size:36px;letter-spacing:-1.1px;line-height:1.15;max-width:850px}h2{font-size:24px;letter-spacing:-.5px;margin-top:48px}p{max-width:900px}.pm{color:#d5a6ff}.label{border:1px solid #ffffff18;border-radius:999px;padding:6px 12px;display:inline-block;font-size:12px;margin-right:8px}.scroll{overflow:auto;border:1px solid #ffffff14;border-radius:16px;background:#161618}table{border-collapse:collapse;width:100%;font-size:13px}th,td{text-align:left;padding:14px 17px;border-bottom:1px solid #ffffff12;vertical-align:top}th{color:#f7f7f8;background:#202024}td:first-child{width:21%;color:#f7f7f8;font-weight:550}td{min-width:220px}pre{overflow:auto;background:#161618;border:1px solid #ffffff14;border-radius:16px;padding:24px;font:13px/1.7 ui-monospace,SFMono-Regular,monospace;color:#e4e4e8}code{font:inherit}.card{border:1px solid #ffffff14;border-radius:16px;background:#161618;padding:24px;max-width:720px}.card h3{margin:0}.card p{margin:14px 0 0}.card small{color:#a4a4ac}a{color:inherit;text-underline-offset:3px}.flow{display:flex;flex-wrap:wrap;gap:10px;align-items:center}.flow span{padding:10px 15px;border:1px solid #ffffff18;border-radius:12px}.note{color:#a4a4ac}footer{border-top:1px solid #ffffff14;margin-top:45px;padding-top:20px;font-size:13px}@media print{html{color-scheme:light}body{background:white;color:#222}.pm{color:#7137a5}h1,h2,h3,strong,td:first-child,th{color:#111}pre,.card,.scroll,th{background:white;border-color:#ccc}pre{white-space:pre-wrap}td,th{border-color:#ccc}main{padding:0}.label{border-color:#ccc}}</style><main>
+<span class="label">Catala natif</span><span class="label pm">Violet = ajout PieceMaker</span>
+<h1>Comment structurer un raisonnement avec Catala</h1>
+<p><strong>L’auteur rédige. Catala calcule et conserve la provenance. <span class="pm">PieceMaker organise les contrôles et la lecture du dossier.</span></strong></p>
+<p>Catala permet de conserver les textes, les analyses et les règles exécutables dans un même document. Il n’impose pas une rédaction simpliste.</p>
+<p>Le tableau couvre les éléments utiles au raisonnement et à son contrôle. Il ne constitue pas un inventaire de chaque opérateur du langage.</p>
+<div class="flow"><span>Textes et pièces</span>→<span>Rédaction par l’auteur</span>→<span>Règles et scénarios Catala</span>→<span>Calcul et provenance</span>→<span class="pm">Contrôles et graphe PieceMaker</span></div>
+<h2>Répartition des rôles</h2><div class="scroll"><table><thead><tr><th>Élément</th><th>Ce que permet Catala</th><th class="pm">Ce que PieceMaker ajoute</th></tr></thead><tbody><tr><td>Question juridique et périmètre</td><td>Texte libre : objet, demande, période et hypothèses.</td><td class="pm">Question : donne aussi un libellé à la carte.</td></tr><tr><td>Plan du raisonnement</td><td>Titres Markdown hiérarchisés. Catala conserve les titres dans les positions du code.</td><td class="pm">Le volet retrouve le contexte documentaire des règles et données.</td></tr><tr><td>Textes légaux ou réglementaires</td><td>Texte, lien et identifiant dans les titres ; définitions placées sous le texte concerné.</td><td class="pm">Reconnaissance des liens juridiques ; lecteur interne et rattachement au graphe.</td></tr><tr><td>Jurisprudence</td><td>Décision, extrait et analyse en Markdown, puis règle ou exception codée.</td><td class="pm">Reconnaissance des liens de décisions et contrôle du passage cité.</td></tr><tr><td>Contrats, doctrine et autres documents</td><td>Contenu libre et liens Markdown. Catala ne connaît pas leur autorité juridique.</td><td class="pm">Classement des références selon leur type ; les catégories reconnues restent limitées.</td></tr><tr><td>Citation exacte</td><td>Le passage peut figurer dans le Markdown ou dans une annotation documentaire #[doc]. Catala ne vérifie pas la citation.</td><td class="pm">quote: « … » est obligatoire dans doc. Les anciennes mentions Citation restent lues pour compatibilité.</td></tr><tr><td>Annotations dans les blocs Catala</td><td>#[doc=&quot;…&quot;] attache du texte documentaire à une déclaration ou définition. Les attributs description et label documentent aussi certains éléments. Une référence ou citation peut figurer dans ce texte.</td><td class="pm">Le volet lit titre, source et quote dans ces annotations. Le vérificateur exige doc sur chaque définition ou règle, avec quote et un titre. Le skill fixe le style du titre, sans contrôle : infinitif pour une règle ou une condition, participe passé pour un fait.</td></tr><tr><td>PDF en annexe</td><td>&gt; Inclusion: annexe-fictive.pdf est reconnu nativement. Le moteur LaTeX prévoit une inclusion du document. Cela n’établit aucun lien probatoire entre une donnée et son annexe.</td><td class="pm">Le graphe ne traite pas encore cette directive comme un rattachement de pièce. Les liens et citations PieceMaker restent nécessaires.</td></tr><tr><td>Interprétation et motivation</td><td>Texte libre pour expliquer le passage du texte à la règle.</td><td class="pm">Justification : conserve cette explication dans le détail de la carte.</td></tr><tr><td>Données factuelles</td><td>Entrées ou définitions intermédiaires, fixées par l’auteur.</td><td class="pm">Liens aux pièces et citations ; recherche des justifications absentes.</td></tr><tr><td>Qualification juridique</td><td>Variable calculée à partir de données distinctes, avec définition explicite.</td><td class="pm">Présentation de la qualification avec ses faits et ses pièces dans une même carte.</td></tr><tr><td>Conditions cumulatives</td><td>Expression avec et ; parenthèses pour préciser les groupes.</td><td class="pm">Groupe « Toutes ces conditions » dans les expressions simples reconnues.</td></tr><tr><td>Conditions alternatives</td><td>Expression avec ou.</td><td class="pm">Groupe « L’une de ces conditions » dans les expressions simples reconnues.</td></tr><tr><td>Négation</td><td>Expression avec non. Une négation ne définit pas forcément une exception juridique.</td><td class="pm">Affichage distinct d’une condition négative et d’une exception native.</td></tr><tr><td>Principe et exceptions</td><td>Définitions étiquetées ; exception &lt;étiquette&gt; explicite la priorité.</td><td class="pm">Affichage de l’exception sélectionnée et de ses fondements.</td></tr><tr><td>Exception à une exception</td><td>Une exception peut viser l’étiquette d’une autre exception.</td><td class="pm">Conservation de la hiérarchie native dans le détail.</td></tr><tr><td>Calculs et types</td><td>Booléens, entiers, décimaux, argent, dates, durées ; opérateurs typés.</td><td class="pm">Affichage des résultats ; aucune règle de droit supplémentaire dans le moteur.</td></tr><tr><td>Données structurées</td><td>Structures, énumérations, listes et appels entre champs d’application.</td><td class="pm">Le graphe actuel ne rend pas tous les détails de ces structures.</td></tr><tr><td>Fait inconnu ou contesté</td><td>Énumération explicite et traitement codé de chaque cas ; aucune vérité automatique à partir d’une pièce.</td><td class="pm">Signalement des états et manques reconnus ; la fiabilité ne se déduit pas de Vrai/Faux.</td></tr><tr><td>Rattachement transversal</td><td>Aucun champ natif Concerne pour les pièces ou le graphe.</td><td class="pm">Concerne : identifiant rattache les sources et notes à l’élément nommé.</td></tr><tr><td>Démarche à effectuer</td><td>Texte libre ; aucun outil de recherche lancé par Catala.</td><td class="pm">À rechercher : affiche le travail restant sur la carte.</td></tr><tr><td>Démarche effectuée</td><td>Texte libre ; aucun historique automatique de collecte.</td><td class="pm">Démarche : conserve la démarche déclarée. Cette ligne peut être répétée.</td></tr><tr><td>Scénarios</td><td>Champ #[test] avec entrées fixées ; chaque scénario représente une hypothèse.</td><td class="pm">Liste des scénarios et sélection de leurs traces conservées.</td></tr><tr><td>Résultat attendu</td><td>assertion dans les tests ; une conclusion fausse peut satisfaire le test.</td><td class="pm">Séparation du résultat métier et du statut du test.</td></tr><tr><td>Couverture des tests</td><td>Clerk indique les passages exercés.</td><td class="pm">Correspondance entre passage du programme et scénarios qui l’exercent.</td></tr><tr><td>Traçabilité d’une exécution</td><td>Positions, titres, valeurs et règles sélectionnées dans les sorties natives.</td><td class="pm">Agrégation DOT, trace JSON et arbres d’exceptions dans un modèle de lecture commun.</td></tr><tr><td>Dépendances et ordre du calcul</td><td>Catala calcule les dépendances des variables ; le document peut suivre le plan juridique.</td><td class="pm">Graphe de lecture depuis la conclusion ; données factuelles regroupées avec leur qualification.</td></tr><tr><td>Erreurs et conflits</td><td>Typage, assertions et preuve sur les obligations produites ; aucun contrôle de fidélité juridique automatique.</td><td class="pm">Lancement coordonné par pm catala verifier ; erreurs distinctes si doc manque, si quote manque ou si le titre manque.</td></tr><tr><td>Vigueur des textes</td><td>Ce contrôle ne vient pas du compilateur Catala.</td><td class="pm">Intégration de catleg, outil distinct ; ne prouve pas l’applicabilité au cas.</td></tr><tr><td>Présentation documentaire</td><td>Markdown et génération de documentation à partir du programme littéraire.</td><td class="pm">Vues écrite et graphique, sources cliquables et détail repliable.</td></tr><tr><td>Fraîcheur des résultats</td><td>L’exécution vaut pour les sources utilisées lors du calcul.</td><td class="pm">Empreinte des sources ; les résultats périmés ne deviennent pas des preuves actuelles.</td></tr><tr><td>Organisation des fichiers</td><td>Modules, interfaces exposées et inclusion textuelle de sources.</td><td class="pm">Dossier .piecemaker/catala/&lt;nom&gt;/, conventions de fichiers et résultats conservés.</td></tr><tr><td>Force probante, objections et stratégie</td><td>Discussion libre en Markdown ; calcul possible seulement après formalisation des choix.</td><td class="pm">Aucune décision automatique sur la force probante, la bonne interprétation ou la stratégie.</td></tr></tbody></table></div>
+<h2>Exemple type : une prime de formation fictive</h2>
+<p>Le modèle réunit condition, seuil, qualification, principe, exception, exception à l’exception, montant, pièces, motivation, objection et test. Les règles et sources sont fictives.</p>
+<p class="note">Les liens example.org ne sont pas des sources juridiques vérifiées. Dans un dossier, remplacez-les par les références réelles. Le volet les classerait ici comme autres références.</p>
+<p><span class="pm">Les mots-clés violets sont des conventions PieceMaker.</span> Le reste demeure du Catala ou du Markdown natif. Les valeurs après ces mots-clés sont rédigées par l’auteur.</p>
+<h3>1. Règles : formation.catala_fr</h3><pre><code>&gt; Module Formation
+
+# Prime de formation — modèle fictif
+
+Objet : déterminer si une prime de 300 € peut être attribuée.
+Périmètre : règlement fictif, sans valeur juridique.
+Méthode : distinguer la règle, sa qualification et les données du scénario.
+
+## Interface du calcul
+
+```catala-metadata
+déclaration champ d&#x27;application Attribution:
+  entrée séances_constatées contenu entier
+  entrée absence_constatée contenu booléen
+  entrée rectification_constatée contenu booléen
+  interne participation_suffisante contenu booléen
+  résultat prime_due contenu booléen
+  résultat montant contenu argent
+```
+
+## Article 1 du règlement fictif — condition de participation
+
+[Règlement fictif, article 1](https://example.org/reglement-fictif#article-1)
+<span class="pm">Citation :</span> « La prime suppose la participation à trois séances au moins. »
+
+<span class="pm">Concerne :</span> participation_suffisante
+<span class="pm">Question :</span> La participation atteint-elle le seuil requis ?
+<span class="pm">Justification :</span> Le nombre de séances est un fait ; le seuil est une condition du règlement.
+
+```catala
+champ d&#x27;application Attribution:
+  #[doc=&quot;<span class="pm">titre:</span> Participation suffisante constatée\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-1\n<span class="pm">quote:</span> « La prime suppose la participation à trois séances au moins. »&quot;]
+  définition participation_suffisante égal à séances_constatées &gt;= 3
+
+  #[doc=&quot;<span class="pm">titre:</span> Prime accordée en principe\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-1\n<span class="pm">quote:</span> « La prime suppose la participation à trois séances au moins. »&quot;]
+  étiquette principe
+  définition prime_due égal à participation_suffisante
+```
+
+## Article 2 du règlement fictif — exception d’absence
+
+[Règlement fictif, article 2](https://example.org/reglement-fictif#article-2)
+<span class="pm">Citation :</span> « Une absence à l’évaluation exclut la prime. »
+
+<span class="pm">Concerne :</span> absence_constatée
+<span class="pm">Question :</span> L’absence à l’évaluation fait-elle obstacle à la prime ?
+<span class="pm">Justification :</span> Cette règle déroge au principe, même si le seuil de participation est atteint.
+
+```catala
+champ d&#x27;application Attribution:
+  #[doc=&quot;<span class="pm">titre:</span> Prime exclue pour absence\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-2\n<span class="pm">quote:</span> « Une absence à l’évaluation exclut la prime. »&quot;]
+  étiquette exclusion exception principe
+  définition prime_due
+  sous condition absence_constatée
+  conséquence égal à
+    faux
+```
+
+## Décision fictive — exception à l’exclusion
+
+[Décision fictive, point 3](https://example.org/decision-fictive#point-3)
+<span class="pm">Citation :</span> « Une absence enregistrée par erreur ne peut exclure la prime après rectification. »
+
+<span class="pm">Concerne :</span> rectification_constatée
+<span class="pm">Question :</span> La rectification neutralise-t-elle l’exclusion ?
+<span class="pm">Justification :</span> La rectification supprime l’obstacle ; elle ne dispense pas du seuil de participation.
+
+```catala
+champ d&#x27;application Attribution:
+  #[doc=&quot;<span class="pm">titre:</span> Exclusion écartée après rectification\n<span class="pm">source:</span> https://example.org/decision-fictive\n<span class="pm">quote:</span> « Une absence enregistrée par erreur ne peut exclure la prime après rectification. »&quot;]
+  exception exclusion
+  définition prime_due
+  sous condition rectification_constatée
+  conséquence égal à
+    participation_suffisante
+```
+
+## Article 3 du règlement fictif — montant
+
+[Règlement fictif, article 3](https://example.org/reglement-fictif#article-3)
+<span class="pm">Citation :</span> « La prime est fixée à 300 euros. »
+
+```catala
+champ d&#x27;application Attribution:
+  #[doc=&quot;<span class="pm">titre:</span> Montant de la prime fixé\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-3\n<span class="pm">quote:</span> « La prime est fixée à 300 euros. »&quot;]
+  définition montant égal à si prime_due alors 300 € sinon 0 €
+```
+
+## Discussion rédigée
+
+Argument favorable : une rectification peut rendre l’exclusion inapplicable.
+Objection : une rectification ne démontre pas, à elle seule, le nombre de séances suivies.
+Réponse : la participation fait l’objet d’une qualification et d’une pièce distinctes.
+Limite : si la rectification reste inconnue, les scénarios pertinents doivent rester ouverts.</code></pre>
+<h3>2. Faits et application : test_formation.catala_fr</h3><pre><code>&gt; Usage de Formation
+
+# Application à un dossier fictif
+
+```catala
+#[test]
+déclaration champ d&#x27;application Rectification:
+  interne séances_observées contenu entier
+  interne absence_observée contenu booléen
+  interne rectification_observée contenu booléen
+  résultat calcul contenu Formation.Attribution
+```
+
+## Pièce 1 — participation
+
+<span class="pm">Concerne :</span> séances_constatées
+[Pièce 1, présence](../../../pieces/presence-fictive.md)
+<span class="pm">Citation :</span> « Jean Dupont a participé à quatre séances. »
+<span class="pm">Justification :</span> Le relevé fournit le nombre de séances utilisé pour la qualification.
+
+```catala
+champ d&#x27;application Rectification:
+  #[doc=&quot;<span class="pm">titre:</span> Quatre séances suivies\n<span class="pm">source:</span> ../../../pieces/presence-fictive.md\n<span class="pm">quote:</span> « Jean Dupont a participé à quatre séances. »&quot;]
+  définition séances_observées égal à 4
+```
+
+## Pièce 2 — absence
+
+<span class="pm">Concerne :</span> absence_constatée
+[Pièce 2, évaluation](../../../pieces/evaluation-fictive.md)
+<span class="pm">Citation :</span> « Jean Dupont est enregistré absent à l’évaluation. »
+
+```catala
+champ d&#x27;application Rectification:
+  #[doc=&quot;<span class="pm">titre:</span> Absence enregistrée à l’évaluation\n<span class="pm">source:</span> ../../../pieces/evaluation-fictive.md\n<span class="pm">quote:</span> « Jean Dupont est enregistré absent à l’évaluation. »&quot;]
+  définition absence_observée égal à vrai
+```
+
+## Pièce 3 — rectification
+
+<span class="pm">Concerne :</span> rectification_constatée
+[Pièce 3, rectification](../../../pieces/rectification-fictive.md)
+<span class="pm">Citation :</span> « La mention d’absence résulte d’une erreur ; elle est rectifiée. »
+<span class="pm">Justification :</span> Le scénario suppose que cette rectification est retenue.
+<span class="pm">À rechercher :</span> Vérifier l’auteur et la portée du document de rectification.
+<span class="pm">Démarche :</span> Exemple fictif | rapprochement des relevés | portée de la rectification à confirmer
+
+```catala
+champ d&#x27;application Rectification:
+  #[doc=&quot;<span class="pm">titre:</span> Absence rectifiée\n<span class="pm">source:</span> ../../../pieces/rectification-fictive.md\n<span class="pm">quote:</span> « La mention d’absence résulte d’une erreur ; elle est rectifiée. »&quot;]
+  définition rectification_observée égal à vrai
+```
+
+## Application et résultat attendu
+
+```catala
+champ d&#x27;application Rectification:
+  #[doc=&quot;<span class="pm">titre:</span> Scénario Rectification appliqué\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-1\n<span class="pm">quote:</span> « La prime suppose la participation à trois séances au moins. »&quot;]
+  définition calcul égal à
+    résultat de Formation.Attribution avec {
+      -- séances_constatées: séances_observées
+      -- absence_constatée: absence_observée
+      -- rectification_constatée: rectification_observée
+    }
+  assertion calcul.prime_due
+  assertion calcul.montant = 300 €
+```
+
+```catala
+#[test]
+déclaration champ d&#x27;application SeuilAbsent:
+  résultat calcul contenu Formation.Attribution
+
+champ d&#x27;application SeuilAbsent:
+  #[doc=&quot;<span class="pm">titre:</span> Scénario SeuilAbsent appliqué\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-1\n<span class="pm">quote:</span> « La prime suppose la participation à trois séances au moins. »&quot;]
+  définition calcul égal à
+    résultat de Formation.Attribution avec {
+      -- séances_constatées: 2
+      -- absence_constatée: faux
+      -- rectification_constatée: faux
+    }
+  assertion non calcul.prime_due
+  assertion calcul.montant = 0 €
+```
+
+```catala
+#[test]
+déclaration champ d&#x27;application Principe:
+  résultat calcul contenu Formation.Attribution
+
+champ d&#x27;application Principe:
+  #[doc=&quot;<span class="pm">titre:</span> Scénario Principe appliqué\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-1\n<span class="pm">quote:</span> « La prime suppose la participation à trois séances au moins. »&quot;]
+  définition calcul égal à
+    résultat de Formation.Attribution avec {
+      -- séances_constatées: 4
+      -- absence_constatée: faux
+      -- rectification_constatée: faux
+    }
+  assertion calcul.prime_due
+  assertion calcul.montant = 300 €
+```
+
+```catala
+#[test]
+déclaration champ d&#x27;application Exclusion:
+  résultat calcul contenu Formation.Attribution
+
+champ d&#x27;application Exclusion:
+  #[doc=&quot;<span class="pm">titre:</span> Scénario Exclusion appliqué\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-1\n<span class="pm">quote:</span> « La prime suppose la participation à trois séances au moins. »&quot;]
+  définition calcul égal à
+    résultat de Formation.Attribution avec {
+      -- séances_constatées: 4
+      -- absence_constatée: vrai
+      -- rectification_constatée: faux
+    }
+  assertion non calcul.prime_due
+  assertion calcul.montant = 0 €
+```
+
+```catala
+#[test]
+déclaration champ d&#x27;application RectificationSansSeuil:
+  résultat calcul contenu Formation.Attribution
+
+champ d&#x27;application RectificationSansSeuil:
+  #[doc=&quot;<span class="pm">titre:</span> Scénario RectificationSansSeuil appliqué\n<span class="pm">source:</span> https://example.org/reglement-fictif#article-1\n<span class="pm">quote:</span> « La prime suppose la participation à trois séances au moins. »&quot;]
+  définition calcul égal à
+    résultat de Formation.Attribution avec {
+      -- séances_constatées: 2
+      -- absence_constatée: vrai
+      -- rectification_constatée: vrai
+    }
+  assertion non calcul.prime_due
+  assertion calcul.montant = 0 €
+```</code></pre>
+<p><span class="pm">Concerne</span> relie ici les pièces du scénario aux entrées du module. La position native des données intermédiaires conserve aussi leur contexte documentaire.</p>
+<h3>3. Scénarios à confronter</h3><div class="scroll"><table><thead><tr><th>Scénario</th><th>Séances</th><th>Absence</th><th>Rectification</th><th>Résultat attendu</th></tr></thead><tbody>
+<tr><td>SeuilAbsent</td><td>2</td><td>Faux</td><td>Faux</td><td>Faux ; 0 €</td></tr><tr><td>Principe</td><td>4</td><td>Faux</td><td>Faux</td><td>Vrai ; 300 €</td></tr><tr><td>Exclusion</td><td>4</td><td>Vrai</td><td>Faux</td><td>Faux ; 0 €</td></tr><tr><td>Rectification</td><td>4</td><td>Vrai</td><td>Vrai</td><td>Vrai ; 300 €</td></tr><tr><td>RectificationSansSeuil</td><td>2</td><td>Vrai</td><td>Vrai</td><td>Faux ; 0 €</td></tr>
+</tbody></table></div>
+<p>Une rectification inconnue demande plusieurs hypothèses ou une énumération explicitement traitée. Elle ne justifie pas de choisir Faux.</p>
+<h3 class="pm">4. Carte ajoutée par PieceMaker</h3><div class="card"><small class="pm">Regroupement de lecture ajouté par PieceMaker</small><h3>Condition : participation suffisante</h3><p><strong>Fondement</strong> — Article 1 du règlement fictif.<br>« La prime suppose la participation à trois séances au moins. »</p><p><strong>Fait invoqué</strong> — Jean Dupont a participé à quatre séances.</p><p><strong>Pièce</strong> — Relevé de présence fictif, passage cité.</p><p><strong>Qualification calculée</strong> — 4 ≥ 3 : Vrai.</p><p><strong>Limite</strong> — Le calcul ne démontre pas l’authenticité du relevé.</p></div>
+<h3>5. Ce qui reste du texte libre</h3><p>Vous pouvez ajouter une chronologie, la charge de la preuve, des arguments adverses, des réserves, des demandes subsidiaires et des dispositions transitoires.</p><p>Ces développements ne modifient le résultat que si les règles exécutables les prennent en compte. <span class="pm">Le volet ne transforme pas chaque paragraphe en champ structuré.</span></p>
+<h2>Ce que Catala prévoit nativement pour les sources</h2><p>Il serait inexact de dire que Catala ne prévoit rien pour les fondements et documents. Il reconnaît les identifiants juridiques des titres, les annotations documentaires et les inclusions de PDF.</p><pre><code># Article fictif | LEGIARTI000000000001
+
+&gt; Inclusion: annexe-fictive.pdf
+
+```catala
+#[doc=&quot;<span class="pm">source:</span> https://example.org/texte-fictif\n<span class="pm">quote:</span> « Passage juridique fictif. »&quot;]
+déclaration champ d'application Exemple:
+  #[doc=&quot;<span class="pm">source:</span> ../../../pieces/demande-fictive.md\n<span class="pm">quote:</span> « Une demande est enregistrée. »&quot;]
+  entrée demande contenu booléen
+  résultat possible contenu booléen
+
+champ d'application Exemple:
+  #[doc=&quot;<span class="pm">titre:</span> Demande admise\n<span class="pm">source:</span> https://example.org/texte-fictif\n<span class="pm">quote:</span> « La demande est la condition. »&quot;]
+  définition possible égal à demande
+```</code></pre><p>L’attribut doc et la directive sont natifs. Les balises titre, source et quote, en violet, suivent la convention PieceMaker obligatoire. Catala seul ne leur impose aucun schéma juridique.</p><p>Essai sur le pack 1.3.0 : le typage accepte ce fichier, même si le PDF est absent. Un programme sans aucune source passe aussi le typage.</p><p>Le code prévoit une sélection de page pour le PDF. L’essai de la syntaxe <code>@ p. 2</code> échoue toutefois avec <code>int_of_string</code> dans le pack testé.</p><p><span class="pm">PieceMaker exige désormais doc sur chaque définition ou règle, avec une balise quote non vide et un titre. Les erreurs sont localisées au fichier et à la ligne.</span></p><h2>Obligation de rédaction</h2><p>Chaque définition ou règle doit porter <code>#[doc]</code>. Chaque annotation doit contenir <span class="pm"><code>titre: Vérifier le contrat conclu</code></span> et <span class="pm"><code>quote: « passage exact »</code></span>. Le skill fixe le style du titre, sans contrôle : un verbe à l’infinitif en tête pour une règle ou une condition, un participe passé pour un fait, dont la source est une pièce (titre: Contrat conclu). La référence s’écrit <span class="pm"><code>source: URL ou chemin</code></span>, sans lien Markdown entre crochets.</p><p class="pm">Le vérificateur produit des erreurs distinctes : doc manquant, quote manquante, titre manquant. La citation extérieure ne remplace pas quote dans l’annotation.</p><h2>Contrôler le modèle</h2><pre class="pm"><code>pm catala verifier --programme formation
+pm catala expliquer --programme formation --fichier test_formation.catala_fr --scope Rectification
+pm catala exceptions --programme formation --fichier formation.catala_fr --scope Attribution --variable prime_due</code></pre>
+<p>Ces commandes <span class="pm">pm catala</span> orchestrent les outils du pack et les contrôles PieceMaker. Pour cet exemple fictif, les citations et la vigueur ne peuvent pas être validées.</p>
+<p id="verification">Exemple exécuté avec le pack local : documentation obligatoire, typage, format, cinq scénarios Clerk, tests Python, preuve et explication réussis. Citations et vigueur non validées : les sources sont fictives.</p>
+<footer>Références natives : <a href="https://book.catala-lang.org/en/5-1-literate-programming.html">programmation littéraire</a> ; <a href="https://book.catala-lang.org/fr/3-5-lawyers-agile.html">méthode de rédaction avec les juristes</a>. Code natif contrôlé : <a href="https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/surface/ast.mli#L282">structure documentaire</a>, <a href="https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/desugared/name_resolution.ml#L221">attribut doc</a>, <a href="https://github.com/CatalaLang/catala/blob/e86fc2f5af14af40d80bfba655ef1d8cd6dee93c/compiler/literate/latex.ml#L262">inclusion PDF</a>. Implémentation PieceMaker : <a href="graphe-catala.md">graphe-catala.md</a> et <a href="../server/piecemaker/vendor/skills/catala/references/graphe.md">fiche de rédaction</a>.<p>Le compilateur ne vérifie ni la bonne interprétation du droit, ni les faits, ni la force probante des pièces.</p></footer>
+</main></html>

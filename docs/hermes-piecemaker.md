@@ -5,14 +5,14 @@ local `piecemaker` dans le profil Hermes courant. Aucun modèle n'est appelé
 pendant cette installation. Le moteur Hermes reste inchangé.
 
 Le plugin fournit l'outil `piecemaker`, le skill PieceMaker et les fonctions
-Python `commande`, `sql`, `raisonnement` et `suivi` :
+Python `commande`, `sql`, `catala` et `suivi` :
 
 ```python
 from piecemaker import sql, commande
 
 documents = sql("SELECT id, label FROM piecemaker_nodes WHERE project_id = dossier() AND kind = 'document'")
 print(documents)
-print(commande("raisonnement", "lister"))
+print(commande("catala", "lister"))
 ```
 
 `commande(outil, *arguments, **options)` reprend les noms des commandes de `pm`.

@@ -28,7 +28,20 @@ Deux points de branchement distincts :
   Judilibre `/decision`, sans expiration, jamais les erreurs ni les textes vides.
   Une entrée sans réponse brute est retéléchargée puis remplacée. Le contrôle
   d'historique de `consulter_decision` y est gardé pour la journée. Les
-  recherches et les articles restent en direct : leur résultat peut changer.
+  recherches restent en direct : leur résultat peut changer.
+- **Cache des articles** `~/.piecemaker/articles/<id>.json` — même format et
+  mêmes règles : réponse brute de `/consult/getArticle`, écriture atomique,
+  jamais les erreurs ni les textes vides. Écrit par `decision_cache.py`
+  (`consulter_article`) et par `article-cache.mjs` (`pm catala catleg`, appel
+  `catleg lf article`). Un identifiant `LEGIARTI`/`JORFARTI` désigne une
+  version : son texte ne change pas, mais sa date de fin, si. Une version close
+  (`dateFin` passée) est gardée sans expiration ; une version sans fin publiée
+  ou à fin future n'est réutilisée que le jour du téléchargement. Aucune
+  réponse « en vigueur à la date X » n'est mise en cache. Les vérificateurs
+  (citations du suivi et de `pm catala verifier`)
+  passent par `consulter_article` et `consulter_decision` du MCP : ils lisent
+  donc ces caches avant tout appel PISTE. `catleg check-expiry` et `catleg
+  diff` restent en direct (code catleg non modifié).
 - `server/piecemaker/harness/decisions.cjs` — extrait le texte intégral et le
   titre d'un résultat `consulter_decision` ou `consulter_article`.
 - `server/piecemaker/harness/citation-turn.ts` — comportement de Mike : texte
@@ -43,12 +56,18 @@ Deux points de branchement distincts :
 - `server/piecemaker/harness/citation-store.ts` — snapshots locaux privés des
   textes ayant servi à vérifier les extraits, avec leurs positions. Les liens
   utilisent des empreintes opaques ; la route de lecture est authentifiée et
-  refuse les sessions supprimées. Ces snapshots contiennent du texte réel,
-  contrairement au journal `citations-verifiees.jsonl` qui ne contient
-  **aucun extrait ni texte source**, et utilise l'identifiant de session.
+  refuse les sessions supprimées. Ces snapshots contiennent du texte réel.
+  C'est le seul cache des citations vérifiées : `citation-sources/validees/`
+  y garde les citations Catala de textes officiels déjà retrouvées.
   Lorsqu'une décision n'avait pas été lue dans le tour, la visionneuse peut
   ouvrir sa copie déjà présente dans `decisions/` : elle cherche mécaniquement
   le passage pour la consultation, sans modifier le `verified: false` initial.
+- Sortie de commande : une citation `document` ou `code` dont le `doc_id`
+  n'est pas un fichier lisible, mais figure dans une commande shell lancée
+  dans le tour (`Bash` Claude ou Codex, y compris `/bin/zsh -lc "…; …"`,
+  `file_system.bash` de Vibe), est vérifiée contre la sortie de ces
+  commandes, même en code de sortie non nul. Titre : le `doc_id` ; repère :
+  la ligne. Un extrait absent de la sortie reste « non retrouvé ».
   Cette provenance est affichée explicitement ; le snapshot reste inchangé.
 - `src/piecemaker/citations/` — liens Markdown natifs du chat, source ouverte
   dans un onglet de l'éditeur latéral de CloudCLI (`src/piecemaker/editor-tabs/`),
@@ -65,7 +84,12 @@ Deux points de branchement distincts :
   par `flattenPromptForWindowsShell` que Vibe stocke sous Windows, et en CRLF,
   ainsi que des titres de session (`normalizeSessionName`) et de la recherche
   (`session-conversations-search.service.ts`). Les commandes slash sont
-  préservées.
+  préservées. Une question posée en commentaire d'un `.docx` part sans le
+  bloc (`docs/docx.md`).
+  Seuls se citent le droit (article, décision) et les pièces du dossier : la
+  consigne exclut sorties de commande, résultats SQL et fichiers techniques,
+  et `citation-turn.ts` écarte toute entrée `kind: "code"` du chat (acceptée
+  seulement quand `codeRoot` est passé explicitement, ce que le chat ne fait pas).
 - Liste **Sources** en fin de réponse (`finish` de `citation-turn.ts`), une
   ligne par citation, dérivée de la seule sortie du vérifieur (inchangé) :
   `[n]`, titre lié au panneau, extraits vérifiés entre guillemets. Titre d'une
@@ -86,7 +110,13 @@ Deux points de branchement distincts :
   deltas (ni `stream_end` ni message final), la liste est donc ajoutée en
   dernier delta avant `complete`. Vibe nomme les outils
   `legifrance_consulter_decision` (un seul `_`) et porte le résultat sur le
-  `tool_use` (`toolResult`) : les deux formes sont reconnues. Sous Windows,
+  `tool_use` (`toolResult`) : les deux formes sont reconnues. Les recherches
+  `Search_*` sont réservées à `research-maker` : hook `guard-legal-search`
+  sous Claude et Codex (approuvé au démarrage dans `~/.codex/config.toml`,
+  appels dans un `exec` compris), outils retirés de l'agent principal dans le
+  chat Mistral. `consulter_article` et `consulter_decision` restent ouverts à
+  tous. Après `research-maker`, `verify-subagent` signale les décisions citées
+  jamais lues, y compris dans le chat Mistral. Sous Windows,
   le pont `cmd` conserve les guillemets et chaînages de commandes ; le chemin
   de Python du venv est ajouté au `PATH`.
 - Dans un `.docx`, l'instruction demande une note de bas de page au lieu de
@@ -105,3 +135,10 @@ retiré : `DEPRECATED_HOOKS` de `websocket-server/claude-hooks.cjs`.
 
 Le format exact du bloc `<CITATIONS>` est injecté à chaque tour par
 `server/piecemaker/harness/citation-instructions.ts`.
+
+## Le Hérisson : registre et vérification automatique
+
+Le Hérisson garde et vérifie les écritures de l'agent dans `.piecemaker/`,
+avant (PreToolUse) et après (PostToolUse). Registre, fonctionnement par
+feature, texte exact de chaque message renvoyé à l'agent, durées et ajout
+d'une feature : [Le Hérisson](Le-Herisson.md).

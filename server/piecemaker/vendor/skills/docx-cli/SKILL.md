@@ -37,12 +37,39 @@ Dès que vous **créez ou modifiez** un `.docx`, ouvrez-le dans le volet de lect
 sans attendre qu’on vous le demande. Après le succès de la commande `docx` :
 
 ```sh
-~/.agents/skills/Skill-PieceMaker/scripts/pm afficher --fichier FICHIER
+pm tab afficher fichier FICHIER
 ```
 
 `FICHIER` est le même chemin que celui que vous venez d’écrire.
+Ouvrez le document dans cet éditeur intégré ; l’édition par `docx` ne nécessite pas l’application Microsoft Word.
+
+Dans les sessions PieceMaker, les éditions directes enregistrent automatiquement les versions et les cartes de substitutions suivies.
+Pour expliquer une proposition, ajoutez un champ facultatif `reason` à la substitution du lot JSONL :
+
+```json
+{"pattern":"90 jours","replacement":"30 jours","reason":"Aligner le délai sur la clause négociée."}
+```
+
+Utilisez `docx replace FICHIER --batch LOT.jsonl --track` ou `--batch -` avec le lot sur l’entrée standard.
+La justification apparaît dans la carte ; elle ne crée pas de commentaire Word.
+
+## PieceMaker — auteur et suivi des modifications
+
+- Signez chaque commande d’écriture du nom de votre fournisseur :
+  `DOCX_AUTHOR="Claude" docx …` (ou `Codex`, `Mistral`). Sans lui, l’auteur
+  est « Reviewer ».
+- `docx edit --at pN:S-S` (intervalle vide, insertion pure) n’est jamais
+  suivi, même avec `--track`. Pour insérer du texte en suivi, remplacez le
+  mot voisin : `docx replace FICHIER "mot" "mot ajouté"`.
 
 ## 1. The contract is `--help` — start there
+
+### PieceMaker — édition du document
+
+Lis chaque document/version une fois par réponse. Réutilise ensuite le résultat ou recherche le passage avec `docx find`.
+Modifie directement les documents ordinaires. Duplique d’abord un modèle avant de le remplir.
+Limite chaque substitution aux mots ou caractères concernés et utilise un contexte qui désigne un emplacement unique.
+Si une clause numérotée change de place, est ajoutée ou supprimée, vérifie les numéros suivants et les renvois du document.
 
 The help text is authoritative and versioned with the binary. This skill is thin
 on purpose and defers to it:

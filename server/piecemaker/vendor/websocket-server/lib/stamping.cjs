@@ -1,6 +1,6 @@
 const path = require('node:path');
 
-const STAMPED_PIECES_SUBFOLDER = 'Pièces tamponnées';
+const { STAMPED_FOLDER: STAMPED_PIECES_SUBFOLDER } = require('../../piecemaker-plugin/scripts/lib/technical-paths.cjs');
 
 function stampedPiecesDirectory(caseFolder) {
   return path.join(caseFolder, STAMPED_PIECES_SUBFOLDER);

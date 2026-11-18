@@ -155,7 +155,7 @@ function isShippedFile(target) {
   return !EXCLUDED_RUNTIME_ASSETS.has(name) && !TEST_FILE_PATTERN.test(name);
 }
 
-const SKIP_RELATIVE_PREFIXES = ['vendor/piecemaker-plugin/skills', 'vendor/piecemaker-plugin/agents'];
+const SKIP_RELATIVE_PREFIXES = ['vendor/piecemaker-plugin/skills'];
 
 function isRuntimeAsset(sourceRoot, target) {
   if (!isShippedFile(target) || path.basename(target).endsWith('.ts')) return false;

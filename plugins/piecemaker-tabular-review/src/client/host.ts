@@ -1,3 +1,4 @@
+import { requestJson } from '../../../../src/shared/authToken.js';
 import type { Provider } from '../shared.js';
 import type { CasePiece, Pseudonym } from './sorting.js';
 
@@ -26,23 +27,7 @@ type AnonymizerStatus = { enabled?: boolean; listening?: boolean; origin?: strin
 
 type ProviderModelsResponse = { data?: { models?: { OPTIONS?: ModelOption[]; DEFAULT?: string } } };
 
-async function hostJson<T>(url: string, body?: unknown): Promise<T> {
-  const token = localStorage.getItem('auth-token');
-  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-  const response = await fetch(url, body === undefined
-    ? { headers }
-    : { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const refreshed = response.headers.get('X-Refreshed-Token');
-  if (refreshed) {
-    localStorage.setItem('auth-token', refreshed);
-    window.dispatchEvent(new CustomEvent('auth-token-refreshed', { detail: refreshed }));
-  }
-  if (!response.ok) {
-    const detail = await response.json().catch(() => null) as { error?: unknown } | null;
-    throw new Error(typeof detail?.error === 'string' ? detail.error : `Erreur ${response.status} sur ${url}`);
-  }
-  return response.json() as Promise<T>;
-}
+const hostJson = <T>(url: string, body?: unknown): Promise<T> => requestJson<T>(url, body);
 
 export function createRpc(api: PluginApi) {
   return async <T>(method: string, path: string, body?: unknown): Promise<T> => {

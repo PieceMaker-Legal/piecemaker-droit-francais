@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import type { MarkdownDocument } from '../shared.js';
 import { REVIEW_FOLDER } from '../shared.js';
+import { isIgnoredName } from '../../../../server/piecemaker/vendor/piecemaker-plugin/scripts/lib/technical-paths.cjs';
 import { isInside, isRealPathInside, toPosix, UserError } from './paths.js';
 
 const MAX_DOCUMENTS = 5000;
@@ -20,10 +21,11 @@ export function listMarkdownDocuments(project: string): MarkdownDocument[] {
       continue;
     }
     for (const entry of entries) {
-      if (entry.name.startsWith('.') || entry.name.startsWith('~$')) continue;
+      // `.piecemaker`, `.git`, `node_modules`… : jamais listés (technical-paths.cjs).
+      if (isIgnoredName(entry.name)) continue;
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) {
-        const skipped = entry.name === 'node_modules' || (depth === 0 && entry.name === REVIEW_FOLDER);
+        const skipped = depth === 0 && entry.name === REVIEW_FOLDER;
         if (depth < MAX_DEPTH && !skipped) pending.push({ directory: absolute, depth: depth + 1 });
         continue;
       }

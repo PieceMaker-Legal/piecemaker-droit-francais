@@ -171,7 +171,7 @@ export function installChatCitationHarness(options: {
     let lastTextIndex = -1;
     const makeTurn = () => createCitationTurn({
       cwd: details.project?.fullPath ?? '', sessionId, store: options.store,
-      recordVerification: false, pieceTitle: options.pieceTitle,
+      replay: true, pieceTitle: options.pieceTitle,
     });
     let turn = makeTurn();
     const finish = async () => {

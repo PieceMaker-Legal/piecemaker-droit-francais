@@ -129,9 +129,9 @@ class Integration(unittest.TestCase):
         program = self.case / ".piecemaker/catala/exemple"
         program.mkdir(parents=True)
         (program / "clerk.toml").touch()
-        result = json.loads(self.ctx.tools["piecemaker"]({"outil": "raisonnement", "arguments": ["lister"]}))
+        result = json.loads(self.ctx.tools["piecemaker"]({"outil": "catala", "arguments": ["lister"]}))
         self.assertTrue(result["ok"], result)
-        self.assertIn("pm catala verifier --programme exemple", result["result"])
+        self.assertIn("exemple : jamais vérifié", result["result"])
 
     def test_missing_guard_and_ambiguous_instances_block(self):
         self.binding["guard"] = str(self.root / "absent.mjs")

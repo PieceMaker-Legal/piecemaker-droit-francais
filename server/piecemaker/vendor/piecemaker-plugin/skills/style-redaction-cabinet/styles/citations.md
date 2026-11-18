@@ -1,3 +1,7 @@
+---
+type: regle-generale
+---
+
 # Style : citations
 
 Ces règles s'appliquent à tous les actes. Les autres fichiers de style renvoient ici.

@@ -33,6 +33,8 @@ Il désigne désormais Small, dans l'état, l'installation et la suppression.
 Le worker utilise le [profil mesuré sur trois corpus](ocr-small-benchmark.md), sans orientation automatique ni redressement, avec deux threads CPU.
 La reconnaissance traite une ligne par lot. Le détecteur limite son côté le plus long à 3 200 pixels et active la dilatation.
 Le rendu PDF reste à 300 DPI. Les deux options mémoire ONNX `enable_cpu_mem_arena` et `enable_mem_pattern` sont désactivées.
+Les seuils intégrés sont `0.3 / 0.6 / 1.5`. Le contrôle des valeurs Small `0.2 / 0.45 / 1.4`, avec et sans dilatation, conserve ce choix.
+Ce contrôle ajoute 39 passages de page. Le profil actuel donne 80 écarts textuels Markdown, contre 161 et 104 pour les deux variantes Small.
 `ocr_markdown.py` regroupe les boîtes du JSON par hauteur, puis cherche des alignements numériques répétés.
 Les zones suffisamment régulières deviennent des tableaux Markdown ; le reste reste du texte dans l'ordre de lecture.
 Les cellules manquantes restent vides. Le traitement conserve chaque texte reconnu sans inventer de valeur.

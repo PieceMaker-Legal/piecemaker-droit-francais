@@ -18,6 +18,9 @@ export const PLUGIN_STYLES = `
 }
 .ptr-root[data-theme=dark]{--ptr-glass-bg:var(--liquid-glass-background-subtle,rgb(24 28 36 / .72));--ptr-glass-border:var(--liquid-glass-border-subtle,rgb(255 255 255 / .08));--ptr-danger:#f87171;--ptr-warning:#fbbf24}
 .ptr-root *{box-sizing:border-box}
+.ptr-embedded [data-back],.ptr-embedded [data-home]{display:none}
+.ptr-row-extra{vertical-align:top;min-width:140px}
+.ptr-chronology-caption{caption-side:top;text-align:left;padding:6px 8px;font-size:12px;color:var(--ptr-muted,inherit)}
 .ptr-root [hidden]{display:none !important}
 .ptr-header{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--ptr-border);flex-shrink:0}
 .ptr-spacer{flex:1}

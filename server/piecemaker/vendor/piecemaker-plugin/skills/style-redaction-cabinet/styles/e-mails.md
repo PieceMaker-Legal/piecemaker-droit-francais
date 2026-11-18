@@ -1,3 +1,7 @@
+---
+type: document
+---
+
 # Style : e-mails
 
 Signe chaque e-mail « Votre bien dévoué ».

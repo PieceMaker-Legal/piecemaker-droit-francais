@@ -118,18 +118,13 @@ test('une instruction répétée sans fermeture est retirée de la réponse visi
   assert.doesNotMatch(await turn.finish(), /texte confidentiel|CITATIONS/);
 });
 
-test('un Markdown du dossier cité comme code est lu hors du dépôt applicatif', async (t) => {
-  const { cwd, turn, store } = await fixture(t);
+test('un fichier technique du dossier cité comme code est écarté des sources', async (t) => {
+  const { cwd, turn } = await fixture(t);
   await mkdir(path.join(cwd, '.agents', 'skills', 'docx-cli'), { recursive: true });
   const source = '`docx` is a command-line tool for reading, editing, redlining, and commenting on Microsoft Word `.docx` files.\n';
   await writeFile(path.join(cwd, '.agents', 'skills', 'docx-cli', 'SKILL.md'), source);
-  turn.text(block([{ ref: 1, kind: 'code', doc_id: '.agents/skills/docx-cli/SKILL.md', quotes: [{ quote: '`docx` is a command-line tool for reading, editing, redlining, and commenting on Microsoft Word `.docx` files.' }] }]));
-  const suffix = await turn.finish();
-  assert.doesNotMatch(suffix, /🔴/);
-  assert.match(suffix, /SKILL\.md, l\. 1/);
-  const token = /#piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
-  assert.ok(token);
-  assert.equal((await store.read(token))?.source, source);
+  turn.text(block([{ ref: 1, kind: 'code', doc_id: '.agents/skills/docx-cli/SKILL.md', quotes: [{ quote: source.trim() }] }]));
+  assert.equal(await turn.finish(), '');
 });
 
 test('une pièce citée par son Markdown converti enregistre le chemin de l’original', async (t) => {
@@ -244,6 +239,32 @@ test('une réponse MCP en erreur et un résultat de sous-agent ne constituent pa
   turn.observe(createNormalizedMessage({ ...base, kind: 'tool_result', content: 'Extrait.', parentToolUseId: 'agent' }));
   turn.text(block([{ ref: 1, decision_id: 'JURITEXT1', quote: 'Extrait.' }]));
   assert.match(await turn.finish(), /#piecemaker-cite-miss/);
+});
+
+test('avec codeRoot, la sortie d’une commande chaînée vérifie sa citation, une citation absente reste signalée', async (t) => {
+  const { cwd, store } = await fixture(t);
+  const turn = createCitationTurn({ cwd, codeRoot: cwd, sessionId: 'session', store });
+  const sortie = 'Mapping : à valider par l’avocat (onglet Dossier, Mapping)\nIndex OKF : 4 erreur(s).\nGraphe : 11 élément(s) manquant(s).\n';
+  const codex = { provider: 'codex' as const, sessionId: 'session', toolId: 'item_1' };
+  turn.observe(createNormalizedMessage({ ...codex, kind: 'tool_use', toolName: 'Bash', toolInput: { command: '/bin/zsh -lc "pm check; pm okf verify"' } }));
+  turn.observe(createNormalizedMessage({ ...codex, kind: 'tool_result', content: sortie, isError: true }));
+  const mistral = { provider: 'mistral' as const, sessionId: 'session', toolId: 'effect_1' };
+  turn.observe(createNormalizedMessage({ ...mistral, kind: 'tool_use', toolName: 'file_system.bash', toolInput: { command: 'pm suivi_dossiers verifier' }, toolResult: { content: 'Suivi : aucune erreur.', isError: false } }));
+  turn.text(block([
+    { ref: 1, kind: 'code', doc_id: 'pm check', quotes: [{ quote: "Mapping : à valider par l'avocat (onglet Dossier, Mapping)" }] },
+    { ref: 2, kind: 'document', doc_id: 'pm okf verify', quotes: [{ quote: 'Index OKF : 4 erreur(s).' }, { quote: 'Graphe : 11 élément(s) manquant(s).' }] },
+    { ref: 3, kind: 'code', doc_id: 'pm okf verify', quotes: [{ quote: 'prémisse sans partie concernée (involves)' }] },
+    { ref: 4, kind: 'code', doc_id: 'pm suivi_dossiers verifier', quotes: [{ quote: 'Suivi : aucune erreur.' }] },
+    { ref: 5, kind: 'code', doc_id: 'pm catala verifier', quotes: [{ quote: 'Suivi : aucune erreur.' }] },
+  ]));
+  const suffix = await turn.finish();
+  assert.match(suffix, /^- \[1\] \[pm check, l\. 1\]\[1\] — « Mapping : à valider par l’avocat \(onglet Dossier, Mapping\)? »$/m);
+  assert.match(suffix, /^- \[2\] \[pm okf verify, l\. 2\]\[2\] — « Index OKF : 4 erreur\(s\)\. » · « Graphe : 11 élément\(s\) manquant\(s\)\. »$/m);
+  assert.match(suffix, /^- \[3\] .* — « prémisse sans partie concernée \(involves\) » — \[citation non retrouvée, à vérifier\]/m);
+  assert.match(suffix, /^- \[4\] \[pm suivi_dossiers verifier, l\. 1\]\[4\] — « Suivi : aucune erreur\. »$/m);
+  assert.match(suffix, /^- \[5\] .* — \[citation non retrouvée, à vérifier\]/m);
+  const token = /\[2\]: #piecemaker-citation=([a-f0-9]{64})/.exec(suffix)?.[1];
+  assert.equal((await store.read(token ?? ''))?.source, sortie);
 });
 
 test('pas de lecture hors dossier, y compris par lien symbolique', async (t) => {

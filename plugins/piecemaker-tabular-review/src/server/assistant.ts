@@ -1,8 +1,8 @@
 import path from 'node:path';
 
-import type { Draft, Provider, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
-import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, INDEX_TEMPLATE_NAME, isCaseIndex, LEGACY_INDEX_NAME, reviewCategory } from '../shared.js';
-import { addClassification, readClassification, saveClassification } from './classification.js';
+import type { ClassificationFolder, Draft, Provider, Review, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
+import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, documentTitle, hasActions, INDEX_MODEL, INDEX_TEMPLATE_NAME, isCaseIndex, LEGACY_INDEX_NAME, reviewCategory } from '../shared.js';
+import { addClassification, proposeClassification, readClassification, readClassificationProposal } from './classification.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
 import { assertProject, assertReviewFile, UserError } from './paths.js';
@@ -23,7 +23,7 @@ const RESEARCH_POLL_MS = 1000;
 const RESEARCH_RUNNING = new Set(['counting', 'listing', 'downloading']);
 const CONCURRENCY = 3;
 const INDEX_REQUEST = /chronolog|tri des pi[eè]ces|^index$|(index|inventaire) (des pi[eè]ces|du dossier)|inventaire int[eé]gral|(scan|revue|lecture) int[eé]grale?/i;
-const SINGLE_INDEX = 'Une seule analyse lit toutes les pièces du dossier, pour la chronologie et le tri : complétez-la avec tabular_review_index, elle s’affiche dans l’onglet Dossier.';
+const SINGLE_INDEX = 'Une seule analyse lit toutes les pièces du dossier, pour la chronologie et le tri : complétez-la avec pm dossier index, elle s’affiche dans l’onglet Dossier.';
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
@@ -52,7 +52,7 @@ function documentRows(project: string, value: unknown): RowRequest[] {
   for (const entry of value) {
     const wanted = text(entry).replace(/\\/g, '/').replace(/^\.(\/|$)/, '').replace(/\/+$/, '');
     const matches = available.includes(wanted) ? [wanted] : available.filter((document) => !wanted || document.startsWith(`${wanted}/`));
-    if (!matches.length) throw new UserError(`Aucun document Markdown pour « ${text(entry)} » (action documents).`);
+    if (!matches.length) throw new UserError(`Aucun document Markdown pour « ${text(entry)} » (Glob sur les .md du dossier).`);
     for (const match of matches) {
       if (!rows.some((row) => row.documents[0] === match)) rows.push({ label: path.posix.basename(match, '.md'), documents: [match] });
     }
@@ -62,7 +62,7 @@ function documentRows(project: string, value: unknown): RowRequest[] {
 
 function resolved(draft: Draft): { provider: Provider; model: string } {
   const provider = draft.provider ?? DEFAULT_PROVIDER;
-  return { provider, model: draft.model || DEFAULT_MODEL[provider] };
+  return { provider, model: draft.model || (isCaseIndex(draft) ? INDEX_MODEL : DEFAULT_MODEL)[provider] };
 }
 
 function missing(draft: Draft): string[] {
@@ -135,10 +135,10 @@ async function prepare(project: string, input: Input, launchers: AssistantLaunch
 }
 
 async function caseIndex(project: string, launchers: AssistantLaunchers) {
-  const review = listReviews([project], launchers.isRunning).find(isCaseIndex);
+  const review = (await listReviews([project], launchers.isRunning)).find(isCaseIndex);
   if (review) {
     await addClassification(project, review.file);
-    return { fichier: review.file };
+    return { fichier: review.file, absentes: unindexedDocuments(project, await readReview(project, review.file)).length };
   }
   const classification = classificationColumn(readClassification(project));
   const draft = listDrafts([project]).find(isCaseIndex);
@@ -157,8 +157,8 @@ function reviewName(project: string, value: unknown): string {
   return file;
 }
 
-function readOut(project: string, file: string, launchers: AssistantLaunchers) {
-  const review = readReview(project, file);
+async function readOut(project: string, file: string, launchers: AssistantLaunchers) {
+  const review = await readReview(project, file);
   return {
     fichier: file,
     nom: review.title,
@@ -167,7 +167,7 @@ function readOut(project: string, file: string, launchers: AssistantLaunchers) {
     colonnes: review.columns.map((column) => ({ colonne: column.index, ...question(column), ...(column.action ? { action: column.action } : {}) })),
     lignes: review.rows.map((row) => ({
       ligne: row.id,
-      document: row.label,
+      document: documentTitle(review, row),
       sources: row.documents.map((document) => document.source),
       statut: row.status,
       ...(row.piece ? { piece: row.piece } : {}),
@@ -209,23 +209,30 @@ async function editColumns(project: string, input: Input, launchers: AssistantLa
   return readOut(project, file, launchers);
 }
 
-async function classificationTree(project: string, input: Input) {
-  const folders = input.dossiers === undefined
-    ? readClassification(project)
-    : await saveClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication })) : input.dossiers);
-  return { dossiers: folders.map((folder) => ({ nom: folder.name, explication: folder.explanation })) };
+function classificationTree(project: string, input: Input) {
+  const out = (folders: ClassificationFolder[]) => folders.map((folder) => ({ nom: folder.name, explication: folder.explanation, ...(folder.type ? { type: folder.type } : {}) }));
+  const dossiers = out(readClassification(project));
+  if (input.dossiers === undefined) {
+    const proposal = readClassificationProposal(project);
+    return { dossiers, ...(proposal ? { proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date } } : {}) };
+  }
+  const proposal = proposeClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication, type: entry?.type })) : input.dossiers, input.motif);
+  return { dossiers, proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date }, message: 'Proposition enregistrée, arborescence inchangée : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Index › Classement.' };
+}
+
+function unindexedDocuments(project: string, review: Review) {
+  const known = new Set(review.rows.flatMap((row) => row.documents.map((document) => document.source)));
+  return listMarkdownDocuments(project).filter((document) => !known.has(document.path));
 }
 
 async function relaunch(project: string, input: Input, launchers: AssistantLaunchers) {
   const file = reviewName(project, input.fichier);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   if (reviewCategory(review) !== 'documents') throw new UserError('Seule une analyse de documents se relance ici : le tri et la recherche ont leur propre bouton dans le volet.');
-  const known = new Set(review.rows.flatMap((row) => row.documents.map((document) => document.source)));
-  const rows = listMarkdownDocuments(project)
-    .filter((document) => !known.has(document.path))
+  const rows = unindexedDocuments(project, review)
     .map((document) => ({ label: path.posix.basename(document.path, '.md'), documents: [document.path] }));
   if (!rows.length) return { fichier: file, ajoutes: 0 };
-  const detail = await launchers.appendDocuments({ project, file, rows, proxyOrigin: input.proxyOrigin });
+  const detail = await launchers.appendDocuments({ project, file, rows, proxyOrigin: input.proxyOrigin, hostOrigin: input.hostOrigin });
   return { fichier: file, ajoutes: rows.length, statut: detail.status };
 }
 
@@ -271,7 +278,7 @@ async function launch(project: string, input: Input, launchers: AssistantLaunche
   const absent = missing(draft);
   if (absent.length) throw new UserError(`À compléter avant de lancer : ${absent.join(', ')}.`);
   const { provider, model } = resolved(draft);
-  const settings = { project, title: draft.title, columns: draft.columns, provider, model, concurrency: CONCURRENCY, proxyOrigin: input.proxyOrigin };
+  const settings = { project, title: draft.title, columns: draft.columns, provider, model, concurrency: CONCURRENCY, proxyOrigin: input.proxyOrigin, hostOrigin: input.hostOrigin };
   if (draft.mode === 'recherche') {
     const state = startResearch(draft.research);
     watchResearch(state.id, draft, (body) => launchers.launchResearch({ ...settings, ...body }));
@@ -291,26 +298,19 @@ export async function assistant(body: Input, launchers: AssistantLaunchers): Pro
     }
     return readTemplates().map((template) => ({ id: template.id, nom: template.name, description: template.description, questions: template.columns.length }));
   }
-  if (action === 'enregistrer_modele') return saveTemplate(body);
+  if (action === 'create_template') return saveTemplate(body);
   const project = assertProject(body.project);
   if (action === 'lister') {
     return {
       projets: listDrafts([project]).map(draftSummary),
-      analyses: listReviews([project], launchers.isRunning).map(reviewSummary),
+      analyses: (await listReviews([project], launchers.isRunning)).map(reviewSummary),
     };
   }
-  if (action === 'documents') return listMarkdownDocuments(project).map((document) => document.path);
   if (action === 'preparer') return prepare(project, body, launchers);
   if (action === 'lancer') return launch(project, body, launchers);
   if (action === 'index') return caseIndex(project, launchers);
   if (action === 'lire') return readOut(project, reviewName(project, body.fichier), launchers);
   if (action === 'colonnes') return editColumns(project, body, launchers);
-  if (action === 'classement') {
-    const file = reviewName(project, body.fichier);
-    if (!isCaseIndex(readReview(project, file))) throw new UserError('Le classement du dossier appartient à l’index : utilisez tabular_review_index.');
-    await addClassification(project, file);
-    return readOut(project, file, launchers);
-  }
   if (action === 'arborescence') return classificationTree(project, body);
   if (action === 'relancer') return relaunch(project, body, launchers);
   throw new UserError(`Action inconnue : ${action}`);

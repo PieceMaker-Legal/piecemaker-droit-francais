@@ -65,7 +65,10 @@ def live_server():
 
 def main():
     electron, port, home = live_server()
-    node = electron or shutil.which('node')
+    launcher = None if electron else shutil.which('pm')
+    if launcher and Path(launcher).resolve() == Path(__file__).resolve():
+        launcher = None
+    node = electron or launcher or shutil.which('node')
     if not node:
         sys.stderr.write('Démarrez PieceMaker (aucun runtime Node : ni l’application, ni `node` sur le PATH).\n')
         return 1
@@ -78,7 +81,11 @@ def main():
     if port:
         env['PIECEMAKER_APP_PORT'] = str(port)
     if home:
-        env['PIECEMAKER_HOME'] = home
+        env['CLOUDCLI_HOME'] = home
+    if 'NO_COLOR' in env:
+        env.pop('FORCE_COLOR', None)
+    if launcher:
+        os.execve(launcher, [launcher, *sys.argv[1:]], env)
     os.execve(node, [node, str(SCRIPT), *sys.argv[1:]], env)
 
 

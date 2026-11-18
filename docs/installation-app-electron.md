@@ -317,8 +317,9 @@ le serveur résout plusieurs chemins relatifs à la racine applicative
 `server/piecemaker/vendor/`. Sans eux, le serveur s'arrête au démarrage sur
 *Cannot find module … verify-citations.cjs*. L'installateur recopie donc
 `server/piecemaker/` en excluant les `.ts` (déjà compilés), `node_modules`,
-`__pycache__`, `.env`, `.DS_Store`, et les skills et agents de
-`piecemaker-plugin/` — le MCP Légifrance vendu (`vendor/mcp/legifrance/`),
+`__pycache__`, `.env`, `.DS_Store`, et les skills de
+`piecemaker-plugin/` — les sous-agents (`vendor/piecemaker-plugin/agents/`,
+installés d'office dans chaque dossier), le MCP Légifrance vendu (`vendor/mcp/legifrance/`),
 le skill `docx-cli` (`vendor/skills/docx-cli/`) et le skill
 `style-redaction-cabinet` (copié depuis `vendor/piecemaker-plugin/skills/`)
 sont inclus. Un fichier témoin, le lanceur Légifrance et les `SKILL.md`

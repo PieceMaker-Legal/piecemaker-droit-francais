@@ -103,6 +103,8 @@ export function createKnowledgeLocalRouter(
     return { projectId: id, ...getService().scanJob(request.query.id, id) };
   }, response));
 
+  router.get('/pieces', (request, response) => respond(() => getService().pieces(resolveProjectId({ folder: request.query.folder })), response));
+
   router.post('/scan/cancel', (request, response) => respond(() => {
     const id = resolveProjectId(request.body);
     return { projectId: id, ...getService().cancelScan(request.body?.id, id) };

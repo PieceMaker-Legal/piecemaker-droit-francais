@@ -20,7 +20,7 @@ export type TemplateColumn = {
   customAction?: string;
 };
 
-export type ClassificationFolder = { name: string; explanation: string };
+export type ClassificationFolder = { name: string; explanation: string; type?: string };
 
 export const DEFAULT_CLASSIFICATION: ClassificationFolder[] = [
   { name: 'Projets', explanation: 'Documents de travail.' },
@@ -54,7 +54,7 @@ export function classificationFolders(rows: ClassificationTreeRow[]): Classifica
     const name = row.name.trim();
     ancestors.length = row.depth;
     ancestors[row.depth] = name;
-    return name ? [{ name: ancestors.filter(Boolean).join('/'), explanation: row.explanation }] : [];
+    return name ? [{ name: ancestors.filter(Boolean).join('/'), explanation: row.explanation, ...(row.type ? { type: row.type } : {}) }] : [];
   });
 }
 
@@ -68,7 +68,7 @@ export function classificationColumn(folders: ClassificationFolder[], name = 'Cl
   const lines = folders.map((folder) => `- ${folder.name}${folder.explanation ? ` : ${folder.explanation}` : ''}`);
   return {
     name,
-    prompt: `Dans quel dossier de l’arborescence faut-il classer ce document ? Choisis un seul dossier et réponds par son nom exact.\n${lines.join('\n')}`,
+    prompt: `Dans quel dossier de l’arborescence faut-il classer ce document ? Choisis un seul dossier et réponds par son nom exact. Un nom avec « / » est un sous-dossier : choisis le sous-dossier qui convient plutôt que son dossier parent, et réponds par le chemin complet (par exemple « Pièces/Contrats »).\n${lines.join('\n')}`,
     format: 'tags',
     tags: folders.map((folder) => folder.name),
     action: 'classify',
@@ -100,6 +100,7 @@ export type RowStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled';
 export type ReviewRow = {
   id: string;
   label: string;
+  title?: Cell;
   documents: ReviewDocument[];
   status: RowStatus;
   mode?: 'inline' | 'path';
@@ -130,6 +131,8 @@ export type Cell = {
   citations?: CellCitation[];
   /** Réponse corrigée à la main : elle n'a pas à être étayée par une citation. */
   edited?: boolean;
+  /** Réponse vérifiée par l'avocat : une ligne liée à une prémisse compte alors comme pièce de source humaine. */
+  checked?: { at: string };
 };
 
 export type CitationSource = {
@@ -150,6 +153,17 @@ export type Provider = 'claude' | 'codex' | 'mistral';
 export const DEFAULT_PROVIDER: Provider = 'mistral';
 
 export const DEFAULT_MODEL: Record<Provider, string> = { claude: 'haiku', codex: '', mistral: 'mistral-small' };
+
+const modelFamily = (value: string) => value.replace(/-(latest|\d[\d.]*)$/, '');
+
+export function matchModel(options: { value: string }[], preferred: string | null | undefined, fallback: string) {
+  if (!preferred) return fallback;
+  return options.find((option) => option.value === preferred)?.value
+    ?? options.find((option) => modelFamily(option.value) === modelFamily(preferred))?.value
+    ?? fallback;
+}
+
+export const INDEX_MODEL: Record<Provider, string> = { claude: 'sonnet', codex: '', mistral: 'mistral-medium-3.5' };
 
 export type ReviewStatus = 'running' | 'done' | 'partial' | 'cancelled' | 'interrupted';
 
@@ -342,6 +356,23 @@ export function citationIssue(cell: Cell): 'missing' | 'unverified' | null {
   if (!cell.citations?.length) return 'missing';
   return cell.citations.some((citation) => !citation.verified) ? 'unverified' : null;
 }
+
+/** Même document, au chemin près : les sessions citent parfois le seul nom du fichier. */
+export function sameDocument(left: string, right: string): boolean {
+  const normalize = (value: string) => value.trim().toLowerCase().replace(/\\/g, '/');
+  const a = normalize(left);
+  const b = normalize(right);
+  return a === b || a.split('/').pop() === b.split('/').pop();
+}
+
+/** Réponse positive : trouvée, et « Oui » pour une question Oui / Non. Seules ces lignes établissent une prémisse liée. */
+export function isPositiveCell(column: Pick<ReviewColumn, 'format'>, cell: Cell | undefined): cell is Cell {
+  if (!isCellFilled(cell) || !citationRequired(cell)) return false;
+  return column.format !== 'yes_no' || /^oui\b/i.test(cell.summary.trim());
+}
+
+/** Auteur d'une réponse : humain si l'avocat l'a vérifiée ou corrigée, agent sinon. */
+export const cellAuthor = (cell: Cell): 'human' | 'agent' => cell.checked || cell.edited ? 'human' : 'agent';
 
 export function isCellFilled(cell: Cell | undefined): cell is Cell {
   return Boolean(cell) && cell!.summary.trim() !== '' && cell!.summary !== EMPTY_CELL_SUMMARY;
@@ -582,4 +613,20 @@ export function researchCriteria(filters: ResearchFilters): string[] {
   if (filters.dateDebut || filters.dateFin) criteria.push(`Période : ${filters.dateDebut || '…'} → ${filters.dateFin || '…'}`);
   if (filters.dispositifOnly) criteria.push('Recherche dans le dispositif uniquement');
   return criteria;
+}
+
+export const DOCUMENT_TITLE_INDEX = -1;
+
+export function isDocumentTypeColumn(column: Pick<TemplateColumn, 'name'>): boolean {
+  return ['nature', 'type de pièce', 'type de document'].includes(column.name.trim().toLocaleLowerCase('fr'));
+}
+
+export function documentTitleCell(review: Pick<Review, 'columns' | 'cells'>, row: ReviewRow): Cell | undefined {
+  const column = review.columns.find((entry) => typeof entry?.name === 'string' && ['titre', 'intitulé', 'titre du document', 'nom du document'].includes(entry.name.trim().toLocaleLowerCase('fr')));
+  const cell = row.title || (column ? review.cells[row.id]?.[column.index] : undefined);
+  return cell && isCellFilled(cell) && citationRequired(cell) ? cell : undefined;
+}
+
+export function documentTitle(review: Pick<Review, 'columns' | 'cells'>, row: ReviewRow): string {
+  return documentTitleCell(review, row)?.summary.trim() || row.label;
 }

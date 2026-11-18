@@ -13,6 +13,7 @@ const {
   documentKey,
   isProtectedFile,
   isResourceFile,
+  memoizedRealpath,
   readProtection,
   WORKSPACE_SUBDIR,
 } = require('./protection.cjs');
@@ -25,6 +26,7 @@ const {
 const { conversionFailureOf, readConversionFailures } = require('./conversion-failures.cjs');
 const { formatDurationFr } = require('./session-timing.cjs');
 const { markdownStemCandidates } = require('./markdown-name.cjs');
+const { isIgnoredName } = require('./technical-paths.cjs');
 
 const fsp = fs.promises;
 
@@ -53,16 +55,7 @@ const MAX_DOCX_CENTRAL_BYTES = 16 * 1024 * 1024;
 const MAX_DOCX_PARTS = 20_000;
 const MAX_DOCX_TEXT_XML_BYTES = 32 * 1024 * 1024;
 const TECHNICAL_CASE_NAMES = new Set(['piecemaker_output']);
-/**
- * Arborescences techniques jamais parcourues. Un dossier juridique finit par
- * héberger autre chose que des pièces : le dossier de test embarque une copie
- * complète d'un projet Node, dont les 53 000 fichiers noyaient la liste de
- * l'administration (47 000 entrées) et faisaient entrer les `package.json` de
- * `node_modules` dans l'historique du dossier.
- */
-const IGNORED_DIRECTORY_NAMES = new Set([
-  'node_modules', 'dist', 'build', 'out', 'coverage', 'vendor', 'target', '__pycache__', 'venv',
-]);
+// Les arborescences jamais parcourues (cachées, `node_modules`…) : technical-paths.cjs.
 /** Plafond de la liste de l'administration ; au-delà, `truncated` le signale. */
 const MAX_ORIGINALS = 2000;
 const PERF_SLOW_MS = 250;
@@ -249,11 +242,6 @@ async function runGit(cwd, args, {
 /** `PieceMaker_Output` et consorts ne sont pas des dossiers juridiques. */
 function isTechnicalCaseDirectoryName(value) {
   return TECHNICAL_CASE_NAMES.has(String(value || '').trim().toLowerCase());
-}
-
-function isIgnoredDirectoryName(value) {
-  const name = String(value || '').trim().toLowerCase();
-  return IGNORED_DIRECTORY_NAMES.has(name) || TECHNICAL_CASE_NAMES.has(name);
 }
 
 function isDocxPath(value) {
@@ -486,11 +474,11 @@ async function currentDocxManifest(caseRoot, baseline = emptyDocxManifest(), { i
   let count = 0;
   async function visit(directory, prefix = '') {
     for (const entry of await fsp.readdir(directory, { withFileTypes: true })) {
-      if (entry.name.startsWith('.') || entry.name.startsWith('~$') || entry.isSymbolicLink()) continue;
+      if (isIgnoredName(entry.name) || entry.isSymbolicLink()) continue;
       const absolute = path.join(directory, entry.name);
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
-        if (!isIgnoredDirectoryName(entry.name)) await visit(absolute, relative);
+        await visit(absolute, relative);
         continue;
       }
       if (!entry.isFile() || !isDocxPath(entry.name)) continue;
@@ -574,11 +562,11 @@ async function safeCaseFiles(caseRoot) {
 
   async function visit(directory, prefix = '') {
     for (const entry of await fsp.readdir(directory, { withFileTypes: true })) {
-      if (entry.name.startsWith('.') || entry.isSymbolicLink()) continue;
+      if (isIgnoredName(entry.name) || entry.isSymbolicLink()) continue;
       const absolute = path.join(directory, entry.name);
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
-        if (!isIgnoredDirectoryName(entry.name)) await visit(absolute, relative);
+        await visit(absolute, relative);
         continue;
       }
       if (!entry.isFile() || !SAFE_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) continue;
@@ -624,7 +612,7 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
   );
   const anonymizationState = readAnonymizationState(root);
   const conversionFailures = readConversionFailures(root);
-  const protection = readProtection(root);
+  const protection = { ...readProtection(root), resolve: memoizedRealpath() };
   const originals = [];
   let truncated = false;
 
@@ -638,7 +626,8 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
       entries.filter((entry) => entry.isFile()).map((entry) => documentKey(entry.name))
     );
     for (const entry of entries) {
-      if (entry.name.startsWith('.') || entry.name.startsWith('~$') || entry.isSymbolicLink()) continue;
+      if (truncated) return;
+      if (isIgnoredName(entry.name) || entry.isSymbolicLink()) continue;
       const absolute = path.join(directory, entry.name);
       const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (entry.isDirectory()) {
@@ -648,7 +637,7 @@ async function originalFilesOverview(caseRoot, { safeFiles: knownSafeFiles = nul
         // MinerU) qui y vivent ne doivent pas non plus être listés comme pièces.
         // `safeCaseFiles`, lui, continue de le parcourir pour repérer les `.md`.
         if (entry.name === WORKSPACE_SUBDIR) continue;
-        if (isIgnoredDirectoryName(entry.name) || conversionOutputs.has(documentKey(entry.name))) continue;
+        if (conversionOutputs.has(documentKey(entry.name))) continue;
         await visit(absolute, relative);
         continue;
       }
@@ -1519,10 +1508,12 @@ function listCases(casesRoot) {
   };
 }
 
-async function caseOverview(casesRoot, homeDir, caseName) {
+async function caseOverview(casesRoot, homeDir, caseName, { listOriginals = null } = {}) {
   const startedAt = performance.now();
   const state = await workingState(casesRoot, homeDir, caseName);
-  const originals = await originalFilesOverview(state.legalCase.root, { safeFiles: state.current.files });
+  const originals = listOriginals
+    ? await listOriginals(state.legalCase.root)
+    : await originalFilesOverview(state.legalCase.root, { safeFiles: state.current.files });
   const enrichedChanges = await Promise.all(state.changes.map(async (change) => {
     if (change.kind === 'deleted') return change;
     try {
