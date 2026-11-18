@@ -44,6 +44,7 @@ import { createSessionDossierRouter } from './session-dossier/session-dossier-ro
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createDocxReviewRouter } from './docx-review.js';
+import { createArtifactFrameRouter, createArtifactsRouter } from './artifacts.js';
 import { createFeatureCommentsRouter } from './feature-comments.js';
 import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
@@ -182,6 +183,7 @@ localRouter.use(knowledge.localRouter);
 localRouter.use(createSuiviLocalRouter(suivi, isLoopback, board));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
+localRouter.use(createArtifactFrameRouter());
 localRouter.use(createCatalaUpdatedRouter(isLoopback, () => projectsDb.getProjectPaths().map((row) => row.project_path), createCatalaCitationCheck(catalaScriptPath(applicationRoot), catalaCitations)));
 localRouter.use(vendor.createPieceMakerStampingLocalRouter(isLoopback));
 localRouter.use(createTabularReviewLocalRouter({
@@ -214,6 +216,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createDocxDocumentRouter());
   router.use(createDocxReviewRouter(projectsDb));
   router.use(createFeatureCommentsRouter(projectsDb));
+  router.use(createArtifactsRouter(projectsDb));
   router.use(createFileLinksRouter());
   router.use(createInstitutionalTermsRouter(institutionalTerms));
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { autoPanelTarget, draftFromResult, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
+import { artifactFromResult, autoPanelTarget, draftFromResult, isArtifactPublish, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 
 describe('autoPanelTarget', () => {
   it('ouvre le .docx seulement quand docx-cli l’écrit', () => {
@@ -126,5 +126,17 @@ describe('panelShowDecision', () => {
     expect(panelShowDecision({ kind: 'file', path: '/dossier/Actes/lettre.docx' }, open)).toBe('skip');
     expect(panelShowDecision({ kind: 'file', path: 'Actes/lettre.docx' }, open)).toBe('skip');
     expect(panelShowDecision({ kind: 'file', path: '/dossier/Actes/autre.docx' }, open)).toBe('apply');
+  });
+});
+
+describe('artifacts', () => {
+  it('un publish réussi de l’outil Artifact montre l’artifact publié', () => {
+    expect(isArtifactPublish('mcp__artifacts__Artifact', { file_path: 'a.html' })).toBe(true);
+    expect(isArtifactPublish('mcp__artifacts__Artifact', { action: 'publish', url: 'x' })).toBe(true);
+    expect(isArtifactPublish('mcp__artifacts__Artifact', { action: 'read' })).toBe(false);
+    expect(isArtifactPublish('mcp__artifacts__Artifact', { asset: true })).toBe(false);
+    expect(isArtifactPublish('mcp__features__Feature', {})).toBe(false);
+    expect(artifactFromResult([{ type: 'text', text: 'Artifact piecemaker://artifact/suivi-abc123 — Suivi' }])).toBe('suivi-abc123');
+    expect(artifactFromResult([{ type: 'text', text: 'conflict: piecemaker://artifact/suivi-abc123 changed' }])).toBeNull();
   });
 });

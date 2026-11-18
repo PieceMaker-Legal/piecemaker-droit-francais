@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Note de synthèse</title>
+<style>
+:root { --bg: #ffffff; --fg: #1a1a1a; --muted: #666; --line: #ddd; --accent: #1f4e79; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #161718; --fg: #e8e8e8; --muted: #a0a0a0; --line: #333; --accent: #8fb8e0; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #161718; --fg: #e8e8e8; --muted: #a0a0a0; --line: #333; --accent: #8fb8e0; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 17px/1.6 Georgia, "Times New Roman", serif; }
+article { max-width: 720px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 1.7rem; margin: 0 0 8px; }
+h2 { font-size: 1.15rem; color: var(--accent); border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-top: 2em; }
+.meta { color: var(--muted); font: 14px/1.4 ui-sans-serif, system-ui, sans-serif; margin-bottom: 24px; }
+blockquote { margin: 1em 0; padding-left: 12px; border-left: 3px solid var(--line); color: var(--muted); }
+@media print { :root { --bg: #fff; --fg: #000; --muted: #444; --line: #bbb; --accent: #000; } article { padding: 0; max-width: none; } @page { size: A4; margin: 2cm; } }
+</style>
+</head>
+<body>
+<article>
+  <h1>Note de synthèse</h1>
+  <p class="meta">Dossier · date · auteur</p>
+  <section>
+    <h2>I. Les faits</h2>
+    <p>…</p>
+  </section>
+  <section>
+    <h2>II. Analyse</h2>
+    <p>…</p>
+  </section>
+  <section>
+    <h2>III. Recommandation</h2>
+    <p>…</p>
+  </section>
+</article>
+</body>
+</html>

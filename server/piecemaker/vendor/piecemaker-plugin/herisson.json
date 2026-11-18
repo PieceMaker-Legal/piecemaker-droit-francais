@@ -25,6 +25,13 @@
       "motif": "Only the features MCP writes the feature data and comments (.piecemaker/features/). Use FeatureData to write a document and FeatureComments to answer a comment of the lawyer. Never write these files with Edit, Write or the shell."
     },
     {
+      "nom": "artifacts",
+      "cible": "^artifacts(/|$)",
+      "ecriture": "serveur",
+      "skill": "creation-artifacts",
+      "motif": "Only the artifacts MCP writes the artifacts of the case (.piecemaker/artifacts/): their versions, data, comments and reviews. Publish a page with Artifact publish, write its data with ArtifactData and answer a comment with ArtifactComments. Never write these files with Edit, Write or the shell."
+    },
+    {
       "nom": "etapes",
       "cible": "^etapes\\.json$",
       "ecriture": "serveur",
