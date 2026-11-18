@@ -6,7 +6,7 @@ import path from 'node:path';
 import { DEFAULT_DOCUMENT_TYPES, DOCUMENT_ICONS } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 import type { DocumentType } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 
-import { INVOLVES, MENTIONS, PARTY_TYPE, PREMISE_TYPE, STATES, readGraphTypes, readTypes, text } from './bundle.js';
+import { INVOLVES, MENTIONS, PARTY_TYPE, PREMISE_TYPE, STATES, DEFAULT_GRAPH_TYPES, readTypes, text } from './bundle.js';
 
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
 export type Ontology = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string; documentTypes?: DocumentType[] };
@@ -50,9 +50,8 @@ function sealed(key: Buffer | null, relations: unknown, seal: unknown): boolean 
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
-export function defaultOntology(projectPath: string): OntologyRelation[] {
-  const graphTypes = readGraphTypes(projectPath);
-  return DEFAULT_RELATIONS.map((relation) => ({ ...relation, source: [...graphTypes], target: [...graphTypes] }));
+export function defaultOntology(): OntologyRelation[] {
+  return DEFAULT_RELATIONS.map((relation) => ({ ...relation, source: [...DEFAULT_GRAPH_TYPES], target: [...DEFAULT_GRAPH_TYPES] }));
 }
 
 function typeList(value: unknown, where: string): string[] {
@@ -134,15 +133,15 @@ export function ontologyErrors(value: unknown): string[] {
 
 export function readOntology(projectPath: string): Ontology {
   const filePath = ontologyFile();
-  if (!fs.existsSync(filePath)) return { relations: defaultOntology(projectPath), personnalisee: false };
+  if (!fs.existsSync(filePath)) return { relations: defaultOntology(), personnalisee: false };
   try {
     const stored = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^﻿/, ''));
     const relations = normalizeOntology(stored);
     const documentTypes = stored.documentTypes === undefined ? undefined : normalizeDocumentTypes(stored.documentTypes);
-    if (!sealed(sealKey(false), documentTypes === undefined ? relations : { relations, documentTypes }, stored?.sceau)) return { relations: defaultOntology(projectPath), personnalisee: true, erreur: TAMPERED };
+    if (!sealed(sealKey(false), documentTypes === undefined ? relations : { relations, documentTypes }, stored?.sceau)) return { relations: defaultOntology(), personnalisee: true, erreur: TAMPERED };
     return { relations, personnalisee: true, ...(documentTypes === undefined ? {} : { documentTypes }) };
   } catch (error) {
-    return { relations: defaultOntology(projectPath), personnalisee: true, erreur: `ontologie illisible, ontologie par défaut appliquée : ${error instanceof Error ? error.message : String(error)}` };
+    return { relations: defaultOntology(), personnalisee: true, erreur: `ontologie illisible, ontologie par défaut appliquée : ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
@@ -164,6 +163,6 @@ export const ruleOf = (ontology: Ontology, name: string): OntologyRelation | und
 export function graphTypesOf(projectPath: string, ontology = readOntology(projectPath)): string[] {
   const present = readTypes(projectPath);
   const types = [...new Set(ontology.relations.flatMap((relation) => [...relation.source, ...relation.target]))].filter((type) => present.includes(type));
-  return types.length ? types : readGraphTypes(projectPath);
+  return types.length ? types : DEFAULT_GRAPH_TYPES;
 }
 export const isSystemRelation = (name: string): boolean => SYSTEM_NAMES.includes(name);

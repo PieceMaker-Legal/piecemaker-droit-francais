@@ -23,7 +23,6 @@
  */
 const fs = require('node:fs');
 const path = require('node:path');
-const { structuredMarkdownCounterpart } = require('./case-folder-structure.cjs');
 const { markdownStemCandidates } = require('./markdown-name.cjs');
 
 const PROTECTION_DIR = '.piecemaker';
@@ -358,18 +357,15 @@ function isResourceFile(absolutePath, caseRoot, state = null) {
 }
 
 /**
- * Le Markdown à lire à la place d'une pièce protégée. Les dossiers structurés
- * l'écrivent dans la zone de conversion de Correspondance ou Data Room ; les
- * anciens dossiers utilisent encore `WORKSPACE_SUBDIR`, la racine ou le dossier
- * de la pièce. À défaut, le chemin attendu rend le refus actionnable.
+ * Le Markdown à lire à la place d'une pièce protégée : dans `WORKSPACE_SUBDIR`,
+ * la racine ou le dossier de la pièce. À défaut, le chemin attendu rend le refus
+ * actionnable.
  */
 function markdownCounterpart(absolutePath, caseRoot) {
   const stems = markdownStemCandidates(absolutePath, caseRoot);
   const stem = stems.at(-1);
-  const structured = structuredMarkdownCounterpart(absolutePath, caseRoot);
   const workspaceMarkdown = path.join(caseRoot, WORKSPACE_SUBDIR, `${stem}.md`);
   const candidates = [
-    ...(structured ? [structured.path] : []),
     ...stems.map((candidate) => path.join(caseRoot, WORKSPACE_SUBDIR, `${candidate}.md`)),
     ...stems.map((candidate) => path.join(path.dirname(absolutePath), `${candidate}.md`)),
     ...stems.map((candidate) => path.join(caseRoot, `${candidate}.md`)),
@@ -389,7 +385,7 @@ function markdownCounterpart(absolutePath, caseRoot) {
       // dossier illisible : on essaie l'emplacement suivant
     }
   }
-  return structured || { path: workspaceMarkdown, exists: false };
+  return { path: workspaceMarkdown, exists: false };
 }
 
 /**

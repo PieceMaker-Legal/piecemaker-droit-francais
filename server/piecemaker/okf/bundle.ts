@@ -111,12 +111,6 @@ export function readTypes(projectPath: string): string[] {
   return [...new Set(folders.map((folder) => folderType(`${text(folder.name)}/_`, folders)).filter(Boolean))];
 }
 
-export function readGraphTypes(projectPath: string): string[] {
-  const stored = readJson(path.join(projectPath, '.piecemaker', 'okf.json')) as { typesGraphe?: unknown } | null;
-  const types = Array.isArray(stored?.typesGraphe) ? stored.typesGraphe.map(text).filter(Boolean) : [];
-  return types.length ? types : DEFAULT_GRAPH_TYPES;
-}
-
 function folderType(resource: string, folders: Array<{ name?: unknown; type?: unknown }>): string {
   const folder = folders.filter((entry) => text(entry.type) && resource.startsWith(`${text(entry.name)}/`)).sort((a, b) => text(b.name).length - text(a.name).length)[0];
   return text(folder?.type) || resource.split('/')[0].normalize('NFC');
