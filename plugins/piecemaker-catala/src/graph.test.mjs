@@ -249,9 +249,10 @@ test('follows the depth of the Catala rules and separates exceptions', () => {
   assert.equal(gates.some((node) => node.dataset.op === 'all'), false);
   assert.deepEqual(gates.map((node) => node.dataset.op), ['not']);
   const conclusion = document.querySelector('[data-node="x004"]').closest('.pmc-branch');
-  assert.deepEqual([...document.querySelectorAll('.pmc-map > .pmc-branch > [data-node]')].map((node) => node.dataset.node), ['x003', 'x004']);
+  assert.deepEqual([...document.querySelectorAll('.pmc-map > .pmc-branch > [data-node]')].map((node) => node.dataset.node), ['x004']);
   assert.equal(conclusion.querySelectorAll(':scope > .pmc-children > .pmc-branch').length, 2);
-  assert.equal(conclusion.querySelector(':scope > .pmc-children .pmc-tree-ref [data-goto="x003"]').textContent, 'Étape 1 · Inexécution grave');
+  assert.ok(conclusion.querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x003"]'));
+  assert.equal(conclusion.querySelector('[data-goto]'), null);
   const exclusion = document.querySelector('.pmc-gate[data-op="not"]').closest('.pmc-branch');
   assert.equal(exclusion.querySelector('[data-node="x002"] .pmc-met').textContent, 'Écartée, à justifier');
   assert.equal(exclusion.querySelector('[data-node="x002"]').dataset.state, 'warn');
