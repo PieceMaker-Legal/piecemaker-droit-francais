@@ -266,8 +266,8 @@ jobs:
           sha256sum release/desktop/*.deb > desktop-release-assets/SHASUMS256-linux.txt
           cp release/desktop/*.deb desktop-release-assets/
 
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz' -print -quit)"
-          test -n "$(find release/local-server -maxdepth 1 -name 'cloudcli-local-server-*.tar.gz.sha256' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz' -print -quit)"
+          test -n "$(find release/local-server -maxdepth 1 -name '*-local-server-*.tar.gz.sha256' -print -quit)"
           cp release/local-server/* server-release-assets/
 
       - name: Upload Linux desktop assets
