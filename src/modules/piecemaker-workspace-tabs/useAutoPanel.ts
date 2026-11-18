@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { readWorkspaceContext } from '@/modules/piecemaker-context-suggestions';
+import { OPEN_PANEL_EVENT } from '@/modules/piecemaker-workspace-tabs/requestWorkspacePanel';
 import { autoPanelTarget, draftFromResult, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import type { AutoPanelTarget } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import { closeInEditor, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
@@ -65,6 +66,15 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
   useLayoutEffect(() => {
     state.current = { sessionId, projectPath, openTab, closeTab };
   });
+
+  useEffect(() => {
+    const open = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: unknown }>).detail?.tab;
+      if (typeof tab === 'string') state.current.openTab(tab as AppTab);
+    };
+    window.addEventListener(OPEN_PANEL_EVENT, open);
+    return () => window.removeEventListener(OPEN_PANEL_EVENT, open);
+  }, []);
 
   useEffect(() => {
     const seen = new Set<string>();
