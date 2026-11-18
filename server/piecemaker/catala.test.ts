@@ -15,6 +15,7 @@ import { createCatalaCitation } from './catala-citation.js';
 import { createCitationStore } from './harness/citation-store.js';
 
 const MODULE = '> Module Prime\n\n## Ancienneté\n\nPièce : [Attestation fictive](../../../pieces/attestation.md).\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
+const TASK = { tache: 'Prime d’ancienneté', type: 'litigation', date_vigueur: '2026-11-04', raisonnements: [{ champ: 'JeanDupont', objectif: 'Calculer la prime.' }] };
 const TESTS = '> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d\'application JeanDupont:\n  résultat calcul champ d\'application Prime.Prime\n```\n';
 
 let root = '';
@@ -40,6 +41,7 @@ const program = (name: string) => {
   fs.writeFileSync(path.join(directory, 'clerk.toml'), `[project]\nname = "${name}"\n`);
   fs.writeFileSync(path.join(directory, 'prime.catala_fr'), MODULE);
   fs.writeFileSync(path.join(directory, 'test_prime.catala_fr'), TESTS);
+  fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(TASK));
   return directory;
 };
 
