@@ -257,6 +257,7 @@
     "answeredBy": "Répondu par {{model}}"
   },
   "composer": {
+    "activeModel": "Modèle actif : {{model}} ({{id}})",
     "permissionHeading": "Comment approuver les actions de {{provider}} ?",
     "permissionCycleHint": "Appuyez sur Tab dans la zone de saisie pour changer de mode",
     "permissionTriggerLabel": "{{mode}} : {{heading}}",

@@ -416,6 +416,16 @@ export class ClaudeProviderModels implements IProviderModels {
     return CLAUDE_PREDEFINED_MODELS;
   }
 
+  async getServedModel(sessionId: string): Promise<string | null> {
+    try {
+      const jsonlPath = sessionsDb.getSessionById(sessionId)?.jsonl_path;
+      const served = jsonlPath ? await readClaudeSessionModelFromJsonl(sessionId, jsonlPath) : null;
+      return served?.model ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   async getCurrentActiveModel(sessionId?: string): Promise<ProviderCurrentActiveModel> {
     if (!sessionId?.trim()) {
       return buildDefaultProviderCurrentActiveModel(await this.getSupportedModels());
