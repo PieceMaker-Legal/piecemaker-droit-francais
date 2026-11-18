@@ -12,8 +12,8 @@ type Notes = { question: string; justification: string; recherche: string; demar
 type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
 export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
 export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string; comment: string; title: string; blockStart: number; blockEnd: number };
-export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; type: string; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
-export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[]; objective?: string };
+export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; type: string; answer: boolean; outputScope?: string; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
+export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[]; objective?: string; scope?: string };
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
 const key = (name: string) => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').normalize('NFC').trim().toLowerCase().replace(/[\s_]+/g, '_');
@@ -342,7 +342,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
         if (file.length === 1 && line) origins.push(enrich({ file: file[0].chemin, line, column: 1, endLine: line, endColumn: (file[0].contenu?.split(/\r?\n/)[line - 1]?.length ?? 0) + 1, headings: node.headings, role: 'definition', selected: true, label: '', expression: '', overrides: '' }));
       } catch {}
     }
-    steps.set(id, { id, kind, type: types.get(key(head)) ?? '', answer: node.kind === 'conclusion' || Boolean(fallback && variable?.output && !edges.some((edge) => edge.from === id)), conditional: false, name: kind === 'condition' ? '' : head, title: capital(human(head)), formula: kind === 'condition' ? '' : human(expression), expression, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '', clause: null, notes: notes.get(key(head)) ?? emptyNotes(), tests: coverage?.scopes.filter((scope) => tests.has(scope.index)).map((scope) => scope.name) ?? [], origins });
+    steps.set(id, { id, kind, type: types.get(key(head)) ?? '', answer: node.kind === 'conclusion' || Boolean(fallback && variable?.output && !edges.some((edge) => edge.from === id)), outputScope: variable?.output ? variable.scope : undefined, conditional: false, name: kind === 'condition' ? '' : head, title: capital(human(head)), formula: kind === 'condition' ? '' : human(expression), expression, value, sources: [], parents: edges.filter((edge) => edge.to === id).map((edge) => edge.from), level: 0, issue: '', clause: null, notes: notes.get(key(head)) ?? emptyNotes(), tests: coverage?.scopes.filter((scope) => tests.has(scope.index)).map((scope) => scope.name) ?? [], origins });
   }
   for (const step of [...steps.values()].filter((entry) => entry.answer)) {
     const twin = step.parents.map((id) => steps.get(id)!).find((parent) => parent.kind === 'rule' && key(parent.name) === key(step.name));
