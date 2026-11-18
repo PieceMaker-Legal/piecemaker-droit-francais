@@ -268,7 +268,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         ocrMissing,
       ];
       if (!explicitFiles) args.push('--skip-existing');
-      if (!explicitFiles && !Object.keys(seed.mapping).length && !Object.keys(seed.extracted_data).length) args.push('--rescan');
+      if (!explicitFiles && !Object.keys(seed.mapping ?? {}).length && !Object.keys(seed.extracted_data ?? {}).length) args.push('--rescan');
       let received: GlinerMappingDocument | null = null;
       let ocrRequired: string[] | null = null;
       const failedDocuments: FailedDocument[] = [];
