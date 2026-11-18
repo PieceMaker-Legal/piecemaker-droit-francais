@@ -233,6 +233,7 @@ champ d'application PénalitéDeRetard:
   exception pénalité_contractuelle
   définition pénalité_due
   sous condition force_majeure
-  conséquence égal à 0 €
+  conséquence égal à
+    0 €
 ```
 ````

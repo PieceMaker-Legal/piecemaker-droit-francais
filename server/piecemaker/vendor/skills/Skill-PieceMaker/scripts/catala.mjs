@@ -460,7 +460,7 @@ async function verifier(context, program, flags = {}) {
       if (!context.python || !context.credentials) return missing(!context.python ? 'Python partagé absent.' : 'Identifiants PISTE absents.');
       await catleg(context, program, { au: flags.au });
       const report = readJson(path.join(program.directory, 'resultats', 'catleg.json'));
-      return { passed: report.passed, message: report.fichiers.filter((file) => !file.passed && !file.skipped).flatMap((file) => file.messages).join(' · ') };
+      return { passed: report.passed, message: report.message ?? report.fichiers.filter((file) => !file.passed && !file.skipped).flatMap((file) => file.messages).join(' · ') };
     }),
     record('citations', 'Contrôle des citations PieceMaker', async () => {
       if (!context.citations) return missing('Contrôle de citations indisponible : serveur PieceMaker requis.');
@@ -818,9 +818,12 @@ async function catleg(context, program, flags) {
     const skipped = Boolean(marker) && !cited.length && !articles.length;
     results.push({ fichier: file, exit_code: result.code, passed: Boolean(marker) && checked.length > 0 && versions.every((version) => version.valide === true) && !differences.length && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
   }
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), dates_reference: dates, origine_date: origine, passed: results.some((entry) => entry.articles.length) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), fichiers: results };
+  // Un contrat peut ne citer aucun article de loi : ses clauses ne relèvent pas de Légifrance.
+  const contract = readJson(path.join(program.directory, 'tache.json'))?.type === 'transactional';
+  const statuteFree = contract && results.length > 0 && results.every((entry) => entry.skipped);
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), dates_reference: dates, origine_date: origine, passed: (statuteFree || results.some((entry) => entry.articles.length)) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), ...(statuteFree ? { message: 'Contrat sans article de loi cité : les clauses ne relèvent pas de Légifrance.' } : {}), fichiers: results };
   writeResult(program.directory, 'catleg.json', report);
-  const lines = results.map((entry) => `- ${entry.fichier} : ${entry.skipped ? 'sans article cité, non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s), en vigueur au ${dates.join(', ')}` : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
+  const lines = results.map((entry) => `- ${entry.fichier} : ${entry.skipped ? contract ? 'aucun article de loi cité (clauses du contrat), non contrôlé' : 'sans article cité, non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s), en vigueur au ${dates.join(', ')}` : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
   return [`catleg (vigueur au ${dates.join(', ')}, ${origineLibelle}) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
 }
 

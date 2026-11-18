@@ -154,7 +154,7 @@ Quand `tache.json` porte `"type": "transactional"`, le volet présente le progra
 | Scénario | Cas de figure |
 | Fondement à préciser | Clause à rattacher |
 
-Une règle se rattache à une clause du contrat : un titre `## Article 5 — Pénalités de retard` suivi du texte exact de la clause entre « ». La clause apparaît comme source de la règle, avec le symbole ¶, et s’ouvre comme les autres sources. Une règle peut aussi rester sous un article de loi (`| LEGIARTI…`). Les hypothèses d’un cas de figure ne demandent pas de prémisse : le contrat se lit en hypothèses, non en faits prouvés. `pm catala verifier` applique les mêmes contrôles de rattachement, la clause valant source.
+Une règle se rattache à une clause du contrat : un titre `## Article 5 — Pénalités de retard` suivi du texte exact de la clause entre « ». La clause apparaît comme source de la règle, avec le symbole ¶, et s’ouvre comme les autres sources. Une règle peut aussi rester sous un article de loi (`| LEGIARTI…`). Les hypothèses d’un cas de figure ne demandent pas de prémisse : le contrat se lit en hypothèses, non en faits prouvés. `pm catala verifier` applique les mêmes contrôles de rattachement, la clause valant source. Un contrat qui ne cite aucun article de loi passe `catleg` ; un article `| LEGIARTI…` qu’il cite reste contrôlé.
 
 L’exemple [contrat-maintenance](tests/contrat-maintenance/README.md) modélise une clause de pénalités plafonnée et sa dérogation pour force majeure.
 

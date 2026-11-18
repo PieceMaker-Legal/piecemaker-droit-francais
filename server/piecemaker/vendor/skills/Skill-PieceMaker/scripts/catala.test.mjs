@@ -328,6 +328,22 @@ test('catleg checks only identifiers cited in an article title, not in a doc att
   } finally { cleanup(); }
 });
 
+test('catleg passes a contract that cites no statute and still checks a cited article', async () => {
+  const task = { tache: 'Contrat fictif', type: 'transactional', date_vigueur: '2026-03-04', raisonnements: [{ champ: 'Prime', objectif: 'Fixer la prime', rang: 'Article 1' }] };
+  const { dossier, deps, report, directory, cleanup } = catlegScenario({ 'prime.catala_fr': '## Article 1 — Prime\n\n« La prime est de 100 €. »\n' }, task);
+  try {
+    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: {}, deps }), /clauses du contrat/);
+    assert.equal(report().passed, true);
+    fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify({ ...task, type: 'litigation' }));
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: {}, deps });
+    assert.equal(report().passed, false, 'a litigation program must cite an article');
+    fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '## Article fictif | LEGIARTI000000000001\n');
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2019-12-31' }, deps });
+    assert.equal(report().passed, false, 'a statute cited by a contract is still checked');
+  } finally { cleanup(); }
+});
+
 test('catleg reads a closed article version from the local cache and downloads a missing one once', async () => {
   const { dossier, deps, home, cleanup } = catlegScenario({ 'prime.catala_fr': '## Article fictif | LEGIARTI000000000001\n\n## Article fictif | LEGIARTI000000000002\n' });
   try {

@@ -86,8 +86,10 @@ champ d'application PénalitéDeRetard:
   ## Appliquer la pénalité plafonnée
   étiquette pénalité_contractuelle
   définition pénalité_due égal à
-    si pénalité_avant_plafond > plafond_des_pénalités
-    alors plafond_des_pénalités
+    si
+      pénalité_avant_plafond > plafond_des_pénalités
+    alors
+      plafond_des_pénalités
     sinon pénalité_avant_plafond
 ```
 
@@ -105,5 +107,6 @@ champ d'application PénalitéDeRetard:
   exception pénalité_contractuelle
   définition pénalité_due
   sous condition force_majeure
-  conséquence égal à 0 €
+  conséquence égal à
+    0 €
 ```
