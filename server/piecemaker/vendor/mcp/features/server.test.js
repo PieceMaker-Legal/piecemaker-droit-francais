@@ -139,10 +139,12 @@ test('OkfWrite stops at the first failure', async () => {
   assert.equal(seen.length, 2);
 });
 
-test('okfRelations reads the ontology and adds the system relations', async () => {
+test('okfRelations takes the sealed ontology from the server and adds the system relations', async () => {
   const { okfRelations } = await import('./server.mjs');
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'features-ontology-'));
-  assert.deepEqual(okfRelations(home), ['amends', 'responds-to', 'refers-to', 'supersedes', 'states', 'involves']);
-  fs.writeFileSync(path.join(home, 'ontologie.json'), JSON.stringify({ relations: [{ name: 'contests' }] }));
-  assert.deepEqual(okfRelations(home), ['contests', 'states', 'involves']);
+  const seen = [];
+  const pm = async (args) => { seen.push(args); return { code: 0, stdout: JSON.stringify(['contests', 'states', 'involves']), stderr: '' }; };
+  assert.deepEqual(await okfRelations('/dossier', pm), ['contests', 'states', 'involves']);
+  assert.deepEqual(seen, [['okf', 'ontologie', '--noms', '--dossier', '/dossier']]);
+  const down = async () => ({ code: 1, stdout: '', stderr: 'serveur indisponible' });
+  assert.deepEqual(await okfRelations('/dossier', down), ['amends', 'responds-to', 'refers-to', 'supersedes', 'states', 'involves']);
 });

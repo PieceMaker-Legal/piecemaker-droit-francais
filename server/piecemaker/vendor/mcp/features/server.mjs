@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -21,13 +20,17 @@ export const INTENTS = { case: 'case', index: 'index', review: 'tabular_review',
 const DEFAULT_RELATIONS = ['amends', 'responds-to', 'refers-to', 'supersedes'];
 const SYSTEM_RELATIONS = ['states', 'involves'];
 
-export function okfRelations(home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker')) {
-  let names = DEFAULT_RELATIONS;
+/**
+ * Relations de l'ontologie lues par le serveur, qui vérifie son sceau : une ontologie modifiée
+ * hors de l'onglet Index n'entre pas dans le schéma. Sans serveur, les relations par défaut.
+ */
+export async function okfRelations(root, pm = runPmScript) {
   try {
-    const found = JSON.parse(fs.readFileSync(path.join(home, 'ontologie.json'), 'utf8')).relations?.map((relation) => relation.name).filter(Boolean);
-    if (found?.length) names = found;
+    const result = await pm(['okf', 'ontologie', '--noms', '--dossier', root], root);
+    const names = result.code === 0 ? JSON.parse(result.stdout) : null;
+    if (Array.isArray(names) && names.length) return [...new Set([...names.filter((name) => typeof name === 'string' && name), ...SYSTEM_RELATIONS])];
   } catch {}
-  return [...new Set([...names, ...SYSTEM_RELATIONS])];
+  return [...DEFAULT_RELATIONS, ...SYSTEM_RELATIONS];
 }
 
 export function runPmScript(args, cwd) {
@@ -81,7 +84,7 @@ function featureText(name, root) {
   ].join('\n');
 }
 
-export function createServer({ root = process.cwd(), pm = runPmScript, relations = okfRelations() } = {}) {
+export function createServer({ root = process.cwd(), pm = runPmScript, relations = [...DEFAULT_RELATIONS, ...SYSTEM_RELATIONS] } = {}) {
   const server = new McpServer({ name: 'features', version: '0.1.0' });
   const store = openStore(root);
   const comments = openComments(root);
@@ -235,4 +238,4 @@ export function createServer({ root = process.cwd(), pm = runPmScript, relations
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
-if (isMain) await createServer().connect(new StdioServerTransport());
+if (isMain) await createServer({ relations: await okfRelations(process.cwd()) }).connect(new StdioServerTransport());

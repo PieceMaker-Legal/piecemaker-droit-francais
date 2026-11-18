@@ -19,7 +19,7 @@ const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
 const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer']);
+const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer', 'noms']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
@@ -799,6 +799,8 @@ async function okf(api, positional, flags, resolved) {
   }
   if (action === 'ontologie') {
     const { relations, systeme, erreur, proposition, documentTypes = [], types = [], icones = [] } = await api.okfFn({ action, folder });
+    // Noms des relations de l'ontologie scellée, plus les relations système : le schéma de l'outil OkfWrite.
+    if (flags.noms) return JSON.stringify([...new Set([...relations, ...systeme].map((entry) => entry.name).filter((name) => name !== 'mentions'))]);
     return [
       ...(erreur ? [`Attention : ${erreur}`] : []),
       ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}) : ${[...(proposition.relations || []), ...(proposition.documentTypes || [])].map((entry) => entry.name).join(', ')}.`] : []),

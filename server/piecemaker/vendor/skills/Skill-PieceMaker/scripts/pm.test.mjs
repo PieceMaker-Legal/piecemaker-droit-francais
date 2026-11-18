@@ -485,6 +485,13 @@ test('okf types propose la liste complète à l’avocat', async () => {
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
+test('okf ontologie --noms donne les relations de l’ontologie scellée lue par le serveur', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-noms-'));
+  const okfFn = async () => ({ relations: [{ name: 'contests', label: 'conteste', source: ['Pièces'], target: ['Pièces'] }], systeme: [{ name: 'states' }, { name: 'mentions' }, { name: 'involves' }] });
+  assert.deepEqual(JSON.parse(await run(['okf', 'ontologie', '--noms'], { cwd: dossier, deps: { okfFn } })), ['contests', 'states', 'involves']);
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
 test('memoire verifier refuse le frontmatter et exige un acte du même nom', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-memoire-'));
   const write = (relative, content) => { fs.mkdirSync(path.dirname(path.join(dossier, relative)), { recursive: true }); fs.writeFileSync(path.join(dossier, relative), content); };
