@@ -101,12 +101,11 @@ p.pmc-scenario{margin:0}
 .pmc-branch{position:relative;display:flex;align-items:center;padding:7px 0}
 .pmc-children{position:relative;display:flex;flex-direction:column;padding-left:72px}
 .pmc-wires{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}.pmc-wires path{--tint:var(--muted);fill:none;stroke:var(--tint);stroke-width:2;stroke-linecap:round;transition:opacity .15s}
-.pmc-map-node,.pmc-tree-ref{--tint:var(--muted);position:relative;flex:none;width:290px;padding:10px 12px;border:1.5px solid color-mix(in srgb,var(--tint) 70%,transparent);border-left-width:5px;border-radius:12px;background:color-mix(in srgb,var(--tint) 9%,var(--surface));color:var(--ink);transition:opacity .15s,outline-color .15s}
+.pmc-map-node{--tint:var(--muted);position:relative;flex:none;width:290px;padding:10px 12px;border:1.5px solid color-mix(in srgb,var(--tint) 70%,transparent);border-left-width:5px;border-radius:12px;background:color-mix(in srgb,var(--tint) 9%,var(--surface));color:var(--ink);transition:opacity .15s,outline-color .15s}
 .pmc-map [data-state=ok]{--tint:var(--ok-line)}.pmc-map [data-state=warn]{--tint:var(--warn-line)}.pmc-map [data-state=ko]{--tint:var(--ko-line)}
-.pmc-branch>.pmc-map-node,.pmc-branch>.pmc-gate,.pmc-branch>.pmc-tree-ref{position:sticky;top:30%;bottom:30%}
-.pmc-map-node[data-state=warn],.pmc-tree-ref[data-state=warn]{border-style:dashed;border-left-style:solid}
+.pmc-branch>.pmc-map-node,.pmc-branch>.pmc-gate{position:sticky;top:30%;bottom:30%}
+.pmc-map-node[data-state=warn]{border-style:dashed;border-left-style:solid}
 .pmc-map-node[data-kind=answer]{border-width:2.5px;border-left-width:7px}
-.pmc-tree-ref{display:flex;flex-direction:column;gap:3px;font-size:13px}
 .pmc-gate{--tint:var(--muted);flex:none;width:290px;padding:10px 12px;border:1.5px dashed color-mix(in srgb,var(--tint) 70%,transparent);border-left:5px solid color-mix(in srgb,var(--tint) 70%,transparent);border-radius:12px;background:var(--surface);color:var(--ink);font-size:13px;line-height:1.35}.pmc-gate p{margin:0 0 4px}
 .pmc-box-kind{display:block;margin-bottom:3px;font-size:10.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .pmc-map-node h3{margin:0;font-size:14px;line-height:1.35;color:var(--ink)}.pmc-result{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin:5px 0 0}.pmc-result:empty{display:none}.pmc-result .pmc-value{margin:0}
