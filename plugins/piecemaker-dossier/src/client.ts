@@ -1,4 +1,4 @@
-import { openIndexAnalysis } from './index-analysis.js';
+import { mountIndexAnalysis } from './index-analysis.js';
 import { editOntology } from './ontology.js';
 import { pendingProposals } from './pending-proposals.js';
 import { etapesApi, knowledgeApi } from './api.js';
@@ -11,8 +11,8 @@ import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, 
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { CUSTOM_NATURE, chronologyView, graphView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, natureInputMarkup, natureSelectMarkup, nodeVariants, parseAliases, scanPercentLabel, scanProgress, shell } from './views.js';
-import type { BodaccScanState, ChronologySort, Tab, ViewData } from './views.js';
+import { chronologyView, graphView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanProgress, shell } from './views.js';
+import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
 import type { PartySide } from './party-codes.js';
@@ -66,8 +66,16 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const requestedView = takeRequestedView();
   let active: Tab = requestedView === 'index-analysis' ? 'chronology' : requestedView ?? 'general';
   let data: ViewData | null = null;
-  let closeIndexAnalysis: (() => void) | null = null;
-  let chronologySort: ChronologySort = { column: 'date', direction: 'ascending' };
+  // L'Index : la revue tabulaire de l'Index, montée une fois par dossier et rattachée à l'onglet à chaque affichage.
+  let indexHost: HTMLElement | null = null;
+  let indexProject = '';
+  let disposeIndex: (() => void) | null = null;
+  const closeIndex = () => {
+    disposeIndex?.();
+    disposeIndex = null;
+    indexHost = null;
+    indexProject = '';
+  };
   let okfView: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null };
   let showPremises = (() => { try { return localStorage.getItem('pmd-okf-premises') === '1'; } catch { return false; } })();
   const okfHandle = () => {
@@ -405,7 +413,29 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   };
 
   const emitFocus = () => {
-    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', view: closeIndexAnalysis ? 'index-analysis' : active } }));
+    window.dispatchEvent(new CustomEvent(PANEL_FOCUS_EVENT, { detail: { tab: 'plugin:piecemaker-dossier', view: active } }));
+  };
+
+  const attachIndex = (slot: HTMLElement | null) => {
+    const projectPath = context.project?.path || '';
+    if (!slot || !projectPath) return;
+    if (indexHost && indexProject === projectPath) {
+      slot.replaceWith(indexHost);
+      return;
+    }
+    closeIndex();
+    const host = document.createElement('div');
+    host.className = 'pmd-index-analysis';
+    host.dataset.indexAnalysis = '';
+    indexHost = host;
+    indexProject = projectPath;
+    slot.replaceWith(host);
+    void mountIndexAnalysis(host, api, (resource) => linksMarkup(data?.okf ?? null, resource)).then((dispose) => {
+      if (indexHost === host) disposeIndex = dispose;
+      else dispose();
+    }).catch((error: unknown) => {
+      if (indexHost === host) host.innerHTML = `<div class="pmd-empty">${escapeHtml(error instanceof Error ? error.message : String(error))}</div>`;
+    });
   };
 
   const paintContent = () => {
@@ -415,8 +445,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     destroyGraph?.();
     destroyGraph = null;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
-    else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'chronology' ? chronologyView(data, context.project.path, chronologySort, okfView) : active === 'graph' ? graphView(data.okf ?? null, showPremises) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    else if (active === 'chronology') {
+      content.innerHTML = chronologyView(okfView);
+      attachIndex(content.querySelector<HTMLElement>('[data-index-analysis]'));
+      return;
+    } else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
+    else content.innerHTML = active === 'graph' ? graphView(data.okf ?? null, showPremises) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
     const graphHost = content.querySelector<HTMLElement>('[data-okf-graph]');
     const projectPath = context.project?.path || '';
     if (!graphHost || !data?.okf) return;
@@ -483,45 +517,10 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }).catch(showError);
   };
 
-  const saveNature = async (nodeId: string, nature: string) => {
-    const node = data?.graph.nodes.find((entry) => entry.id === nodeId);
-    if (!node) return;
-    await save([{ op: 'upsertNode', node: { id: node.id, kind: 'document', label: node.label, aliases: node.aliases, data: { ...node.data, nature: nature || null }, date: node.date } }]);
-  };
-
   const bindOnce = () => {
-    root.addEventListener('change', (event) => {
-      const field = event.target as HTMLInputElement;
-      const nodeId = field.dataset?.natureSelect ?? field.dataset?.natureInput;
-      if (!nodeId) return;
-      const value = field.value.trim();
-      if (value === CUSTOM_NATURE) {
-        field.parentElement!.innerHTML = natureInputMarkup(nodeId);
-        root.querySelector<HTMLElement>('[data-nature-input]')?.focus();
-        return;
-      }
-      if (!value && field.dataset.natureInput) {
-        paintContent();
-        return;
-      }
-      void saveNature(nodeId, value).catch(showError);
-    });
     root.addEventListener('click', (event) => {
       const target = event.target as HTMLElement;
       if (target.closest('.pmd-modal')) return;
-      if (target.closest('[data-nature-select],[data-nature-input]')) return;
-      if (root.querySelector('[data-nature-select],[data-nature-input]')) {
-        paintContent();
-        return;
-      }
-      const editNature = target.closest<HTMLElement>('[data-edit-nature]');
-      if (editNature) {
-        const node = data?.graph.nodes.find((entry) => entry.id === editNature.dataset.editNature);
-        if (!node) return;
-        editNature.parentElement!.innerHTML = natureSelectMarkup(node, data?.okf?.documentTypes);
-        root.querySelector<HTMLElement>('[data-nature-select]')?.focus();
-        return;
-      }
       const nodeMenu = target.closest<HTMLElement>('[data-node-menu]');
       if (nodeMenu) {
         const menu = nodeMenu.parentElement?.querySelector<HTMLElement>('.pmd-profile-menu');
@@ -537,13 +536,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         paintContent();
         return;
       }
-      const sort = target.closest<HTMLElement>('[data-sort]')?.dataset.sort;
-      if (sort === 'document' || sort === 'date' || sort === 'classification') {
-        chronologySort = { column: sort, direction: chronologySort.column === sort && chronologySort.direction === 'ascending' ? 'descending' : 'ascending' };
-        paintContent();
-        root.querySelector<HTMLElement>(`[data-sort="${sort}"]`)?.focus();
-        return;
-      }
       const premisesToggle = target.closest<HTMLInputElement>('[data-okf-premises]');
       if (premisesToggle) {
         showPremises = premisesToggle.checked;
@@ -557,12 +549,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
           okfView = { ...okfView, errors: erreurs, contradictions };
           paintContent();
         }).catch(showError);
-        return;
-      }
-      if (action === 'index-analysis' && context.project) {
-        const button = target.closest<HTMLButtonElement>('button')!;
-        button.disabled = true;
-        void openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); }).then((dispose) => { closeIndexAnalysis = dispose; }).catch(showError).finally(() => { button.disabled = false; });
         return;
       }
       if (action === 'edit-ontology' && context.project) {
@@ -713,17 +699,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (nodeId) void deleteNode(nodeId).catch(showError);
         return;
       }
-      const editDocument = target.closest<HTMLElement>('[data-edit-document]');
-      if (editDocument) {
-        const node = data?.graph.nodes.find((entry) => entry.id === editDocument.dataset.editDocument);
-        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece, okfHandle());
-        return;
-      }
-      const openDocument = target.closest<HTMLElement>('[data-open-document]');
-      if (openDocument) {
-        const node = data?.graph.nodes.find((entry) => entry.id === openDocument.dataset.openDocument);
-        if (data && node) documentEditor(root, data, node, context.project?.path || '', save, renamePiece, okfHandle());
-      }
     });
     root.addEventListener('dragstart', (event) => {
       const card = (event.target as HTMLElement).closest<HTMLElement>('[data-profile-id]');
@@ -831,31 +806,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     void load();
   };
   const versionTimer = window.setInterval(() => void refreshWhenChanged(), VERSION_POLL_INTERVAL_MS);
-  let openingAnalysis = false;
-  const showIndexAnalysis = () => {
-    if (closeIndexAnalysis || openingAnalysis || !context.project) return;
-    openingAnalysis = true;
-    void openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); })
-      .then((dispose) => { closeIndexAnalysis = dispose; emitFocus(); })
-      .catch(showError)
-      .finally(() => { openingAnalysis = false; });
-  };
   const showRequestedView = () => {
     const view = takeRequestedView();
     if (!view) return;
-    if (view === 'index-analysis') {
-      if (active !== 'chronology') {
-        active = 'chronology';
-        render();
-      }
-      showIndexAnalysis();
-      return;
-    }
-    active = view;
+    // « index-analysis » (ancien nom de la revue de l'Index) ouvre l'Index : c'est la même vue.
+    active = view === 'index-analysis' ? 'chronology' : view;
     render();
   };
   window.addEventListener(VIEW_EVENT, showRequestedView);
-  if (requestedView === 'index-analysis') showIndexAnalysis();
   const showRequestedMapping = () => {
     mappingRequested = takeRequestedMapping();
     openRequestedMapping();
@@ -870,8 +828,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     const changedTheme = next.theme !== context.theme;
     context = next;
     if (changedProject) {
-      closeIndexAnalysis?.();
-      closeIndexAnalysis = null;
+      closeIndex();
       data = null;
       scanJob = null;
       bodaccStates.clear();
@@ -882,7 +839,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     }
   });
   (container as HTMLElement & { pmdUnsubscribe?: () => void }).pmdUnsubscribe = () => {
-    closeIndexAnalysis?.();
+    closeIndex();
     destroyGraph?.();
     unsubscribe();
     compactWorkspace.removeEventListener('change', syncTiersWithWorkspaceWidth);

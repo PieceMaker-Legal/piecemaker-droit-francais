@@ -110,7 +110,7 @@ describe('plan d’application', () => {
 describe('review de tri des pièces', () => {
   it('crée un tri dont chaque ligne porte sa pièce, puis accueille les nouvelles pièces sans doublon', async () => {
     const project = caseWithPieces(['jugement', 'contrat']);
-    const { file, review } = createReview(project, sortingTemplate, 'Tri', [{ label: 'jugement', documents: ['Fichiers convertis PieceMaker/jugement.md'], piece: 'Pièces/jugement.pdf' }], settings);
+    const { file, review } = await createReview(project, sortingTemplate, 'Tri', [{ label: 'jugement', documents: ['Fichiers convertis PieceMaker/jugement.md'], piece: 'Pièces/jugement.pdf' }], settings);
     expect(review.category).toBe('tri-pieces');
     expect(review.rows[0].piece).toBe('Pièces/jugement.pdf');
 
@@ -120,20 +120,20 @@ describe('review de tri des pièces', () => {
     ]);
 
     expect(added).toHaveLength(1);
-    expect(readReview(project, file).rows.map((row) => row.piece)).toEqual(['Pièces/jugement.pdf', 'contrat.pdf']);
+    expect((await readReview(project, file)).rows.map((row) => row.piece)).toEqual(['Pièces/jugement.pdf', 'contrat.pdf']);
   });
 
-  it('refuse une ligne de tri sans pièce, à plusieurs documents ou hors du dossier', () => {
+  it('refuse une ligne de tri sans pièce, à plusieurs documents ou hors du dossier', async () => {
     const project = caseWithPieces(['jugement', 'contrat']);
     const documents = ['Fichiers convertis PieceMaker/jugement.md'];
-    expect(() => createReview(project, sortingTemplate, 'Tri', [{ label: 'x', documents }], settings)).toThrow(/Pièce invalide/);
-    expect(() => createReview(project, sortingTemplate, 'Tri', [{ label: 'x', documents: [...documents, 'Fichiers convertis PieceMaker/contrat.md'], piece: 'a.pdf' }], settings)).toThrow(/une seule pièce/);
-    expect(() => createReview(project, sortingTemplate, 'Tri', [{ label: 'x', documents, piece: '../a.pdf' }], settings)).toThrow(/Pièce invalide/);
+    await expect(createReview(project, sortingTemplate, 'Tri', [{ label: 'x', documents }], settings)).rejects.toThrow(/Pièce invalide/);
+    await expect(createReview(project, sortingTemplate, 'Tri', [{ label: 'x', documents: [...documents, 'Fichiers convertis PieceMaker/contrat.md'], piece: 'a.pdf' }], settings)).rejects.toThrow(/une seule pièce/);
+    await expect(createReview(project, sortingTemplate, 'Tri', [{ label: 'x', documents, piece: '../a.pdf' }], settings)).rejects.toThrow(/Pièce invalide/);
   });
 
   it('enregistre une cellule modifiée à la main, sans citation exigée, puis l’application de la ligne', async () => {
     const project = caseWithPieces(['jugement']);
-    const { file, review } = createReview(project, sortingTemplate, 'Tri', [{ label: 'jugement', documents: ['Fichiers convertis PieceMaker/jugement.md'], piece: 'jugement.pdf' }], settings);
+    const { file, review } = await createReview(project, sortingTemplate, 'Tri', [{ label: 'jugement', documents: ['Fichiers convertis PieceMaker/jugement.md'], piece: 'jugement.pdf' }], settings);
     const rowId = review.rows[0].id;
 
     const edited = await editCell(project, file, rowId, 1, '2024-01-09_Jugement');

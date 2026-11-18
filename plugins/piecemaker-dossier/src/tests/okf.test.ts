@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { spreadBoxes, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
-import { chronologyView, graphView, shell } from '../views.js';
+import { chronologyView, documentTitle, graphView, linksMarkup, shell } from '../views.js';
+import { indexRowResource } from '../index-analysis.js';
 
 const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', relations });
 const index: OkfIndex = {
@@ -26,12 +27,11 @@ describe('index OKF', () => {
   it('utilise le titre descriptif dans la première colonne et la fiche, sans renommer la source', () => {
     const node = { id: 'document:1', kind: 'document' as const, label: 'Contrat.pdf', aliases: [], data: { path: '/dossier/Pièces/Contrat.pdf' }, date: null };
     const named = { ...index, fiches: index.fiches.map((entry) => entry.resource === 'Pièces/Contrat.pdf' ? { ...entry, title: 'Convention de prestation', titleCitation: 'La présente convention' } : entry) };
-    const html = chronologyView({ graph: { nodes: [node], links: [] } as never, okf: named }, '/dossier');
-    expect(html).toContain('class="pmd-card-title">Convention de prestation</span>');
+    expect(documentTitle(node as never, named, '/dossier')).toBe('Convention de prestation');
     expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('class="pmd-fact-title">Convention de prestation</h2>');
     expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('La présente convention');
     expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('data-open-file="Pièces/Contrat.pdf"');
-    expect(chronologyView({ graph: { nodes: [node], links: [] } as never }, '/dossier')).toContain('class="pmd-card-title">Contrat.pdf</span>');
+    expect(documentTitle(node as never, null, '/dossier')).toBe('Contrat.pdf');
   });
 
   it('les liens se lisent dans les deux sens', () => {
@@ -47,11 +47,12 @@ describe('index OKF', () => {
     expect(graphElements(custom)[2].data.label).toBe('invoque');
   });
 
-  it('le tableau affiche la colonne Liens et le rapport de vérification', () => {
-    const node = { id: 'document:1', kind: 'document' as const, label: 'Courrier.pdf', aliases: [], data: { path: '/dossier/Pièces/Courrier.pdf' }, date: null };
-    const html = chronologyView({ graph: { nodes: [node], links: [] } as never, okf: index }, '/dossier', undefined, { errors: [{ fiche: '/Pièces/Courrier.pdf.md', erreur: 'type absent' }] });
-    expect(html).toContain('se réfère à → Contrat');
-    expect(html).toContain('title="Nous faisons suite au contrat."');
+  it('l’Index affiche la colonne Liens de chaque pièce et le rapport de vérification', () => {
+    const links = linksMarkup(index, indexRowResource({ id: 'r1', piece: 'Pièces/Courrier.pdf', documents: [{ source: 'Fichiers convertis PieceMaker/Courrier.md' }] }));
+    expect(links).toContain('se réfère à → Contrat');
+    expect(links).toContain('title="Nous faisons suite au contrat."');
+    expect(indexRowResource({ id: 'r2', documents: [{ source: 'Pièces/Note.md' }] })).toBe('Pièces/Note.md');
+    const html = chronologyView({ errors: [{ fiche: '/Pièces/Courrier.pdf.md', erreur: 'type absent' }] });
     expect(html).toContain('1 erreur dans l’index');
     expect(html).not.toContain('data-okf-graph');
   });

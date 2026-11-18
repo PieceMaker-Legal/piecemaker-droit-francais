@@ -50,7 +50,7 @@ describe('classement côté serveur', () => {
     cleanup.push(() => fs.rmSync(project, { recursive: true, force: true }));
     fs.mkdirSync(path.join(project, 'Fichiers convertis PieceMaker'));
     fs.writeFileSync(path.join(project, 'Fichiers convertis PieceMaker', 'contrat.md'), '# Contrat Société Exemple SAS');
-    const { file, review } = createReview(project, template, 'Index', [{ label: 'contrat', documents: ['Fichiers convertis PieceMaker/contrat.md'], piece: 'contrat.pdf' }], { provider: 'claude', model: 'haiku', concurrency: 1 });
+    const { file, review } = await createReview(project, template, 'Index', [{ label: 'contrat', documents: ['Fichiers convertis PieceMaker/contrat.md'], piece: 'contrat.pdf' }], { provider: 'claude', model: 'haiku', concurrency: 1 });
     const rowId = review.rows[0].id;
     await updateReview(project, file, (current) => {
       current.cells[rowId] = { 0: { summary: 'Contrats', flag: 'green', reasoning: '' } };
@@ -60,7 +60,7 @@ describe('classement côté serveur', () => {
     await sortRow(host.origin, project, file, rowId);
 
     expect(host.renames).toEqual([{ folder: project, path: 'contrat.pdf', directory: 'Pièces/Contrats' }]);
-    expect(readReview(project, file).rows[0]).toMatchObject({ piece: 'Pièces/Contrats/contrat.pdf', applied: { from: 'contrat.pdf' } });
+    expect((await readReview(project, file)).rows[0]).toMatchObject({ piece: 'Pièces/Contrats/contrat.pdf', applied: { from: 'contrat.pdf' } });
   });
 
   it('n’accepte que l’origine locale du serveur', () => {

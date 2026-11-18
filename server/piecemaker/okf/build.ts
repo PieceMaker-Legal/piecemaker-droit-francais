@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { sentenceContaining } from '../../../plugins/piecemaker-dossier/src/excerpt.js';
-import { REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+import { REVIEW_FOLDER, documentTitle, isCellFilled } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+import type { Review } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
 
 import type { Frontmatter, Relation, Relations } from './bundle.js';
@@ -80,6 +81,54 @@ export function documentsFromSnapshot(projectPath: string, snapshot: KnowledgeSn
     documents.set(resource, { resource, title: metadata.get(resource)?.title || node.label, nature: text(node.data.nature) || metadata.get(resource)?.nature || '', date: text(node.date), parties: [...parties.values()], updatedAt: node.updatedAt });
   }
   return [...documents.values()].sort((left, right) => left.resource.localeCompare(right.resource));
+}
+
+/** Date ISO d'une cellule Date de l'Index : « 2021-03-12 », « 12/03/2021 » ou « 12 mars 2021 ». */
+export function indexDate(value: string): string {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  return datesIn(trimmed)[0]?.date ?? '';
+}
+
+const NATURE_COLUMNS = ['nature', 'type de document', 'type de pièce', 'type'];
+const columnNamed = (review: Review, names: string[]) => review.columns.find((column) => names.includes(String(column?.name ?? '').trim().toLocaleLowerCase('fr').normalize('NFC')));
+
+/** Les pièces de l'Index (SQLite) : une ligne, une pièce, avec le titre, la nature et la date que l'analyse y a portés. */
+export function documentsFromIndex(projectPath: string, review: Review | null | undefined): SourceDocument[] {
+  if (!review) return [];
+  const dateColumn = columnNamed(review, ['date']) ?? review.columns.find((column) => column.format === 'date');
+  const natureColumn = columnNamed(review, NATURE_COLUMNS);
+  const documents = new Map<string, SourceDocument>();
+  for (const row of review.rows) {
+    const source = row.piece || row.documents?.[0]?.source || '';
+    if (!source || /^https?:/i.test(source)) continue;
+    const absolute = path.resolve(projectPath, source);
+    if (!fs.existsSync(absolute)) continue;
+    const resource = resourceOf(projectPath, absolute);
+    if (resource.startsWith('..') || documents.has(resource)) continue;
+    const cell = (column: typeof dateColumn) => column ? review.cells?.[row.id]?.[String(column.index)] : undefined;
+    const date = cell(dateColumn);
+    const nature = cell(natureColumn);
+    documents.set(resource, {
+      resource,
+      title: documentTitle(review, row),
+      nature: isCellFilled(nature) ? text(nature.summary) : '',
+      date: isCellFilled(date) ? indexDate(date.summary) : '',
+      parties: [],
+      updatedAt: row.finishedAt || review.updatedAt,
+    });
+  }
+  return [...documents.values()];
+}
+
+/** L'Index fait la liste des pièces ; le scan n'y ajoute que ce qu'il sait de plus (parties citées, pièces pas encore indexées). */
+export function mergeDocuments(fromIndex: SourceDocument[], fromScan: SourceDocument[]): SourceDocument[] {
+  const merged = new Map(fromScan.map((document) => [document.resource, document]));
+  for (const document of fromIndex) {
+    const scanned = merged.get(document.resource);
+    merged.set(document.resource, scanned ? { ...document, title: document.title || scanned.title, nature: document.nature || scanned.nature, date: document.date || scanned.date, parties: scanned.parties } : document);
+  }
+  return [...merged.values()].sort((left, right) => left.resource.localeCompare(right.resource));
 }
 
 const SCAN_RELATION = 'refers-to';

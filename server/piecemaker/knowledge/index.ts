@@ -7,6 +7,7 @@ import { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledg
 import { createOkfBackend } from '../okf/index.js';
 import { migrateArborescence } from '../okf/ontology.js';
 import { createOkfStore } from '../okf/store.js';
+import { createIndexStore } from '../okf/index-store.js';
 
 import { importLegacyKnowledge } from './legacy-import.js';
 import { createKnowledgeLocalRouter, isLoopback } from './local-routes.js';
@@ -70,6 +71,7 @@ export function createKnowledgeBackend(applicationRoot: string) {
     projects: projectsDb,
     snapshot: (projectId) => getStore().snapshot(projectId),
     store: createOkfStore(getConnection()),
+    indexStore: createIndexStore(getConnection()),
     convertedMarkdown: (projectPath, filePath) => convertedMarkdown(projectPath, { path: filePath }),
     listDocuments: defaultScanFiles,
     isLoopback,
