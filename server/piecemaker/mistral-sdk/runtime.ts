@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto';
 import type { ChatCompletionRequest, ContentChunk, ToolCall } from '@mistralai/mistralai/models/components';
 
 import type { IProvider, IProviderFork, IProviderRuntime } from '@/shared/interfaces.js';
-import type { AnyRecord, NormalizedMessage, ProviderPermissionDecision, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
+import type { AnyRecord, NormalizedMessage, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
 import { appendFilesInputTag } from '@/shared/index.js';
 import { AppError, buildDefaultProviderCurrentActiveModel, createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
 
@@ -86,16 +86,7 @@ export function createMistralSdkRuntime(
   loadTools = createMistralTools,
 ): IProviderRuntime {
   const active = new Map<string, AbortController>();
-  const pending = new Map<string, { sessionId: string; toolName: string; input: unknown; resolve(decision: ProviderPermissionDecision): void }>();
   return {
-    permissions: {
-      resolve(requestId, decision) { pending.get(requestId)?.resolve(decision); },
-      listPending(sessionId) {
-        return [...pending].filter(([, request]) => request.sessionId === sessionId).map(([requestId, request]) => ({
-          requestId, _sessionId: sessionId, _toolName: request.toolName, _input: request.input, _receivedAt: new Date(),
-        }));
-      },
-    },
     abort(sessionId) {
       const controller = active.get(sessionId);
       controller?.abort();
@@ -123,25 +114,6 @@ export function createMistralSdkRuntime(
         return message;
       };
       const save = () => history.save(nativeId, { userId, messages, transcript });
-      const approve = (toolName: string, input: unknown) => new Promise<ProviderPermissionDecision>(resolve => {
-        const requestId = randomUUID();
-        let done = false;
-        const finish = (decision: ProviderPermissionDecision) => {
-          if (done) return;
-          done = true;
-          pending.delete(requestId);
-          signal.removeEventListener('abort', cancel);
-          resolve(decision);
-        };
-        const cancel = () => {
-          emit({ kind: 'permission_cancelled', requestId, reason: 'aborted' });
-          finish({ allow: false, message: 'Demande annulée.' });
-        };
-        pending.set(requestId, { sessionId, toolName, input, resolve: finish });
-        signal.addEventListener('abort', cancel, { once: true });
-        emit({ kind: 'permission_request', requestId, toolName, input });
-        if (signal.aborted) cancel();
-      });
       try {
         record = await history.load(nativeId);
         if (record && record.userId !== userId) throw new Error('Cette conversation appartient à un autre utilisateur.');
@@ -159,10 +131,7 @@ export function createMistralSdkRuntime(
         const planning = options.permissionMode === 'plan' || /^\/plan(?:\s|$)/.test(command.trim());
         const authorize = async (tool: { name: string; readOnly: boolean }, input: Record<string, unknown>) => {
           if (planning && !tool.readOnly) throw new Error('Outil indisponible dans ce mode.');
-          if (tool.readOnly || options.permissionMode === 'bypassPermissions' || (options.permissionMode === 'acceptEdits' && ['Write', 'Edit'].includes(tool.name))) return input;
-          const decision = await approve(tool.name, input);
-          if (!decision.allow) throw new Error(decision.message || 'Autorisation refusée.');
-          return decision.updatedInput ? decision.updatedInput as Record<string, unknown> : input;
+          return input;
         };
         toolbox = delegateSubagents(await loadTools(cwd, options.libraryDisabledSkills, signal), { cwd, client: connection.client, fallbackModel: 'mistral-small-latest', signal, authorize });
         const instructions: string[] = [
