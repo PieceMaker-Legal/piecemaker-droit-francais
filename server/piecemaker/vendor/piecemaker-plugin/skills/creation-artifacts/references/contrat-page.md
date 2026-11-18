@@ -24,7 +24,7 @@
 
 La page tourne dans une iframe isolée, sans accès au jeton de PieceMaker ni au reste de l'application :
 
-- **Aucune requête réseau** : `fetch`, `XMLHttpRequest`, WebSocket sont bloqués (`connect-src 'none'`). Toute donnée est dans la page, dans ses fichiers publiés ou dans sa base (`window.artifact.db`).
+- **Aucune requête réseau** : `fetch`, `XMLHttpRequest`, WebSocket sont bloqués (`connect-src 'none'`), même vers les fichiers publiés de l'artifact. Toute donnée est dans la page, dans un script publié (`data.js` chargé par `<script src>`) ou dans sa base (`window.artifact.db`).
 - Scripts externes permis seulement depuis `cdnjs.cloudflare.com` (préféré), `cdn.jsdelivr.net/npm/`, `unpkg.com`, `cdn.tailwindcss.com`, `code.jquery.com`, avec une version exacte (`chart.js@4.4.1`, jamais `@4` ni sans version). Feuilles de style externes : Google Fonts seulement. Préfère tout mettre dans la page : le dossier peut être ouvert hors ligne.
 - Images : fichiers publiés, assets (`Artifact publish url=… asset=true file_path=…`, puis l'`url` rendue telle quelle) ou `data:`. Pas d'image distante.
 - Pas de `localStorage` pour un état qui doit durer : il reste dans ce navigateur. Il sert au confort (onglet retenu, filtre). Enveloppe chaque accès dans `try/catch`.

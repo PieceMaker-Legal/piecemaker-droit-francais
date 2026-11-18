@@ -10,8 +10,11 @@ import { fileURLToPath } from 'node:url';
  *   1. les templates embarqués (`templates/` à côté de ce fichier), toujours présents ;
  *   2. le clone local du dépôt de templates (`~/.piecemaker/artifacts-templates/`).
  *
- * Un template est un dossier `<nom>/` : `template.json`, la page `index.html`, et les pages à lire
- * d'abord (`read_first`, `README.md` par défaut). Son lien est `piecemaker://template/<nom>`.
+ * Un template est un dossier `<nom>/` : `template.json`, la page `index.html`, les pages à lire
+ * d'abord (`read_first`, `README.md` par défaut), des références (`references`, lues à la demande)
+ * et des scripts Python (`scripts`, lancés par `ArtifactTemplates run` dans l'environnement Python
+ * de PieceMaker). Références et scripts ne sont jamais copiés dans l'artifact. Son lien est
+ * `piecemaker://template/<nom>`.
  */
 
 export const TEMPLATE_PREFIX = 'piecemaker://template/';
@@ -19,6 +22,7 @@ export const TEMPLATE_PREFIX = 'piecemaker://template/';
 export const DEFAULT_REPOSITORY = 'https://github.com/PieceMaker-Legal/PieceMaker_Electron.git';
 export const INTENTS = ['document', 'slides', 'design', 'other'];
 const NAME = /^[a-z][a-z0-9-]{1,63}$/;
+const SCRIPT_NAME = /^[a-z][a-z0-9_-]{0,63}$/;
 const BUNDLED = path.join(path.dirname(fileURLToPath(import.meta.url)), 'templates');
 const GIT_TIMEOUT_MS = 120000;
 
@@ -76,6 +80,9 @@ export function openTemplates({ home = path.join(os.homedir(), '.piecemaker'), b
       read_first: Array.isArray(data.read_first) ? data.read_first : fs.existsSync(path.join(folder, 'README.md')) ? ['README.md'] : [],
       entry: data.entry || 'index.html',
       data_files: Array.isArray(data.data_files) ? data.data_files : [],
+      references: Array.isArray(data.references) ? data.references.filter((file) => typeof file === 'string') : [],
+      scripts: Array.isArray(data.scripts) ? data.scripts.filter((entry) => SCRIPT_NAME.test(String(entry?.name)) && typeof entry.file === 'string' && entry.file.endsWith('.py'))
+        .map(({ name, file, description, args }) => ({ name, file, description: String(description || ''), args: Array.isArray(args) ? args.map(String) : [] })) : [],
       source,
       folder,
     };
@@ -109,12 +116,12 @@ export function openTemplates({ home = path.join(os.homedir(), '.piecemaker'), b
 
   /** Fichiers du template à copier dans un nouvel artifact (tout sauf template.json et les pages à lire). */
   function files(template) {
-    const skip = new Set(['template.json', template.entry, ...template.read_first]);
+    const skip = new Set(['template.json', template.entry, ...template.read_first, ...template.references, ...template.scripts.map((script) => script.file)]);
     const walk = (folder) => fs.readdirSync(path.join(template.folder, folder), { withFileTypes: true })
-      .filter((entry) => !entry.name.startsWith('.'))
+      .filter((entry) => !entry.name.startsWith('.') && entry.name !== '__pycache__')
       .flatMap((entry) => {
         const relative = folder ? `${folder}/${entry.name}` : entry.name;
-        return entry.isDirectory() ? walk(relative) : skip.has(relative) ? [] : [relative];
+        return entry.isDirectory() ? (relative === 'scripts' || relative === 'references' ? [] : walk(relative)) : skip.has(relative) || relative.endsWith('.py') ? [] : [relative];
       });
     return walk('');
   }
@@ -141,6 +148,14 @@ export function openTemplates({ home = path.join(os.homedir(), '.piecemaker'), b
     },
     files,
     fileOf,
+
+    /** Chemin d'un script déclaré par le template, ou une erreur qui liste ceux qu'il déclare. */
+    script(link, name) {
+      const template = find(link);
+      const entry = template.scripts.find((script) => script.name === name);
+      if (!entry) fail('not_found', `${template.type_url} has no script "${name}"${template.scripts.length ? `; it declares ${template.scripts.map((script) => script.name).join(', ')}` : ''}.`);
+      return { ...entry, path: fileOf(template, entry.file), template };
+    },
 
     async status() {
       const settings = config();

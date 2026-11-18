@@ -25,7 +25,17 @@ Un artifact est une page HTML que tu publies dans l'onglet **Artifacts** du doss
 - Petite modification : `Artifact publish url=<artifact> file_path=<page> edits=[{old_str, new_str}]` modifie le fichier et publie en un appel. Chaque `old_str` est copié exactement et n'apparaît qu'une fois.
 - Réécriture : modifie le fichier (Edit), puis republie avec le même `file_path` et la même `url`.
 - Un artifact d'une session précédente : `Artifact list` pour retrouver l'URL, `Artifact read url=…` pour partir de la version en ligne. Un publish sans lecture préalable est refusé : il te rend la version en ligne, fusionne tes changements dessus, publie à nouveau. Ne passe `force` que si l'avocat a dit d'écraser cette version.
-- Fichiers annexes (`data.json`, `style.css`, images) : `files={"chemin/publié": "source"}`. Une page HTML annexe commence par son propre `<!doctype html>`. `null` retire un fichier ; les fichiers non passés sont gardés.
+- Fichiers annexes (`data.js`, `style.css`, images) : `files={"chemin/publié": "source"}`. La page ne peut pas lire un `data.json` par `fetch` (aucune requête réseau) : mets les données figées dans un `data.js` (`window.DONNEES = …;`) chargé par `<script src="data.js">`. Une page HTML annexe commence par son propre `<!doctype html>`. `null` retire un fichier ; les fichiers non passés sont gardés.
+
+## Références et scripts d'un template
+
+Le README d'un template peut renvoyer à des fichiers attachés, déclarés dans son `template.json` :
+
+- `references` : des pages à lire quand le README y renvoie → `ArtifactTemplates read type_url=… path=references/<fichier>`.
+- `scripts` : des scripts Python (`{name, file, description, args}`) qui préparent les données de la page. Lance-les par **`ArtifactTemplates run type_url=… script=<name> args=[…] url=<artifact>`**, jamais par le shell : ils tournent avec l'interpréteur Python de PieceMaker (celui de la conversion), dossier courant = le dossier, et écrivent dans `Artifacts/<template>/` (variable `PIECEMAKER_ARTIFACT_OUT`). Le résultat donne la sortie du script et, en général, la commande de publication.
+- Ni les références ni les scripts ne sont copiés dans l'artifact : seule la page et ses fichiers servis le sont.
+
+Exemple embarqué : le template `chronologie` (script `build`, référence `references/format.md`).
 
 ## Données qui changent
 

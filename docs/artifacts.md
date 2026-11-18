@@ -22,7 +22,7 @@ flowchart LR
 | `Artifact` | `publish` (défaut), `read`, `list`, `delete`, `open`, `pin`, `unpin`, `quickstart` | pages, versions, fichiers annexes, assets, templates |
 | `ArtifactData` | `get`, `list`, `query`, `set`, `update`, `str_replace`, `delete`, `batch` | base partagée d'un artifact, même moteur que `FeatureData` (`store.mjs`) |
 | `ArtifactComments` | `read`, `reply`, `resolve`, `annotate` | fils de l'avocat (onglet ou Plannotator) |
-| `ArtifactTemplates` | `list`, `read`, `status`, `sync`, `save`, `push` | bibliothèque de templates, dépôt séparé |
+| `ArtifactTemplates` | `list`, `read`, `run`, `status`, `sync`, `save`, `push` | bibliothèque de templates, dépôt séparé, scripts Python des templates |
 
 Repris d'Artifact : `file_path`, `url`, `title` (repli quand la page n'a pas de `<title>`), `description`, `icon`, `label`, `edits` (tout ou rien, puis écrits sur disque), `files` (carte chemin publié → source, `null` retire, les absents restent), `type_url`, `capabilities`, `pin`, `force`, `asset` / `file_paths`, `path`, `ver`, `scope` (`mine`, `pinned`, `types`, `files`, `versions`, `assets`), `limit`, `type`, `intent` (`document`, `slides`, `design`, `other`).
 
@@ -67,9 +67,12 @@ Une version est écrite dans un dossier temporaire puis renommée : jamais de ve
 
 ## Templates
 
-- Embarqués : `vendor/mcp/artifacts/templates/` (`page`, `document`, `slides`, `tracker`).
+- Embarqués : `vendor/mcp/artifacts/templates/` (`page`, `document`, `slides`, `tracker`, `chronologie`).
 - Dépôt de la bibliothèque : `PieceMaker-Legal/PieceMaker_Electron`, vidé le 18/11/2026 pour cet usage (l'ancien historique est conservé en bundle git dans les fichiers du projet). Autre dépôt : `ArtifactTemplates sync repository=<url>`, ou `PIECEMAKER_ARTIFACT_TEMPLATES_REPO`. Réglage dans `~/.piecemaker/artifacts-templates.json`.
-- Un template : `<nom>/template.json` (`title`, `description`, `intent`, `icon`, `entry`, `read_first`, `capabilities`, `data_files`), `index.html`, `README.md`, fichiers annexes copiés dans l'artifact. À nom égal, le dépôt l'emporte sur l'embarqué.
+- Un template : `<nom>/template.json` (`title`, `description`, `intent`, `icon`, `entry`, `read_first`, `references`, `scripts`, `capabilities`, `data_files`), `index.html`, `README.md`, fichiers annexes copiés dans l'artifact. À nom égal, le dépôt l'emporte sur l'embarqué.
+- `references` (pages lues à la demande) et `scripts` (`[{name, file, description, args}]`, fichiers `.py`) ne sont jamais copiés dans l'artifact, pas plus que `scripts/`, `references/` et `__pycache__/`.
+- `ArtifactTemplates run type_url=… script=… args=[…] [url=…]` lance le script avec l'interpréteur Python de PieceMaker (`python.mjs`, même résolution que `pythonExecutable` du pipeline : environnement commun de `config.json`, `PYTHON_PATH`, `~/.piecemaker/venv`), dossier courant = le dossier, délai 10 min. Variables : `PIECEMAKER_CASE`, `PIECEMAKER_TEMPLATE_DIR`, `PIECEMAKER_ARTIFACT_OUT` (`Artifacts/<template>/`, créé), `PIECEMAKER_ARTIFACT_URL`. Un code de sortie non nul est une erreur de l'outil. Les scripts viennent du dépôt de l'avocat : ils ont les droits de PieceMaker sur la machine.
+- La page ne lit pas un fichier publié par `fetch` (`connect-src 'none'`) : un script écrit `data.js` (`window.X = …;`), chargé par `<script src>`.
 - `sync` clone ou avance en `--ff-only` ; `save` copie un artifact dans le clone et commite ; `push` n'est lancé qu'à la demande de l'avocat.
 
 ## Skill

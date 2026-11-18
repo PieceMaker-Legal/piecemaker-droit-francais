@@ -215,3 +215,47 @@ test('Plannotator is pinned by checksum and runs without any outgoing call', asy
   for (const [name, value] of Object.entries(PRIVATE_ENV)) assert.equal(spawned[0].env[name], value);
   assert.equal(platformKey('freebsd', 'x64'), null);
 });
+
+test('a template script runs in the PieceMaker Python environment and is never copied into the artifact', async () => {
+  const { call, write, root } = await connect();
+  const created = await call('Artifact', { type_url: 'piecemaker://template/chronologie', title: 'Chronologie' });
+  assert.equal(created.error, false, created.text);
+  assert.match(created.text, /ArtifactTemplates read type_url=piecemaker:\/\/template\/chronologie path=references\/format\.md/);
+  assert.match(created.text, /- build \(<événements\.json\|csv>\): .* → ArtifactTemplates run/);
+  const url = urlIn(created.text);
+  const files = JSON.parse((await call('Artifact', { action: 'list', scope: 'files', url })).text).map((file) => file.path);
+  assert.deepEqual(files, ['index.html', 'data.js']);
+
+  write('evenements.csv', 'date;titre;piece\n2026-02-01;Assignation;Pièce 4\n2026-01-10;Contrat signé;Pièce 1\n');
+  const run = await call('ArtifactTemplates', { action: 'run', url, script: 'build', args: ['evenements.csv'] });
+  assert.equal(run.error, false, run.text);
+  assert.match(run.text, /exit code 0/);
+  assert.match(run.text, /2 événement\(s\)/);
+  const data = fs.readFileSync(path.join(root, 'Artifacts', 'chronologie', 'data.js'), 'utf8');
+  assert.ok(data.indexOf('Contrat signé') < data.indexOf('Assignation'), 'sorted by date');
+  const published = await call('Artifact', { url, files: { 'data.js': 'Artifacts/chronologie/data.js' } });
+  assert.equal(published.error, false, published.text);
+  assert.match(published.text, /version 2 of 2/);
+
+  write('mauvais.json', JSON.stringify([{ date: 'hier', titre: 'x' }]));
+  const failed = await call('ArtifactTemplates', { action: 'run', url, script: 'build', args: ['mauvais.json'] });
+  assert.equal(failed.error, true);
+  assert.match(failed.text, /ligne 1/);
+  assert.match((await call('ArtifactTemplates', { action: 'run', url, script: 'absent' })).text, /declares build/);
+});
+
+test('the Python interpreter is resolved like the conversion pipeline', async () => {
+  const { piecemakerPython } = await import('./python.mjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-python-'));
+  assert.equal(piecemakerPython({ home, env: {}, platform: 'linux' }), 'python3');
+  assert.equal(piecemakerPython({ home, env: { PYTHON_PATH: '/opt/py' }, platform: 'linux' }), '/opt/py');
+  fs.mkdirSync(path.join(home, 'venv', 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(home, 'venv', 'bin', 'python'), '');
+  assert.equal(piecemakerPython({ home, env: {}, platform: 'linux' }), path.join(home, 'venv', 'bin', 'python'));
+  const shared = path.join(home, 'shared-python');
+  fs.writeFileSync(shared, '');
+  fs.writeFileSync(path.join(home, 'config.json'), JSON.stringify({ pythonPath: shared, pythonRuntime: { kind: 'shared' } }));
+  assert.equal(piecemakerPython({ home, env: { PYTHON_PATH: '/opt/py' }, platform: 'linux' }), shared);
+  fs.rmSync(shared);
+  assert.throws(() => piecemakerPython({ home, env: {}, platform: 'linux' }), /shared PieceMaker Python environment is missing/);
+});

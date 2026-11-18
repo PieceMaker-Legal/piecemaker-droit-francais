@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
@@ -11,6 +12,7 @@ import { applyEdits, idOf, isText, ID_PATTERN, openArtifacts, required, sourceFi
 import { INTENTS, openTemplates } from './templates.mjs';
 import { openPlannotator } from './plannotator.mjs';
 import { collectReviews, startReview } from './reviews.mjs';
+import { runPython } from './python.mjs';
 
 /** Le skill interne qui dit comment faire un artifact : renvoyé par quickstart et par toute création. */
 export const SKILL = 'creation-artifacts';
@@ -30,7 +32,7 @@ function header(meta, extra = []) {
   ].join('\n');
 }
 
-export function createServer({ root = process.cwd(), pm = runPmScript, templates = openTemplates(), plannotator = openPlannotator() } = {}) {
+export function createServer({ root = process.cwd(), pm = runPmScript, templates = openTemplates(), plannotator = openPlannotator(), python = runPython } = {}) {
   const server = new McpServer({ name: 'artifacts', version: '0.1.0' });
   const artifacts = openArtifacts(root);
   const store = openStore(root, STORE_OPTIONS);
@@ -39,7 +41,11 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
   const existing = (url) => { const id = idOf(url); artifacts.load(id); return id; };
 
   function readFirst(template) {
-    return template.read_first.map((relative) => `\n## Read first: ${relative}\n\n${templates.read(template.type_url, relative)}`).join('\n');
+    return [
+      ...template.read_first.map((relative) => `\n## Read first: ${relative}\n\n${templates.read(template.type_url, relative)}`),
+      ...(template.references.length ? ['\n## References (read when the README points to them)\n', ...template.references.map((relative) => `- ArtifactTemplates read type_url=${template.type_url} path=${relative}`)] : []),
+      ...(template.scripts.length ? ['\n## Scripts (run in the PieceMaker Python environment)\n', ...template.scripts.map((script) => `- ${script.name}${script.args.length ? ` (${script.args.join(' ')})` : ''}: ${script.description} → ArtifactTemplates run type_url=${template.type_url} script=${script.name} args=[...]`)] : []),
+    ].join('\n');
   }
 
   async function createFromTemplate({ type_url: typeUrl, title, description, icon, label, pin, file_path: filePath, files, edits }) {
@@ -50,8 +56,16 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
       source = sourceFile(root, filePath);
       page = applyEdits(fs.readFileSync(source, 'utf8'), edits);
     }
-    const copied = Object.fromEntries(templates.files(template).map((relative) => [relative, templates.fileOf(template, relative)]));
+    // Les fichiers du template passent par le dossier temporaire, seule source admise hors du dossier.
+    const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-template-'));
+    const copied = Object.fromEntries(templates.files(template).map((relative) => {
+      const copy = path.join(staging, relative);
+      fs.mkdirSync(path.dirname(copy), { recursive: true });
+      fs.copyFileSync(templates.fileOf(template, relative), copy);
+      return [relative, copy];
+    }));
     const result = artifacts.publish({ page, files: { ...copied, ...(files ?? {}) }, title: title || template.title, description, icon: icon ?? template.icon, label, pin, type: template.type_url, capabilities: template.capabilities, sourcePath: filePath });
+    fs.rmSync(staging, { recursive: true, force: true });
     if (source && edits?.length) fs.writeFileSync(source, page);
     return [header(result, [`created from ${template.type_url}`]), `\nFill it by publishing your own files to url=${result.url} (file_path for the page, files for the data files: ${template.data_files.join(', ') || 'see Read first'}).`, `Follow the skill ${SKILL}.`,readFirst(template)].join('\n');
   }
@@ -233,9 +247,11 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
   });
 
   server.registerTool('ArtifactTemplates', {
-    description: 'The template library of the artifacts (the lawyer\'s own types), kept in a separate Git repository cloned under ~/.piecemaker/artifacts-templates, plus the templates bundled with PieceMaker. list (intent, query) returns the templates and their type_url; read returns a file of one (path, default its page); status shows the repository, the last sync and local changes; sync clones or fast-forwards the repository (repository and branch to change it); save turns an artifact (url) into a template of the local clone and commits it (name, title, description, intent, readme); push sends the local commits to the repository, only when the lawyer asks.',
+    description: 'The template library of the artifacts (the lawyer\'s own types), kept in a separate Git repository cloned under ~/.piecemaker/artifacts-templates, plus the templates bundled with PieceMaker. list (intent, query) returns the templates and their type_url; read returns a file of one (path, default its page: README, a reference, a script); run executes a script the template declares (script, args) with the PieceMaker Python interpreter, in the case folder, and returns its output (url: the artifact it fills); status shows the repository, the last sync and local changes; sync clones or fast-forwards the repository (repository and branch to change it); save turns an artifact (url) into a template of the local clone and commits it (name, title, description, intent, readme); push sends the local commits to the repository, only when the lawyer asks.',
     inputSchema: {
-      action: z.enum(['list', 'read', 'status', 'sync', 'save', 'push']),
+      action: z.enum(['list', 'read', 'run', 'status', 'sync', 'save', 'push']),
+      script: z.string().optional().describe('run: the script name, as the template declares it.'),
+      args: z.array(z.string()).max(64).optional().describe('run: the script arguments; paths are relative to the case folder.'),
       intent: z.enum(INTENTS).optional(),
       query: z.string().optional().describe('list: words that must all appear in the name, title or description.'),
       type_url: z.string().optional().describe('read: the template (piecemaker://template/<name>).'),
@@ -253,6 +269,18 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
       switch (input.action) {
         case 'list': return text(templates.list({ intent: input.intent, query: input.query }));
         case 'read': return text(templates.read(required(input.type_url, 'type_url', 'read'), input.path));
+        case 'run': {
+          const typeUrl = input.type_url || (input.url ? artifacts.load(existing(input.url)).type : null);
+          const script = templates.script(required(typeUrl, 'type_url', 'run'), required(input.script, 'script', 'run'));
+          const out = path.join(root, 'Artifacts', script.template.name);
+          fs.mkdirSync(out, { recursive: true });
+          const result = await python(script.path, input.args ?? [], {
+            cwd: root,
+            env: { PIECEMAKER_CASE: root, PIECEMAKER_TEMPLATE_DIR: script.template.folder, PIECEMAKER_ARTIFACT_OUT: out, ...(input.url ? { PIECEMAKER_ARTIFACT_URL: urlOf(idOf(input.url)) } : {}) },
+          });
+          const report = [`script ${script.name} of ${script.template.type_url} → exit code ${result.code} (python: ${result.python})`, `output folder: ${path.relative(root, out)}`, result.stdout.trim(), result.stderr.trim() && `stderr:\n${result.stderr.trim()}`].filter(Boolean).join('\n');
+          return text(report, result.code !== 0);
+        }
         case 'status': return text(await templates.status());
         case 'sync': return text(await templates.sync({ repository: input.repository, branch: input.branch }));
         case 'push': return text(await templates.push());
