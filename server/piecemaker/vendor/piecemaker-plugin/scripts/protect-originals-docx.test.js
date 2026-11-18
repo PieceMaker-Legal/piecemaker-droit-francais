@@ -86,6 +86,8 @@ fs.writeFileSync(path.join(variantRoot, 'Note Dupont.docx'), 'docx fictif');
 fs.writeFileSync(path.join(variantRoot, 'Note M. Dupont.docx'), 'docx fictif long');
 fs.writeFileSync(path.join(variantRoot, 'Avis Dupont.docx'), 'docx fictif');
 fs.writeFileSync(path.join(variantRoot, 'Avis M. Dupont.docx'), 'docx fictif');
+// Même taille : le plus récent l’emporte. Sans date de création fiable (certains systèmes de fichiers Linux), la date de modification départage.
+fs.utimesSync(path.join(variantRoot, 'Avis Dupont.docx'), new Date('2026-01-01T10:00:00Z'), new Date('2026-01-01T10:00:00Z'));
 fs.writeFileSync(path.join(home, 'projects.json'), JSON.stringify({ version: 1, sources: { test: [caseRoot, shieldedRoot, variantRoot] } }));
 const database = new Database(databasePath);
 database.exec(`

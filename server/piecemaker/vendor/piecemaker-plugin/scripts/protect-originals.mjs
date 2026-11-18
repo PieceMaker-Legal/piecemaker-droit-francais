@@ -314,7 +314,7 @@ async function withExistingFiles(command, cwd) {
     if (files.length < 2) return word;
     const chosen = files
       .filter((file) => size !== undefined && file.stat.size === Number(size))
-      .sort((a, b) => b.stat.birthtimeMs - a.stat.birthtimeMs)[0];
+      .sort((a, b) => (b.stat.birthtimeMs - a.stat.birthtimeMs) || (b.stat.mtimeMs - a.stat.mtimeMs))[0];
     if (chosen) return quotedForShell(chosen.path);
     ambiguous.push(files);
     return word;
