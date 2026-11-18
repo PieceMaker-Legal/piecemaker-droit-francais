@@ -229,11 +229,11 @@ export function createMistralSdkRuntime(
               });
             }
           }
+          if (thinking) transcript.push(createNormalizedMessage({ id: thinkingId, provider: 'mistral', sessionId: nativeId, kind: 'thinking', content: thinking, model }));
           if (content) {
             emit({ id: textId, kind: 'stream_end' });
-            transcript.push(createNormalizedMessage({ id: textId, provider: 'mistral', sessionId: nativeId, kind: 'text', role: 'assistant', content, model }));
+            transcript.push(emit({ id: textId, kind: 'text', role: 'assistant', content, model }));
           }
-          if (thinking) transcript.push(createNormalizedMessage({ id: thinkingId, provider: 'mistral', sessionId: nativeId, kind: 'thinking', content: thinking, model }));
           const toolCalls = [...calls.values()];
           messages.push({ role: 'assistant', content: chunks.length ? chunks : content || null, ...(toolCalls.length ? { toolCalls } : {}) });
           if (!toolCalls.length) {
@@ -243,7 +243,7 @@ export function createMistralSdkRuntime(
           }
           for (const call of toolCalls) {
             const apiName = call.function.name;
-            const tool = toolbox.tools.get(apiName);
+            const tool = toolbox.tools.get(apiName) ?? [...toolbox.tools].find(([key]) => key.toLowerCase() === apiName.toLowerCase())?.[1];
             const name = tool?.name ?? apiName;
             const toolId = call.id || randomUUID().replaceAll('-', '').slice(0, 9);
             call.id = toolId;
@@ -254,7 +254,7 @@ export function createMistralSdkRuntime(
             try {
               input = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
               emit({ id: toolMessageId, kind: 'tool_use', toolName: name, toolInput: input, toolId });
-              if (!tool) throw new Error('Outil indisponible dans ce mode.');
+              if (!tool) throw new Error(`Outil inconnu : ${apiName}.`);
               input = await authorize(tool, input);
               signal.throwIfAborted();
               result = await tool.execute(input);

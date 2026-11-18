@@ -20,6 +20,10 @@ Les serveurs MCP viennent des configurations utilisateur et projet `.vibe/config
 
 Les lectures s’exécutent directement ; les autres outils demandent l’autorisation, sauf les modes permissifs explicites. `acceptEdits` autorise les écritures de fichiers ; le mode plan exclut les outils modificateurs. Les hooks existants protègent pièces originales, mapping et secrets configurés. `Edit` et `Write` vérifient aussi le droit de lecture de leur cible. Le harnais juridique et l’historique automatique du dossier restent actifs.
 
+Le modèle nomme parfois un outil dans une autre casse (`bash` pour `Bash`) : la recherche de l’outil ignore la casse, dans le chat comme chez les sous-agents. Un nom réellement inconnu reçoit « Outil inconnu », distinct d’un refus lié au mode.
+
+Comme Claude, chaque réponse diffusée se termine par `stream_end` puis par un événement `text` complet de même identifiant. Le chat remplace alors la ligne diffusée au lieu de l’afficher deux fois. Le raisonnement précède le texte dans l’historique enregistré.
+
 Chaque client SDK capture le proxy de sa session et sa CA locale. Une panne du proxy échoue sans connexion directe de secours. Les limites de tokens et de tours sont prises en charge ; une limite monétaire Vibe reçoit une erreur explicite.
 
 ## Analyse tabulaire

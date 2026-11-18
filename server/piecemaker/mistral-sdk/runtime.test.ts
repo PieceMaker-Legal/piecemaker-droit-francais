@@ -199,3 +199,18 @@ test('reasoning fragments retain their signature in the resumed SDK message', as
   const thought = answer.find(chunk => chunk.type === 'thinking');
   assert.equal(thought && 'signature' in thought ? thought.signature : null, 'fictitious-signature');
 });
+
+test('a tool name in another case runs the tool and the answer ends with a final text like Claude', async t => {
+  const { home, history } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  let executions = 0;
+  await createMistralSdkRuntime(history, async () => [], home, fixtureClient([
+    [{ toolCalls: [{ id: 'abcdef123', function: { name: 'PROBE', arguments: '{}' } }] }], [{ content: 'Fait.' }],
+  ]), fixtureTools(async () => { executions++; return 'ok'; })).run('tester', { sessionId: 'mistral-sdk-casse' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context);
+  assert.equal(executions, 1);
+  const end = events.find(event => event.kind === 'stream_end');
+  const text = events.find(event => event.kind === 'text' && event.role === 'assistant');
+  assert.equal(text?.content, 'Fait.');
+  assert.equal(text?.id, end?.id);
+  assert.ok(events.indexOf(end!) < events.indexOf(text!));
+});
