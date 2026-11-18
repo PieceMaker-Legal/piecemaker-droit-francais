@@ -10,10 +10,19 @@
       "empty": "No commands available for this case."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Case Sorting",
       "description": "How cases are ordered in the sidebar"
+    },
+    "keepProjectsExpanded": {
+      "label": "Keep cases expanded",
+      "description": "Open several cases together and remember them after reloading."
     }
   },
   "mcpForm": {
@@ -40,6 +49,11 @@
       "steps": {
         "initCommand": "Use task-master init in your case directory"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "Ships with PieceMaker and is updated together with it."
     }
   },
   "permissions": {

@@ -10,6 +10,11 @@
       "empty": "此案件沒有可用的指令。"
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "案件排序",
@@ -31,6 +36,11 @@
       "steps": {
         "initCommand": "在案件目錄中使用 task-master init"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "隨 PieceMaker 一起提供，並與其一同更新。"
     }
   },
   "permissions": {

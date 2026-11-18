@@ -10,6 +10,11 @@
       "empty": "この案件で利用できるコマンドはありません。"
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "案件の並び順",
@@ -31,6 +36,11 @@
       "steps": {
         "initCommand": "案件ディレクトリで task-master init を実行してください"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "PieceMaker に同梱されており、PieceMaker と一緒に更新されます。"
     }
   },
   "permissions": {

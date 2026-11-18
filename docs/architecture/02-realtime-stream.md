@@ -18,8 +18,8 @@ exception is `stream_delta`. Deltas do not reach the store directly; they pile u
 ref and a 100 ms timer publishes the whole accumulated string into a single synthetic row
 with a well-known id, so a reply that streams for thirty seconds is one row whose content
 grows rather than a thousand rows. Everything a newcomer finds confusing here comes from
-that one exception and from the fact that **only two of the four providers ever send a
-`stream_delta` at all.**
+that one exception and from the fact that **only one of the four providers (Cursor) ever
+sends a `stream_delta` at all.**
 
 ## Mental model
 
@@ -42,10 +42,11 @@ it.
    row count stays flat while the text grows. `finalizeStreaming` rewrites that same array
    slot — new id, `kind: 'text'`, `role: 'assistant'` — so React reconciles instead of
    remounting.
-4. **Whether you see deltas at all depends on the provider.** Cursor and OpenCode stream;
-   Claude and Codex do not. Claude's live prose arrives as complete `text` rows, one per
-   assistant message. Code that assumes "assistant reply implies `stream_delta`" is wrong
-   for half the providers, and the half it is wrong for is the default one.
+4. **Whether you see deltas at all depends on the provider.** Cursor streams; Claude,
+   Codex and OpenCode do not. Claude's live prose arrives as complete `text` rows, one per
+   assistant message, and OpenCode's as one `text` row per finished text part. Code that
+   assumes "assistant reply implies `stream_delta`" is wrong for most providers, the
+   default one included.
 5. **`complete` is the only terminal event. `error` is just a row.** Providers emit
    `error` for mid-run stderr and keep running. Clearing the busy state on `error` leaves
    a live run writing into a UI that believes it is idle.
@@ -69,21 +70,21 @@ it.
 | --- | --- |
 | `src/shared/context/WebSocketContext.tsx` | The one socket. Parses each frame and calls every registered listener synchronously. Synthesises the client-only `websocket_reconnected` frame on a re-open, and retries a dropped socket after 3 s. |
 | `src/modules/chat/hooks/useChatRealtimeHandlers.ts` | The whole client-side protocol. One switch on `kind`; the streaming buffer; the `seq` bookkeeping. |
-| `src/modules/chat/ChatInterface.tsx` | Owns the four refs the handler mutates — `accumulatedStreamRef`, `streamTimerRef`, `lastSeqRef`, `statusCheckSentAtRef` — and clears the first two on unmount. |
+| `src/modules/chat/ChatInterface.tsx` | Owns the refs the handler mutates — `accumulatedStreamRef`, `streamTimerRef`, `lastSeqRef` (a `{ runId, seq }` position per session), `statusCheckSentAtRef`, `watchedRunSessionsRef` — and clears the first two on unmount. |
 | `src/modules/chat/hooks/useSessionStore.ts` | Per-session slots. `appendRealtime`, `updateStreaming`, `finalizeStreaming`, `truncateAt`, and the merge of live and persisted rows. |
 | `src/modules/chat/hooks/useChatMessages.ts` | `normalizedToChatMessages` — the projection from store records to UI objects. Pairs `tool_use` with `tool_result`, folds subagent rows into their container, and memoises through a `WeakMap`. |
 | `src/modules/chat/hooks/useChatSessionState.ts` | Sends `chat.subscribe` on session open and on reconnect, owns `requestLatestMessages` and `resetStreamingState`, and memoises `chatMessages`. |
-| `src/modules/chat/hooks/useChatComposerState.ts` | The outbound side: `chat.send`, `chat.edit-send`, `chat.abort`, `chat.permission-response`, plus the optimistic user echo. |
+| `src/modules/chat/hooks/useChatComposerState.ts` | The outbound side: `chat.send`, `chat.edit-send`, `chat.steer`, `chat.abort`, `chat.permission-response`, plus the optimistic user echo. |
 | `src/shared/hooks/useSessionProtection.ts` | The per-session activity map that the indicator and the abort button derive from. |
 | `src/modules/chat/transcript/StreamingMarkdown.tsx` | Renders an assistant reply, streaming or finished, as a settled half plus a pending half. |
 | `src/modules/chat/utils/streamingMarkdown.ts` | `splitStreamingMarkdown` — where it is safe to cut a partially-written markdown document in two. |
 | `src/shared/types.ts` | `ServerEvent` at `:204`, the client's view of a frame. Every field the handler reads is optional here. |
-| `server/modules/websocket/services/chat-websocket.service.ts` | Handles `chat.send`, `chat.edit-send`, `chat.abort`, `chat.subscribe`, `chat.permission-response`. Registers the run, then hands the turn to the provider runtime. |
+| `server/modules/websocket/services/chat-websocket.service.ts` | Handles `chat.send`, `chat.edit-send`, `chat.steer`, `chat.abort`, `chat.subscribe`, `chat.permission-response`. Registers the run, then hands the turn to the provider runtime. |
 | `server/modules/websocket/services/chat-run-registry.service.ts` | One entry per app session. `decorateAndRecordEvent` at `:84` is the choke point: session-id rewrite, `seq` assignment, replay buffering, terminal-`complete` de-duplication. |
 | `server/modules/websocket/services/chat-session-writer.service.ts` | The object provider runtimes think is their socket. Swallows `session_created`; `forward` at `:160` fans out to every watching connection and collects dead ones. |
 | `server/shared/utils.ts` | `createNormalizedMessage` at `:348` and `createCompleteMessage` — the envelope every provider event is built with. **Not** `message-unification.ts`; that file exports only `prepareTranscriptMessages`, which runs on REST history reads and never on the live path. |
 | `server/shared/types.ts` | `MessageKind` at `:178` — the fifteen kinds a provider can emit. `GatewayEventKind` at `:204` — the four the gateway adds. |
-| `server/modules/providers/list/*/` | Per provider, a `*-runtime.provider.js` that drives the CLI or SDK and a `*-sessions.provider.ts` whose `normalizeMessage` converts one raw event into `NormalizedMessage[]`. |
+| `server/modules/providers/list/*/` | Per provider, a `*-runtime.provider.ts` (still `.js` for Cursor) that drives the CLI or SDK and a `*-sessions.provider.ts` whose `normalizeMessage` converts one raw event into `NormalizedMessage[]`. |
 
 Tests worth knowing about: `streamingMarkdown.test.ts` and
 `streamingMarkdownRenderEquivalence.test.tsx` pin the split; `messageStreamEnd.test.tsx`
@@ -108,7 +109,7 @@ sequenceDiagram
     GW->>CLI: runtime.run with the app session id
     CLI-->>REG: session_created announcing the provider-native id
     Note over REG: swallowed and recorded, never forwarded
-    CLI-->>REG: text rows for Claude and Codex, stream_delta for Cursor and OpenCode
+    CLI-->>REG: text rows for Claude, Codex and OpenCode, stream_delta for Cursor
     REG-->>WSC: sessionId rewritten to the app id, seq stamped, buffered
     WSC-->>UI: dispatched to every listener
     CLI-->>REG: tool_use carrying a toolId
@@ -134,8 +135,11 @@ Three things in that picture are easy to get backwards:
   `msg.toolResult` first and only then consults its map of `toolId` to result row.
 - **The run outlives the socket.** It is keyed by app session id in the registry, keeps
   its last 5000 events for replay, and stays available for five minutes after finishing.
-  A reconnecting client sends `lastSeq` and gets only what it missed — and only if the
-  run is still running, because a completed run is already on disk and served over REST.
+  Every frame carries the run's `runId` next to its `seq`, because every run of a session
+  restarts at seq 1. A reconnecting client sends `lastSeq` with that `runId` and gets only
+  what it missed; when its position is from another run (or past the end of this one), it
+  gets the current run from the start. Either way only while the run is still running,
+  because a completed run is already on disk and served over REST.
 
 ## What each provider actually emits
 
@@ -147,15 +151,15 @@ reload can make the transcript look completely different from what streamed.
 
 | Kind | Claude | Codex | Cursor | OpenCode |
 | --- | --- | --- | --- | --- |
-| `text` | yes, whole assistant messages | yes | history only | history only |
-| `stream_delta` | **no** | **no** | yes, one per assistant chunk | yes, from `text` parts |
-| `stream_end` | **no** | **no** | **never** | yes, from `step_finish` |
-| `thinking` | yes | yes | history only | yes, from `reasoning` parts |
-| `tool_use` | yes | yes | history only | yes |
+| `text` | yes, whole assistant messages | yes | history only | yes, one per finished `text` part |
+| `stream_delta` | **no** | **no** | yes, one per assistant chunk | **no** |
+| `stream_end` | **no** | **no** | **never** | yes, from `step-finish` parts |
+| `thinking` | yes | yes | history only | yes, from finished `reasoning` parts |
+| `tool_use` | yes | yes | history only | yes, once the call has finished |
 | `tool_result` | yes, a separate frame | yes, a separate frame | history only | **never** — attached to the `tool_use` frame instead |
 | `error` | yes | yes | yes, from stderr and spawn failures | yes |
-| `status` with `text: 'token_budget'` | yes | yes | no | yes, once at process exit |
-| `permission_request` / `permission_resolved` / `permission_cancelled` | yes, the only provider | no | no | no |
+| `status` with `text: 'token_budget'` | yes | yes | no | yes, once at the end of the turn |
+| `permission_request` / `permission_resolved` / `permission_cancelled` | yes | no | no | yes, from OpenCode's permission and question requests |
 | `complete` | yes, exactly one | yes | yes | yes |
 
 Two entries deserve the emphasis:
@@ -186,7 +190,7 @@ flowchart TD
     F["Frame arrives from WebSocketContext"]
     K{"Does it have a kind"}
     DROP["Return. Task Master frames key on type"]
-    SEQ["Advance lastSeq for this session id"]
+    SEQ["Advance the runId and seq position for this session id"]
     G{"Is it a gateway or client-only kind"}
     RC["websocket_reconnected. Refresh the tail then resubscribe"]
     HT["history_truncated. truncateAt the anchor id"]
@@ -225,11 +229,19 @@ because looking for these kinds in the transcript array is futile: **`complete`,
 never stored.** They exist to move the busy map, the token counter and the permission
 list.
 
-`lastSeqRef` is advanced for every frame that carries a numeric `seq`, and only ever
-forward. It is read when a `chat.subscribe` is sent — on session open and on reconnect —
-so the server replays exactly the gap. There is no reordering buffer: frames are applied
-in arrival order, which is safe because one TCP connection preserves order and replay is
-emitted in buffer order.
+`lastSeqRef` holds a `{ runId, seq }` position per session: the session's current run and
+the highest `seq` handled in it. A frame of the same run only moves it forward, and a frame
+it already covers is dropped as a replay duplicate (two subscribes can overlap). A frame of
+a run not seen before starts a new position, and the run it replaces is remembered for that
+socket: a replaced run can still send afterwards (a killed background task), and those
+frames are shown but never move the position back. A `chat_subscribed` ack names the
+current run and moves the position onto it. The position is read when a `chat.subscribe` is
+sent — on session open, on reconnect, and when the session is busy with a run this socket
+is not attached to — so the server replays exactly the gap, or the whole current run when
+the position is from another one. Frames from a server that sends no `runId` keep the old
+seq-only behaviour and are never deduplicated. There is no reordering buffer: frames are
+applied in arrival order, which is safe because one TCP connection preserves order and
+replay is emitted in buffer order.
 
 ## Text streaming
 
@@ -364,17 +376,30 @@ feeding it a summed `result.usage` is what made it bounce before commit `ab13376
 The other arm of the `status` branch — the one that writes `statusText` and `canInterrupt`
 into the activity map — **has no producer today.** All three `status` emitters
 (`claude-runtime.provider.js:968`, `codex-runtime.provider.js:406`,
-`opencode-runtime.provider.js:338`) send `text: 'token_budget'`. The arm is live code
+`opencode-runtime.provider.ts`, at the end of `runOpenCodeTurn`) send `text: 'token_budget'`. The arm is live code
 kept for a provider that reports progress text; do not delete it expecting nothing to
 change, and do not assume the status text you see in the UI came from it.
 
 ## Permission requests
 
-Claude is the only provider with interactive tool approvals. Its runtime's `canUseTool`
+Claude and OpenCode have interactive tool approvals. Claude's runtime's `canUseTool`
 callback emits `permission_request` with a `requestId` and blocks until the client answers
 with `chat.permission-response`. When an answer arrives it emits `permission_resolved`
 with the same id; if the run ends or the request times out it emits `permission_cancelled`
-instead. The distinction matters because the answer itself travels only on the inbound
+instead.
+
+OpenCode's runtime drives a private `opencode serve` per turn through `@opencode-ai/sdk`
+and turns the server's `permission.asked` and `question.asked` events into the same
+frames. A permission request carries OpenCode's permission name as `toolName` and, in
+`context.always`, the patterns "Always allow" approves; Allow once, Always allow and Deny
+go back as OpenCode's `once`, `always` and `reject` (a plain reject ends the turn, as
+OpenCode's own Reject does). A question arrives as an `AskUserQuestion` request with
+`context.answerFormat: 'label-lists'`: the panel answers with one label list per question,
+and its Dismiss rejects the question. OpenCode remembers "Always allow" only for its
+server's lifetime, so the runtime keeps the approved patterns per chat in memory and
+answers later matching requests itself. In bypassPermissions (also how `/api/agent`
+runs) every request is approved once and questions are answered as unanswered, so such a
+turn never waits for anyone. The distinction matters because the answer itself travels only on the inbound
 socket: without the outbound `permission_resolved`, the `permission_request` sitting in
 the replay buffer had nothing to retract it, so a mid-run page refresh resurrected an
 already-answered prompt — and a second tab kept it forever. `permissionPromptReplay.test.tsx`
@@ -489,7 +514,7 @@ question rendered twice in another.
 | The `shouldPersist` filter | Adding a kind to it makes that kind renderable, which means `normalizedToChatMessages` needs a case for it or it silently disappears. |
 | Anything in `splitStreamingMarkdown` | `streamingMarkdown.test.ts` for the boundary rules and `streamingMarkdownRenderEquivalence.test.tsx` for split-equals-unsplit on every prefix. Both must pass on the fenced and list fixtures. |
 | A provider's `normalizeMessage` | The kind table above. Adding `stream_delta` to a provider that had none makes the shared buffer and the missing `stream_end` suddenly matter for it. |
-| `decorateAndRecordEvent` or `seq` assignment | Reconnect replay is `seq > lastSeq` with no gap detection, and `lastSeqRef` only moves forward. Any non-monotonic `seq` silently loses events. |
+| `decorateAndRecordEvent` or `seq` assignment | Reconnect replay is `seq > lastSeq` within the run named by `runId` (the whole run for another run's position), with no gap detection, and `lastSeqRef` only moves forward within a run. Any non-monotonic `seq` silently loses events, and a frame without its `runId` falls back to seq-only replay. `unwatchedRunSubscribe.test.tsx` and `chat-run-registry.test.ts` cover both sides. |
 | The `status` branch | Both arms. The `token_budget` arm is scoped to the viewed session on purpose, and the other arm currently has no producer — a new producer will start writing status text into the activity map for the first time. |
 | Session-switch cleanup in `useChatSessionState` | `resetStreamingState` is the only thing that unwinds a shared buffer mid-stream. Removing that call re-introduces cross-session text bleed. |
 

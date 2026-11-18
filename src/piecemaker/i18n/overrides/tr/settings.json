@@ -10,10 +10,19 @@
       "empty": "Bu dava için kullanılabilir komut yok."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Dava Sıralama",
       "description": "Davaların kenar çubuğunda nasıl sıralanacağı"
+    },
+    "keepProjectsExpanded": {
+      "label": "Davaları açık tut",
+      "description": "Birden fazla davayı aynı anda açın ve sayfa yenilendikten sonra da hatırlansın."
     }
   },
   "mcpForm": {
@@ -24,6 +33,15 @@
     },
     "fields": {
       "selectProject": "Bir dava seç..."
+    },
+    "scopes": {
+      "project": "Dava",
+      "projectAllProviders": "Dava (Tüm Sağlayıcılar)",
+      "userGlobalDesc": "Bu makinedeki tüm davalarda kullanılabilir",
+      "userAllProvidersDesc": "Her sağlayıcının kullanıcı ayarına yazılır ve bu makinedeki tüm davalarda kullanılabilir",
+      "localDesc": "Seçili dava için Claude kullanıcı ayarlarında saklanır",
+      "projectDesc": "Seçili davanın çalışma alanında saklanır",
+      "projectAllProvidersDesc": "Her sağlayıcı için seçili davanın çalışma alanına yazılır"
     }
   },
   "tasks": {
@@ -31,6 +49,11 @@
       "steps": {
         "initCommand": "Dava dizininde task-master init komutunu kullan"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "PieceMaker ile birlikte gelir ve onunla birlikte güncellenir."
     }
   },
   "permissions": {
@@ -43,10 +66,44 @@
       }
     }
   },
+  "mcpServers": {
+    "managed": {
+      "hint": "PieceMaker tarafından yönetiliyor."
+    }
+  },
   "pluginSettings": {
+    "sections": {
+      "officialDescription": "PieceMaker ekibi tarafından geliştirilir, doğrudan kurulmaya hazırdır."
+    },
     "starterPlugin": {
       "name": "Dava İstatistikleri",
       "description": "Davan için dosya sayıları, kod satırları, dosya türü dağılımı ve son etkinlik."
     }
+  },
+  "skillsPage": {
+    "description": "{{provider}} becerilerini yerel dosyalardan, tam klasörlerden ve davaya özel konumlardan yönetin.",
+    "scanningProjectSkills": "Dava becerileri taranıyor...",
+    "emptyDescription": "Yukarıdan genel bir beceri ekleyin veya çalışma alanınızda davaya özel beceri klasörleri oluşturun.",
+    "noMatchDescription": "Farklı bir komut, ad, kapsam, dava veya kaynak yolu deneyin.",
+    "projectBadge": "Dava: {{name}}",
+    "scopes": {
+      "project": "Dava"
+    }
+  },
+  "mcpServersAdd": {
+    "refreshingScopes": "Dava kapsamları yenileniyor..."
+  },
+  "mcpTeamCard": {
+    "proLink": "PieceMaker Pro ile kullanılabilir"
+  },
+  "mcpServersAddErrors": {
+    "selectProjectRequired": "Dava kapsamlı MCP sunucuları için bir dava seçin",
+    "globalScopeUnsupported": "MCP Sunucusu Ekle tüm sağlayıcılarda yalnızca kullanıcı veya dava kapsamını destekler."
+  },
+  "about": {
+    "hostedTitle": "PieceMaker Hosted'ı deneyin",
+    "proFeaturesTitle": "PieceMaker Pro Özellikleri",
+    "teamManagementDescription": "Ekibiniz için birden fazla kullanıcı, rol tabanlı erişim ve paylaşılan davalar.",
+    "proCta": "PieceMaker Pro ile kullanılabilir"
   }
 }

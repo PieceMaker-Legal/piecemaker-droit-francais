@@ -10,6 +10,11 @@
       "empty": "No hay comandos disponibles para este expediente."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Orden de expedientes",
@@ -24,6 +29,15 @@
     },
     "fields": {
       "selectProject": "Selecciona un expediente..."
+    },
+    "scopes": {
+      "project": "Expediente",
+      "projectAllProviders": "Expediente (todos los proveedores)",
+      "userGlobalDesc": "Disponible en todos los expedientes de tu equipo",
+      "userAllProvidersDesc": "Se escribe en la configuración de usuario de cada proveedor y está disponible en los expedientes de este equipo",
+      "localDesc": "Se guarda en los ajustes de usuario de Claude del expediente seleccionado",
+      "projectDesc": "Se guarda en el espacio de trabajo del expediente seleccionado",
+      "projectAllProvidersDesc": "Se escribe en el espacio de trabajo del expediente seleccionado para cada proveedor"
     }
   },
   "tasks": {
@@ -31,6 +45,11 @@
       "steps": {
         "initCommand": "Usa task-master init en el directorio de tu expediente"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "Se incluye con PieceMaker y se actualiza junto con él."
     }
   },
   "permissions": {
@@ -56,5 +75,31 @@
       "name": "Estadísticas del expediente",
       "description": "Recuento de archivos, líneas de código, desglose por tipo de archivo y actividad reciente de tu expediente."
     }
+  },
+  "skillsPage": {
+    "description": "Gestiona las skills de {{provider}} desde archivos locales, carpetas completas y ubicaciones según el expediente.",
+    "scanningProjectSkills": "Buscando skills del expediente...",
+    "emptyDescription": "Añade una skill global arriba o crea carpetas de skills del expediente en tu espacio de trabajo.",
+    "noMatchDescription": "Prueba con otro comando, nombre, ámbito, expediente o ruta de origen.",
+    "projectBadge": "Expediente: {{name}}",
+    "scopes": {
+      "project": "Expediente"
+    }
+  },
+  "mcpServersAdd": {
+    "refreshingScopes": "Actualizando los ámbitos del expediente..."
+  },
+  "mcpTeamCard": {
+    "proLink": "Disponible con PieceMaker Pro"
+  },
+  "mcpServersAddErrors": {
+    "selectProjectRequired": "Elige un expediente para los servidores MCP con ámbito de expediente",
+    "globalScopeUnsupported": "Añadir servidor MCP solo admite el ámbito de usuario o de expediente en todos los proveedores."
+  },
+  "about": {
+    "hostedTitle": "Prueba PieceMaker Hosted",
+    "proFeaturesTitle": "Funciones de PieceMaker Pro",
+    "teamManagementDescription": "Varios usuarios, acceso por roles y expedientes compartidos para tu equipo.",
+    "proCta": "Disponible con PieceMaker Pro"
   }
 }

@@ -24,5 +24,13 @@
     "buttons": {
       "createProject": "Crear expediente"
     }
+  },
+  "commandPalette": {
+    "selectProjectFirst": "Elige primero un expediente"
+  },
+  "misc": {
+    "projectFallback": "Expediente",
+    "noProjectSelected": "Ningún expediente seleccionado",
+    "projectRequiredForShell": "Hace falta un expediente para abrir una shell"
   }
 }

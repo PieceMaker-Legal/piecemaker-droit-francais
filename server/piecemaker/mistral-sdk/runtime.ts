@@ -51,7 +51,7 @@ export function installMistralSdk(provider: IProvider, home: string) {
   };
   provider.models.getSupportedModels = async () => models;
   provider.models.getCurrentActiveModel = async () => buildDefaultProviderCurrentActiveModel(models);
-  provider.auth.getStatus = async () => ({ installed: true, authenticated: false, provider: 'mistral', email: null, method: 'sdk' });
+  provider.auth.getStatus = async () => ({ installed: true, installedVersion: null, authenticated: false, provider: 'mistral', email: null, method: 'sdk' });
   const history = createMistralHistory(home);
   const legacyHistory = provider.sessions.fetchHistory.bind(provider.sessions);
   provider.sessions.fetchHistory = async (sessionId, options = {}) => {
