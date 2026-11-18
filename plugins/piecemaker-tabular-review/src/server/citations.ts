@@ -123,9 +123,9 @@ export function correctionPrompt(problems: CitationProblem[], attempt: number, l
 
 const SOURCE_WINDOW = 60_000;
 
-export function citationSource(project: string, file: string, rowId: string, column: number, number: number): CitationSource {
+export async function citationSource(project: string, file: string, rowId: string, column: number, number: number): Promise<CitationSource> {
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const row = review.rows.find((entry) => entry.id === rowId);
   const citation = (column === DOCUMENT_TITLE_INDEX && row ? documentTitleCell(review, row) : review.cells[rowId]?.[String(column)])?.citations?.[number];
   if (!row || !citation) throw new UserError('Citation introuvable.');

@@ -52,6 +52,18 @@ describe('analyse de l’Index dans Dossier', () => {
     expect(root.querySelector('[data-title-row="r1"] [data-citation]')).not.toBeNull();
   });
 
+  it('s’affiche comme l’Index même de l’onglet Dossier : sans retour, avec la colonne de liens de l’hôte', async () => {
+    const project = '/dossier-exemple';
+    const review: Review = { version: 1, title: 'Index', templateName: 'Index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [{ id: 'r1', label: 'Contrat', piece: 'Pièces/Contrat.pdf', documents: [], status: 'done' }], cells: {} };
+    const rpc = vi.fn(async (_method: string, path: string) => path === '/assistant' ? { fichier: 'index.json' } : { project, file: 'index.json', status: 'done', review });
+    const cell = vi.fn((row: { piece?: string }) => `<span data-liens>${row.piece}</span>`);
+    mount(root, { context: { theme: 'light', project: { name: 'Exemple', path: project }, session: null }, rpc, onContextChange: () => () => {} }, { project, rowColumn: { title: 'Liens', cell } });
+    await vi.waitFor(() => expect(root.querySelector('[data-liens]')).not.toBeNull());
+    expect(root.querySelector('.ptr-root')!.classList.contains('ptr-embedded')).toBe(true);
+    expect([...root.querySelectorAll('thead th')].map((th) => th.textContent?.trim())[1]).toBe('Liens');
+    expect(root.querySelector('[data-liens]')!.textContent).toBe('Pièces/Contrat.pdf');
+  });
+
   it('reprend le projet existant dans Dossier et revient à l’Index sans ouvrir l’historique', async () => {
     const back = vi.fn();
     const focus = vi.fn();

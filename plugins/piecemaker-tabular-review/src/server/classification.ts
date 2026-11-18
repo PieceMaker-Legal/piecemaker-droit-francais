@@ -35,8 +35,8 @@ export async function saveClassification(project: string, value: unknown): Promi
   dropClassificationProposal();
   // L'arborescence est commune : les colonnes Classement de tous les dossiers suivent.
   const projects = [...new Set([project, ...registeredProjects()])];
-  for (const { project: owner, file } of listReviews(projects, () => false)) {
-    if (!classifyColumn(readReview(owner, file).columns)) continue;
+  for (const { project: owner, file } of await listReviews(projects, () => false)) {
+    if (!classifyColumn((await readReview(owner, file)).columns)) continue;
     await updateReview(owner, file, (review) => {
       const column = classifyColumn(review.columns);
       if (column) Object.assign(column, classificationColumn(folders, column.name));

@@ -29,7 +29,7 @@ async function local<T>(origin: string, route: string, body?: unknown): Promise<
 }
 
 async function moveRow(origin: string, project: string, file: string, rowId: string): Promise<void> {
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const row = review.rows.find((entry) => entry.id === rowId);
   if (!row) return;
   const { pieces } = await local<{ pieces: CasePiece[] }>(origin, `/pieces?folder=${encodeURIComponent(project)}`);

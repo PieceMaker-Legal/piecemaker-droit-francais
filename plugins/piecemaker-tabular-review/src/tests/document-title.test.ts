@@ -33,13 +33,13 @@ describe('titre du document dans la première cellule', () => {
       .mockResolvedValueOnce(answer(-1, 'Contrat de prestation', 'Contrat de prestation.'));
     await queueTasks(project, 'index.json', [{ rowId: 'r1' }], 1, {});
     await vi.waitFor(() => expect(isRunning(project, 'index.json')).toBe(false));
-    const review = readReview(project, 'index.json');
+    const review = (await readReview(project, 'index.json'));
     expect(review.columns).toHaveLength(1);
     expect(review.cells.r1).not.toHaveProperty('-1');
     expect(review.rows[0].label).toBe('source.pdf');
     expect(documentTitle(review, review.rows[0])).toBe('Contrat de prestation');
     expect(review.rows[0].title?.citations?.[0].verified).toBe(true);
-    expect(citationSource(project, 'index.json', 'r1', -1, 0)).toMatchObject({ quote: 'Contrat de prestation.', verified: true });
+    expect(await citationSource(project, 'index.json', 'r1', -1, 0)).toMatchObject({ quote: 'Contrat de prestation.', verified: true });
     expect(session.send).toHaveBeenCalledTimes(2);
     expect(session.send.mock.calls[0][0]).toContain('acte de procédure');
     expect(session.send.mock.calls[0][0]).not.toContain('assignation, conclusions');
@@ -50,7 +50,7 @@ describe('titre du document dans la première cellule', () => {
     session.send.mockResolvedValue([JSON.stringify({ column_index: -1, summary: 'Non trouvé', flag: 'grey', citations: [] }), answer(0, 'autre', 'Contrat de prestation.')].join('\n'));
     await queueTasks(project, 'index.json', [{ rowId: 'r1' }], 1, {});
     await vi.waitFor(() => expect(isRunning(project, 'index.json')).toBe(false));
-    const review = readReview(project, 'index.json');
+    const review = (await readReview(project, 'index.json'));
     expect(review.rows[0].title).toBeUndefined();
     expect(documentTitle(review, review.rows[0])).toBe('source.pdf');
     expect(review.cells.r1[0].summary).toBe('indéterminé');

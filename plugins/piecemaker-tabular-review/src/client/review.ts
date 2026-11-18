@@ -223,6 +223,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
       ? `Effectuée le ${formatDate(review.createdAt)} · Dossier ${app.projectName(project)} · Recherche : ${review.research.query} · Juridictions : ${review.research.criteria.join(' · ')}`
       : `${review.templateName} · ${app.projectName(project)} · ${formatDate(review.createdAt)}`;
     const research = review.category === 'recherche-juridique';
+    const extra = research ? undefined : app.rowColumn;
     const classification = classifyColumn(review.columns);
     element.innerHTML = `
       <div class="ptr-review-top">
@@ -249,10 +250,10 @@ export function createReviewView(app: App, project: string, file: string, onBack
       <div class="ptr-review-body">
         <div class="ptr-table-wrap">
           <table class="ptr-table">
-            <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${research ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${review.columns.map(columnHeading).join('')}<th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button>${research || classification ? '' : ' <button type="button" class="ptr-add" data-add-classification title="Ajouter la colonne de classement dans l’arborescence du dossier">+ Classement</button>'}</th></tr></thead>
+            <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${research ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${extra ? `<th scope="col">${escapeHtml(extra.title)}</th>` : ''}${review.columns.map(columnHeading).join('')}<th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button>${research || classification ? '' : ' <button type="button" class="ptr-add" data-add-classification title="Ajouter la colonne de classement dans l’arborescence du dossier">+ Classement</button>'}</th></tr></thead>
             <tbody>${sortBy(review.rows, sort, (row, key) => key === 'label' ? documentTitle(review, row) : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
               <tr>
-                <td data-title-row="${escapeHtml(row.id)}"><div class="ptr-row-label">${escapeHtml(documentTitle(review, row))}</div>${documentTitleCell(review, row) ? citationLinks(documentTitleCell(review, row)!) : ''}${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
+                <td data-title-row="${escapeHtml(row.id)}"><div class="ptr-row-label">${escapeHtml(documentTitle(review, row))}</div>${documentTitleCell(review, row) ? citationLinks(documentTitleCell(review, row)!) : ''}${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>${extra ? `<td class="ptr-row-extra">${extra.cell(row)}</td>` : ''}
                 ${review.columns.map((column) => {
                   const cell = review.cells[row.id]?.[String(column.index)];
                   const isSelected = selected?.row === row.id && selected.column === column.index;
@@ -263,7 +264,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
                 }).join('')}
                 <td class="ptr-add-col"></td>
               </tr>`).join('')}
-              ${research ? '' : `<tr><td><button type="button" class="ptr-add" data-add-documents title="Ajouter des documents (lignes)">+ Documents</button></td><td colspan="${review.columns.length + 1}"></td></tr>`}
+              ${research ? '' : `<tr><td><button type="button" class="ptr-add" data-add-documents title="Ajouter des documents (lignes)">+ Documents</button></td><td colspan="${review.columns.length + 1 + (extra ? 1 : 0)}"></td></tr>`}
             </tbody>
           </table>
         </div>

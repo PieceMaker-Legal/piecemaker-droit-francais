@@ -174,7 +174,7 @@ describe('effet du classement', () => {
     const [first, second] = await Promise.all([appendRows(project, 'doublon.json', rows), appendRows(project, 'doublon.json', rows)]);
     expect([first.length, second.length]).toEqual([1, 0]);
     expect(await appendRows(project, 'doublon.json', [{ label: 'bail', documents: ['Notes/bail.md'] }])).toEqual([]);
-    expect(readReview(project, 'doublon.json').rows.map((row) => row.label)).toEqual(['bail', 'nouveau']);
+    expect((await readReview(project, 'doublon.json')).rows.map((row) => row.label)).toEqual(['bail', 'nouveau']);
   });
 
   it('ne range jamais un fichier technique ni vers un dossier technique', () => {
@@ -219,7 +219,7 @@ describe('un seul index par dossier', () => {
   const template = { id: 't', name: 'Chronologie', description: '', updatedAt: '', columns: [{ name: 'Date', prompt: 'Date ?', format: 'date' as const }] };
   const rows = [{ label: 'bail', documents: ['Notes/bail.md'] }];
   const dossier = path.join(home, 'Dossier Unique');
-  const fichiers = () => listReviews([dossier], () => false).map((review) => review.file);
+  const fichiers = async () => (await listReviews([dossier], () => false)).map((review) => review.file);
 
   beforeAll(() => {
     fs.mkdirSync(path.join(dossier, 'Notes'), { recursive: true });
@@ -264,11 +264,11 @@ describe('un seul index par dossier', () => {
   });
 
   it('ne crée jamais une seconde analyse et retrouve la première', async () => {
-    const premiere = createReview(dossier, template, 'Chronologie', rows, settings);
-    const seconde = createReview(dossier, template, 'Chronologie', rows, settings);
-    const autreNom = createReview(dossier, template, 'Faits du dossier', rows, settings);
+    const premiere = await createReview(dossier, template, 'Chronologie', rows, settings);
+    const seconde = await createReview(dossier, template, 'Chronologie', rows, settings);
+    const autreNom = await createReview(dossier, template, 'Faits du dossier', rows, settings);
     expect([premiere.created, seconde.created, autreNom.created]).toEqual([true, false, false]);
-    expect(fichiers()).toEqual([premiere.file]);
+    expect(await fichiers()).toEqual([premiere.file]);
     const run = launchers();
     expect(await assistant({ action: 'index', project: dossier }, run)).toMatchObject({ fichier: premiere.file, absentes: expect.any(Number) });
     expect(await assistant({ action: 'preparer', project: dossier, modele: 'Chronologie' }, run)).toMatchObject({ fichier: premiere.file });
@@ -277,7 +277,7 @@ describe('un seul index par dossier', () => {
   });
 
   it('crée une analyse classique à côté de la chronologie', async () => {
-    const classique = createReview(dossier, { ...template, name: 'Analyse de contrat' }, 'Baux', rows, settings);
+    const classique = await createReview(dossier, { ...template, name: 'Analyse de contrat' }, 'Baux', rows, settings);
     expect(classique.created).toBe(true);
   });
 });

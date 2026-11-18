@@ -5,9 +5,10 @@ import express from 'express';
 
 import { DEFAULT_DOCUMENT_TYPES, DOCUMENT_ICONS, documentIcon } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
+import { REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
 import type { Renamed } from './build.js';
-import { buildBundle, documentsFromSnapshot, legacyRecords, partiesFromSnapshot } from './build.js';
+import { buildBundle, documentsFromIndex, documentsFromSnapshot, legacyRecords, mergeDocuments, partiesFromSnapshot } from './build.js';
 import { LAWYER_ACTOR, conceptId, readBundle, readTypes, relationsOf, resourceOf, text } from './bundle.js';
 import type { ExamInput, LinkInput, ReviewLinkInput } from './links.js';
 import { addLink, linkReview, markExamined, removeLink, unlinkReview, unmarkExamined } from './links.js';
@@ -15,6 +16,8 @@ import { SYSTEM_RELATIONS, graphTypesOf, ontologyFile, readOntology, saveOntolog
 import { dropProposal, ontologyLines, proposeOntology, readProposal } from './ontology-proposal.js';
 import { EXAMINED, graphReport, linkedReviews } from './premises.js';
 import { documentMetadataFromReviews, reviewCatalog, reviewRowPieces } from './reviews.js';
+import type { IndexStore } from './index-store.js';
+import { IndexConflictError, loadIndex, writeIndexView } from './index-store.js';
 import type { OkfStore } from './store.js';
 import { contradictions, verifyBundle } from './verify.js';
 
@@ -25,6 +28,8 @@ type OkfOptions = {
   };
   snapshot(projectId: string): KnowledgeSnapshot;
   store: OkfStore;
+  /** L'Index du dossier, rempli par l'analyse tabulaire : il fait la liste des pièces. */
+  indexStore?: IndexStore;
   convertedMarkdown(projectPath: string, filePath: string): string | null;
   listDocuments(projectPath: string): Promise<string[]>;
   isLoopback(request: express.Request): boolean;
@@ -46,7 +51,8 @@ export function createOkfBackend(options: OkfOptions) {
     store.importOnce(projectId, legacyRecords(projectPath), now);
     if (renamed) store.rename(projectId, conceptId(renamed.previous), conceptId(renamed.current));
     const snapshot = options.snapshot(projectId);
-    return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, snapshot), parties: partiesFromSnapshot(snapshot), records: store.records(projectId), markdownOf: markdownOf(projectPath), now });
+    const documents = mergeDocuments(documentsFromIndex(projectPath, options.indexStore ? loadIndex(options.indexStore, projectId, projectPath)?.review : null), documentsFromSnapshot(projectPath, snapshot));
+    return buildBundle({ projectPath, documents, parties: partiesFromSnapshot(snapshot), records: store.records(projectId), markdownOf: markdownOf(projectPath), now });
   };
   const target = (projectId: string) => ({ projectPath: projectPathOf(projectId), projectId, store });
 
@@ -184,5 +190,61 @@ export function createOkfBackend(options: OkfOptions) {
     }, response);
   });
 
-  return { build, verify, read, ontology, saveOntology: saveOntologyOf, link, unlink, router, localRouter };
+  // L'Index : la Tabular Review le lit et l'écrit ici, SQLite fait foi et le .json en est régénéré.
+  const rebuilds = new Map<string, ReturnType<typeof setTimeout>>();
+  const rebuildSoon = (projectId: string) => {
+    clearTimeout(rebuilds.get(projectId));
+    rebuilds.set(projectId, setTimeout(() => {
+      rebuilds.delete(projectId);
+      try {
+        build(projectId);
+      } catch (error) {
+        console.warn(`[piecemaker] index OKF non mis à jour : ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }, 1000));
+  };
+  const indexStoreOf = (): IndexStore => {
+    if (!options.indexStore) throw new Error('Index indisponible.');
+    return options.indexStore;
+  };
+  const indexProject = (folder: unknown) => {
+    const project = options.projects.getProjectPath(String(folder || '').trim());
+    if (!project) throw new Error('Project not found.');
+    return { projectId: project.project_id, projectPath: fs.realpathSync(project.project_path) };
+  };
+  const readIndex = (folder: unknown) => {
+    const { projectId, projectPath } = indexProject(folder);
+    const stored = loadIndex(indexStoreOf(), projectId, projectPath);
+    if (stored && !fs.existsSync(path.join(projectPath, REVIEW_FOLDER, stored.file))) writeIndexView(projectPath, stored.file, stored.review);
+    return stored ? { fichier: stored.file, review: stored.review, revision: stored.revision } : { fichier: null, review: null, revision: 0 };
+  };
+  const writeIndex = (body: { folder?: unknown; fichier?: unknown; review?: unknown; revision?: unknown }) => {
+    const { projectId, projectPath } = indexProject(body.folder);
+    const expected = typeof body.revision === 'number' ? body.revision : undefined;
+    const revision = indexStoreOf().write(projectId, String(body.fichier || ''), body.review as Parameters<IndexStore['write']>[2], expected);
+    const stored = indexStoreOf().read(projectId)!;
+    writeIndexView(projectPath, stored.file, stored.review);
+    rebuildSoon(projectId);
+    return { fichier: stored.file, revision };
+  };
+  const removeIndex = (folder: unknown) => {
+    const { projectId } = indexProject(folder);
+    indexStoreOf().remove(projectId);
+    rebuildSoon(projectId);
+    return { ok: true };
+  };
+  const loopbackOnly = (request: express.Request, response: express.Response, next: express.NextFunction) => {
+    if (options.isLoopback(request)) return next();
+    response.status(403).json({ error: 'L’Index est réservé aux appels locaux.' });
+  };
+  const respondIndex = (operation: () => unknown, response: express.Response) => {
+    Promise.resolve().then(operation).then((result) => response.json(result)).catch((error: unknown) => {
+      response.status(error instanceof IndexConflictError ? 409 : statusFor(error)).json({ error: error instanceof Error ? error.message : 'Index indisponible.' });
+    });
+  };
+  localRouter.get('/index-review', loopbackOnly, (request, response) => respondIndex(() => readIndex(request.query.folder), response));
+  localRouter.put('/index-review', loopbackOnly, express.json({ limit: '64mb' }), (request, response) => respondIndex(() => writeIndex(request.body ?? {}), response));
+  localRouter.delete('/index-review', loopbackOnly, (request, response) => respondIndex(() => removeIndex(request.query.folder), response));
+
+  return { build, verify, read, readIndex, writeIndex, ontology, saveOntology: saveOntologyOf, link, unlink, router, localRouter };
 }

@@ -45,21 +45,21 @@ describe('édition d’une analyse tabulaire dans la page', () => {
   it('ajoute une question dont le titre est tiré du texte', async () => {
     const project = writeReview({});
     await saveQuestion(project, FILE, undefined, '  Quelle est la durée   du préavis ?  ', '');
-    const review = readReview(project, FILE);
+    const review = (await readReview(project, FILE));
     expect(review.columns).toEqual([{ index: 0, name: 'Quelle est la durée du préavis ?', prompt: 'Quelle est la durée   du préavis ?', format: 'text' }]);
   });
 
   it('modifie la question d’une colonne existante sans changer son index ni son titre', async () => {
     const project = writeReview({ columns: [{ index: 3, name: 'Ancien', prompt: 'Ancien', format: 'text' }] });
     await saveQuestion(project, FILE, 3, 'Nouvelle question', '');
-    expect(readReview(project, FILE).columns).toEqual([{ index: 3, name: 'Ancien', prompt: 'Nouvelle question', format: 'text' }]);
+    expect((await readReview(project, FILE)).columns).toEqual([{ index: 3, name: 'Ancien', prompt: 'Nouvelle question', format: 'text' }]);
   });
 
   it('enregistre un titre donné à la création comme à la modification', async () => {
     const project = writeReview({ columns: [{ index: 0, name: 'A', prompt: 'A', format: 'text' }] });
     await saveQuestion(project, FILE, undefined, 'Question longue', '  Préavis  ');
     await saveQuestion(project, FILE, 0, 'A', 'Titre');
-    expect(readReview(project, FILE).columns.map((column) => column.name)).toEqual(['Titre', 'Préavis']);
+    expect((await readReview(project, FILE)).columns.map((column) => column.name)).toEqual(['Titre', 'Préavis']);
   });
 
   it('refuse une question vide et une colonne inconnue', async () => {
@@ -71,7 +71,7 @@ describe('édition d’une analyse tabulaire dans la page', () => {
   it('enregistre la période et les juridictions et recalcule les critères', async () => {
     const project = writeReview({ category: 'recherche-juridique', research: { query: '"exemple"', criteria: researchCriteria(filters), dispositifOnly: true, total: 2, filters } });
     await updateResearchFilters(project, FILE, { dateDebut: '2025-01-01', dateFin: '2025-06-30', sources: ['caa'] });
-    const { research } = readReview(project, FILE);
+    const { research } = (await readReview(project, FILE));
     expect(research?.filters).toEqual({ ...filters, dateDebut: '2025-01-01', dateFin: '2025-06-30', sources: ['caa'] });
     expect(research?.criteria).toEqual(researchCriteria({ ...filters, dateDebut: '2025-01-01', dateFin: '2025-06-30', sources: ['caa'] }));
     expect(research?.query).toBe('"exemple"');
@@ -88,7 +88,7 @@ describe('édition d’une analyse tabulaire dans la page', () => {
       rows: [{ id: 'r', label: 'Courrier', documents: [], status: 'done' }],
       cells: { r: { 0: { summary: 'Oui', flag: 'red', reasoning: '', citations: [{ document: 'c', quote: 'q', verified: true }] } } },
     });
-    expect(cellAuthor(readReview(project, FILE).cells.r[0])).toBe('agent');
+    expect(cellAuthor((await readReview(project, FILE)).cells.r[0])).toBe('agent');
     const checked = await checkCell(project, FILE, 'r', 0, true);
     expect(checked.cells.r[0].checked?.at).toBeTruthy();
     expect(cellAuthor(checked.cells.r[0])).toBe('human');

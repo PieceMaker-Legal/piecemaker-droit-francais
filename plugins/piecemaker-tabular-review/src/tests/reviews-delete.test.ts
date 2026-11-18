@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 describe('suppression d’une analyse tabulaire', () => {
-  it('retire le JSON, ses exports et ses copies exclusives, mais garde les copies partagées', () => {
+  it('retire le JSON, ses exports et ses copies exclusives, mais garde les copies partagées', async () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-'));
     directories.push(project);
     const folder = path.join(project, 'Tabular Review');
@@ -44,7 +44,7 @@ describe('suppression d’une analyse tabulaire', () => {
     fs.writeFileSync(path.join(folder, 'a.pdf'), 'x');
     fs.writeFileSync(path.join(folder, 'b.pdf'), 'x');
 
-    deleteReview(project, 'a.json');
+    await deleteReview(project, 'a.json');
 
     expect(fs.readdirSync(folder).sort()).toEqual(['b.json', 'b.pdf', 'docs']);
     expect(fs.readdirSync(path.join(folder, 'docs'))).toEqual(['partage.md']);

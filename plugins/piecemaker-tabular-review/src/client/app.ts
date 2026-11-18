@@ -1,4 +1,4 @@
-import type { Draft, Template } from '../shared.js';
+import type { Draft, ReviewRow, Template } from '../shared.js';
 import type { HostProject, PluginApi, PluginContext, Rpc } from './host.js';
 
 export type View = {
@@ -26,4 +26,8 @@ export type App = {
   updateResearch(project: string, file: string): void;
   takeResearchUpdate(): { project: string; file: string } | null;
   takeTargetProject(): string | null;
+  /** Colonne ajoutée par l'hôte qui affiche la revue (l'Index dans l'onglet Dossier : liens OKF de chaque pièce). */
+  rowColumn?: RowColumn;
 };
+
+export type RowColumn = { title: string; cell(row: ReviewRow): string };

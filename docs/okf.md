@@ -4,7 +4,7 @@ L'index du dossier suit Open Knowledge Format 0.2, avec les relations typées d'
 
 ## Autorité
 
-SQLite fait foi. Les prémisses, les liens cités, les examens sans lien et les revues tabulaires liées sont dans les tables `piecemaker_okf_premises`, `piecemaker_okf_relations`, `piecemaker_okf_exams` et `piecemaker_okf_reviews` (`server/piecemaker/okf/store.ts`). Les personnes, pseudonymes, mentions et qualifications de partie sont dans les tables de la connaissance. Les fiches `.md` de `.piecemaker/okf/` sont des vues : le serveur les régénère depuis SQLite après chaque écriture dans la base. Une fiche modifiée ou supprimée à la main est réécrite à la reconstruction suivante. Une prémisse n'existe que par un lien `states` cité ou une revue tabulaire liée.
+SQLite fait foi. Les prémisses, les liens cités, les examens sans lien et les revues tabulaires liées sont dans les tables `piecemaker_okf_premises`, `piecemaker_okf_relations`, `piecemaker_okf_exams` et `piecemaker_okf_reviews` (`server/piecemaker/okf/store.ts`). L'Index du dossier (la revue tabulaire de l'Index : colonnes, lignes, cellules et citations) est dans `piecemaker_index_reviews`, `piecemaker_index_columns`, `piecemaker_index_rows` et `piecemaker_index_cells` (`server/piecemaker/okf/index-store.ts`) ; son `.json` dans `Tabular Review/` est une vue réécrite après chaque écriture. Les personnes, pseudonymes, mentions et qualifications de partie sont dans les tables de la connaissance. Les fiches `.md` de `.piecemaker/okf/` sont des vues : le serveur les régénère depuis SQLite après chaque écriture dans la base. Une fiche modifiée ou supprimée à la main est réécrite à la reconstruction suivante. Une prémisse n'existe que par un lien `states` cité ou une revue tabulaire liée.
 
 Les fiches écrites avant que SQLite ne porte ces données sont importées une seule fois par dossier (`piecemaker_okf_imports`). Les fiches Partie portent des codes, pas des noms. Les citations et les titres de pièces sont en clair et peuvent contenir des identités réelles.
 
@@ -14,7 +14,7 @@ Les fiches écrites avant que SQLite ne porte ces données sont importées une s
 
 | Fiche | Identifiant | Origine |
 | --- | --- | --- |
-| Document | `/<chemin du document>.md` | scan |
+| Document | `/<chemin du document>.md` | lignes de l'Index, complétées par le scan |
 | Prémisse (`Premise`) | `/_premises/<titre normalisé>.md` | avocat ou agent |
 | Partie | `/_parties/<CODE>.md` | personnes qualifiées client ou adversaire |
 | `index.md` | — | reconstruction |
@@ -109,12 +109,12 @@ flowchart LR
 
 ## Production, sans token
 
-1. Le scan GLiNER remplit SQLite.
-2. `buildBundle` écrit les fiches de documents (titre, nature, date), de parties et de prémisses, et pose `mentions`.
+1. L'analyse tabulaire de l'Index et le scan GLiNER remplissent SQLite.
+2. `buildBundle` écrit une fiche par ligne de l'Index (titre de la ligne, colonnes Nature et Date) et par document scanné absent de l'Index, ainsi que les fiches de parties et de prémisses, et pose `mentions` (parties citées, connues du scan).
 3. Le scan pose `refers-to` quand une phrase du Markdown converti contient la date et la nature d'un seul autre document.
 4. `buildBundle` régénère toutes les fiches depuis SQLite et supprime les fichiers qui n'y correspondent pas.
 
-La reconstruction a lieu après un scan, après un renommage (les cibles suivent dans SQLite) et après chaque écriture de lien ou d'examen. La lecture (`GET /okf`) et la vérification (`verify`) ne reconstruisent pas : elles lisent les fiches sur le disque. Un fichier n'est réécrit que si son contenu change.
+La reconstruction a lieu après une écriture de l'Index (regroupée, une seconde après la dernière), après un scan, après un renommage (les cibles suivent dans SQLite) et après chaque écriture de lien ou d'examen. La lecture (`GET /okf`) et la vérification (`verify`) ne reconstruisent pas : elles lisent les fiches sur le disque. Un fichier n'est réécrit que si son contenu change.
 
 Le serveur refuse une citation absente du document source.
 
@@ -143,7 +143,7 @@ Le bouton **Ontologie** réunit trois onglets : Relations, Classement et Types d
 
 - **Relations** conserve les types source et cible existants. Un nouveau lien relie `Pièces` à `Pièces`. Les propositions restent soumises aux décisions de l’avocat.
 - **Classement** réutilise l’éditeur d’arborescence. Le champ `type` d’un dossier fixe son type principal, par exemple `Pièces` ou `Archives`. Les sous-dossiers héritent du parent. Sans champ `type`, le nom du dossier de premier niveau reste le type principal. L’enregistrement reconstruit l’index sans déplacer les fichiers.
-- **Analyse tabulaire** ouvre la revue d’index du dossier, unique, dans une fenêtre de l’onglet. `pm dossier index lancer|lire|colonnes` et l’outil MCP `tabular_review_index` ouvrent la même fenêtre (vue `index-analysis`). Après un lancement par `pm` ou par l’outil MCP, la route hôte `/api/piecemaker/local/tabular-review` transmet l’origine du serveur : le runner du plugin range chaque ligne terminée selon la colonne Classement (`/api/piecemaker/local/rename`, puis `markApplied`), même si la revue n’est pas affichée. Un lancement fait depuis l’interface garde le rangement par le volet.
+- L'onglet Index **est** la revue de l'Index du dossier, unique : une ligne par pièce, une colonne par question, plus une colonne **Liens** (liens OKF de la pièce). Il n'y a plus de tableau tiré du scan ni de fenêtre d'analyse par-dessus. `pm dossier index lancer|lire|colonnes` et l'outil MCP `tabular_review_index` ouvrent cet onglet (la vue `index-analysis` en est un alias). Le plugin Tabular Review lit et écrit l'Index par la route locale `/api/piecemaker/local/index-review` (`GET`, `PUT` avec la révision lue, `DELETE`), à l'origine `PIECEMAKER_HOST_ORIGIN` que l'hôte lui donne au lancement ; hors de PieceMaker, l'Index reste un `.json`. Un Index encore en `.json` est repris une fois dans SQLite à la première lecture. Après un lancement par `pm` ou par l’outil MCP, la route hôte `/api/piecemaker/local/tabular-review` transmet l’origine du serveur : le runner du plugin range chaque ligne terminée selon la colonne Classement (`/api/piecemaker/local/rename`, puis `markApplied`), même si la revue n’est pas affichée. Un lancement fait depuis l’interface garde le rangement par le volet.
 - **Types de documents** règle les natures et leurs icônes SVG monochromes. Le catalogue livré contient 17 natures : acte de procédure, courrier, courriel, mise en demeure, contrat, facture, devis, attestation, décision judiciaire, procès-verbal, constat, expertise, statuts de société, extrait Kbis, relevé bancaire, acte notarié et bordereau de pièces. L’extraction utilise « indéterminé » lorsqu’aucun type ne convient. L’avocat peut ajouter, renommer ou supprimer une nature, et choisir son icône. Supprimer une nature conserve les documents ; leur icône devient générique.
 
 Le catalogue commun est stocké dans le champ `documentTypes: [{ name, icon }]` de l’ontologie. Le sceau couvre les relations et le catalogue. Les anciens sceaux restent lisibles et sont migrés à l’enregistrement. Enregistrer les relations conserve le catalogue.
@@ -181,6 +181,8 @@ L'agent principal écrit lui-même l'index, par l'outil `OkfWrite` du MCP `featu
 | Format, lecture, écriture | `server/piecemaker/okf/bundle.ts` |
 | Construction depuis le scan | `server/piecemaker/okf/build.ts` |
 | Tables SQLite de l'OKF | `server/piecemaker/okf/store.ts` |
+| Index du dossier (SQLite, vue `.json`) | `server/piecemaker/okf/index-store.ts`, `plugins/piecemaker-tabular-review/src/server/host-index.ts` |
+| Onglet Index (revue de l'Index, colonne Liens) | `plugins/piecemaker-dossier/src/index-analysis.ts` |
 | Métadonnées lues dans les revues tabulaires | `server/piecemaker/okf/reviews.ts` |
 | Vérification, contradictions | `server/piecemaker/okf/verify.ts` |
 | Pièces d'une prémisse, manques du graphe | `server/piecemaker/okf/premises.ts` |

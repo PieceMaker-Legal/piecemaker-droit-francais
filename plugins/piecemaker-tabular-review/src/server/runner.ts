@@ -83,7 +83,7 @@ async function askWithCorrections(job: Job, rowId: string, session: Conversation
 
 async function runRow(job: Job, task: RowTask): Promise<void> {
   const { rowId } = task;
-  const review = readReview(job.project, job.file);
+  const review = await readReview(job.project, job.file);
   const row = review.rows.find((entry) => entry.id === rowId);
   if (!row) return;
   const targets = emptyColumns(review, rowId, task.columns);
@@ -202,7 +202,7 @@ export function pendingTasks(review: Review, tasks: RowTask[]): RowTask[] {
 
 export async function queueTasks(project: string, file: string, tasks: RowTask[], concurrency: number, environment: NodeJS.ProcessEnv, hostOrigin?: string): Promise<number> {
   const key = reviewKey(project, file);
-  const runnable = pendingTasks(readReview(project, file), tasks);
+  const runnable = pendingTasks(await readReview(project, file), tasks);
   const count = runnable.length;
   if (!count) return 0;
   const existing = jobs.get(key);

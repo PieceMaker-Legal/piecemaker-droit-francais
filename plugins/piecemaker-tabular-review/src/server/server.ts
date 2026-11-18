@@ -51,7 +51,7 @@ async function createAndLaunch(body: Body) {
   const settings = { provider: assertProvider(request.provider), model: assertModel(request.model), concurrency: concurrency(request.concurrency) };
   const environment = await launchEnvironment(request.proxyOrigin);
   const hostOrigin = assertHostOrigin(body.hostOrigin);
-  const { file, review, created } = createReview(project, template, request.title, request.rows, settings);
+  const { file, review, created } = await createReview(project, template, request.title, request.rows, settings);
   if (!created) return reviewDetail(project, file, isRunning(project, file));
   await queueTasks(project, file, review.rows.map((row) => ({ rowId: row.id })), settings.concurrency, environment, hostOrigin);
   return reviewDetail(project, file, isRunning(project, file));
@@ -71,7 +71,7 @@ async function retry(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const running = isRunning(project, file);
   const tasks: RowTask[] = review.rows
     .filter((row) => row.status === 'error' || row.status === 'cancelled' || (!running && (row.status === 'pending' || row.status === 'running')) || emptyColumns(review, row.id).length)
@@ -87,7 +87,7 @@ async function run(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const rowId = typeof body.rowId === 'string' ? body.rowId : null;
   const column = body.column === undefined || body.column === null ? null : Number(body.column);
   if (rowId !== null && !review.rows.some((row) => row.id === rowId)) throw new UserError('Ligne introuvable.');
@@ -125,7 +125,7 @@ async function appendUpdate(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const environment = await launchEnvironment(body.proxyOrigin);
   const rows = await appendResearchUpdate(project, file, String(body.id ?? ''));
   if (rows.length) await queueTasks(project, file, rows.map((rowId) => ({ rowId })), review.concurrency || 3, environment);
@@ -144,7 +144,7 @@ async function appendPieces(body: Body) {
   const project = assertProject(body.project);
   const file = String(body.file ?? '');
   assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const environment = await launchEnvironment(body.proxyOrigin);
   const hostOrigin = assertHostOrigin(body.hostOrigin);
   const rows = await appendRows(project, file, body.rows as RowRequest[]);
@@ -215,7 +215,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   if (method === 'POST' && pathname === '/reviews/list') {
     const registered = registeredProjects();
     const projects = (Array.isArray(body.projects) ? body.projects : []).filter((project): project is string => typeof project === 'string' && registered.has(project));
-    return { reviews: listReviews(projects, isRunning) };
+    return { reviews: await listReviews(projects, isRunning) };
   }
   if (method === 'GET' && pathname === '/reviews/item') {
     const project = assertProject(url.searchParams.get('project'));
@@ -267,7 +267,7 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
     const file = String(body.file ?? '');
     assertReviewFile(project, file);
     if (isRunning(project, file)) throw new UserError('Annulez l’analyse tabulaire en cours avant de la supprimer.');
-    deleteReview(project, file);
+    await deleteReview(project, file);
     return { deleted: true };
   }
   if (method === 'POST' && pathname === '/reviews/export') {

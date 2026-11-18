@@ -1,6 +1,6 @@
 import type { Draft, Template } from '../shared.js';
 import { OPEN_EVENT, PANEL_FOCUS_EVENT, PENDING_SHOW_KEY, PENDING_TARGET_KEY, REVIEW_FOLDER, SHOW_EVENT } from '../shared.js';
-import type { App, View } from './app.js';
+import type { App, RowColumn, View } from './app.js';
 import { basename, errorMessage, escapeHtml, openModal, toast } from './dom.js';
 import { createHistoryView } from './history.js';
 import { createRpc, loadHostProjects } from './host.js';
@@ -46,13 +46,17 @@ function takeShowRequest(): ShowRequest | null {
   return { project: text(request.project), review: text(request.review), draft: text(request.draft) };
 }
 
-export function mount(container: HTMLElement, api: PluginApi, index?: { project: string; onBack(): void; draft?: string }): void {
+/** `index` : l'Index du dossier affiché par l'onglet Dossier. Sans `onBack`, il y est la vue même de l'onglet (pas de retour). */
+export type IndexMount = { project: string; onBack?(): void; draft?: string; rowColumn?: RowColumn };
+
+export function mount(container: HTMLElement, api: PluginApi, index?: IndexMount): void {
   unmount(container);
   const style = document.createElement('style');
   style.textContent = PLUGIN_STYLES;
   const root = document.createElement('div');
   root.className = 'ptr-root';
   root.dataset.theme = api.context.theme;
+  if (index && !index.onBack) root.classList.add('ptr-embedded');
   root.innerHTML = `
     <header class="ptr-header" data-subbar hidden>
       <button type="button" class="ptr-icon-button" data-home aria-label="Retour à l’historique" title="Retour à l’historique">←</button>
@@ -73,6 +77,7 @@ export function mount(container: HTMLElement, api: PluginApi, index?: { project:
 
   const app: App = {
     root,
+    rowColumn: index?.rowColumn,
     api,
     rpc: createRpc(api),
     context: () => api.context,
@@ -157,7 +162,7 @@ export function mount(container: HTMLElement, api: PluginApi, index?: { project:
   };
 
   function backToHistory() {
-    if (index) { index.onBack(); return; }
+    if (index) { index.onBack?.(); return; }
     closeReview();
     showTab('history');
     focusTable(null);

@@ -6,6 +6,8 @@ import type { Cell, Provider, Review, ReviewDetail, ReviewDocument, ReviewRow, R
 import { DOCS_FOLDER, emptyColumns, hasActions, isCaseIndex, lastSearchDate, reviewCategory, withIndexName } from '../shared.js';
 import { resolveMarkdownDocument } from './documents.js';
 import { assertReviewFile, docsDirectory, documentPath, isInside, reviewDirectory, toPosix, UserError, writeFileAtomic } from './paths.js';
+import { HostIndexConflict, hostIndexOrigin, readHostIndex, removeHostIndex, writeHostIndex } from './host-index.js';
+import type { HostIndex } from './host-index.js';
 import { MAX_COLUMNS, normalizeColumn } from './templates.js';
 
 const MAX_ROWS = 500;
@@ -70,8 +72,25 @@ function copyDocument(project: string, source: string, copies: Map<string, Revie
   return document;
 }
 
-export function writeNewReview(project: string, review: Review): string {
+/** L'Index du dossier tenu par l'hôte (SQLite), s'il porte ce nom de fichier. */
+async function hostIndexOf(project: string, file: string): Promise<HostIndex | null> {
+  const stored = await readHostIndex(project);
+  return stored && stored.fichier === file ? stored : null;
+}
+
+export function writeNewReviewFile(project: string, review: Review): string {
   const target = uniquePath(reviewDirectory(project), reviewBasename(new Date(review.createdAt), review.templateName, review.title), '.json');
+  writeFileAtomic(target, `${JSON.stringify(review, null, 2)}\n`);
+  return path.basename(target);
+}
+
+/** Une nouvelle revue : l'Index du dossier va dans SQLite (l'hôte en régénère le .json), les autres revues restent des .json. */
+export async function writeNewReview(project: string, review: Review): Promise<string> {
+  const target = uniquePath(reviewDirectory(project), reviewBasename(new Date(review.createdAt), review.templateName, review.title), '.json');
+  if (isCaseIndex(review) && hostIndexOrigin()) {
+    await writeHostIndex(project, path.basename(target), review);
+    return path.basename(target);
+  }
   writeFileAtomic(target, `${JSON.stringify(review, null, 2)}\n`);
   return path.basename(target);
 }
@@ -110,11 +129,11 @@ function buildRows(project: string, rows: RowRequest[], sorting: boolean, copies
   });
 }
 
-export function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): { file: string; review: Review; created: boolean } {
+export async function createReview(project: string, template: Template, title: string, rows: RowRequest[], settings: ReviewSettings): Promise<{ file: string; review: Review; created: boolean }> {
   const cleanTitle = typeof title === 'string' ? title.trim().slice(0, 120) : '';
   if (!cleanTitle) throw new UserError('Donnez un nom à l’analyse tabulaire.');
-  const existing = isCaseIndex({ title: cleanTitle, templateName: template.name }) ? listReviews([project], () => false).find(isCaseIndex) : undefined;
-  if (existing) return { file: existing.file, review: readReview(project, existing.file), created: false };
+  const existing = isCaseIndex({ title: cleanTitle, templateName: template.name }) ? (await listReviews([project], () => false)).find(isCaseIndex) : undefined;
+  if (existing) return { file: existing.file, review: await readReview(project, existing.file), created: false };
   if (!Array.isArray(rows) || !rows.length) throw new UserError('Sélectionnez au moins un document.');
   if (rows.length > MAX_ROWS) throw new UserError(`Une analyse tabulaire contient au plus ${MAX_ROWS} lignes.`);
   const sorting = hasActions(template.columns);
@@ -136,10 +155,17 @@ export function createReview(project: string, template: Template, title: string,
     rows: reviewRows,
     cells: {},
   };
-  return { file: writeNewReview(project, review), review, created: true };
+  return { file: await writeNewReview(project, review), review, created: true };
 }
 
-export function readReview(project: string, file: string): Review {
+/** Une revue : l'Index du dossier est lu dans SQLite (via l'hôte), les autres dans leur .json. */
+export async function readReview(project: string, file: string): Promise<Review> {
+  const stored = await hostIndexOf(project, file);
+  if (stored) return withIndexName(stored.review);
+  return readReviewFile(project, file);
+}
+
+export function readReviewFile(project: string, file: string): Review {
   const target = assertReviewFile(project, file);
   try {
     return withIndexName(JSON.parse(fs.readFileSync(target, 'utf8')) as Review);
@@ -151,8 +177,21 @@ export function readReview(project: string, file: string): Review {
 export function updateReview(project: string, file: string, mutate: (review: Review) => void): Promise<Review> {
   const key = reviewKey(project, file);
   const previous = locks.get(key) ?? Promise.resolve();
-  const next = previous.catch(() => undefined).then(() => {
-    const review = readReview(project, file);
+  const next = previous.catch(() => undefined).then(async () => {
+    for (let attempt = 0; ; attempt += 1) {
+      const stored = await hostIndexOf(project, file);
+      if (!stored) break;
+      const review = withIndexName(stored.review);
+      mutate(review);
+      review.updatedAt = new Date().toISOString();
+      try {
+        await writeHostIndex(project, file, review, stored.revision);
+        return review;
+      } catch (error) {
+        if (!(error instanceof HostIndexConflict) || attempt >= 2) throw error;
+      }
+    }
+    const review = readReviewFile(project, file);
     mutate(review);
     review.updatedAt = new Date().toISOString();
     writeFileAtomic(assertReviewFile(project, file), `${JSON.stringify(review, null, 2)}\n`);
@@ -256,15 +295,16 @@ export function deriveStatus(review: Review, running: boolean): ReviewStatus {
   return 'done';
 }
 
-export function reviewDetail(project: string, file: string, running: boolean): ReviewDetail {
-  const review = readReview(project, file);
+export async function reviewDetail(project: string, file: string, running: boolean): Promise<ReviewDetail> {
+  const review = await readReview(project, file);
   return { project, file, status: deriveStatus(review, running), review };
 }
 
-export function listReviews(projects: string[], isRunning: (project: string, file: string) => boolean): ReviewSummary[] {
+export async function listReviews(projects: string[], isRunning: (project: string, file: string) => boolean): Promise<ReviewSummary[]> {
   const summaries: ReviewSummary[] = [];
   for (const project of projects) {
     const directory = reviewDirectory(project);
+    const index = await readHostIndex(project).catch(() => null);
     let files: string[];
     try {
       files = fs.readdirSync(directory).filter((file) => file.endsWith('.json') && !file.startsWith('.'));
@@ -273,7 +313,7 @@ export function listReviews(projects: string[], isRunning: (project: string, fil
     }
     for (const file of files) {
       try {
-        const review = readReview(project, file);
+        const review = index?.fichier === file ? withIndexName(index.review) : readReviewFile(project, file);
         if (review.version !== 1 || !Array.isArray(review.rows)) continue;
         summaries.push({
           project,
@@ -303,7 +343,7 @@ function referencedCopies(project: string, excludedFile: string): Set<string> {
   const referenced = new Set<string>();
   for (const file of fs.readdirSync(reviewDirectory(project)).filter((entry) => entry.endsWith('.json') && !entry.startsWith('.') && entry !== excludedFile)) {
     try {
-      for (const row of readReview(project, file).rows) for (const document of row.documents) referenced.add(document.copy);
+      for (const row of readReviewFile(project, file).rows) for (const document of row.documents) referenced.add(document.copy);
     } catch {
       continue;
     }
@@ -311,9 +351,10 @@ function referencedCopies(project: string, excludedFile: string): Set<string> {
   return referenced;
 }
 
-export function deleteReview(project: string, file: string): void {
+export async function deleteReview(project: string, file: string): Promise<void> {
   const target = assertReviewFile(project, file);
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
+  if (await hostIndexOf(project, file)) await removeHostIndex(project);
   const shared = referencedCopies(project, file);
   const docs = docsDirectory(project);
   for (const copy of new Set(review.rows.flatMap((row) => row.documents.map((document) => document.copy)))) {
