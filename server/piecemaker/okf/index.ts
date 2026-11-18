@@ -7,14 +7,15 @@ import { DEFAULT_DOCUMENT_TYPES, DOCUMENT_ICONS, documentIcon } from '../../../p
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
 
 import type { Renamed } from './build.js';
-import { buildBundle, documentsFromSnapshot, partiesFromSnapshot } from './build.js';
-import { LAWYER_ACTOR, readBundle, readTypes, relationsOf, resourceOf, text } from './bundle.js';
+import { buildBundle, documentsFromSnapshot, legacyRecords, partiesFromSnapshot } from './build.js';
+import { LAWYER_ACTOR, conceptId, readBundle, readTypes, relationsOf, resourceOf, text } from './bundle.js';
 import type { ExamInput, LinkInput } from './links.js';
 import { addLink, markExamined, removeLink, unmarkExamined } from './links.js';
 import { SYSTEM_RELATIONS, graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
 import { dropProposal, ontologyLines, proposeOntology, readProposal } from './ontology-proposal.js';
 import { EXAMINED, graphReport } from './premises.js';
-import { documentMetadataFromReviews, premisesFromReviews } from './reviews.js';
+import { documentMetadataFromReviews } from './reviews.js';
+import type { OkfStore } from './store.js';
 import { contradictions, verifyBundle } from './verify.js';
 
 type OkfOptions = {
@@ -23,6 +24,7 @@ type OkfOptions = {
     getProjectPath(projectPath: string): { project_id: string; project_path: string } | null;
   };
   snapshot(projectId: string): KnowledgeSnapshot;
+  store: OkfStore;
   convertedMarkdown(projectPath: string, filePath: string): string | null;
   listDocuments(projectPath: string): Promise<string[]>;
   isLoopback(request: express.Request): boolean;
@@ -36,11 +38,17 @@ export function createOkfBackend(options: OkfOptions) {
   };
   const markdownOf = (projectPath: string) => (resource: string) => options.convertedMarkdown(projectPath, path.join(projectPath, resource));
 
+  const { store } = options;
+  // SQLite is the source: fiches are regenerated from it after each write.
   const build = (projectId: string, renamed?: Renamed) => {
     const projectPath = projectPathOf(projectId);
+    const now = new Date().toISOString();
+    store.importOnce(projectId, legacyRecords(projectPath), now);
+    if (renamed) store.rename(projectId, conceptId(renamed.previous), conceptId(renamed.current));
     const snapshot = options.snapshot(projectId);
-    return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, snapshot), parties: partiesFromSnapshot(snapshot), reviewPremises: premisesFromReviews(projectPath), markdownOf: markdownOf(projectPath), renamed });
+    return buildBundle({ projectPath, documents: documentsFromSnapshot(projectPath, snapshot), parties: partiesFromSnapshot(snapshot), records: store.records(projectId), markdownOf: markdownOf(projectPath), now });
   };
+  const target = (projectId: string) => ({ projectPath: projectPathOf(projectId), projectId, store });
 
   const verify = async (projectId: string) => {
     const projectPath = projectPathOf(projectId);
@@ -110,22 +118,21 @@ export function createOkfBackend(options: OkfOptions) {
 
   const link = (projectId: string, input: LinkInput, origin?: string) => {
     build(projectId);
-    const projectPath = projectPathOf(projectId);
-    const added = addLink(projectPath, input, markdownOf(projectPath), origin);
+    const added = addLink(target(projectId), input, markdownOf(projectPathOf(projectId)), origin);
     build(projectId);
     return added;
   };
 
   const unlink = (projectId: string, input: LinkInput) => {
-    const removed = removeLink(projectPathOf(projectId), input);
+    build(projectId);
+    const removed = removeLink(target(projectId), input);
     build(projectId);
     return removed;
   };
 
   const examine = (projectId: string, input: ExamInput & { retirer?: unknown }) => {
     build(projectId);
-    const projectPath = projectPathOf(projectId);
-    const result = input.retirer === true ? unmarkExamined(projectPath, input) : markExamined(projectPath, input);
+    const result = input.retirer === true ? unmarkExamined(target(projectId), input) : markExamined(target(projectId), input);
     build(projectId);
     return result;
   };

@@ -4,10 +4,7 @@ import path from 'node:path';
 import { REVIEW_FOLDER, documentTitleCell } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 import type { Review } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
-import { premiseId, squash, text } from './bundle.js';
-
-export type ReviewStatement = { candidates: string[]; quote: string; value: string };
-export type ReviewPremise = { id: string; title: string; description: string; single: boolean; statements: ReviewStatement[] };
+import { text } from './bundle.js';
 
 function readReviews(projectPath: string): Review[] {
   const directory = path.join(projectPath, REVIEW_FOLDER);
@@ -44,24 +41,4 @@ export function documentMetadataFromReviews(projectPath: string): Map<string, { 
     }
   }
   return metadata;
-}
-
-export function premisesFromReviews(projectPath: string): ReviewPremise[] {
-  const premises = new Map<string, ReviewPremise>();
-  for (const review of readReviews(projectPath)) {
-    for (const column of review.columns) {
-      if (!column.premise || !text(column.name)) continue;
-      const id = premiseId(column.name);
-      const premise: ReviewPremise = { id, title: text(column.name), description: squash(text(column.prompt)), single: column.premise === 'single', statements: premises.get(id)?.statements || [] };
-      premises.set(id, premise);
-      for (const row of review.rows) {
-        const cell = review.cells?.[row.id]?.[column.index];
-        const citation = cell?.citations?.find((entry) => entry.verified && text(entry.quote));
-        if (!cell || !citation) continue;
-        const candidates = [row.piece, ...(row.documents || []).map((document) => document.source)].filter((value): value is string => Boolean(value)).map((value) => value.normalize('NFC'));
-        premise.statements.push({ candidates, quote: squash(citation.quote), value: squash(text(cell.summary)) });
-      }
-    }
-  }
-  return [...premises.values()];
 }

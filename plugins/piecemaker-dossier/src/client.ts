@@ -1,8 +1,8 @@
 import { openIndexAnalysis } from './index-analysis.js';
 import { editOntology } from './ontology.js';
 import { pendingProposals } from './pending-proposals.js';
-import { etapesApi, knowledgeApi, tabularReviewRpc } from './api.js';
-import { PREMISE_TYPE, PARTY_TYPE, premiseReviewDraft, mountGraph, okfApi } from './okf.js';
+import { etapesApi, knowledgeApi } from './api.js';
+import { PARTY_TYPE, mountGraph, okfApi } from './okf.js';
 import type { OkfGraph } from './okf.js';
 import { ficheCardMarkup } from './okf-card.js';
 import type { OkfView } from './okf.js';
@@ -446,15 +446,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         }
         const node = data.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === fiche.resource);
         if (node) documentEditor(root, data, node, projectPath, save, renamePiece, okfHandle());
-      });
-      const draft = fiche.type === PREMISE_TYPE ? premiseReviewDraft(okf, id, projectPath) : null;
-      card.querySelector<HTMLButtonElement>('[data-premise-review]')?.addEventListener('click', (event) => {
-        if (!draft) return;
-        (event.currentTarget as HTMLButtonElement).disabled = true;
-        void (tabularReviewRpc('PUT', '/drafts', { draft }) as Promise<{ draft: { id: string } }>)
-          .then((saved) => openIndexAnalysis(root, api, () => { closeIndexAnalysis = null; void load(); }, saved.draft.id))
-          .then((dispose) => { closeIndexAnalysis = dispose; })
-          .catch(showError);
       });
     };
     wrap.querySelector('[data-okf-center]')?.addEventListener('click', () => graph?.center());

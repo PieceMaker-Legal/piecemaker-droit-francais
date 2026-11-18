@@ -48,7 +48,7 @@ function premiseBody(index: OkfIndex, premise: OkfFiche) {
   return {
     kind: 'Prémisse',
     meta: premise.single ? 'Prémisse · valeur unique' : 'Prémisse',
-    actions: '<button type="button" class="pmd-button piecemaker-button piecemaker-button--black piecemaker-button--sm" data-premise-review title="Crée une revue tabulaire dont la colonne porte cette prémisse">Revue tabulaire</button>',
+    actions: '',
     props: row(premise.single ? 'Valeur' : 'Valeurs', values.map((value) => text(value, diverge ? 'warning' : 'value')).join(''))
       + row('Parties', parties.map((party) => pill(index, party)).join(''))
       + row('Pièces', text(String(sources.length))),

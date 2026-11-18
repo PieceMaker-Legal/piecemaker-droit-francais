@@ -104,12 +104,6 @@ export function partyPremises(index: OkfIndex | null, code: string): OkfFiche[] 
   return premises(index).filter((fiche) => fiche.relations.some((entry) => entry.relation === 'involves' && entry.target === party.id));
 }
 
-export function premiseReviewDraft(index: OkfIndex, premiseId: string, project: string) {
-  const premise = index.fiches.find((fiche) => fiche.id === premiseId);
-  if (!premise) return null;
-  return { project, title: premise.title, templateName: '', columns: [{ name: premise.title, prompt: premise.description || premise.title, format: 'text', premise: premise.single ? 'single' : 'checkpoint' }], rows: [] };
-}
-
 export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: number }>, gap: number, gapY = gap, rounds = 300): void {
   for (let round = 0; round < rounds; round += 1) {
     let moved = false;

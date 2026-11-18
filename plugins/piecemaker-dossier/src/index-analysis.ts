@@ -18,7 +18,7 @@ type AnalysisModule = {
   unmount(container: HTMLElement): void;
 };
 
-export async function openIndexAnalysis(root: HTMLElement, api: AnalysisApi, onBack: () => void, draft?: string): Promise<() => void> {
+export async function openIndexAnalysis(root: HTMLElement, api: AnalysisApi, onBack: () => void): Promise<() => void> {
   const project = api.context.project?.path;
   if (!project) return () => {};
   const token = localStorage.getItem('auth-token');
@@ -38,6 +38,6 @@ export async function openIndexAnalysis(root: HTMLElement, api: AnalysisApi, onB
   const close = () => { dispose(); onBack(); };
   layer.addEventListener('click', (event) => { if (event.target === layer || (event.target as HTMLElement).closest('[data-close-index]')) close(); });
   layer.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !layer.querySelector('.ptr-overlay,.ptr-drawer-backdrop')) close(); });
-  analysis.mount(container, { get context() { return api.context; }, onContextChange: api.onContextChange.bind(api), openFileInEditor: api.openFileInEditor.bind(api), rpc: tabularReviewRpc }, { project, onBack: close, ...(draft ? { draft } : {}) });
+  analysis.mount(container, { get context() { return api.context; }, onContextChange: api.onContextChange.bind(api), openFileInEditor: api.openFileInEditor.bind(api), rpc: tabularReviewRpc }, { project, onBack: close });
   return dispose;
 }
