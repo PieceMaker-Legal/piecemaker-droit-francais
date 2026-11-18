@@ -36,7 +36,7 @@ export function display(step: Step) {
 export function tone(step: Step) {
   const value = structured(step.value) ? display(step) || step.value : bare(step.value);
   if (/^(?:Confirmé|Établi)$/i.test(value)) return 'ok';
-  if (/^Réfuté$/i.test(value)) return 'ko';
+  if (/^(?:Réfuté|Écarté)$/i.test(value)) return 'ko';
   if (/^(?:Inconnu|Indéterminé|Disputé|Contesté|Non Tranchée|null|None|)$/i.test(value)) return 'warn';
   if (step.kind === 'rule' && /^Vrai$/i.test(value)) return 'ok';
   if (step.kind === 'rule' && /^Faux$/i.test(value)) return 'ko';
@@ -116,7 +116,6 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   const supports = (step: Step) => [...step.parents, ...(step.clause ? references(step.clause, false).map(([reference]) => reference.id) : [])].filter((id) => id !== step.id && steps.has(id));
   const dependencies = new Set(model.steps.filter((step) => !container(step)).flatMap(supports));
   const roots = candidates.filter((step) => !dependencies.has(step.id));
-  const goal = roots.find((step) => step.answer) ?? roots.at(-1) ?? candidates.at(-1);
   const upstream = (step: Step) => {
     const found: Step[] = [];
     const seenIds = new Set([step.id]);
@@ -137,9 +136,23 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const parent = step.parents[0];
     resultGroups.set(parent, [...resultGroups.get(parent) ?? [], step]);
   }
+  const stateResults = [...resultGroups].flatMap(([id, results]) => {
+    const state = steps.get(id)!;
+    if (!state.outputScope || (model.scope && state.outputScope !== model.scope) || !/^(?:Établi|Inconnu|Écarté)$/.test(state.value)) return [];
+    const matches = (comparison: string, expected: boolean) => results.find((result) => result.outputScope === state.outputScope
+      && result.value === (expected ? 'Vrai' : 'Faux')
+      && formula(result, human).replace(/^\((.*)\)$/, '$1').trim() === `${human(state.name)} ${comparison}`);
+    const established = matches('= Établi', state.value === 'Établi');
+    const notExcluded = matches('!= Écarté', state.value !== 'Écarté');
+    return established && notExcluded ? [{ state, results: [established, notExcluded] }] : [];
+  });
+  const principal = stateResults.length === 1 ? stateResults[0] : undefined;
+  const goal = principal?.state ?? roots.find((step) => step.answer) ?? roots.at(-1) ?? candidates.at(-1);
   const sharedResults = new Map<string, Step[]>();
-  const grouped = new Set<string>();
-  for (const results of resultGroups.values()) {
+  const summarized = new Set(principal?.results.map((step) => step.id));
+  const grouped = new Set(summarized);
+  for (const group of resultGroups.values()) {
+    const results = group.filter((step) => !summarized.has(step.id));
     if (results.length < 2) continue;
     const primary = results.find((step) => step === goal) ?? results[0];
     const others = results.filter((step) => step !== primary);
@@ -178,8 +191,11 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const application = owner ? conditionApplication(step, model) : null;
     const exception = application?.kind === 'exception' || step.origins.some((origin) => origin.selected && origin.role === 'definition' && origin.overrides);
     const stated = new Set((owner?.sources ?? []).map(identity));
-    const foundation = step.kind === 'rule' ? step.sources.filter((source) => source.kind !== 'origin' && source.kind !== 'piece') : (application?.basis ?? []).filter((source) => !stated.has(identity(source)));
-    const pieces = step.sources.filter((source) => source.kind === 'piece');
+    const sources = step === principal?.state
+      ? [...new Map([...principal.results.flatMap((result) => result.sources), ...step.sources].map((source) => [identity(source), source])).values()]
+      : step.sources;
+    const foundation = step.kind === 'rule' ? sources.filter((source) => source.kind !== 'origin' && source.kind !== 'piece') : (application?.basis ?? []).filter((source) => !stated.has(identity(source)));
+    const pieces = sources.filter((source) => source.kind === 'piece');
     const statement = [...new Set(pieces.map((piece) => piece.premise).filter((text): text is string => Boolean(text) && text !== step.title))];
     const written = step.kind === 'rule' && !step.clause && !isGoal ? formula(step, human) : '';
     const calculation = written && written.replace(/\s/g, '') !== display(step).replace(/\s/g, '') ? written : '';
@@ -191,7 +207,8 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const missing = step.kind === 'rule' ? upstream(step) : [];
     const above = missing.length ? `<button type="button" class="pmc-text-action pmc-upstream" data-goto="${missing[0].id}">${missing.length} point${missing.length > 1 ? 's' : ''} ouvert${missing.length > 1 ? 's' : ''} en amont</button>` : '';
     const proof = proofOf(step, model);
-    const card = `<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}" data-kind="${isGoal ? 'answer' : exception ? 'exception' : step.kind}" data-state="${isGoal ? 'neutral' : current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(isGoal && model.objective || step.title)}</h3>${statement.map((text) => `<p class="pmc-statement">${escape(text)}</p>`).join('')}${isGoal ? '' : `<p class="pmc-result">${status(step, current)}${badge(proof)}</p>`}${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, 'law')}${documents(pieces, 'evidence')}${exceptions(step)}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${isGoal ? badge(proof) : above}</article>`;
+    const aliases = step === principal?.state ? ` data-summary-of="${[...summarized].join(' ')}"` : '';
+    const card = `<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}"${aliases} data-kind="${isGoal ? 'answer' : exception ? 'exception' : step.kind}" data-state="${isGoal ? 'neutral' : current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === principal?.state ? step.title : isGoal && model.objective || step.title)}</h3>${statement.map((text) => `<p class="pmc-statement">${escape(text)}</p>`).join('')}${isGoal ? '' : `<p class="pmc-result">${status(step, current)}${badge(proof)}</p>`}${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, 'law')}${documents(pieces, 'evidence')}${exceptions(step)}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${isGoal ? badge(proof) : above}</article>`;
     const result = isGoal ? `<div class="pmc-root">${card}<span class="pmc-arrow" aria-hidden="true"></span>${outcome(step)}</div>` : card;
     const others = !owner && sharedResults.get(step.id);
     if (!others) return branch(result, children, isGoal ? truth(step) : current);
@@ -218,7 +235,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   };
   const wires = (body: string, label: string) => `<div class="pmc-map" data-layout="columns"${label ? ` aria-label="${label}"` : ''}><svg class="pmc-wires" aria-hidden="true"></svg>${body}</div>`;
   const main = goal ? node(goal, null) : '';
-  const rest = [...roots.filter((step) => step !== goal && !grouped.has(step.id)).map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) ? '' : node(step, null))].join('');
+  const rest = [...roots.filter((step) => step !== goal && !grouped.has(step.id)).map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) || summarized.has(step.id) ? '' : node(step, null))].join('');
   const hidden = links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('');
   if (only) return wires(`${hidden}${main}${rest}`, '');
   const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, 'other')}</details>` : '';

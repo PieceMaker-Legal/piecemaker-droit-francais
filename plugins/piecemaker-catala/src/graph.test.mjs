@@ -268,6 +268,38 @@ test('shows both outcomes of a shared rule with a single supporting branch', () 
   assert.equal(roots[0].querySelectorAll(':scope > .pmc-children [data-node="x001"]').length, 1);
 });
 
+test('presents each principal state once and keeps independent outputs visible', () => {
+  const file = { ...module, contenu: `\`\`\`catala
+champ d'application Exemple:
+  définition état_principal égal à appréciation
+  définition démontré égal à état_principal = Établi
+  définition non_écarté égal à état_principal != Écarté
+  définition montant_annexe égal à 42
+\`\`\`
+` };
+  const position = (line) => ({ file: file.chemin, start: { line, character: 3 }, end: { line, character: 60 }, law_headings: [] });
+  const output = (name, line, value) => ({ element: { kind: 'scope_var', name, output: true }, pos: position(line), value, trace: [{ element: { kind: 'exception' }, pos: position(line), value }] });
+  for (const [state, established, notExcluded] of [['Établi', true, true], ['Inconnu', false, true], ['Écarté', false, false]]) {
+    const provenance = {
+      trace: [{ element: { kind: 'scope_call', name: 'Exemple' }, pos: position(2), trace: [
+        output('état_principal', 3, state), output('démontré', 4, established),
+        output('non_écarté', 5, notExcluded), output('montant_annexe', 6, 42),
+      ] }],
+      definitions: [], issues: [], dependencies: [{ fichier: file.chemin, intra_scopes: {
+        Exemple: { nodes: { 1: 'état_principal', 2: 'démontré', 3: 'non_écarté' }, edges: [{ from: 1, to: 2 }, { from: 1, to: 3 }] },
+      } }],
+    };
+    const model = reasoning('', [file], [], undefined, provenance);
+    model.scope = 'Exemple';
+    const document = new JSDOM(reasoningGraph(model)).window.document;
+    const roots = [...document.querySelectorAll('.pmc-map > .pmc-branch [data-node]')];
+    assert.deepEqual(roots.map((node) => node.querySelector('h3').textContent), ['État principal', 'Montant annexe']);
+    assert.equal(roots[0].querySelector('.pmc-box-kind').textContent, 'Objectif');
+    assert.equal(roots[0].querySelector('.pmc-value').textContent, state);
+    if (state === 'Écarté') assert.equal(roots[0].dataset.state, 'ko');
+  }
+});
+
 test('shows the definition comment and qualification without printing the structure in either view', () => {
   const comment = 'Le rapport ne date pas le dernier constat.';
   const file = { ...module, contenu: `\`\`\`catala
