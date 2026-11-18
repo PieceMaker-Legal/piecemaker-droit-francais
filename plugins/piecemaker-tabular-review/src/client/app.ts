@@ -28,6 +28,10 @@ export type App = {
   takeTargetProject(): string | null;
   /** Colonne ajoutée par l'hôte qui affiche la revue (l'Index dans l'onglet Dossier : liens OKF de chaque pièce). */
   rowColumn?: RowColumn;
+  /** Mode chronologie de l'Index : l'hôte dit s'il est actif et quelles lignes sont des pièces. */
+  chronology?: Chronology;
 };
+
+export type Chronology = { active(): boolean; isPiece(row: ReviewRow): boolean; subscribe(callback: () => void): () => void };
 
 export type RowColumn = { title: string; cell(row: ReviewRow): string };

@@ -98,6 +98,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
   let draft: { key: string; value: string } | null = null;
   let timer = 0;
   let destroyed = false;
+  const stopChronology = app.chronology?.subscribe(() => { if (detail && !destroyed) render(); }) ?? (() => {});
   let busy = false;
   let scroll = { top: 0, left: 0 };
   let choice: { provider: Provider; model: string } | null = null;
@@ -224,6 +225,11 @@ export function createReviewView(app: App, project: string, file: string, onBack
       : `${review.templateName} · ${app.projectName(project)} · ${formatDate(review.createdAt)}`;
     const research = review.category === 'recherche-juridique';
     const extra = research ? undefined : app.rowColumn;
+    // Mode chronologie : les seules pièces, de la plus ancienne à la plus récente ; sans date, en fin de liste.
+    const chronology = !research && app.chronology?.active() ? app.chronology : null;
+    const dateColumn = review.columns.find((column) => column.format === 'date') ?? review.columns.find((column) => column.name.trim().toLocaleLowerCase('fr') === 'date');
+    const shownRows = chronology ? review.rows.filter((row) => chronology.isPiece(row)) : review.rows;
+    const order: SortState = chronology ? (dateColumn ? { key: `c${dateColumn.index}`, direction: 1 } : null) : sort;
     const classification = classifyColumn(review.columns);
     element.innerHTML = `
       <div class="ptr-review-top">
@@ -249,9 +255,9 @@ export function createReviewView(app: App, project: string, file: string, onBack
       </div>
       <div class="ptr-review-body">
         <div class="ptr-table-wrap">
-          <table class="ptr-table">
+          <table class="ptr-table">${chronology ? `<caption class="ptr-chronology-caption" data-chronology>Chronologie : ${shownRows.length} pièce${shownRows.length > 1 ? 's' : ''} sur ${review.rows.length} ligne${review.rows.length > 1 ? 's' : ''}, par date${dateColumn ? '' : ' (aucune colonne Date)'}</caption>` : ''}
             <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${research ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${extra ? `<th scope="col">${escapeHtml(extra.title)}</th>` : ''}${review.columns.map(columnHeading).join('')}<th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button>${research || classification ? '' : ' <button type="button" class="ptr-add" data-add-classification title="Ajouter la colonne de classement dans l’arborescence du dossier">+ Classement</button>'}</th></tr></thead>
-            <tbody>${sortBy(review.rows, sort, (row, key) => key === 'label' ? documentTitle(review, row) : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
+            <tbody>${sortBy(shownRows, order, (row, key) => key === 'label' ? documentTitle(review, row) : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
               <tr>
                 <td data-title-row="${escapeHtml(row.id)}"><div class="ptr-row-label">${escapeHtml(documentTitle(review, row))}</div>${documentTitleCell(review, row) ? citationLinks(documentTitleCell(review, row)!) : ''}${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>${extra ? `<td class="ptr-row-extra">${extra.cell(row)}</td>` : ''}
                 ${review.columns.map((column) => {
@@ -848,6 +854,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     },
     destroy() {
       destroyed = true;
+      stopChronology();
       window.clearTimeout(timer);
       window.clearTimeout(researchTimer);
     },

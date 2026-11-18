@@ -4,7 +4,7 @@ import { spreadBoxes, premiseEstablishers, premiseParties, premiseStatements, pr
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
 import { chronologyView, documentTitle, graphView, linksMarkup, shell } from '../views.js';
-import { indexRowResource } from '../index-analysis.js';
+import { indexRowResource, isPieceRow } from '../index-analysis.js';
 
 const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', relations });
 const index: OkfIndex = {
@@ -45,6 +45,14 @@ describe('index OKF', () => {
     expect(ficheLinks(custom, 'Pièces/Courrier.pdf')[0].label).toBe('invoque →');
     expect(ficheLinks(custom, 'Pièces/Contrat.pdf')[0].label).toBe('← invoqué par');
     expect(graphElements(custom)[2].data.label).toBe('invoque');
+  });
+
+  it('le mode chronologie ne garde que les lignes dont la fiche est une pièce', () => {
+    const okf = { fiches: [{ resource: 'Pièces/Contrat.pdf', type: 'Pièces' }, { resource: 'Projets/Conclusions.docx', type: 'Projets' }] };
+    expect(isPieceRow(okf, { id: 'a', piece: 'Pièces/Contrat.pdf', documents: [] })).toBe(true);
+    expect(isPieceRow(okf, { id: 'b', piece: 'Projets/Conclusions.docx', documents: [] })).toBe(false);
+    expect(isPieceRow(okf, { id: 'c', documents: [{ source: 'Inconnu.md' }] })).toBe(false);
+    expect(isPieceRow(null, { id: 'd', documents: [] })).toBe(true);
   });
 
   it('l’Index affiche la colonne Liens de chaque pièce et le rapport de vérification', () => {

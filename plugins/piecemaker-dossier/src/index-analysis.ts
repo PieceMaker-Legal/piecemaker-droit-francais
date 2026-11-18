@@ -18,8 +18,20 @@ export type IndexRow = { id: string; piece?: string; documents: Array<{ source: 
 
 type RowColumn = { title: string; cell(row: IndexRow): string };
 
+/** Mode chronologie : l'onglet dit s'il est actif et quelles lignes sont des pièces ; la revue n'affiche alors qu'elles, par date. */
+export type IndexChronology = { active(): boolean; isPiece(row: IndexRow): boolean; subscribe(callback: () => void): () => void };
+
+/** Type principal des pièces du dossier (dossier de premier niveau « Pièces » de l'arborescence). */
+export const PIECE_TYPE = 'Pièces';
+
+/** Une ligne est une pièce si sa fiche OKF est du type Pièces. Tant que l'index OKF n'est pas lu, toutes les lignes comptent. */
+export function isPieceRow(okf: { fiches: Array<{ resource: string; type: string }> } | null | undefined, row: IndexRow): boolean {
+  if (!okf) return true;
+  return okf.fiches.find((fiche) => fiche.resource === indexRowResource(row))?.type === PIECE_TYPE;
+}
+
 type AnalysisModule = {
-  mount(container: HTMLElement, api: AnalysisApi & { rpc: typeof tabularReviewRpc }, index: { project: string; draft?: string; rowColumn?: RowColumn }): void;
+  mount(container: HTMLElement, api: AnalysisApi & { rpc: typeof tabularReviewRpc }, index: { project: string; draft?: string; rowColumn?: RowColumn; chronology?: IndexChronology }): void;
   unmount(container: HTMLElement): void;
 };
 
@@ -43,13 +55,13 @@ function loadAnalysis(): Promise<AnalysisModule> {
 }
 
 /** L'Index du dossier, affiché dans l'onglet même : c'est la revue tabulaire de l'Index (SQLite), avec une colonne de liens OKF par pièce. */
-export async function mountIndexAnalysis(container: HTMLElement, api: AnalysisApi, links: (resource: string) => string): Promise<() => void> {
+export async function mountIndexAnalysis(container: HTMLElement, api: AnalysisApi, links: (resource: string) => string, chronology?: IndexChronology): Promise<() => void> {
   const project = api.context.project?.path;
   if (!project) return () => {};
   const analysis = await loadAnalysis();
   if (api.context.project?.path !== project || !container.isConnected) return () => {};
   const rowColumn: RowColumn = { title: 'Liens', cell: (row) => `<div class="pmd-badges" data-okf-links="${escapeAttribute(indexRowResource(row))}">${links(indexRowResource(row))}</div>` };
-  analysis.mount(container, { get context() { return api.context; }, onContextChange: api.onContextChange.bind(api), openFileInEditor: api.openFileInEditor.bind(api), rpc: tabularReviewRpc }, { project, rowColumn });
+  analysis.mount(container, { get context() { return api.context; }, onContextChange: api.onContextChange.bind(api), openFileInEditor: api.openFileInEditor.bind(api), rpc: tabularReviewRpc }, { project, rowColumn, ...(chronology ? { chronology } : {}) });
   return () => analysis.unmount(container);
 }
 

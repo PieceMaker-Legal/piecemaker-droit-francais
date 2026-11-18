@@ -64,6 +64,26 @@ describe('analyse de l’Index dans Dossier', () => {
     expect(root.querySelector('[data-liens]')!.textContent).toBe('Pièces/Contrat.pdf');
   });
 
+  it('en mode chronologie, n’affiche que les pièces, par date, sans date en fin de liste', async () => {
+    const project = '/dossier-exemple';
+    const row = (id: string, piece: string) => ({ id, label: id, piece, documents: [], status: 'done' as const });
+    const cell = (summary: string) => ({ summary, flag: 'grey' as const, reasoning: '', citations: [{ document: 'x.md', quote: summary, verified: true }] });
+    const review: Review = { version: 1, title: 'Index', templateName: 'Index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [row('recent', 'Pièces/b.pdf'), row('note', 'Notes/n.md'), row('sans-date', 'Pièces/c.pdf'), row('ancien', 'Pièces/a.pdf')], cells: { recent: { 0: cell('12/03/2024') }, note: { 0: cell('01/01/2020') }, ancien: { 0: cell('2021-05-01') } } };
+    const rpc = vi.fn(async (_method: string, path: string) => path === '/assistant' ? { fichier: 'index.json' } : { project, file: 'index.json', status: 'done', review });
+    let active = true;
+    const listeners = new Set<() => void>();
+    const chronology = { active: () => active, isPiece: (entry: { piece?: string }) => Boolean(entry.piece?.startsWith('Pièces/')), subscribe: (callback: () => void) => { listeners.add(callback); return () => listeners.delete(callback); } };
+    mount(root, { context: { theme: 'light', project: { name: 'Exemple', path: project }, session: null }, rpc, onContextChange: () => () => {} }, { project, chronology });
+    const rows = () => [...root.querySelectorAll<HTMLElement>('[data-title-row]')].map((entry) => entry.dataset.titleRow);
+    await vi.waitFor(() => expect(rows()).toHaveLength(3));
+    expect(rows()).toEqual(['ancien', 'recent', 'sans-date']);
+    expect(root.querySelector('[data-chronology]')!.textContent).toContain('3 pièces sur 4 lignes');
+    active = false;
+    listeners.forEach((listener) => listener());
+    expect(rows()).toHaveLength(4);
+    expect(root.querySelector('[data-chronology]')).toBeNull();
+  });
+
   it('reprend le projet existant dans Dossier et revient à l’Index sans ouvrir l’historique', async () => {
     const back = vi.fn();
     const focus = vi.fn();
