@@ -38,6 +38,7 @@ import { useSlashCommandPills } from '@/piecemaker/chat/useSlashCommandPills';
 import { useDocxCommentQuestions } from '@/piecemaker/chat/useDocxCommentQuestions';
 import { prepareCommandMenuCommands } from '@/piecemaker/chat/prepareCommandMenuCommands';
 import { useContextSuggestion } from '@/modules/piecemaker-context-suggestions';
+import { CaseConversionCard } from '@/modules/piecemaker-case-conversion';
 
 type ChatInterfaceProps = {
   isActive: boolean;
@@ -618,6 +619,7 @@ function ChatInterface({
             </div>
           )}
 
+          <CaseConversionCard project={selectedProject} />
           <ChatComposer
           pendingPermissionRequests={pendingPermissionRequests}
           handlePermissionDecision={handlePermissionDecision}
