@@ -130,6 +130,21 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     }
     return found;
   };
+  const resultGroups = new Map<string, Step[]>();
+  for (const step of only ? [] : roots) {
+    if (step.clause || step.parents.length !== 1 || steps.get(step.parents[0])?.kind !== 'rule') continue;
+    const parent = step.parents[0];
+    resultGroups.set(parent, [...resultGroups.get(parent) ?? [], step]);
+  }
+  const sharedResults = new Map<string, Step[]>();
+  const grouped = new Set<string>();
+  for (const results of resultGroups.values()) {
+    if (results.length < 2) continue;
+    const primary = results.find((step) => step === goal) ?? results[0];
+    const others = results.filter((step) => step !== primary);
+    sharedResults.set(primary.id, others);
+    others.forEach((step) => grouped.add(step.id));
+  }
   const active = new Set<string>();
   const rendered = new Set<string>();
   const condition = (clause: Clause, owner: Step, negated: boolean): string => {
@@ -152,7 +167,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const unused = definitions.filter((origin) => !origin.selected && origin.overrides && origin !== principle);
     return `${principle ? `<div class="pmc-overridden" data-part="overridden"><span class="pmc-box-kind">${words.overridden}</span>${describe(principle)}</div>` : ''}${unused.map((origin) => `<div class="pmc-overridden" data-part="unused"><span class="pmc-box-kind">${words.unused}</span>${describe(origin)}</div>`).join('')}`;
   };
-  const node = (step: Step, owner: Step | null, negated = false, parsed = false): string => {
+  const node = (step: Step, owner: Step | null, negated = false, parsed = false, expand = true): string => {
     if (container(step) || active.has(step.id)) return '';
     active.add(step.id);
     rendered.add(step.id);
@@ -169,14 +184,21 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const calculation = written && written.replace(/\s/g, '') !== display(step).replace(/\s/g, '') ? written : '';
     const top = step.clause?.kind === 'all' ? step.clause.members : step.clause ? [step.clause] : [];
     const explained = new Set(top.flatMap((member) => references(member, false).map(([reference]) => reference.id)));
-    const children = [...top.map((member) => condition(member, step, false)), ...step.parents.filter((id) => !explained.has(id)).map((id) => node(steps.get(id)!, step))];
+    const children = expand ? [...top.map((member) => condition(member, step, false)), ...step.parents.filter((id) => !explained.has(id)).map((id) => node(steps.get(id)!, step))] : [];
     active.delete(step.id);
     const kind = isGoal ? words.root : exception ? words.exception : step.kind === 'fact' ? words.fact : words.rule;
     const missing = step.kind === 'rule' ? upstream(step) : [];
     const above = missing.length ? `<button type="button" class="pmc-text-action pmc-upstream" data-goto="${missing[0].id}">${missing.length} point${missing.length > 1 ? 's' : ''} ouvert${missing.length > 1 ? 's' : ''} en amont</button>` : '';
     const proof = proofOf(step, model);
     const card = `<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}" data-kind="${isGoal ? 'answer' : exception ? 'exception' : step.kind}" data-state="${isGoal ? 'neutral' : current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(isGoal && model.objective || step.title)}</h3>${statement.map((text) => `<p class="pmc-statement">${escape(text)}</p>`).join('')}${isGoal ? '' : `<p class="pmc-result">${status(step, current)}${badge(proof)}</p>`}${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, 'law')}${documents(pieces, 'evidence')}${exceptions(step)}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${isGoal ? badge(proof) : above}</article>`;
-    return branch(isGoal ? `<div class="pmc-root">${card}<span class="pmc-arrow" aria-hidden="true"></span>${outcome(step)}</div>` : card, children, isGoal ? truth(step) : current);
+    const result = isGoal ? `<div class="pmc-root">${card}<span class="pmc-arrow" aria-hidden="true"></span>${outcome(step)}</div>` : card;
+    const others = !owner && sharedResults.get(step.id);
+    if (!others) return branch(result, children, isGoal ? truth(step) : current);
+    const cards = others.map((entry) => {
+      links.push({ from: step.parents[0], to: entry.id });
+      return node(entry, null, false, false, false);
+    });
+    return branch(`<div class="pmc-root-results">${result}${cards.join('')}</div>`, children, isGoal ? truth(step) : current);
   };
   const outcome = (step: Step) => {
     const state = truth(step);
@@ -195,7 +217,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   };
   const wires = (body: string, label: string) => `<div class="pmc-map" data-layout="columns"${label ? ` aria-label="${label}"` : ''}><svg class="pmc-wires" aria-hidden="true"></svg>${body}</div>`;
   const main = goal ? node(goal, null) : '';
-  const rest = [...roots.filter((step) => step !== goal).map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) ? '' : node(step, null))].join('');
+  const rest = [...roots.filter((step) => step !== goal && !grouped.has(step.id)).map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) ? '' : node(step, null))].join('');
   const hidden = links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('');
   if (only) return wires(`${hidden}${main}${rest}`, '');
   const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, 'other')}</details>` : '';

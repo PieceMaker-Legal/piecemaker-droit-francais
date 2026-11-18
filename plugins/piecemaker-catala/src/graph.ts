@@ -268,7 +268,7 @@ const lawOf = (clause: Clause, steps: Map<string, Step>) => unique(leaves(clause
 
 export function reasoning(dot: string, files: File[] = [], citations: Citation[] = [], coverage?: Coverage, provenance?: NativeProvenance, mode: Mode = 'litigation'): Reasoning {
   const contract = mode === 'transactional';
-  const native = provenance ? nativeExecution(provenance) : null;
+  const native = provenance ? nativeExecution(provenance, files) : null;
   const fallback = !dot.trim() || dot.trim() === 'digraph G {}' || Boolean(native?.variables.length);
   const { nodes, edges } = parseDot(fallback && native?.variables.length ? native.dot : dot);
   const linked = new Map<string, Source[]>();

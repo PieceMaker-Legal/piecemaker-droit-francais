@@ -17,16 +17,23 @@ const xml = (text: string) => text.replace(/[&<>"']/g, (char) => ({ '&': '&amp;'
 const within = (a: Position, b: Position) => a.file === b.file && (a.start.line > b.start.line || a.start.line === b.start.line && a.start.character >= b.start.character) && (a.start.line < b.end.line || a.start.line === b.end.line && a.start.character <= b.end.character);
 const valueOf = (value: unknown): string => typeof value === 'boolean' ? value ? 'Vrai' : 'Faux' : typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? 'Indéterminé');
 
-export function nativeExecution(data: NativeProvenance) {
+export function nativeExecution(data: NativeProvenance, files: Array<{ chemin: string; contenu?: string }>) {
   const variables: Array<{ id: string; name: string; file: string; scope: string; value: string; input: boolean; output: boolean; origins: NativeOrigin[] }> = [];
   const edges: Array<[string, string]> = [];
+  const sources = new Map(files.map((file) => [file.chemin, file.contenu?.split(/\r?\n/)]));
+  const argumentsToLink: Array<{ caller: Map<string, string>; name: string; input: string }> = [];
   const link = (from: string, to: string) => { if (from !== to && !edges.some(([a, b]) => a === from && b === to)) edges.push([from, to]); };
-  const visit = (events: Event[], parent = '') => {
+  const visit = (events: Event[], parent = '', caller?: Map<string, string>) => {
     for (const call of events) {
-      if (call.element.kind !== 'scope_call') { visit(call.trace ?? [], parent); continue; }
+      if (call.element.kind !== 'scope_call') { visit(call.trace ?? [], parent, caller); continue; }
       const local = new Map<string, string>();
       const file = call.element.decl_pos?.file ?? call.pos.file;
       const scope = call.element.name ?? '';
+      const { start, end } = call.pos;
+      const lines = sources.get(call.pos.file)?.slice(start.line - 1, end.line) ?? [];
+      const text = lines.map((line, index) => line.slice(index === 0 ? start.character - 1 : 0, index === lines.length - 1 ? end.character - 1 : undefined)).join('\n');
+      const argumentsBlock = caller && text.match(/^(?:résultat de|output of)\s+[\p{L}\p{N}_.]+\s+(?:avec|with)\s*\{([^{}]*)\}$/u)?.[1];
+      const args = new Map([...(argumentsBlock || '').matchAll(/--\s*([\p{L}\p{N}_]+)\s*:\s*([\p{L}\p{N}_]+)(?:\.[\p{L}\p{N}_]+)*\s*(?=--|$)/gu)].map(([, input, name]) => [input, name]));
       for (const event of call.trace ?? []) {
         if (event.element.kind !== 'scope_var') continue;
         const name = event.element.name ?? '';
@@ -53,9 +60,12 @@ export function nativeExecution(data: NativeProvenance) {
         };
         tree(trees);
         const unique = origins.filter((entry, index) => origins.findIndex((other) => identity(other) === identity(entry)) === index);
-        variables.push({ id, name, file, scope, value: valueOf(event.value), input: event.element.input === 'only_input', output: Boolean(event.element.output), origins: unique });
+        const input = event.element.input === 'only_input';
+        variables.push({ id, name, file, scope, value: valueOf(event.value), input, output: Boolean(event.element.output), origins: unique });
+        const argument = input && args.get(name);
+        if (caller && argument) argumentsToLink.push({ caller, name: argument, input: id });
         if (parent && event.element.output) link(id, parent);
-        visit(event.trace ?? [], id);
+        visit(event.trace ?? [], id, local);
       }
       const dependencies = data.dependencies.find((entry) => entry.fichier === file)?.intra_scopes[scope];
       if (dependencies) for (const edge of dependencies.edges) {
@@ -66,6 +76,10 @@ export function nativeExecution(data: NativeProvenance) {
     }
   };
   visit(data.trace);
+  for (const { caller, name, input } of argumentsToLink) {
+    const argument = caller.get(name);
+    if (argument) link(argument, input);
+  }
   const nodes = variables.map((variable) => {
     const source = variable.origins.find((entry) => entry.selected && entry.role === 'definition') ?? variable.origins[0];
     const url = `${new URL(`file:///${source.file.replaceAll('\\', '/').replace(/^\/+/, '')}`).href}#L${source.line}`;
