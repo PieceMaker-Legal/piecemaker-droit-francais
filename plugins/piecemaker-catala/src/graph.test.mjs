@@ -247,6 +247,27 @@ test('shows both outcomes of a shared rule with a single supporting branch', () 
   assert.equal(roots[0].querySelectorAll(':scope > .pmc-children [data-node="x001"]').length, 1);
 });
 
+test('shows the definition comment and qualification without printing the structure in either view', () => {
+  const comment = 'Le rapport ne date pas le dernier constat.';
+  const file = { ...module, contenu: `\`\`\`catala
+champ d'application Exemple:
+  ## Apprécier la persistance
+  # ${comment}
+  définition examen égal à ExamenDocumentaire { -- qualification: Inconnu -- éléments: [] }
+\`\`\`
+` };
+  const model = reasoning(`digraph G {
+    x001 [label=<<table><tr><td>examen</td></tr><tr><td>ExamenDocumentaire { -- qualification: Inconnu -- éléments: [] }</td></tr><tr><td>= {&quot;qualification&quot;:&quot;Inconnu&quot;,&quot;éléments&quot;:[true]}</td></tr></table>>, URL="https://catala.local/resolution.catala_fr#L5"];
+  }`, [file]);
+  for (const html of [reasoningGraph(model), reasoningText(model)]) {
+    const document = new JSDOM(html).window.document;
+    const card = document.querySelector('[data-card="x001"]');
+    assert.ok(card.textContent.includes(comment));
+    assert.equal(card.querySelector('.pmc-value').textContent, 'Inconnu');
+    assert.doesNotMatch(card.textContent, /ExamenDocumentaire|éléments:/);
+  }
+});
+
 test('distinguishes statutes, case law and other references without treating a website as legal authority', () => {
   const file = { ...module, contenu: `${module.contenu}\n## Sources\nConcerne : résolution_possible\n[Décision fictive](https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001)\n[Documentation](https://example.org/explication)\n` };
   const graph = new JSDOM(reasoningGraph(reasoning(dot, [file], citations))).window.document;
