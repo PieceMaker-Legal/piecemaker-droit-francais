@@ -217,7 +217,7 @@ test('shows the program text with each Catala block drawn as a graph', async () 
   } finally { view.close(); }
 });
 
-test('lays the graph out in columns: steps on the left, a shared fact repeated under each step', async () => {
+test('shows the objective above independent branches and repeats shared facts under each', async () => {
   const shared = `digraph G {
   x001 [label=<<table><tr><td>inexécution</td><td>true</td></tr></table>>, URL="https://catala.local/test_demo.catala_fr#L9", style="filled"];
   x002 [label=<<table><tr><td>sanction_possible</td></tr><tr><td>inexécution</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L9", style="filled"];
@@ -235,15 +235,15 @@ test('lays the graph out in columns: steps on the left, a shared fact repeated u
     assert.match(map.querySelector('svg.pmc-wires path').getAttribute('d'), /^M\S+ \S+C/);
     const roots = [...map.querySelectorAll(':scope > .pmc-branch')];
     assert.equal(roots.length, 2);
-    const conclusion = roots[1].querySelector(':scope > [data-node]');
+    const conclusion = roots[0].querySelector(':scope > [data-node]');
     assert.equal(conclusion.dataset.kind, 'answer');
     assert.equal(conclusion.querySelector('.pmc-box-kind').textContent, 'Objectif');
-    const child = roots[1].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]');
+    const child = roots[0].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]');
     assert.ok(child);
     assert.equal(child.dataset.kind, 'fact');
     assert.equal(map.querySelectorAll('[data-node="x001"]').length, 2);
-    assert.ok(roots[0].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]'));
-    assert.equal(roots[0].querySelector(':scope > [data-node]').dataset.state, 'ok');
+    assert.ok(roots[1].querySelector(':scope > .pmc-children > .pmc-branch > [data-node="x001"]'));
+    assert.equal(roots[1].querySelector(':scope > [data-node]').dataset.state, 'ok');
     assert.equal(conclusion.dataset.state, 'ko');
     assert.deepEqual([...map.querySelectorAll('i[hidden]')].map((edge) => `${edge.dataset.from}>${edge.dataset.to}`).sort(), ['x001>x002', 'x001>x003']);
     view.click(child);

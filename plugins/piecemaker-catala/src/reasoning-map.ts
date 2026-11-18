@@ -148,7 +148,8 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     });
     return branch(`<div class="pmc-root-results">${card}${cards.join('')}</div>`, children, current);
   };
-  const trees = [...roots.filter((step) => !grouped.has(step.id)).map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) ? '' : node(step, null))].join('');
+  const orderedRoots = only ? roots : [...roots].sort((a, b) => Number(b === goal) - Number(a === goal));
+  const trees = [...orderedRoots.filter((step) => !grouped.has(step.id)).map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) ? '' : node(step, null))].join('');
   if (only) return `<div class="pmc-map" data-layout="columns"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;
   const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, '', 'other')}</details>` : '';
   const legend = '<p class="pmc-map-legend"><span data-state="ok">Validé</span><span data-state="warn">À établir ou à justifier</span><span data-state="ko">Non rempli</span></p>';
