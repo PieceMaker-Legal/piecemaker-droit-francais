@@ -35,11 +35,16 @@ export async function tabularIndex(tabularFn, { action, project, ...input }) {
   if (action === 'arborescence') return tabularFn({ ...input, action, project });
   const found = await tabularFn({ action: 'index', project });
   if (action === 'ouvrir') return found;
-  if (action === 'preparer' || action === 'lancer') {
-    if (!found.projet) throw new Error('L’index est déjà lancé : utilisez colonnes pour ses questions, ou relancer pour les nouvelles pièces.');
+  if (action === 'lancer' && found.fichier) return tabularFn({ ...input, action: 'relancer', project, fichier: found.fichier });
+  if (action === 'lancer') {
+    if (input.ia || input.modele_ia) await tabularFn({ ia: input.ia, modele_ia: input.modele_ia, action: 'preparer', project, projet: found.projet });
     return tabularFn({ ...input, action, project, projet: found.projet });
   }
-  if (!found.fichier) throw new Error('L’index n’est pas encore lancé : lancez-le avec lancer, sur accord de l’avocat.');
+  if (action === 'preparer') {
+    if (!found.projet) throw new Error('L’index est déjà lancé : utilisez colonnes pour ses questions, ou lancer pour les nouvelles pièces.');
+    return tabularFn({ ...input, action, project, projet: found.projet });
+  }
+  if (!found.fichier) throw new Error('L’index n’est pas encore lancé : lancez-le avec pm dossier index lancer, sur accord de l’avocat.');
   return tabularFn({ ...input, action, project, fichier: found.fichier });
 }
 
@@ -49,7 +54,7 @@ export async function refuseIndex(tabularFn, project, { fichier, projet }) {
   if (!name && !draft) return;
   const { analyses = [], projets = [] } = await tabularFn({ action: 'lister', project });
   const isIndex = [...analyses, ...projets].some((entry) => entry.index && ((name && entry.fichier === name) || (draft && entry.projet === draft)));
-  if (isIndex) throw new Error('L’index du dossier s’affiche toujours dans l’onglet Dossier : utilisez tabular_review_index.');
+  if (isIndex) throw new Error('L’index du dossier s’affiche toujours dans l’onglet Dossier : utilisez pm dossier index.');
 }
 
 export function reviewFile(dossier, fichier) {

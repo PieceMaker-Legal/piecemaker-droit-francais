@@ -1,5 +1,5 @@
 import type { Draft, Provider, ReviewDetail, RowRequest, TemplateColumn } from '../shared.js';
-import { COLUMN_FORMATS, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, REVIEW_FOLDER } from '../shared.js';
+import { COLUMN_FORMATS, DEFAULT_MODEL, DEFAULT_PROVIDER, hasActions, matchModel, REVIEW_FOLDER } from '../shared.js';
 import type { App, View } from './app.js';
 import { basename, confirmDialog, errorMessage, escapeHtml, toast } from './dom.js';
 import { openDocumentsDrawer } from './documents-drawer.js';
@@ -10,7 +10,7 @@ import type { SortState } from './ordering.js';
 import { openQuestionsDrawer } from './questions-drawer.js';
 import { selectMenu } from './select-menu.js';
 
-const PROVIDERS: { value: Provider; label: string }[] = [
+export const PROVIDERS: { value: Provider; label: string }[] = [
   { value: 'claude', label: 'Claude' },
   { value: 'codex', label: 'Codex' },
   { value: 'mistral', label: 'Mistral' },
@@ -129,7 +129,7 @@ export function createLaunchView(app: App, draft: Draft, onBack: () => void): Vi
       models = { options: requestedProvider === 'claude' ? [{ value: 'haiku', label: 'Haiku' }] : [], cheapest: requestedProvider === 'claude' ? 'haiku' : '' };
     }
     if (provider !== requestedProvider) return;
-    model = models.options.some((option) => option.value === preferredModel) ? preferredModel : models.cheapest;
+    model = matchModel(models.options, preferredModel, models.cheapest);
     preferredModel = '';
     renderProviderMenus();
     renderFooter();

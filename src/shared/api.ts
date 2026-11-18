@@ -1,11 +1,22 @@
-import {
-  expireAuthSession,
-  getStoredAuthToken,
-  storeAuthToken,
-} from '@/shared/authToken';
+import { authenticatedFetch as sharedAuthenticatedFetch, getStoredAuthToken, type ApiRequestOptions } from '@/shared/authToken';
 import { IS_PLATFORM } from '@/shared/utils';
 import { readVoiceConfig, voiceConfigHeaders } from '@/shared/voiceConfig';
-import type { MistralSdkAuthStatus } from '@/shared/types';
+import type { DocxReview, MistralSdkAuthStatus } from '@/shared/types';
+
+export async function docxReviewRequest(projectId: string, path: string, body?: Record<string, unknown>): Promise<DocxReview> {
+  const response = await authenticatedFetch(`/api/piecemaker/docx-review?${new URLSearchParams({ projectId, path })}`, body ? {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+  } : undefined);
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Opération Word impossible.');
+  return result;
+}
+
+export async function docxReviewSnapshot(projectId: string, path: string, id: string): Promise<ArrayBuffer> {
+  const response = await authenticatedFetch(`/api/piecemaker/docx-review/snapshot?${new URLSearchParams({ projectId, path, id })}`);
+  if (!response.ok) throw new Error('Version Word indisponible.');
+  return response.arrayBuffer();
+}
 
 async function mistralSdkResponse<T>(response: Response): Promise<T> {
   const payload = await response.json();
@@ -20,57 +31,11 @@ export const mistralSdkApi = {
   check: () => authenticatedFetch('/api/piecemaker/mistral-sdk/auth/check', { method: 'POST' }).then(mistralSdkResponse<{ ok: boolean; response: string }>),
 };
 
-// Headers are a plain record rather than the full `HeadersInit` union so the
-// defaults below can be merged with a caller's headers by spreading.
-export type ApiRequestOptions = Omit<RequestInit, 'headers'> & {
-  headers?: Record<string, string>;
-};
+export type { ApiRequestOptions };
 
-// Utility function for authenticated API calls
-export const authenticatedFetch = (
-  url: string,
-  options: ApiRequestOptions = {},
-): Promise<Response> => {
-  const token = getStoredAuthToken();
-
-  const defaultHeaders: Record<string, string> = {};
-
-  // Only set Content-Type for non-FormData requests
-  if (!(options.body instanceof FormData)) {
-    defaultHeaders['Content-Type'] = 'application/json';
-  }
-
-  if (!IS_PLATFORM && token) {
-    defaultHeaders['Authorization'] = `Bearer ${token}`;
-  }
-
-  return fetch(url, {
-    ...options,
-    // Every response here can carry X-Refreshed-Token or X-Auth-Error, and a
-    // served-from-cache response replays the headers it was stored with. Those
-    // headers describe one moment in one session, so they must never be reused:
-    // a stale X-Refreshed-Token overwrote the current token with an expired one
-    // on every start, which then got discarded as expired.
-    cache: 'no-store',
-    headers: {
-      ...defaultHeaders,
-      ...options.headers,
-    },
-  }).then((response) => {
-    const refreshedToken = response.headers.get('X-Refreshed-Token');
-    if (refreshedToken) {
-      storeAuthToken(refreshedToken);
-    }
-    // Belt and braces for any path that still reaches a cached response: only a
-    // real rejection ends the session. Note that a revalidated response surfaces
-    // its stored status (typically 200), not the 304 from the wire, so the
-    // header alone says nothing about the current request.
-    if (response.status === 401 && response.headers.get('X-Auth-Error')) {
-      expireAuthSession();
-    }
-    return response;
-  });
-};
+// The app's calls: the token is sent except on the hosted platform.
+export const authenticatedFetch = (url: string, options: ApiRequestOptions = {}): Promise<Response> =>
+  sharedAuthenticatedFetch(url, options, { withToken: !IS_PLATFORM });
 
 export async function pollWorkspacePanel(project: string) {
   const query = new URLSearchParams({ project });

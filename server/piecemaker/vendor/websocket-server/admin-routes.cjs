@@ -74,7 +74,7 @@ async function registerLegalCase({
   const protection = readProtection(root);
   if (!protection.exists) writeProtection(root, { unprotected: [] });
 
-  const folderOverview = await caseOverview(path.dirname(root), homeDir, path.basename(root));
+  const folderOverview = await caseOverview(path.dirname(root), homeDir, path.basename(root), { listOriginals: listOriginalsCached });
   folderOverview.path = entry.id;
   folderOverview.location = root;
   folderOverview.registered = true;
@@ -2144,18 +2144,11 @@ function createAdminRouter({
     const startedAt = performance.now();
     try {
       const legalCase = selectedCase(req.query.case);
-      const folder = await caseOverview(legalCase.casesRoot, homeDir, legalCase.caseName);
+      const folder = await caseOverview(legalCase.casesRoot, homeDir, legalCase.caseName, { listOriginals: listOriginalsCached });
       folder.path = legalCase.id;
       folder.location = legalCase.root;
       folder.registered = legalCase.registered;
-      // Les Markdown convertis vivent déjà dans l'historique ; ce cadre ne
-      // présente que les pièces originales.
-      const [originals, branches] = await Promise.all([
-        listOriginalsCached(legalCase.root),
-        historyBranches(legalCase.casesRoot, homeDir, legalCase.caseName),
-      ]);
-      folder.originals = originals;
-      folder.branches = branches;
+      folder.branches = await historyBranches(legalCase.casesRoot, homeDir, legalCase.caseName);
       finishAdminTiming(res, 'case', startedAt, {
         changes: folder.changes,
         originals: folder.originals.length,

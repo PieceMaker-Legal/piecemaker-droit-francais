@@ -2,9 +2,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 
+import { parseFrontMatter } from '@/shared/frontmatter.js';
 import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
 
-import { prepareWorkspaceInstallation } from './library/workspace-installation.js';
+import { installableComponent } from './library/store.js';
+import { componentFileHashes, prepareWorkspaceInstallation } from './library/workspace-installation.js';
 
 const VARIANT = { skipClaude: false, claudeOnly: false };
 const LINK_PROVIDERS = ['.claude', '.cursor', '.opencode', '.grok'];
@@ -13,10 +15,17 @@ const MARKER = '.piecemaker/bundled-skills.json';
 const BUNDLED_SKILLS = [
   { slug: 'docx-cli', segments: ['vendor', 'skills', 'docx-cli'] },
   { slug: 'style-redaction-cabinet', segments: ['vendor', 'piecemaker-plugin', 'skills', 'style-redaction-cabinet'] },
+  { slug: 'creation-artifacts', segments: ['vendor', 'piecemaker-plugin', 'skills', 'creation-artifacts'] },
   { slug: 'Skill-PieceMaker', segments: ['vendor', 'skills', 'Skill-PieceMaker'] },
+  { slug: 'catala', segments: ['vendor', 'skills', 'catala'] },
+  { slug: 'okf', segments: ['vendor', 'skills', 'okf'] },
 ] as const;
 
-const RETIRED_BUNDLED_SKILLS = ['redaction-juridique'];
+const BUNDLED_AGENTS = ['research-maker'] as const;
+
+const RETIRED_BUNDLED_AGENTS = ['index-maker', 'premise-maker', 'deep-research-maker'];
+
+const RETIRED_BUNDLED_SKILLS =['redaction-juridique', 'raisonner', 'indexer', 'premisses', 'rechercher', 'recherche-approfondie'];
 
 type BundledSkill = (typeof BUNDLED_SKILLS)[number];
 
@@ -138,6 +147,54 @@ function retireSkill(workspace: string, slug: string): void {
   removeFromMarker(workspace, slug);
 }
 
+function retireAgent(workspace: string, slug: string): void {
+  const key = `agent:${slug}`;
+  const previousFiles = readMarker(workspace, key);
+  if (!previousFiles) return;
+  const unchanged = Object.fromEntries(Object.entries(previousFiles).filter(([relative, hash]) => {
+    const absolute = path.join(workspace, relative);
+    return fs.existsSync(absolute) && digest(fs.readFileSync(absolute)) === hash;
+  }));
+  if (Object.keys(unchanged).length) {
+    prepareWorkspaceInstallation(workspace, { id: `bundled:${slug}`, kind: 'agent', name: slug, slug, files: unchanged, skipClaude: false }, null).commit();
+  }
+  removeFromMarker(workspace, key);
+}
+
+function agentComponent(slug: string) {
+  const source = path.join(findApplicationRoot(getModuleDirectory(import.meta.url)), 'server', 'piecemaker', 'vendor', 'piecemaker-plugin', 'agents', `${slug}.md`);
+  if (!fs.existsSync(source)) return null;
+  const content = fs.readFileSync(source, 'utf8');
+  const description = String(parseFrontMatter(content).data.description ?? '');
+  return installableComponent({ id: `bundled:${slug}`, kind: 'agent', name: slug, description, content, assets: {} });
+}
+
+function declareAgent(workspace: string, slug: string): void {
+  const component = agentComponent(slug);
+  if (!component) return;
+  const key = `agent:${slug}`;
+  const hashes = componentFileHashes(workspace, component, VARIANT);
+  const previousFiles = readMarker(workspace, key) ?? {};
+  const targets = new Set([...Object.keys(hashes), ...Object.keys(previousFiles)]);
+  const owned: Record<string, string> = {};
+  let current = true;
+  for (const relative of targets) {
+    const absolute = path.join(workspace, relative);
+    const existing = fs.existsSync(absolute) ? digest(fs.readFileSync(absolute)) : null;
+    if (existing !== hashes[relative]) current = false;
+    if (!existing) continue;
+    if (existing !== previousFiles[relative] && existing !== hashes[relative]) return;
+    owned[relative] = existing;
+  }
+  if (!current) {
+    const previous = Object.keys(owned).length
+      ? { id: `bundled:${slug}`, kind: 'agent' as const, name: slug, slug, files: owned, skipClaude: false }
+      : undefined;
+    prepareWorkspaceInstallation(workspace, previous, { component, variant: VARIANT }).commit();
+  }
+  writeMarker(workspace, key, hashes);
+}
+
 export function declareBundledSkills(workspace: string): void {
   for (const slug of RETIRED_BUNDLED_SKILLS) {
     try {
@@ -151,6 +208,20 @@ export function declareBundledSkills(workspace: string): void {
       declareSkill(workspace, skill);
     } catch (error) {
       console.warn(`[piecemaker] déclaration du skill ${skill.slug} impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  for (const slug of RETIRED_BUNDLED_AGENTS) {
+    try {
+      retireAgent(workspace, slug);
+    } catch (error) {
+      console.warn(`[piecemaker] retrait du sous-agent ${slug} impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  for (const slug of BUNDLED_AGENTS) {
+    try {
+      declareAgent(workspace, slug);
+    } catch (error) {
+      console.warn(`[piecemaker] déclaration du sous-agent ${slug} impossible dans ${workspace} : ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }

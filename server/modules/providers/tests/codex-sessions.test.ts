@@ -385,7 +385,7 @@ test('Codex history attaches a spawned agent\'s own transcript to the Task row',
           type: 'function_call',
           name: 'spawn_agent',
           call_id: 'spawn-1',
-          arguments: JSON.stringify({ task_name: 'test_agent_1' }),
+          arguments: JSON.stringify({ task_name: 'test_agent_1', agent_type: 'index-maker' }),
         },
       }),
       JSON.stringify({
@@ -404,6 +404,13 @@ test('Codex history attaches a spawned agent\'s own transcript to the Task row',
           type: 'agent_message',
           author: '/root/test_agent_1',
           content: [{ type: 'input_text', text: 'Message Type: FINAL_ANSWER\nSender: /root/test_agent_1\nPayload:\nAll done.' }],
+        },
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        payload: {
+          type: 'token_count',
+          info: { total_token_usage: { total_tokens: 900_000 }, last_token_usage: { total_tokens: 42_000 }, model_context_window: 258_400 },
         },
       }),
     ].join('\n')}\n`, 'utf8');
@@ -447,6 +454,8 @@ test('Codex history attaches a spawned agent\'s own transcript to the Task row',
       assert.equal(task.subagent?.name, 'Hegel');
       assert.equal(task.subagent?.status, 'completed');
       assert.equal(task.toolResult?.content, 'All done.');
+      assert.equal(JSON.parse(String(task.toolInput)).subagent_type, 'index-maker');
+      assert.deepEqual(history.tokenUsage, { used: 42_000, total: 258_400 });
 
       // The agent's own shell call is translated exactly like the parent's.
       assert.equal(task.subagentTools?.length, 1);

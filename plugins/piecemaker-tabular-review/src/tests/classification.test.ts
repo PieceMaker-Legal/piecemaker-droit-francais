@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { Review } from '../shared.js';
 import { classificationColumn, DEFAULT_CLASSIFICATION, REVIEW_FOLDER } from '../shared.js';
-import { classifiedFolder, newNotes, newPieces, plannedChange, targetPath } from '../client/sorting.js';
+import { classifiedFolder, matchingFolder, newNotes, newPieces, plannedChange, targetPath } from '../client/sorting.js';
 
 const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'ptr-classement-')));
 const project = path.join(home, 'Dossier Exemple');
@@ -14,7 +14,7 @@ vi.stubEnv('HOME', home);
 vi.stubEnv('USERPROFILE', home);
 
 const { assistant } = await import('../server/assistant.js');
-const { readClassification, saveClassification } = await import('../server/classification.js');
+const { addClassification, classificationLines, dropClassificationProposal, readClassification, readClassificationProposal, saveClassification } = await import('../server/classification.js');
 const { appendRows, createReview, listReviews, readReview } = await import('../server/reviews.js');
 const { deleteDraft, listDrafts } = await import('../server/drafts.js');
 
@@ -71,8 +71,21 @@ describe('arborescence du dossier', () => {
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
 
+  it('conserve le type principal et refuse un type réservé', async () => {
+    const folders = [{ name: 'Documents', explanation: 'Pièces reçues', type: 'Pièces' }];
+    await saveClassification(project, folders);
+    expect(readClassification(project)).toEqual(folders);
+    await expect(saveClassification(project, [{ ...folders[0], type: 'Partie' }])).rejects.toThrow('Type principal invalide');
+    await saveClassification(project, DEFAULT_CLASSIFICATION);
+  });
+
   it.each(['', '../hors', '.cache', 'a//b', 'Tabular Review', 'a:b'])('refuse le dossier « %s »', async (name) => {
     await expect(saveClassification(project, [{ name, explanation: '' }])).rejects.toThrow('Nom de dossier invalide');
+  });
+
+  it.each(['Fichiers convertis PieceMaker', 'Pièces/Fichiers convertis PieceMaker', 'Pièces tamponnées', 'node_modules', 'Archives/__pycache__'])('refuse le dossier technique « %s »', async (name) => {
+    await expect(saveClassification(project, [{ name, explanation: '' }])).rejects.toThrow(/réservé à PieceMaker|invalide/);
+    await expect(assistant({ action: 'arborescence', project, dossiers: [{ nom: name }] }, launchers())).rejects.toThrow(/réservé à PieceMaker|invalide/);
   });
 
   it('refuse les doublons et une arborescence vide', async () => {
@@ -87,6 +100,37 @@ describe('arborescence du dossier', () => {
     const column = review.columns.find((entry) => entry.action === 'classify');
     expect(column?.tags).toEqual(['Clients']);
     expect(column?.prompt).toContain('Clients : Échanges avec le client.');
+    await saveClassification(project, DEFAULT_CLASSIFICATION);
+  });
+
+  it('l’agent propose l’arborescence, l’avocat seul l’applique', async () => {
+    await saveClassification(project, [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }]);
+    const tree = (dossiers: unknown, motif?: string) => assistant({ action: 'arborescence', project, dossiers, motif }, launchers());
+    const proposed = await tree([{ nom: 'Pièces/Contrats', explication: 'Contrats signés.' }, { nom: 'Factures' }], 'Isoler les contrats') as { dossiers: unknown; proposition: { dossiers: unknown; motif: string }; message: string };
+    expect(proposed.dossiers).toEqual([{ nom: 'Pièces', explication: '' }, { nom: 'Projets', explication: '' }]);
+    expect(proposed.proposition).toMatchObject({ dossiers: [{ nom: 'Pièces/Contrats', explication: 'Contrats signés.' }, { nom: 'Factures', explication: '' }], motif: 'Isoler les contrats' });
+    expect(proposed.message).toContain('l’avocat');
+    expect(readClassification(project).map((folder) => folder.name)).toEqual(['Pièces', 'Projets']);
+    expect(readClassificationProposal(project)?.dossiers).toHaveLength(2);
+    await expect(tree([{ nom: '.cache' }])).rejects.toThrow('Nom de dossier invalide');
+    await saveClassification(project, DEFAULT_CLASSIFICATION);
+    expect(readClassificationProposal(project)).toBeNull();
+  });
+
+  it('situe chaque dossier dans le fichier pour le chat', async () => {
+    await saveClassification(project, [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: 'Actes.' }]);
+    const lines = classificationLines(project, readClassification(project));
+    expect(lines.fichier).toBe(path.join(home, '.piecemaker', 'ontologie.json'));
+    const text = fs.readFileSync(lines.fichier!, 'utf8').split('\n');
+    expect(Object.keys(lines.lignes)).toEqual(['Pièces', 'Projets']);
+    for (const [name, { debut, fin }] of Object.entries(lines.lignes)) {
+      const block = text.slice(debut - 1, fin).join('\n');
+      expect(block.trim().startsWith('{')).toBe(true);
+      expect(block).toContain(`"name": ${JSON.stringify(name)}`);
+      expect(text.slice(0, debut).some((line) => line.trim().startsWith('"arborescence"'))).toBe(true);
+    }
+    expect(lines.total).toBe(text.length - 1);
+    dropClassificationProposal(project);
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
 });
@@ -105,6 +149,19 @@ describe('effet du classement', () => {
     expect(plannedChange(orphan, orphan.rows[0], [], pieces)).toBeNull();
   });
 
+  it('range dans le sous-dossier choisi, même écrit partiellement', () => {
+    const tags = ['Pièces', 'Pièces/Contrats', 'Projets'];
+    expect(matchingFolder(tags, 'Pièces/Contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(tags, 'pièces / contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(tags, 'Pièces › Contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(tags, 'Contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(tags, 'Pièces, Pièces/Contrats')).toBe('Pièces/Contrats');
+    expect(matchingFolder(['Pièces/Contrats', 'Projets/Contrats'], 'Contrats')).toBe('');
+    const review = reviewOf('Contrats');
+    review.columns = [{ index: 0, ...classificationColumn([{ name: 'Pièces', explanation: '' }, { name: 'Pièces/Contrats', explanation: '' }]) }];
+    expect(targetPath(plannedChange(review, { ...review.rows[0], piece: 'Pièces/bail.pdf' }, [], pieces)!)).toBe('Pièces/Contrats/bail.pdf');
+  });
+
   it('laisse en place une pièce déjà rangée dans ce dossier ou un sous-dossier', () => {
     const review = reviewOf('Archives');
     const row = { ...review.rows[0], piece: 'Archives/2023/bail.pdf' };
@@ -117,7 +174,34 @@ describe('effet du classement', () => {
     const [first, second] = await Promise.all([appendRows(project, 'doublon.json', rows), appendRows(project, 'doublon.json', rows)]);
     expect([first.length, second.length]).toEqual([1, 0]);
     expect(await appendRows(project, 'doublon.json', [{ label: 'bail', documents: ['Notes/bail.md'] }])).toEqual([]);
-    expect(readReview(project, 'doublon.json').rows.map((row) => row.label)).toEqual(['bail', 'nouveau']);
+    expect((await readReview(project, 'doublon.json')).rows.map((row) => row.label)).toEqual(['bail', 'nouveau']);
+  });
+
+  it('ne range jamais un fichier technique ni vers un dossier technique', () => {
+    for (const piece of ['.piecemaker/cache/bail.pdf', 'Fichiers convertis PieceMaker/bail.md', 'Tabular Review/export.xlsx', 'node_modules/x/bail.pdf']) {
+      const review = reviewOf('Archives');
+      expect(plannedChange(review, { ...review.rows[0], piece }, [], pieces)).toBeNull();
+    }
+    const review = reviewOf('');
+    review.columns = [{ index: 0, name: 'Déplacer', prompt: '', format: 'text', action: 'move' } as never];
+    const moveTo = (summary: string) => {
+      review.cells = { r1: { 0: { summary, flag: 'green', reasoning: '' } } };
+      return plannedChange(review, review.rows[0], [], pieces);
+    };
+    expect(moveTo('Archives')?.directory).toBe('Archives');
+    expect(moveTo('.piecemaker')).toBeNull();
+    expect(moveTo('Fichiers convertis PieceMaker')).toBeNull();
+    expect(moveTo('Pièces/node_modules')).toBeNull();
+  });
+
+  it('ne liste ni .piecemaker, ni les .md convertis, ni les exports parmi les documents à classer', () => {
+    const review = reviewOf('Archives');
+    const technical = ['.piecemaker/cache/x.pdf', 'Tabular Review/export.xlsx', 'Pièces tamponnées/bail.pdf', 'Fichiers convertis PieceMaker/orphelin.pdf']
+      .map((entry) => ({ path: entry, status: 'ready', markdown: null }));
+    expect(newPieces(review, [...pieces, ...technical])).toEqual([]);
+    const orphan = { path: 'Fichiers convertis PieceMaker/orphelin.md', name: 'orphelin', size: 1, updatedAt: '' };
+    const hidden = { path: '.piecemaker/notes.md', name: 'notes', size: 1, updatedAt: '' };
+    expect(newNotes(review, [orphan, hidden] as never, pieces)).toEqual([]);
   });
 
   it('repère les nouveaux documents par leur Markdown', () => {
@@ -135,7 +219,7 @@ describe('un seul index par dossier', () => {
   const template = { id: 't', name: 'Chronologie', description: '', updatedAt: '', columns: [{ name: 'Date', prompt: 'Date ?', format: 'date' as const }] };
   const rows = [{ label: 'bail', documents: ['Notes/bail.md'] }];
   const dossier = path.join(home, 'Dossier Unique');
-  const fichiers = () => listReviews([dossier], () => false).map((review) => review.file);
+  const fichiers = async () => (await listReviews([dossier], () => false)).map((review) => review.file);
 
   beforeAll(() => {
     fs.mkdirSync(path.join(dossier, 'Notes'), { recursive: true });
@@ -180,22 +264,21 @@ describe('un seul index par dossier', () => {
   });
 
   it('ne crée jamais une seconde analyse et retrouve la première', async () => {
-    const premiere = createReview(dossier, template, 'Chronologie', rows, settings);
-    const seconde = createReview(dossier, template, 'Chronologie', rows, settings);
-    const autreNom = createReview(dossier, template, 'Faits du dossier', rows, settings);
+    const premiere = await createReview(dossier, template, 'Chronologie', rows, settings);
+    const seconde = await createReview(dossier, template, 'Chronologie', rows, settings);
+    const autreNom = await createReview(dossier, template, 'Faits du dossier', rows, settings);
     expect([premiere.created, seconde.created, autreNom.created]).toEqual([true, false, false]);
-    expect(fichiers()).toEqual([premiere.file]);
+    expect(await fichiers()).toEqual([premiere.file]);
     const run = launchers();
-    expect(await assistant({ action: 'index', project: dossier }, run)).toEqual({ fichier: premiere.file });
+    expect(await assistant({ action: 'index', project: dossier }, run)).toMatchObject({ fichier: premiere.file, absentes: expect.any(Number) });
     expect(await assistant({ action: 'preparer', project: dossier, modele: 'Chronologie' }, run)).toMatchObject({ fichier: premiere.file });
     const listed = await assistant({ action: 'lister', project: dossier }, run) as { analyses: { fichier: string; index?: boolean }[] };
     expect(listed.analyses).toEqual([expect.objectContaining({ fichier: premiere.file, nom: 'Index', index: true })]);
   });
 
-  it('crée une analyse classique à côté de la chronologie, sans classement pour l’agent', async () => {
-    const classique = createReview(dossier, { ...template, name: 'Analyse de contrat' }, 'Baux', rows, settings);
+  it('crée une analyse classique à côté de la chronologie', async () => {
+    const classique = await createReview(dossier, { ...template, name: 'Analyse de contrat' }, 'Baux', rows, settings);
     expect(classique.created).toBe(true);
-    await expect(assistant({ action: 'classement', project: dossier, fichier: classique.file }, launchers())).rejects.toThrow('index');
   });
 });
 
@@ -222,11 +305,14 @@ describe('outil tabular_review', () => {
     await expect(assistant({ action: 'colonnes', project, fichier: 'protegee.json', questions: [{ colonne: 1, nom: 'X' }] }, { ...run, isRunning: () => true })).rejects.toThrow('Attendez');
   });
 
-  it('lit et remplace l’arborescence', async () => {
+  it('lit l’arborescence et la proposition en attente', async () => {
     const run = launchers();
     await assistant({ action: 'arborescence', project, dossiers: [{ nom: 'Clients', explication: 'Échanges.' }] }, run);
-    expect(await assistant({ action: 'arborescence', project }, run)).toEqual({ dossiers: [{ nom: 'Clients', explication: 'Échanges.' }] });
+    const read = await assistant({ action: 'arborescence', project }, run) as { dossiers: unknown; proposition: { dossiers: unknown } };
+    expect(read.dossiers).toEqual(DEFAULT_CLASSIFICATION.map((folder) => ({ nom: folder.name, explication: folder.explanation })));
+    expect(read.proposition.dossiers).toEqual([{ nom: 'Clients', explication: 'Échanges.' }]);
     await saveClassification(project, DEFAULT_CLASSIFICATION);
+    expect(await assistant({ action: 'arborescence', project }, run)).not.toHaveProperty('proposition');
   });
 
   it('ajoute la colonne une seule fois', async () => {
@@ -235,8 +321,9 @@ describe('outil tabular_review', () => {
     plain.columns = [{ index: 3, name: 'Date', prompt: 'Date ?', format: 'date' }];
     fs.writeFileSync(path.join(project, REVIEW_FOLDER, 'simple.json'), JSON.stringify(plain));
     const run = launchers();
-    await assistant({ action: 'classement', project, fichier: 'simple.json' }, run);
-    const again = await assistant({ action: 'classement', project, fichier: 'simple.json' }, run) as { colonnes: { colonne: number }[] };
+    await addClassification(project, 'simple.json');
+    await addClassification(project, 'simple.json');
+    const again = await assistant({ action: 'lire', project, fichier: 'simple.json' }, run) as { colonnes: { colonne: number }[] };
     expect(again.colonnes.map((column) => column.colonne)).toEqual([3, 4]);
   });
 

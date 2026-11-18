@@ -24,13 +24,13 @@ type PipelineOptions = {
   pythonPath?: string;
 };
 
-type OriginalFile = { path: string; resource?: boolean };
+type OriginalFile = { path: string; resource?: boolean; protected?: boolean };
 
 type RenamedPiece = { previous: string; current: string; markdown: string | null };
 
 type ConversionFailure = { reason: string; failedAt: string };
 
-type CasePiece = { path: string; status: string; markdown: string | null; conversionFailure: ConversionFailure | null };
+type CasePiece = { path: string; status: string; protected: boolean; markdown: string | null; conversionFailure: ConversionFailure | null };
 
 type OriginalsPipeline = {
   listOriginals(caseRoot: string): Promise<Array<OriginalFile & { status: string; conversionFailure: ConversionFailure | null }>>;
@@ -69,12 +69,12 @@ const { renamePiece } = require(path.join(
   'websocket-server',
   'renamed-originals.cjs',
 )) as { renamePiece(caseRoot: string, piecePath: string, name: unknown, directory?: unknown): Promise<RenamedPiece> };
-const { invalidateOriginals } = require(path.join(
+const { invalidateOriginals, listOriginalsCached } = require(path.join(
   findApplicationRoot(getModuleDirectory(import.meta.url)),
   'server',
   'piecemaker',
   'originals-cache.cjs',
-)) as { invalidateOriginals(caseRoot: string): void };
+)) as { invalidateOriginals(caseRoot: string): void; listOriginalsCached: OriginalsPipeline['listOriginals'] };
 const { markdownCounterpart } = require(path.join(
   findApplicationRoot(getModuleDirectory(import.meta.url)),
   'server',
@@ -152,7 +152,7 @@ function documentsFromIndex(projectPath: string, files: string[], documentIndex:
   });
 }
 
-function convertedMarkdown(projectPath: string, document: GlinerDocument): string | null {
+export function convertedMarkdown(projectPath: string, document: Pick<GlinerDocument, 'path'>): string | null {
   try {
     const markdown = markdownCounterpart(String(document.path || ''), projectPath);
     return markdown.exists ? fs.readFileSync(markdown.path, 'utf8') : null;
@@ -268,6 +268,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         ocrMissing,
       ];
       if (!explicitFiles) args.push('--skip-existing');
+      if (!explicitFiles && !Object.keys(seed.mapping ?? {}).length && !Object.keys(seed.extracted_data ?? {}).length) args.push('--rescan');
       let received: GlinerMappingDocument | null = null;
       let ocrRequired: string[] | null = null;
       const failedDocuments: FailedDocument[] = [];
@@ -287,6 +288,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
           },
         }));
       } catch (error) {
+        invalidateOriginals(projectPath);
         if (ocrRequired) throw new OcrRequiredError(ocrRequired);
         if (received) persistScanResult({ projectId, mapping: received, documents: [] }, options.store);
         throw error;
@@ -308,11 +310,12 @@ export function createKnowledgePipeline(options: PipelineOptions) {
       const project = options.projects.getProjectById(projectId);
       if (!project) throw new Error('Project not found.');
       const projectPath = fs.realpathSync(project.project_path);
-      return (await listOriginals(projectPath)).map((file) => {
+      return (await listOriginalsCached(projectPath)).map((file) => {
         const markdown = markdownCounterpart(path.join(projectPath, file.path), projectPath);
         return {
           path: file.path,
           status: file.status,
+          protected: Boolean(file.protected),
           markdown: markdown.exists ? path.relative(projectPath, markdown.path).split(path.sep).join('/') : null,
           conversionFailure: file.conversionFailure,
         };

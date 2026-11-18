@@ -30,7 +30,7 @@ import { PIECEMAKER_HOME, PLUGIN_HOME, UserError, writeFileAtomic } from './path
 import { clausesMatch, matchIndex, parseQuery } from './query.js';
 import type { Criterion, ParsedQuery } from './query.js';
 import type { ReviewSettings } from './reviews.js';
-import { readReview, sanitizeFilename, storeDocument, updateReview, writeNewReview } from './reviews.js';
+import { readReviewFile, sanitizeFilename, storeDocument, updateReview, writeNewReviewFile } from './reviews.js';
 import { listPlan, planClauses, resolvePlan, sourcePlan } from './sources.js';
 import type { Listed, SourcePlan } from './sources.js';
 import { MAX_COLUMNS, normalizeColumn } from './templates.js';
@@ -417,7 +417,7 @@ function knownDecisions(review: Review): Set<string> {
 }
 
 function researchReview(project: string, file: string): Review & { research: NonNullable<Review['research']> } {
-  const review = readReview(project, file);
+  const review = readReviewFile(project, file);
   if (reviewCategory(review) !== 'recherche-juridique' || !review.research) throw new UserError('Cette analyse tabulaire ne provient pas d’une recherche juridique.');
   return review as Review & { research: NonNullable<Review['research']> };
 }
@@ -616,7 +616,7 @@ export function createResearchReview(project: string, id: string, title: unknown
     rows,
     cells: {},
   };
-  return { file: writeNewReview(project, review), review };
+  return { file: writeNewReviewFile(project, review), review };
 }
 
 function decisionRows(project: string, id: string, decisions: ResearchDecision[]): ReviewRow[] {

@@ -3,10 +3,8 @@
  * dossier juridique, pilotés depuis l'administration.
  *
  * Les originaux ne sortent jamais du dossier, et le pipeline porte sur toutes
- * les pièces du dossier, sans restriction de zone. Le Markdown d'une pièce de
- * `01_CORRESPONDANCE` ou `02_DATA_ROOM` est rangé dans le sous-dossier de
- * conversion métier correspondant ; celui d'une pièce hors de ces deux zones
- * rejoint le sous-dossier de travail générique. Le mapping vit en base et
+ * les pièces du dossier, sans restriction de zone. Le Markdown d'une pièce
+ * rejoint le sous-dossier de travail. Le mapping vit en base et
  * l'état technique dans `.piecemaker/anonymization-state.json`. Seules les lignes `PROGRESS:` et un
  * extrait d'erreur sont conservés dans le journal d'un travail : la sortie
  * brute des scripts peut contenir du texte de pièce, qui ne doit jamais
@@ -22,10 +20,6 @@ const {
 } = require('./process-group.cjs');
 
 const { originalFilesOverview } = require('../piecemaker-plugin/scripts/lib/commits.cjs');
-const {
-  classifyRelativeCaseFolderPath,
-  readCaseFolderStructure,
-} = require('./case-folder-structure.cjs');
 const { reconcileRenamedOriginals } = require('./renamed-originals.cjs');
 
 const SCRIPTS_DIR = path.join(__dirname, 'scripts');
@@ -81,19 +75,7 @@ async function listOriginals(caseRoot) {
   if (!runningManaged.size && !waiting.length && (await reconcileRenamedOriginals(caseRoot, originals)).length) {
     originals = await originalFilesOverview(caseRoot);
   }
-  const snapshot = readCaseFolderStructure(caseRoot);
-  return originals
-    .map((file) => ({
-      file,
-      info: classifyRelativeCaseFolderPath(file.path, snapshot.structure, { managed: snapshot.exists }),
-    }))
-    // Les images et autres dérivés produits avec le Markdown ne redeviennent
-    // jamais des pièces originales dans l'administration.
-    .filter(({ file, info }) => file.extension !== '.md' && !info.generated)
-    .map(({ file, info }) => ({
-      ...file,
-      businessArea: info.area,
-    }));
+  return originals.filter((file) => file.extension !== '.md');
 }
 
 // ── Travaux de conversion / anonymisation ──────────────────────────────────

@@ -29,7 +29,7 @@ export function installLegalCodeHarness(options: {
 }) {
   const run = options.runtime.run.bind(options.runtime);
   const fetchHistory = options.sessions.fetchHistory.bind(options.sessions);
-  const instructionsPath = path.join(options.applicationRoot, 'server', 'piecemaker', 'legal-code', 'instructions.md');
+  const instructionsPath = path.join(options.applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'catala', 'SKILL.md');
 
   options.runtime.run = async (provider, command, runtimeOptions, writer) => {
     if (runtimeOptions.legalCode !== true || command.startsWith('/')) return run(provider, command, runtimeOptions, writer);
@@ -43,8 +43,7 @@ export function installLegalCodeHarness(options: {
       },
     }) as ProviderRuntimeWriter;
     const dossier = String(runtimeOptions.cwd ?? runtimeOptions.projectPath ?? '');
-    const pm = path.join(dossier, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm');
-    const instructions = `${fs.readFileSync(instructionsPath, 'utf8').trim()}\n\nDossier de la session : ${dossier}. pm n'est pas dans le PATH : lance-le par son chemin, "${pm}". Passe toujours --dossier "${dossier}" à pm, quel que soit le répertoire courant.`;
+    const instructions = `${fs.readFileSync(instructionsPath, 'utf8').trim()}\n\nDossier de la session : ${dossier}. Passe toujours --dossier "${dossier}" à pm, quel que soit le répertoire courant.`;
     return run(provider, withLegalCodeInstructions(command, instructions), runtimeOptions, wrapped);
   };
 

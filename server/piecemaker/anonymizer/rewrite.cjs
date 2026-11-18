@@ -42,6 +42,10 @@ const UNCHANGED_VALUE_KEYS = new Set([
   'signature',
   'call_id',
   'tool_use_id',
+  'tool_name',
+  'server_name',
+  'server_label',
+  'allowed_tools',
   'tool_call_id',
   'parent_tool_use_id',
   'id',
@@ -90,8 +94,38 @@ function rewriteToolValue(value, transform, key = null) {
   return value;
 }
 
+const TOOL_ITEM_TYPE = /tool_use|tool_call|function_call|mcp_/;
+
+const MCP_TOOL_NAME = 'mcp__[\\w-]+__[\\w-]+';
+
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function requestToolNames(body) {
+  if (!Array.isArray(body?.tools)) return [];
+  return body.tools
+    .flatMap((tool) => [tool?.name, tool?.function?.name])
+    .filter((name) => typeof name === 'string' && /^[\w-]+$/.test(name));
+}
+
+function sparingToolNames(transform, toolNames = []) {
+  const names = [MCP_TOOL_NAME, ...[...new Set(toolNames)].sort((a, b) => b.length - a.length).map(escapeRegExp)];
+  const pattern = new RegExp(`(?<![\\w-])(?:${names.join('|')})(?![\\w-])`, 'g');
+  return (text) => {
+    let output = '';
+    let last = 0;
+    for (const match of text.matchAll(pattern)) {
+      if (transform(match[0]) === match[0]) continue;
+      output += transform(text.slice(last, match.index)) + match[0];
+      last = match.index + match[0].length;
+    }
+    return last ? output + transform(text.slice(last)) : transform(text);
+  };
+}
+
 function rewriteJsonValue(value, transform, key = null) {
-  if (key === 'tools') return rewriteToolValue(value, transform);
+  if (key === 'tools' || key === 'mcp_servers') return rewriteToolValue(value, transform);
   if (key !== null && UNCHANGED_VALUE_KEYS.has(key)) return value;
   if (typeof value === 'string') return transform(value);
   if (Array.isArray(value)) return value.map((item) => rewriteJsonValue(item, transform, null));
@@ -99,10 +133,8 @@ function rewriteJsonValue(value, transform, key = null) {
     const output = {};
     const toolCall = key === 'function'
       || key === 'function_call'
-      || value.type === 'function_call'
-      || value.type === 'custom_tool_call'
-      || value.type === 'function_call_output'
-      || value.type === 'tool_use';
+      || (typeof value.type === 'string' && TOOL_ITEM_TYPE.test(value.type));
+    const toolName = toolCall || value.role === 'tool' || value.role === 'function';
     for (const [entryKey, item] of Object.entries(value)) {
       const toolData = toolCall && (
         entryKey === 'arguments'
@@ -110,7 +142,7 @@ function rewriteJsonValue(value, transform, key = null) {
         || entryKey === 'output'
         || entryKey === 'content'
       );
-      output[entryKey] = entryKey === 'name' && toolCall
+      output[entryKey] = entryKey === 'name' && toolName
         ? item
         : toolData ? rewriteDataValue(item, transform) : rewriteJsonValue(item, transform, entryKey);
     }
@@ -127,11 +159,13 @@ function rewriteJsonValue(value, transform, key = null) {
 function rewriteJsonBody(raw, transform) {
   if (!raw) return raw;
   const text = typeof raw === 'string' ? raw : raw.toString('utf8');
+  let body;
   try {
-    return JSON.stringify(rewriteJsonValue(JSON.parse(text), transform));
+    body = JSON.parse(text);
   } catch {
-    return transform(text);
+    return sparingToolNames(transform)(text);
   }
+  return JSON.stringify(rewriteJsonValue(body, sparingToolNames(transform, requestToolNames(body))));
 }
 
 /** Les champs d'un événement SSE qui portent du texte produit par le modèle. */
@@ -153,7 +187,8 @@ const DELTA_TEXT_FIELDS = ['text', 'thinking', 'partial_json'];
  * l'événement dans le format où il est arrivé, sans que le reste du code ait à
  * connaître les trois formes.
  */
-function createSseRewriter(transform) {
+function createSseRewriter(rawTransform) {
+  const transform = sparingToolNames(rawTransform);
   let pendingLines = '';
   const held = new Map();
 

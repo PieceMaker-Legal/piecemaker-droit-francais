@@ -138,7 +138,8 @@ function resolveContext(dictionary, { projectId = null, text = '' } = {}) {
     return entry.regex.test(text);
   });
   if (!shared.length) return context;
-  const counts = presentCodes(applyMapping(text, dictionary.unambiguous));
+  const others = [...shared].sort((a, b) => b.variant.length - a.variant.length).reduce((rest, { regex }) => rest.replace(regex, ' '), text);
+  const counts = presentCodes(applyMapping(others, dictionary.unambiguous));
   const projectScores = new Map();
   for (const code of counts.keys()) {
     const project = dictionary.codeProjects.get(code);

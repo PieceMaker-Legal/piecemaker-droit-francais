@@ -208,7 +208,7 @@ function findCodexTokenUsage(fileContent: string): TokenUsageResult | null {
           || inputTokens + outputTokens;
       }
       return {
-        used: totalTokens,
+        used: readUsageNumber(tokenInfo.last_token_usage?.total_tokens) || totalTokens,
         total: readUsageNumber(tokenInfo.model_context_window) || 200_000,
         inputTokens,
         outputTokens,

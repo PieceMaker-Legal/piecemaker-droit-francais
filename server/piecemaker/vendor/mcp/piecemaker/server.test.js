@@ -25,7 +25,7 @@ function publishOpenPanels(file, project, entry) {
 test('les outils exposés sont afficher, conversion, sql, tabular_review et tabular_review_index, sans renommage', async () => {
   const { client, close } = await connect({ sqlFn: async () => '' });
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'conversion', 'raisonnement', 'sql', 'suivi', 'tabular_review', 'tabular_review_index']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['afficher', 'conversion', 'sql', 'suivi', 'tabular_review', 'tabular_review_index']);
   const sql = tools.find((tool) => tool.name === 'sql');
   assert.deepEqual(Object.keys(sql.inputSchema.properties), ['requete']);
   assert.deepEqual(sql.annotations, {
@@ -38,7 +38,7 @@ test('les outils exposés sont afficher, conversion, sql, tabular_review et tabu
   assert.ok(sql.description.startsWith('SQL libre (SQLite) sur la base PieceMaker ; noms réels masqués.\n'));
   assert.ok(sql.description.includes('\nDates automatiques. Renommer une pièce = UPDATE de son label (AAAA-MM-JJ_titre).\n'));
   assert.ok(sql.description.endsWith('échéances marquées faites par l\'avocat.'));
-  assert.equal(sql.description.split('\n').length, 8);
+  assert.equal(sql.description.split('\n').length, 7);
   await close();
 });
 
@@ -80,7 +80,11 @@ test('tabular_review_index déduit le fichier et s’affiche dans l’onglet Dos
   const result = await client.callTool({ name: 'tabular_review_index', arguments: { action: 'lire', dossier } });
   assert.equal(result.isError, undefined);
   assert.deepEqual(calls.map((call) => [call.action, call.fichier]), [['index', undefined], ['lire', 'index.json']]);
-  const refused = await client.callTool({ name: 'tabular_review_index', arguments: { action: 'lancer', dossier } });
+  calls.length = 0;
+  const relaunched = await client.callTool({ name: 'tabular_review_index', arguments: { action: 'lancer', dossier } });
+  assert.equal(relaunched.isError, undefined);
+  assert.deepEqual(calls.map((call) => [call.action, call.fichier]), [['index', undefined], ['relancer', 'index.json']]);
+  const refused = await client.callTool({ name: 'tabular_review_index', arguments: { action: 'preparer', dossier } });
   assert.equal(refused.isError, true);
   assert.match(refused.content[0].text, /déjà lancé/);
   await close();

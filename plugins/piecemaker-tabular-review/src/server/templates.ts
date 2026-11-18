@@ -2,8 +2,12 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { readOntology } from '../../../../server/piecemaker/okf/ontology.js';
+import { DEFAULT_DOCUMENT_TYPES, documentTypeNames } from '../../../piecemaker-dossier/src/document-types.js';
+import type { DocumentType } from '../../../piecemaker-dossier/src/document-types.js';
+
 import type { ColumnAction, ColumnFormat, Template, TemplateColumn } from '../shared.js';
-import { COLUMN_ACTIONS, COLUMN_FORMATS, INDEX_TEMPLATE_NAME, LEGACY_INDEX_NAME } from '../shared.js';
+import { COLUMN_ACTIONS, COLUMN_FORMATS, INDEX_TEMPLATE_NAME, LEGACY_INDEX_NAME, isDocumentTypeColumn } from '../shared.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const TEMPLATES_FILE = path.join(PLUGIN_HOME, 'templates.json');
@@ -20,7 +24,7 @@ export const SORTING_TEMPLATE: TemplateSeed = {
   description: 'Renomme les pièces en AAAA-MM-JJ_titre et les range dans les sous-dossiers du dossier. Les colonnes « Nouveau nom » et « Dossier cible » s’appliquent avec « Appliquer » ; modifiez leurs consignes pour changer la règle.',
   columns: [
     column('Date', 'Quelle est la date de la pièce (date de l’acte, de la décision, du courrier) ?', 'date'),
-    column('Type de pièce', 'Quel est le type de pièce (jugement, contrat, courrier, mise en demeure…) ?'),
+    column('Type de pièce', 'Quel est le type de pièce ?', 'tags', documentTypeNames()),
     column('Parties', 'Quelles sont les parties concernées par la pièce ?', 'list'),
     action('Nouveau nom', 'Propose le nom de fichier de la pièce, sans extension, au format AAAA-MM-JJ_<type de pièce> <précisions utiles : juridiction, parties, objet>, par exemple « 2024-01-09_Jugement du Tribunal judiciaire de Paris - Société A c- Société B ». N’utilise aucun des caractères / \\ : * ? " < > | (écris « c- » pour « contre »). Réponds par le nom seul. Si la date de la pièce est introuvable, réponds « Non trouvé ».', 'rename'),
     action('Dossier cible', 'Dans quel sous-dossier du dossier faut-il ranger cette pièce ? Réponds par un chemin relatif seul, avec « / » entre les niveaux (par exemple « Procédure/Jugements »). Réponds « Non trouvé » si la pièce doit rester où elle est.', 'move'),
@@ -75,7 +79,7 @@ export const DEFAULT_TEMPLATES: TemplateSeed[] = [
     description: 'Inventaire des pièces d’un dossier contentieux.',
     columns: [
       column('Date', 'Quelle est la date du document ?', 'date'),
-      column('Nature', 'Quelle est la nature du document ?', 'tags', ['Courrier', 'Email', 'Mise en demeure', 'Contrat', 'Facture', 'Compte rendu', 'Acte de procédure', 'Autre']),
+      column('Nature', 'Quelle est la nature du document ?', 'tags', documentTypeNames()),
       column('Émetteur et destinataire', 'Qui émet le document et à qui est-il adressé ?'),
       column('Points clés', 'Quels sont les points essentiels du document ?', 'list'),
       column('Délais et échéances', 'Le document mentionne-t-il un délai, une échéance ou une date butoir ?'),
@@ -108,7 +112,8 @@ function libraryTemplates(own: Template[]): Template[] {
 
 export function readTemplates(): Template[] {
   const own = readOwnTemplates();
-  return [...own, ...libraryTemplates(own)].map((template) => (template.name === LEGACY_INDEX_NAME ? { ...template, name: INDEX_TEMPLATE_NAME, description: INDEX_TEMPLATE.description } : template));
+  const types = readOntology('').documentTypes;
+  return [...own, ...libraryTemplates(own)].map((template) => ({ ...(template.name === LEGACY_INDEX_NAME ? { ...template, name: INDEX_TEMPLATE_NAME, description: INDEX_TEMPLATE.description } : template), columns: alignDocumentTypes(template.columns, types) }));
 }
 
 function readOwnTemplates(): Template[] {
@@ -196,4 +201,8 @@ export function findTemplate(id: unknown): Template {
   const template = readTemplates().find((entry) => entry.id === id);
   if (!template) throw new UserError('Modèle introuvable.');
   return template;
+}
+
+export function alignDocumentTypes<T extends TemplateColumn>(columns: T[], types: DocumentType[] = DEFAULT_DOCUMENT_TYPES): T[] {
+  return columns.map((column) => isDocumentTypeColumn(column) ? { ...column, format: 'tags', tags: documentTypeNames(types) } : column);
 }

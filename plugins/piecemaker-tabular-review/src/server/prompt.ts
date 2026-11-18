@@ -1,5 +1,5 @@
 import type { Cell, CellCitation, Flag, Review, ReviewColumn } from '../shared.js';
-import { EMPTY_CELL_SUMMARY, FLAGS, NOT_FOUND_SUMMARY, reviewCategory } from '../shared.js';
+import { EMPTY_CELL_SUMMARY, FLAGS, NOT_FOUND_SUMMARY, reviewCategory, isDocumentTypeColumn } from '../shared.js';
 
 export type PromptDocument = {
   name: string;
@@ -10,7 +10,9 @@ export type PromptDocument = {
 const NOT_FOUND = NOT_FOUND_SUMMARY;
 const NOT_ADDRESSED = EMPTY_CELL_SUMMARY;
 
-export function formatSuffix(column: Pick<ReviewColumn, 'format' | 'tags'>): string {
+export function formatSuffix(column: Pick<ReviewColumn, 'format' | 'tags'> & Partial<Pick<ReviewColumn, 'action' | 'name'>>): string {
+  if (column.name && isDocumentTypeColumn({ name: column.name })) return ` Choisis exactement un type dans cette liste : ${(column.tags ?? []).join(', ')}. Si aucun type ne convient, réponds « indéterminé ». N’invente aucun type.`;
+  if (column.action === 'classify') return ` Réponds uniquement par une seule de ces étiquettes, recopiée à l’identique : ${(column.tags ?? []).join(', ')}.`;
   switch (column.format) {
     case 'list':
       return ' Réponds sous forme de liste à puces markdown (une puce par élément).';

@@ -28,6 +28,9 @@ function harness() {
       calls.scanJob.push({ id, projectId });
       return { job: { id, state: 'done', result: { documents: 2 } } };
     },
+    async pieces(projectId: string) {
+      return { pieces: [{ path: `${projectId}/01.pdf`, status: 'pending', markdown: null, conversionFailure: null }] };
+    },
     cancelScan(id: unknown, projectId: string) {
       calls.cancelScan.push({ id, projectId });
       return { cancelled: true };
@@ -252,5 +255,14 @@ test('POST /sql est refusé quand la requête loopback vient d’un proxy ou d�
     assert.deepEqual(calls.sql, []);
     assert.equal(await postRaw(base, { Host: `localhost:${new URL(base).port}` }), 200);
     assert.equal(calls.sql.length, 1);
+  });
+});
+
+test('GET /pieces renvoie les pièces du dossier et leur état de conversion', async () => {
+  const { app } = harness();
+  await withServer(app, async (base) => {
+    const response = await fetch(`${base}/pieces?folder=${encodeURIComponent('/dossiers/alpha')}`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { pieces: [{ path: 'project-alpha/01.pdf', status: 'pending', markdown: null, conversionFailure: null }] });
   });
 });

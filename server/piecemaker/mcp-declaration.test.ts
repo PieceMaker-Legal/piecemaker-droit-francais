@@ -40,10 +40,14 @@ test('déclare Légifrance, retire piecemaker, conserve les entrées tierces', (
   assert.equal(codex.mcp_servers.legifrance.default_tools_approval_mode, 'approve');
   assert.equal(codex.mcp_servers.exemple.default_tools_approval_mode, undefined);
   const vibe = TOML.parse(fs.readFileSync(path.join(folder, '.vibe', 'config.toml'), 'utf8'));
-  assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['exemple', 'legifrance']);
+  assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['artifacts', 'exemple', 'features', 'legifrance']);
   const mcpJson = JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8'));
   assert.equal(mcpJson.mcpServers.piecemaker, undefined);
   assert.match(mcpJson.mcpServers.legifrance.args[0], /vendor[\\/]mcp[\\/]legifrance[\\/]server\.mjs$/);
+  assert.equal(fs.existsSync(mcpJson.mcpServers.features.args[0]), true);
+  assert.equal(codex.mcp_servers.features.default_tools_approval_mode, 'approve');
+  assert.equal(fs.existsSync(mcpJson.mcpServers.artifacts.args[0]), true);
+  assert.equal(codex.mcp_servers.artifacts.default_tools_approval_mode, 'approve');
 });
 
 test('un second passage ne réécrit aucun fichier', () => {

@@ -1,0 +1,493 @@
+# Indemnité de départ — projection du corpus fictif
+
+Le statut Inconnu n’est jamais remplacé par Faux. Les interprétations sont des hypothèses juridiques, pas des faits du dossier.
+
+```catala-metadata
+déclaration énumération Appréciation:
+  -- Confirmé
+  -- Réfuté
+  -- Inconnu
+
+déclaration énumération Lecture:
+  -- NonTranchée
+  -- ThèseContractuelle
+  -- VoteInitialVersailles
+  -- VoteAprèsDépart
+```
+
+# Outils de raisonnement
+
+```catala
+# Une condition inconnue reste inconnue ; un obstacle confirmé suffit à écarter la conclusion.
+## Cumuler deux appréciations
+déclaration cumul
+  contenu Appréciation
+  dépend de premier contenu Appréciation, second contenu Appréciation
+  égal à
+    selon premier sous forme
+    -- Réfuté : Réfuté
+    -- Confirmé : second
+    -- Inconnu :
+      selon second sous forme
+      -- Réfuté : Réfuté
+      -- Confirmé : Inconnu
+      -- Inconnu : Inconnu
+
+## Qualifier un fait établi
+déclaration qualifier
+  contenu Appréciation
+  dépend de fait contenu booléen
+  égal à
+    si fait alors Confirmé sinon Réfuté
+```
+
+# Interface du dossier
+
+```catala-metadata
+déclaration champ d'application AnalyseIndemnité:
+  ## Société cotée
+  contexte société_cotée condition
+  ## Mandat de directeur général
+  contexte mandat_de_directeur_général condition
+  ## Engagement décidé
+  contexte engagement_décidé condition
+  ## Politique approuvée
+  contexte politique_approuvée condition
+  ## Révocation décidée
+  contexte révocation_décidée condition
+  ## Faute grave ou lourde
+  contexte faute_grave_ou_lourde condition
+  # À rechercher : le procès-verbal du conseil du 15 mars 2022. Ne pas confondre conseil et assemblée.
+  ## Non-participation du dirigeant au conseil
+  contexte non_participation_au_conseil contenu Appréciation
+  # À rechercher : les comptes et l’effet de l’engagement sur l’équilibre financier.
+  ## Absence d’effet dissuasif
+  contexte absence_effet_dissuasif contenu Appréciation
+  # À rechercher : la résolution individuelle et son objet exact. La politique ex ante ne suffit pas.
+  ## Vote individuel ex post initial
+  contexte vote_ex_post_initial contenu Appréciation
+  ## Vote après départ refusé
+  contexte vote_après_départ_refusé condition
+  ## Indemnité impayée
+  contexte indemnité_impayée condition
+  ## Marge constatée
+  contexte marge_constatée contenu décimal
+  ## Seuil de performance
+  contexte seuil_de_performance contenu décimal
+  ## Rémunération mensuelle
+  contexte rémunération_mensuelle contenu argent
+  ## Mois contractuels
+  contexte mois_contractuels contenu décimal
+  ## Montant stipulé
+  contexte montant_stipulé contenu argent
+  ## Montant réclamé
+  contexte montant_réclamé contenu argent
+  ## Capital social
+  contexte capital_social contenu argent
+  ## Date de l’engagement
+  contexte date_engagement contenu date
+  ## Date de cessation
+  contexte date_cessation contenu date
+  ## Lecture du vote retenue
+  contexte lecture_du_vote contenu Lecture
+  ## Date d’examen
+  contexte date_examen contenu date
+  interne régime_codé_applicable contenu booléen
+  interne engagement_approuvé contenu Appréciation
+  interne performance_satisfaite contenu booléen
+  interne montant_cohérent contenu booléen
+  interne délai_contractuel_écoulé contenu Appréciation
+  interne prescription_sur_borne_prudente contenu Appréciation
+  interne socle_contractuel contenu Appréciation
+  résultat engagement_opposable contenu Appréciation
+  résultat conditions_contractuelles contenu Appréciation
+  résultat condition_du_vote contenu Appréciation
+  résultat paiement_de_l_indemnité contenu Appréciation
+  résultat montant_contractuel contenu argent
+  résultat rapport_sur_capital contenu décimal
+  résultat échéance_contractuelle contenu date
+  résultat borne_prudente_prescription contenu date
+```
+
+# Code de commerce
+
+## Article L. 22-10-8 | LEGIARTI000042338833
+
+« Dans les sociétés dont les actions sont admises aux négociations sur un marché réglementé »
+« ne peut être pris par la société s'il n'est pas conforme à la politique de rémunération approuvée »
+
+I.-Dans les sociétés dont les actions sont admises aux négociations sur un
+marché réglementé, le conseil d'administration établit une politique de
+rémunération des mandataires sociaux. Cette politique est conforme à l'intérêt
+social de la société, contribue à sa pérennité et s'inscrit dans sa stratégie
+commerciale. Elle décrit toutes les composantes de la rémunération fixe et
+variable et explique le processus de décision suivi pour sa détermination, sa
+révision et sa mise en œuvre.
+
+Elle est présentée de manière claire et compréhensible au sein du rapport sur le
+gouvernement d'entreprise mentionné au dernier alinéa de l'article L. 225-37.
+
+Le contenu et les modalités de la publicité de la politique de rémunération sont
+fixés par décret en Conseil d'Etat.
+
+II.-La politique de rémunération fait l'objet d'un projet de résolution soumis à
+l'approbation de l'assemblée générale des actionnaires dans les conditions
+prévues aux articles L. 225-98 et L. 22-10-32 chaque année et lors de chaque
+modification importante dans la politique de rémunération.
+
+Lorsque l'assemblée générale des actionnaires n'approuve pas le projet de
+résolution et qu'elle a précédemment approuvé une politique de rémunération dans
+les conditions prévues au présent article, celle-ci continue de s'appliquer et
+le conseil d'administration soumet à l'approbation de la prochaine assemblée
+générale des actionnaires, dans les conditions prévues aux articles L. 225-98 et
+L. 22-10-32, un projet de résolution présentant une politique de rémunération
+révisée et indiquant de quelle manière ont été pris en compte le vote des
+actionnaires et, le cas échéant, les avis exprimés lors de l'assemblée générale.
+
+En l'absence de politique de rémunération précédemment approuvée dans les
+conditions prévues au présent article, si l'assemblée générale des actionnaires
+n'approuve pas le projet de résolution, la rémunération est déterminée
+conformément à la rémunération attribuée au titre de l'exercice précédent ou, en
+l'absence de rémunération attribuée au titre de l'exercice précédent,
+conformément aux pratiques existant au sein de la société. Dans ce cas, le
+conseil d'administration soumet à l'approbation de la prochaine assemblée
+générale des actionnaires, dans les conditions prévues aux articles L. 225-98 et
+L. 22-10-32, un projet de résolution présentant une politique de rémunération
+révisée et indiquant de quelle manière ont été pris en compte le vote des
+actionnaires et, le cas échéant, les avis exprimés lors de l'assemblée générale.
+
+III.-Aucun élément de rémunération, de quelque nature que ce soit, ne peut être
+déterminé, attribué ou versé par la société, ni aucun engagement correspondant à
+des éléments de rémunération, des indemnités ou des avantages dus ou
+susceptibles d'être dus à raison de la prise, de la cessation ou du changement
+de leurs fonctions ou postérieurement à l'exercice de celles-ci, ne peut être
+pris par la société s'il n'est pas conforme à la politique de rémunération
+approuvée ou, en son absence, aux rémunérations ou aux pratiques mentionnées au
+dernier alinéa du II.
+
+Toutefois, en cas de circonstances exceptionnelles, le conseil d'administration
+peut déroger à l'application de la politique de rémunération si cette dérogation
+est temporaire, conforme à l'intérêt social et nécessaire pour garantir la
+pérennité ou la viabilité de la société.
+
+Tout versement, attribution ou engagement effectué ou pris en méconnaissance des
+dispositions du présent III est nul dans cette mesure.
+
+IV.-Les éléments ou les engagements mentionnés au premier alinéa du III sont
+déterminés, attribués, ou pris par délibération du conseil d'administration.
+Lorsque le conseil d'administration se prononce sur un élément ou un engagement
+au bénéfice de son président, d'un directeur général ou d'un directeur général
+délégué, les personnes intéressées ne peuvent prendre part ni aux délibérations
+ni au vote sur l'élément ou l'engagement concerné.
+
+```catala
+champ d'application AnalyseIndemnité:
+  # Le régime de la SA cotée et la version de 2022 s’appliquent à un engagement pris entre 2021 et octobre 2025.
+  ## Régime de la société cotée applicable
+  définition régime_codé_applicable égal à
+    société_cotée
+    et mandat_de_directeur_général
+    et date_engagement >= |2021-01-01|
+    et date_engagement < |2025-10-01|
+```
+
+```catala
+champ d'application AnalyseIndemnité:
+  ## Engagement conforme à la politique approuvée
+  définition engagement_approuvé égal à
+    cumul de (qualifier de engagement_décidé), (qualifier de politique_approuvée)
+```
+
+## Article L. 22-10-34 | LEGIARTI000042338905
+
+« ne peuvent être versés qu'après approbation par une assemblée générale des éléments de rémunération de la personne concernée »
+
+I.-Dans les sociétés dont les actions sont admises aux négociations sur un
+marché réglementé, l'assemblée générale ordinaire statue sur un projet de
+résolution portant sur les informations mentionnées au I de l'article L.
+22-10-9.
+
+Lorsque l'assemblée générale ordinaire n'approuve pas le projet de résolution
+mentionné à l'alinéa précédent, le conseil d'administration ou le conseil de
+surveillance soumet une politique de rémunération révisée, tenant compte du vote
+des actionnaires, à l'approbation de la prochaine assemblée générale. Le
+versement de la somme allouée pour l'exercice en cours en application du premier
+alinéa de l'article L. 225-45 ou du premier alinéa de l'article L. 225-83 est
+suspendu jusqu'à l'approbation de la politique de rémunération révisée.
+Lorsqu'il est rétabli, il inclut l'arriéré depuis la dernière assemblée
+générale.
+
+Lorsque l'assemblée générale n'approuve pas le projet de résolution présentant
+la politique de rémunération révisée en application du précédent alinéa, la
+somme suspendue ne peut être versée, et les mêmes effets que ceux associés à la
+désapprobation du projet de résolution mentionné au premier alinéa s'appliquent.
+
+II.-Dans les sociétés dont les actions sont admises aux négociations sur un
+marché réglementé, l'assemblée générale statue sur les éléments fixes, variables
+et exceptionnels composant la rémunération totale et les avantages de toute
+nature versés au cours de l'exercice écoulé ou attribués au titre du même
+exercice par des résolutions distinctes pour le président du conseil
+d'administration ou du conseil de surveillance, le directeur général, les
+directeurs généraux délégués, ou pour le président du directoire et les autres
+membres du directoire ou le directeur général unique.
+
+Les éléments de rémunération variables ou exceptionnels attribués au titre de
+l'exercice écoulé au président du conseil d'administration ou du conseil de
+surveillance, au directeur général, aux directeurs généraux délégués, au
+président du directoire, aux autres membres du directoire ou au directeur
+général unique, ne peuvent être versés qu'après approbation par une assemblée
+générale des éléments de rémunération de la personne concernée dans les
+conditions prévues à l'alinéa précédent.
+
+```catala
+champ d'application AnalyseIndemnité:
+  # La lecture du vote retenue fixe la conséquence ; la CA de Versailles ne requiert que le vote suivant la conclusion du contrat.
+  ## Lecture du vote non tranchée
+  définition lecture_du_vote égal à NonTranchée
+  # Le vote de politique ex ante et le vote individuel ex post sont distincts. Le procès-verbal de 2022 ne suffit pas à établir le second.
+  ## Condition du vote ex post appréciée
+  définition condition_du_vote égal à
+    selon lecture_du_vote sous forme
+    -- NonTranchée : Inconnu
+    -- ThèseContractuelle : Confirmé
+    -- VoteInitialVersailles : vote_ex_post_initial
+    -- VoteAprèsDépart : si vote_après_départ_refusé alors Réfuté sinon Inconnu
+```
+
+### Discussion — CA Versailles, 3 juin 2025, RG 23/06335
+
+[CA Versailles, 3 juin 2025, RG 23/06335](https://www.courdecassation.fr/decision/683fd4c49fc9cbe0b56b0f7d)
+« le versement de cette indemnité n'est pas soumis à un autre vote individuel ex post que celui de l'assemblée générale suivant la conclusion de ce contrat. »
+
+# Jurisprudence
+
+## Cass. com., 15 novembre 2011, n° 09-10.893 | JURITEXT000024821010
+
+« l'engagement qui y était souscrit par la société à son profit, en cas de cessation de ces fonctions, était d'une ampleur susceptible de porter une atteinte majeure à son équilibre financier »
+
+La situation financière du corpus est insuffisamment documentée. Aucun seuil de 1,2 % n’est utilisé comme preuve.
+
+# Code civil
+
+## Article 1103 | LEGIARTI000032040777
+
+« Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits. »
+
+Les contrats légalement formés tiennent lieu de loi à ceux qui les ont faits.
+
+```catala
+champ d'application AnalyseIndemnité:
+  # La clause est établie par la pièce 02 : ses termes sont des prémisses du dossier, sa force obligatoire vient de l’article 1103.
+  ## Performance atteinte
+  définition performance_satisfaite égal à
+    marge_constatée >= seuil_de_performance
+  ## Montant contractuel calculé
+  définition montant_contractuel égal à
+    rémunération_mensuelle * mois_contractuels
+  ## Montant calculé et réclamé conforme
+  définition montant_cohérent égal à
+    montant_contractuel = montant_stipulé
+    et montant_réclamé = montant_stipulé
+  ## Conditions de la clause réunies
+  étiquette conditions_principales
+  définition conditions_contractuelles égal à
+    cumul de (qualifier de révocation_décidée), (qualifier de (performance_satisfaite et montant_cohérent))
+  # La faute grave ou lourde écarte les conditions principales de la clause.
+  ## Conditions écartées pour faute grave
+  exception conditions_principales
+  définition conditions_contractuelles
+  sous condition faute_grave_ou_lourde
+  conséquence égal à
+    Réfuté
+  ## Échéance contractuelle calculée
+  définition échéance_contractuelle égal à
+    date_cessation + 30 jour
+  ## Rapport entre indemnité et capital
+  définition rapport_sur_capital égal à
+    montant_contractuel / capital_social
+```
+
+```catala
+champ d'application AnalyseIndemnité:
+  ## Engagement opposable à la société
+  définition engagement_opposable égal à
+    cumul de engagement_approuvé, (cumul de non_participation_au_conseil, absence_effet_dissuasif)
+  ## Délai contractuel écoulé
+  définition délai_contractuel_écoulé égal à
+    qualifier de (date_examen >= échéance_contractuelle)
+  ## Autres conditions du paiement réunies
+  définition socle_contractuel égal à
+    cumul de engagement_opposable, (cumul de conditions_contractuelles, (cumul de délai_contractuel_écoulé, prescription_sur_borne_prudente))
+  ## Paiement de l’indemnité retenu
+  définition paiement_de_l_indemnité égal à
+    si
+      régime_codé_applicable
+    alors
+      cumul de socle_contractuel, (cumul de condition_du_vote, (qualifier de indemnité_impayée))
+    sinon Inconnu
+```
+
+## Article 2224 | LEGIARTI000019017112
+
+« Les actions personnelles ou mobilières se prescrivent par cinq ans à compter du jour où le titulaire d'un droit a connu ou aurait dû connaître les faits lui permettant de l'exercer. »
+
+Les actions personnelles ou mobilières se prescrivent par cinq ans à compter du
+jour où le titulaire d'un droit a connu ou aurait dû connaître les faits lui
+permettant de l'exercer.
+
+```catala
+champ d'application AnalyseIndemnité:
+  # La date d’examen est celle de l’analyse ; chaque scénario la fixe.
+  ## Date d’examen du dossier
+  définition date_examen égal à |2026-10-21|
+  # Borne calculée par prudence à partir de l’échéance contractuelle.
+  ## Borne prudente de prescription calculée
+  définition borne_prudente_prescription égal à
+    échéance_contractuelle + 5 an
+  ## Prescription écartée sur la borne prudente
+  définition prescription_sur_borne_prudente égal à
+    si date_examen < borne_prudente_prescription alors Confirmé sinon Inconnu
+```
+
+# Scénario — DossierEnÉtat
+
+```catala
+#[test]
+déclaration champ d'application DossierEnÉtat:
+  résultat cas champ d'application AnalyseIndemnité
+champ d'application DossierEnÉtat:
+  ## okf:/_premises/societe-cotee.md
+  règle cas.société_cotée rempli
+  ## okf:/_premises/mandat-de-directeur-general.md
+  règle cas.mandat_de_directeur_général rempli
+  ## okf:/_premises/engagement-decide.md
+  règle cas.engagement_décidé rempli
+  ## okf:/_premises/politique-approuvee.md
+  règle cas.politique_approuvée rempli
+  ## okf:/_premises/revocation-decidee.md
+  règle cas.révocation_décidée rempli
+  ## okf:/_premises/indemnite-impayee.md
+  règle cas.indemnité_impayée rempli
+  définition cas.non_participation_au_conseil égal à Inconnu
+  définition cas.absence_effet_dissuasif égal à Inconnu
+  définition cas.vote_ex_post_initial égal à Inconnu
+  ## okf:/_premises/marge-constatee.md
+  définition cas.marge_constatée égal à 8,6
+  ## okf:/_premises/seuil-de-performance.md
+  définition cas.seuil_de_performance égal à 8,0
+  ## okf:/_premises/remuneration-mensuelle.md
+  définition cas.rémunération_mensuelle égal à 20 000 €
+  ## okf:/_premises/mois-contractuels.md
+  définition cas.mois_contractuels égal à 24,0
+  ## okf:/_premises/montant-stipule.md
+  définition cas.montant_stipulé égal à 480 000 €
+  ## okf:/_premises/montant-reclame.md
+  définition cas.montant_réclamé égal à 480 000 €
+  ## okf:/_premises/capital-social.md
+  définition cas.capital_social égal à 40 000 000 €
+  ## okf:/_premises/date-engagement.md
+  définition cas.date_engagement égal à |2022-03-15|
+  ## okf:/_premises/date-cessation.md
+  définition cas.date_cessation égal à |2022-12-19|
+  définition cas.lecture_du_vote égal à NonTranchée
+  assertion cas.paiement_de_l_indemnité = Inconnu
+  assertion cas.montant_contractuel = 480 000 €
+  assertion cas.échéance_contractuelle = |2023-01-18|
+  assertion cas.borne_prudente_prescription = |2028-01-18|
+```
+
+# Scénario — ThèseContractuelleSansPrémisses
+
+```catala
+#[test]
+déclaration champ d'application ThèseContractuelleSansPrémisses:
+  résultat cas champ d'application AnalyseIndemnité
+champ d'application ThèseContractuelleSansPrémisses:
+  ## okf:/_premises/societe-cotee.md
+  règle cas.société_cotée rempli
+  ## okf:/_premises/mandat-de-directeur-general.md
+  règle cas.mandat_de_directeur_général rempli
+  ## okf:/_premises/engagement-decide.md
+  règle cas.engagement_décidé rempli
+  ## okf:/_premises/politique-approuvee.md
+  règle cas.politique_approuvée rempli
+  ## okf:/_premises/revocation-decidee.md
+  règle cas.révocation_décidée rempli
+  ## okf:/_premises/indemnite-impayee.md
+  règle cas.indemnité_impayée rempli
+  définition cas.non_participation_au_conseil égal à Inconnu
+  définition cas.absence_effet_dissuasif égal à Inconnu
+  définition cas.vote_ex_post_initial égal à Inconnu
+  ## okf:/_premises/marge-constatee.md
+  définition cas.marge_constatée égal à 8,6
+  ## okf:/_premises/seuil-de-performance.md
+  définition cas.seuil_de_performance égal à 8,0
+  ## okf:/_premises/remuneration-mensuelle.md
+  définition cas.rémunération_mensuelle égal à 20 000 €
+  ## okf:/_premises/mois-contractuels.md
+  définition cas.mois_contractuels égal à 24,0
+  ## okf:/_premises/montant-stipule.md
+  définition cas.montant_stipulé égal à 480 000 €
+  ## okf:/_premises/montant-reclame.md
+  définition cas.montant_réclamé égal à 480 000 €
+  ## okf:/_premises/capital-social.md
+  définition cas.capital_social égal à 40 000 000 €
+  ## okf:/_premises/date-engagement.md
+  définition cas.date_engagement égal à |2022-03-15|
+  ## okf:/_premises/date-cessation.md
+  définition cas.date_cessation égal à |2022-12-19|
+  définition cas.lecture_du_vote égal à ThèseContractuelle
+  assertion cas.paiement_de_l_indemnité = Inconnu
+  assertion cas.montant_contractuel = 480 000 €
+  assertion cas.échéance_contractuelle = |2023-01-18|
+  assertion cas.borne_prudente_prescription = |2028-01-18|
+```
+
+# Scénario — VoteAprèsDépartRefusé
+
+```catala
+#[test]
+déclaration champ d'application VoteAprèsDépartRefusé:
+  résultat cas champ d'application AnalyseIndemnité
+champ d'application VoteAprèsDépartRefusé:
+  ## okf:/_premises/societe-cotee.md
+  règle cas.société_cotée rempli
+  ## okf:/_premises/mandat-de-directeur-general.md
+  règle cas.mandat_de_directeur_général rempli
+  ## okf:/_premises/engagement-decide.md
+  règle cas.engagement_décidé rempli
+  ## okf:/_premises/politique-approuvee.md
+  règle cas.politique_approuvée rempli
+  ## okf:/_premises/revocation-decidee.md
+  règle cas.révocation_décidée rempli
+  ## okf:/_premises/vote-apres-depart-refuse.md
+  règle cas.vote_après_départ_refusé rempli
+  ## okf:/_premises/indemnite-impayee.md
+  règle cas.indemnité_impayée rempli
+  définition cas.non_participation_au_conseil égal à Inconnu
+  définition cas.absence_effet_dissuasif égal à Inconnu
+  définition cas.vote_ex_post_initial égal à Inconnu
+  ## okf:/_premises/marge-constatee.md
+  définition cas.marge_constatée égal à 8,6
+  ## okf:/_premises/seuil-de-performance.md
+  définition cas.seuil_de_performance égal à 8,0
+  ## okf:/_premises/remuneration-mensuelle.md
+  définition cas.rémunération_mensuelle égal à 20 000 €
+  ## okf:/_premises/mois-contractuels.md
+  définition cas.mois_contractuels égal à 24,0
+  ## okf:/_premises/montant-stipule.md
+  définition cas.montant_stipulé égal à 480 000 €
+  ## okf:/_premises/montant-reclame.md
+  définition cas.montant_réclamé égal à 480 000 €
+  ## okf:/_premises/capital-social.md
+  définition cas.capital_social égal à 40 000 000 €
+  ## okf:/_premises/date-engagement.md
+  définition cas.date_engagement égal à |2022-03-15|
+  ## okf:/_premises/date-cessation.md
+  définition cas.date_cessation égal à |2022-12-19|
+  définition cas.lecture_du_vote égal à VoteAprèsDépart
+  assertion cas.paiement_de_l_indemnité = Réfuté
+  assertion cas.montant_contractuel = 480 000 €
+  assertion cas.échéance_contractuelle = |2023-01-18|
+  assertion cas.borne_prudente_prescription = |2028-01-18|
+```

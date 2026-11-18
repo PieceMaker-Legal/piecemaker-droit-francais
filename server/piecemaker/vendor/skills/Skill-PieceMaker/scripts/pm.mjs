@@ -1,51 +1,139 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { CATALA_COMMANDS, listPrograms, premiseLinks, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['conversion', 'sql', 'bordereau', 'afficher', 'tabular_review', 'tabular_review_index', 'raisonnement', 'suivi'];
-const REASONING_COMMANDS = ['consignes', 'verifier', 'lister'];
-const VOLETS = ['dossier', 'index', 'tabular-review', 'tampon'];
-const REVIEW_ACTIONS = ['lister', 'ouvrir', 'documents', 'modeles', 'enregistrer_modele', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer'];
+const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
+const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
+const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'artifacts', 'fichier'];
+const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
+const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
+const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
-const INDEX_ACTIONS = ['lister', 'modifier', 'ouvrir', 'preparer', 'lancer', 'lire', 'colonnes', 'classement', 'arborescence', 'relancer'];
+const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
+const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee', 'revue', 'revues'];
+const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force', 'fermer']);
+const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer', 'noms']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
+const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
+const SUIVI_FILES = /^(?:(.+)-)?suivi\.json$/;
+const MEMOIRES_DIR = '.piecemaker/memoires';
+const ETAPE_LABELS = { preparation: 'préparation', raisonnement: 'raisonnement', redaction: 'rédaction', finalisation: 'finalisation', attente: 'en attente de tiers', clos: 'clos' };
+const URGENT_DEADLINE = /— (DÉPASSÉE|AUJOURD’HUI|date à établir)/;
 
-export const HELP = `Usage: pm <outil> [options]
+export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossier PATH])
 
-  conversion [--dossier PATH] [--force] [pièce…]
-  sql [--dossier PATH] [--requete SQL]
-  bordereau [--dossier PATH] <pièce…>
-      tamponne les pièces dans cet ordre : Pièces tamponnées/Pièce n°N.pdf
-  afficher [--fichier PATH] [--volet ${VOLETS.join('|')}] [--review FILE]
-      sans cible : liste les volets ouverts
-      --fermer : ferme le fichier ou le volet
+  check
+      bilan numéroté du dossier, dans l'ordre du travail : conversion, anonymisation,
+      mapping, index, puis chaque raisonnement (programme Catala, prémisses, actes,
+      suivi) et les revues de recherche ; chaque défaut donne la commande ou le
+      sous-agent qui le corrige
+
+  tab lister
+      volets ouverts à côté du chat
+  tab afficher|fermer <cible>
+      cibles : dossier | index | tabular_review [FICHIER.json] | bordereau
+               | suivi_dossiers | catala | fichier PATH
+
+  dossier sql "REQUÊTE"
+      seul accès à la base du dossier ; données masquées par le serveur
+  dossier conversion [--force] [pièce…]
+      sans pièce : tout le dossier (pièces pas encore prêtes) ;
+      attend 90 s au plus, puis renvoie l’avancée : relancez pour suivre
+  dossier arborescence [--dossiers '[{"nom":"…","explication":"…"}]'] [--motif "raison"]
+      lit l’arborescence ; avec --dossiers, propose une arborescence que l’avocat accepte, refuse ou modifie
+  dossier classer <document> <dossier>
+      range le document dans un dossier de l’arborescence : il prend le type de ce dossier
+  dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
+      crée l’index s’il manque ; sinon analyse les pièces absentes de l’index
+  dossier index lire
+  dossier index colonnes --questions JSON
+
   tabular_review ${REVIEW_ACTIONS.join('|')}
-  tabular_review_index ${INDEX_ACTIONS.join('|')}
-      toujours dans l’onglet Dossier ; fichier et projet déduits
-      lister [--dossier NOM] ; modifier --piece ID [--date AAAA-MM-JJ] [--libelle TEXT] [--dossier NOM]
-      [--dossier PATH] [--fichier FILE] [--projet ID] [--mode analyse|recherche]
+      [--fichier FILE] [--projet ID] [--mode analyse|recherche]
       [--nom TEXT] [--modele ID] [--description TEXT] [--questions JSON]
       [--documents a,b] [--recherche JSON] [--ia claude|codex|mistral] [--modele-ia TEXT]
-  raisonnement consignes
-      règles d'écriture du raisonnement : à lire avant de l'écrire ou de le compléter
-  raisonnement verifier [--raisonnement NOM]
-  raisonnement lister
-      un fichier par raisonnement : .piecemaker/raisonnements/NOM.yaml ;
-      --raisonnement est requis quand le dossier en compte plusieurs
-  suivi verifier [--suivi FICHIER]
-      vérifie un suivi : .piecemaker/<nom>-suivi.json (matter, événements et échéances) ;
-      --suivi est requis quand le dossier en compte plusieurs (ex. appel-suivi.json)
-  suivi lire <chemin>
-      lit un document du tableau des dossiers (ex. projects/cabinet/requests)
-  suivi ecrire <chemin> --json '{...}'
-      écrit un document du tableau des dossiers
+
+  bordereau <pièce…>
+      tamponne les pièces dans cet ordre : Pièces tamponnées/Pièce n°N.pdf
+
+  suivi_dossiers verifier [--suivi FICHIER]
+      vérifie .piecemaker/<nom>-suivi.json et recalcule les échéances ;
+      --suivi est requis quand le dossier en compte plusieurs
+  suivi_dossiers lire <chemin>
+      lit un document du Matter board (ex. projects/cabinet/requests)
+  suivi_dossiers ecrire <chemin> --json '{...}'
+      écrit un document du Matter board
+
+  memoire verifier [--memoire NOM]
+      mémoire d'un projet : .piecemaker/memoires/NOM.md, récit sans frontmatter,
+      nommée comme son acte ; sans --memoire : toutes ; rien si tout est conforme
+
+  okf verify
+      index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
+      reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
+      et les contradictions (une prémisse à valeur unique, plusieurs valeurs selon les pièces),
+      puis les éléments manquants du graphe : pièce sans prémisse ni lien, prémisse sans pièce,
+      sans valeur ou sans partie, partie isolée ; enfin, en information, les pièces examinées sans lien
+  okf types --json '[{"name":"contrat","icon":"pen"}]' [--motif "raison"]
+      propose à l'avocat le catalogue complet des types (clés name et icon) ; rien ne change avant sa décision
+  okf ontologie
+      relations admises entre documents (~/.piecemaker/ontologie.json, commune à tous les dossiers, réglée par l'avocat dans l'onglet Index) :
+      nom, sens, types de la source et de la cible ; lecture seule
+  okf ontologie proposer --json '{"relations":[...],"documentTypes":[...]}' [--motif "raison"]
+      propose à l'avocat les relations (clés name, label, inverse, description, source, target) et/ou
+      les types de documents, listes complètes ; clés absentes, inconnues ou hors règles refusées ; rien ne change
+      avant sa décision : l'onglet Index › Ontologie montre chaque changement à accepter, refuser ou modifier ;
+      une nouvelle proposition remplace la précédente pour chaque liste fournie
+  okf link <source> <relation> <target> --citation "phrase du document source"
+      entre documents : une relation de l'ontologie (pm okf ontologie), entre les types qu'elle admet ;
+      source et cible : chemins ; la citation doit figurer mot pour mot dans le document source
+  okf link <pièce> states "<titre de la prémisse>" --citation "phrase de la pièce" [--value "valeur"] [--single]
+      la pièce établit une prémisse (fait, ou clause d'un contrat) ; sa fiche Premise est créée si elle manque ;
+      --single : la prémisse n'a qu'une valeur, un écart entre pièces est une contradiction
+  okf link "<titre de la prémisse>" involves <CODE_PARTIE>
+      la prémisse concerne une partie du dossier ; pas de citation
+  okf unlink <source> <relation> <target>
+  okf examinee <pièce> --motif "raison"
+      la pièce a été lue et aucun passage ne justifie un lien ni une prémisse : verify la liste
+      en information, plus en manque ; le manque revient si le document change
+  okf examinee <pièce> --retirer
+      retire cette marque : la pièce redevient à examiner
+  okf revues
+      revues tabulaires des pièces du dossier et leurs colonnes, à lier à une prémisse
+  okf revue "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index> [--retirer]
+      les lignes positives de la colonne (réponse trouvée, « Oui » pour une question Oui / Non) établissent
+      la prémisse, créée si elle manque ; chaque ligne est une pièce d'auteur agent, humain une fois vérifiée
+      par l'avocat dans la revue ; lues dans la revue à chaque lecture : une revue relancée remonte aussitôt
+
+  catala verifier [--au today|AAAA-MM-JJ] [--programme NOM]
+      programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
+      mise au format, typage, tests Clerk/Python, preuves, Catleg, citations, explication → resultats/verification.json ;
+      --programme est requis quand le dossier en compte plusieurs
+  catala lister | env
+  catala formater [--programme NOM]
+  catala preuve --scope CHAMP [--fichier F] [--programme NOM]
+  catala expliquer --scope CHAMP [--fichier F] [--programme NOM]
+      graphe des formules et conditions pour un champ sans entrées ;
+  catala exceptions --scope CHAMP --variable V [--fichier F] [--programme NOM]
+      arbre des exceptions d'une variable
+  catala executer --scope CHAMP [--fichier F] [--programme NOM]
+      exécute un scénario et affiche sa trace
+  catala squelette --scope CHAMP [--fichier F] [--programme NOM]
+      squelette de test Catala, entrées à leur valeur par défaut
+  catala catleg [--au today|AAAA-MM-JJ] [--fichier F] [--programme NOM]
+      vigueur des articles à la date --au, sinon date_vigueur de tache.json ; sans date : erreur
+  catala section --fichier F --source ID --extrait "…" [--titre "Article 1224"] [--programme NOM]
+      ajoute au fichier la section ## titre | ID, l'extrait vérifié mot pour mot et le texte officiel
+      (cache local ; ID : LEGIARTI, JORFARTI, JURITEXT, CETATEXT ou CONSTEXT)
+  catala exec <catala|clerk|catala-lsp|catala-format|catala-dap> [-- args…]
 Le serveur PieceMaker doit tourner (boucle locale).`;
 
 export function parseArgv(argv) {
@@ -157,10 +245,11 @@ function parseJson(value, name) {
   }
 }
 
-function spawnPiecemaker(cliPath, args, cwd) {
+function spawnPiecemaker(cliPath, args, cwd, signal) {
   return new Promise((resolve) => {
     const child = spawn(process.execPath, [cliPath, ...args], {
       cwd,
+      signal,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
       env: process.env,
@@ -172,6 +261,7 @@ function spawnPiecemaker(cliPath, args, cwd) {
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', (error) => {
+      if (signal?.aborted) return;
       resolve({ code: 1, stdout, stderr: stderr || error.message });
     });
     child.on('close', (code) => {
@@ -197,19 +287,38 @@ async function defaultDeps(cwd) {
   const client = await import(pathToFileURL(path.join(vendor, 'installer', 'lib', 'conversion-client.mjs')).href);
   const volets = await import(pathToFileURL(path.join(vendor, 'mcp', 'piecemaker', 'volets.mjs')).href);
   const panels = await import(pathToFileURL(path.join(vendor, 'mcp', 'piecemaker', 'volets-ouverts.mjs')).href);
+  const library = createRequire(path.join(vendor, 'piecemaker-plugin', 'scripts', 'lib', 'case-folders.cjs'));
+  const caseFolders = library('./case-folders.cjs');
+  const protection = library('./protection.cjs');
   const cliPath = path.join(vendor, 'installer', 'bin', 'piecemaker.mjs');
   const panelsPath = panels.openPanelsFile();
   return {
     sessionDossier: (cwd) => sessionDossier(cwd, { lookup: client.sessionDossier }),
     sqlFn: client.runSql,
-    reasoningFn: client.runReasoning,
-    reasoningInstructions: () => fs.readFileSync(path.join(vendor, '..', 'legal-code', 'instructions.md'), 'utf8'),
+    moveFn: client.movePiece,
+    catalaUpdated: client.notifyCatalaUpdated,
+    catalaCitations: client.verifyCatalaCitations,
     suiviFn: client.runSuivi,
+    okfFn: client.runOkf,
     tabularFn: client.runTabularReview,
     stampFn: client.runStamping,
-    execFn: (args, dir) => spawnPiecemaker(cliPath, args, dir),
-    chronologieSql: volets.chronologieSql,
-    reviewFile: volets.reviewFile,
+    execFn: (args, dir, signal) => spawnPiecemaker(cliPath, args, dir, signal),
+    conversionJob: client.readConversionJob,
+    piecesFn: client.readLocalPieces,
+    caseState: (dir) => {
+      const found = caseFolders.locateProjectCase(dir);
+      return { anonymized: Boolean(found?.anonymized), lifted: protection.isProtectionBypassed(found?.caseRoot ?? dir) };
+    },
+    mappingValidated: (dir) => {
+      const read = (file) => { try { return JSON.parse(fs.readFileSync(path.join(dir, '.piecemaker', file), 'utf8')); } catch { return {}; } };
+      const validated = read('etapes.json').mappingValide;
+      const scanned = Object.values(read('anonymization-state.json').files ?? {}).map((entry) => entry?.scanned?.updatedAt ?? '').sort().at(-1);
+      return Boolean(validated) && !(scanned && new Date(scanned) > new Date(validated));
+    },
+    entityCount: async (dir) => Number(String(await client.runSql({
+      requete: "SELECT (SELECT count(*) FROM piecemaker_nodes WHERE project_id = dossier() AND id LIKE 'entity:%') + (SELECT count(*) FROM piecemaker_mappings WHERE project_id = dossier()) AS n",
+      cwd: dir,
+    })).split('\n')[1]),
     tabularIndex: volets.tabularIndex,
     refuseIndex: volets.refuseIndex,
     describePanels: (dir) => panels.describeOpenPanels(dir, panelsPath),
@@ -229,7 +338,9 @@ async function confirmPanel(api, request, target) {
   if (api.waitPanel && await api.waitPanel(target, 0)) return { opened: true, alreadyOpen: true };
   let id;
   try {
-    if (api.openPanel) ({ id } = await api.openPanel(request));
+    let listening;
+    if (api.openPanel) ({ id, listening } = await api.openPanel(request));
+    if (listening === false) return { opened: false, alreadyOpen: false, absent: true };
   } catch {
     const opened = api.waitPanel ? await api.waitPanel(target, timeoutMs) : false;
     return { opened, alreadyOpen: false };
@@ -279,20 +390,26 @@ async function confirmClose(api, request, target) {
 }
 
 function voletTarget(cwd, volet, review) {
-  if (volet === 'tampon') return { cwd, tab: 'plugin:piecemaker-tampon' };
-  if (volet === 'tabular-review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
+  if (volet === 'bordereau') return { cwd, tab: 'plugin:piecemaker-tampon' };
+  if (volet === 'suivi_dossiers') return { cwd, tab: 'plugin:piecemaker-echeances' };
+  if (volet === 'catala') return { cwd, tab: 'plugin:piecemaker-catala' };
+  if (volet === 'artifacts') return { cwd, tab: 'plugin:piecemaker-artifacts', review: review || undefined };
+  if (volet === 'tabular_review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
   return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
 }
 
 function panelNoticeLabel(target) {
   if (target.tab === 'files') return `Fichiers (${path.basename(target.document || '')})`;
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
-  if (target.tab === 'plugin:piecemaker-raisonnement') return 'Raisonnement';
+  if (target.tab === 'plugin:piecemaker-echeances') return 'Suivi des dossiers';
+  if (target.tab === 'plugin:piecemaker-catala') return 'Catala';
+  if (target.tab === 'plugin:piecemaker-artifacts') return target.review ? `Artifacts (${target.review})` : 'Artifacts';
   if (target.tab === 'plugin:piecemaker-tabular-review') {
     if (target.draft) return `Analyse tabulaire (projet ${target.draft})`;
     if (target.review) return `Analyse tabulaire (${target.review})`;
     return 'Analyse tabulaire';
   }
+  if (target.view === 'index-analysis') return 'Dossier (analyse tabulaire de l’index)';
   return target.view === 'chronology' ? 'Dossier (index)' : 'Dossier (vue générale)';
 }
 
@@ -310,12 +427,14 @@ function asText(result) {
 }
 
 function withNotice(result, notice) {
+  if (!notice) return asText(result);
   return `${asText(result).replace(/\n$/, '')}\n${notice}`;
 }
 
 async function followPanel(api, request, target) {
   const label = panelNoticeLabel(target);
-  const { opened, alreadyOpen } = await confirmPanel(api, request, target);
+  const { opened, alreadyOpen, absent } = await confirmPanel(api, request, target);
+  if (absent) return '';
   if (!opened) return 'Le volet n’a pas suivi (PieceMaker n’a pas confirmé l’ouverture).';
   return alreadyOpen ? `Déjà visible : ${label}.` : `Visible : ${label}.`;
 }
@@ -339,6 +458,457 @@ function reviewInput(flags) {
   };
 }
 
+function value(flag) {
+  return flag && flag !== true ? String(flag) : undefined;
+}
+
+function panelRequest(project, target) {
+  const request = { project, ...target };
+  delete request.cwd;
+  return request;
+}
+
+async function tab(api, positional, cwd, resolved) {
+  const [, commande, cible, argument] = positional;
+  if (!TAB_COMMANDS.includes(commande)) usage(`tab attend ${TAB_COMMANDS.join(', ')}.`);
+  if (commande === 'lister') return api.describePanels ? api.describePanels(resolved) : 'Aucun volet ouvert à côté du chat.';
+  if (!TAB_TARGETS.includes(cible)) usage(`Cible inconnue : ${cible ?? '(aucune)'}`);
+  const closing = commande === 'fermer';
+  if (cible === 'fichier') {
+    if (!argument) usage('Indiquez le chemin du fichier.');
+    const file = path.resolve(cwd, argument);
+    if (!closing && !api.exists(file)) fail(`Fichier introuvable : ${argument}`);
+    const target = { cwd: resolved, tab: 'files', document: file };
+    const request = { project: resolved, tab: 'files', document: file };
+    if (closing) {
+      const { closed, alreadyClosed } = await confirmClose(api, request, target);
+      if (!closed) fail('La fermeture du fichier n’a pas été confirmée dans PieceMaker.');
+      return alreadyClosed ? `Déjà fermé : ${argument}` : `Fermé : ${argument}`;
+    }
+    const { opened, alreadyOpen } = await confirmPanel(api, request, target);
+    if (!opened) fail('L’ouverture du fichier n’a pas été confirmée dans PieceMaker.');
+    return alreadyOpen ? `Déjà affiché dans le volet de lecture : ${argument}` : `Affiché dans le volet de lecture : ${argument}`;
+  }
+  const review = (cible === 'tabular_review' || cible === 'artifacts') && argument ? path.basename(argument) : '';
+  const target = voletTarget(resolved, cible, review);
+  const request = panelRequest(resolved, target);
+  const label = `${cible}${review ? ` (${review})` : ''}`;
+  if (closing) {
+    const { closed, alreadyClosed } = await confirmClose(api, request, target);
+    if (!closed) fail(`La fermeture de ${label} n’a pas été confirmée dans PieceMaker.`);
+    return alreadyClosed ? `Déjà fermé : ${label}` : `Fermé : ${label}`;
+  }
+  const { opened, alreadyOpen } = await confirmPanel(api, request, target);
+  if (!opened) fail(`L’ouverture de ${label} n’a pas été confirmée dans PieceMaker.`);
+  return alreadyOpen ? `Déjà affiché : ${label}` : `Volet affiché : ${label}`;
+}
+
+async function runningJob(api, folder) {
+  try {
+    const { job } = await api.conversionJob({ folder });
+    return job?.state === 'running' ? job : null;
+  } catch {
+    return null;
+  }
+}
+
+function progress(job) {
+  return `Conversion en cours : phase ${job.phase}, ${job.processed}/${job.total} (avancement global ${Math.round(job.percent)} %).`;
+}
+
+const EN_ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
+  + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala et suivi.\n'
+  + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
+  + 'Revenez à la fin avec pm dossier conversion.';
+
+const EN_COURS_CHECK = 'Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala et suivi, qui ne lisent pas les pièces.';
+
+function background(job) {
+  return `${job ? progress(job) : 'Conversion en cours.'}\n${EN_ARRIERE_PLAN}`;
+}
+
+async function followJob(api, project, deadline) {
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => { setTimeout(resolve, api.conversionPollMs ?? 2000); });
+    if (!await runningJob(api, project)) {
+      const { job } = await api.conversionJob({ folder: project }).catch(() => ({}));
+      if (job?.state === 'done') return 'Conversion terminée. Lancez pm check.';
+      return `Conversion arrêtée : ${job?.state ?? 'état inconnu'}${job?.error ? `, ${job.error}` : ''}.`;
+    }
+  }
+  return background(await runningJob(api, project));
+}
+
+async function conversion(api, project, pieces, force) {
+  const waitMs = api.conversionWaitMs ?? CONVERSION_WAIT_MS;
+  if (await runningJob(api, project)) return followJob(api, project, Date.now() + waitMs);
+  const controller = new AbortController();
+  let timer;
+  const timeout = new Promise((resolve) => { timer = setTimeout(resolve, waitMs, null); });
+  const result = await Promise.race([api.execFn(conversionArgs({ dossier: project, pieces, force }), project, controller.signal), timeout]);
+  clearTimeout(timer);
+  if (!result) {
+    controller.abort();
+    return background(await runningJob(api, project));
+  }
+  if (result.code !== 0) {
+    fail((result.stderr && result.stderr.trim()) || (result.stdout && result.stdout.trim()) || `Échec de la conversion (code ${result.code}).`);
+  }
+  return result.stdout;
+}
+
+async function dossierState(api, project) {
+  const state = api.caseState(project);
+  const sansEntite = state.anonymized && !state.lifted && (await api.entityCount?.(project)) === 0;
+  const anonymisation = state.lifted ? 'levée par l’avocat (pièces lisibles par l’IA)'
+    : sansEntite ? 'à refaire, aucune entité ni mapping en base pour ce dossier : pm dossier conversion'
+      : state.anonymized ? 'faite' : 'à faire : pm dossier conversion';
+  const mappingOk = state.lifted || Boolean(api.mappingValidated?.(project));
+  const mapping = state.lifted ? 'sans objet (anonymisation levée)' : mappingOk ? 'validé par l’avocat' : 'à valider par l’avocat (onglet Dossier, Mapping)';
+  const { analyses = [], projets = [] } = await api.tabularFn({ action: 'lister', project });
+  let index = projets.some((entry) => entry.index) ? 'préparé, pas lancé : pm dossier index lancer' : 'absent : pm dossier index lancer';
+  let indexOk = false;
+  if (analyses.some((entry) => entry.index)) {
+    const { absentes = 0 } = await api.tabularFn({ action: 'index', project });
+    indexOk = !absentes;
+    index = absentes ? `${absentes} pièce(s) absente(s) de l’index : pm dossier index lancer` : 'à jour';
+  }
+  const { pieces = [] } = await api.piecesFn({ folder: project });
+  const pending = pieces.filter((piece) => piece.protected && piece.status !== 'ready');
+  const job = await runningJob(api, project);
+  const conversionLine = job ? progress(job)
+    : pending.length ? `${pending.length} pièce(s) non convertie(s) : pm dossier conversion\n${pending.map((piece) => `  - ${piece.path} (${PIECE_STATES[piece.status] ?? piece.status})`).join('\n')}`
+      : `${pieces.length} pièce(s), toutes converties`;
+  const lignes = [
+    { nom: 'anonymisation', texte: job && (!state.anonymized || sansEntite) ? 'en cours, voir 1°' : anonymisation, ok: (state.anonymized && !sansEntite) || state.lifted },
+    { nom: 'mapping', texte: mapping, ok: mappingOk },
+    { nom: 'index', texte: index, ok: indexOk },
+    { nom: 'conversion', texte: conversionLine, ok: !job && !pending.length },
+  ];
+  return { lignes, pret: lignes.every((ligne) => ligne.ok), enCours: Boolean(job) };
+}
+
+const DOSSIER_LABELS = { conversion: 'Conversion', anonymisation: 'Anonymisation', mapping: 'Mapping' };
+
+const point = (numero, nom, defauts, detail, depth = 0) => ({ numero, depth, ok: !defauts, texte: `${nom} : ${defauts ? `${defauts}${detail ? ` → ${detail}` : ''}` : 'valide'}` });
+const titre = (numero, texte, depth = 0) => ({ numero, depth, texte, titre: true });
+const letter = (index) => String.fromCharCode(65 + index);
+
+function indexPoint({ erreurs = [], contradictions = [], manques = [] }) {
+  const orphans = manques.filter((entry) => !entry.programmes?.length);
+  const forAgent = orphans.filter((entry) => !entry.avocat);
+  const forLawyer = orphans.length - forAgent.length;
+  const untyped = erreurs.filter((entry) => /^type « Non classé »/.test(entry.erreur)).map((entry) => String(entry.fiche).replace(/^\//, '').replace(/\.md$/, ''));
+  const faults = erreurs.length - untyped.length;
+  const defauts = [
+    untyped.length ? `attribuer un type à ${untyped.join(', ')} : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence)` : '',
+    faults ? `${faults} erreur(s)` : '',
+    forAgent.length ? `${forAgent.length} manque(s)` : '',
+    forLawyer ? `${forLawyer} manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier)` : '',
+    contradictions.length ? `${contradictions.length} contradiction(s) à présenter à l’avocat` : '',
+  ].filter(Boolean).join(', ');
+  return point('4°', 'Index', defauts, 'pm okf verify');
+}
+
+function newestSource(directory) {
+  let newest = 0;
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (entry.name === 'resultats' || entry.name.startsWith('_')) continue;
+    const file = path.join(directory, entry.name);
+    newest = Math.max(newest, entry.isDirectory() ? newestSource(file) : fs.statSync(file).mtimeMs);
+  }
+  return newest;
+}
+
+function catalaState(folder, name) {
+  const directory = path.join(folder, '.piecemaker', 'catala', name);
+  const result = path.join(directory, 'resultats', 'verification.json');
+  let report = null;
+  try { report = JSON.parse(fs.readFileSync(result, 'utf8')); } catch {}
+  if (!report) return 'jamais vérifié';
+  if (newestSource(directory) > fs.statSync(result).mtimeMs) return 'modifié depuis la vérification';
+  if (report.passed) return '';
+  return `${(report.checks ?? []).filter((entry) => !entry.passed).length || 1} contrôle(s) en échec`;
+}
+
+
+async function suiviState(api, folder, suivi) {
+  let text;
+  try { text = String(await api.suiviFn({ commande: 'verifier', cwd: folder, suivi })); } catch { return 'vérification impossible'; }
+  const issues = /(\d+) erreur\(s\), (\d+) manque\(s\)\./.exec(text);
+  const urgent = text.split('\n').filter((entry) => URGENT_DEADLINE.test(entry)).length;
+  return [
+    ...(issues && (issues[1] !== '0' || issues[2] !== '0') ? [`${issues[1]} erreur(s), ${issues[2]} manque(s)`] : []),
+    ...(urgent ? [`${urgent} échéance(s) dépassée(s), du jour ou sans date`] : []),
+  ].join(', ');
+}
+
+function documentState(folder, document) {
+  if (document.valide) return '';
+  return fs.existsSync(path.resolve(folder, document.chemin)) ? 'en cours de rédaction' : 'à rédiger';
+}
+
+async function reasoningPoints(api, folder, manques) {
+  let etapes = {};
+  try { etapes = JSON.parse(fs.readFileSync(path.join(folder, '.piecemaker', 'etapes.json'), 'utf8')); } catch {}
+  const suites = Object.fromEntries(Object.entries(etapes.raisonnements ?? {}).filter(([, suite]) => !suite.remplacePar));
+  const superseded = new Set(Object.keys(etapes.raisonnements ?? {}).filter((nom) => !suites[nom]));
+  const programs = listPrograms(folder);
+  let suivis = [];
+  try { suivis = fs.readdirSync(path.join(folder, '.piecemaker')).filter((entry) => SUIVI_FILES.test(entry)).sort(); } catch {}
+  const suiviOf = (nom) => suivis.find((entry) => SUIVI_FILES.exec(entry)[1] === nom);
+  const names = [...new Set([...Object.keys(suites), ...programs, ...suivis.map((entry) => SUIVI_FILES.exec(entry)[1]).filter(Boolean)])]
+    .filter((nom) => !superseded.has(nom)).sort();
+  if (!names.length) return { points: [{ numero: '5°', depth: 0, ok: true, texte: 'Raisonnement : aucun' }], others: suivis };
+  const points = [titre('5°', 'Raisonnement')];
+  for (const [index, nom] of names.entries()) {
+    const numero = `5.${letter(index)}`;
+    const suite = suites[nom];
+    points.push(titre(numero, `${nom}${suite ? ` (${ETAPE_LABELS[suite.etape] ?? suite.etape})` : ''}`, 1));
+    if (suite?.etape === 'clos') continue;
+    const children = [];
+    const add = (nomPoint, defauts, detail) => children.push(point(`${numero}.${children.length + 1}`, nomPoint, defauts, detail, 2));
+    if (programs.includes(nom)) {
+      add(`Programme Catala (.piecemaker/catala/${nom}/)`, catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
+      const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
+      const links = premiseLinks(folder, nom);
+      const missing = [...new Set(links.errors.map((error) => error.match(/\[ERROR\] input "([^"]+)"/)?.[1]).filter(Boolean))];
+      const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} entrée(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
+      const detail = gaps ? 'pm okf verify' : missing.length ? `pm catala verifier --programme ${nom}` : 'skill okf';
+      if (defauts) add('Prémisses OKF du programme', defauts, detail);
+      else if (!links.inputs && !links.mentions) add('Prémisses OKF du programme', 'aucune', 'skill okf');
+      else children.push({ ...point(`${numero}.${children.length + 1}`, 'Prémisses OKF du programme', '', '', 2), ...(links.unlinked.length ? { texte: `Prémisses OKF du programme : valide, ${links.unlinked.length} prémisse(s) de l’index sans entrée (alerte) → pm catala verifier --programme ${nom}` } : {}) });
+    } else add('Programme Catala', 'à écrire', 'skill catala');
+    for (const document of suite?.documents ?? []) {
+      const state = documentState(folder, document);
+      children.push({ numero: `${numero}.${children.length + 1}`, depth: 2, ok: !state, texte: `${document.nom} : ${state || 'validé'}` });
+    }
+    const suivi = suiviOf(nom);
+    if (suivi) add('Suivi', await suiviState(api, folder, suivi), `pm suivi_dossiers verifier --suivi ${suivi}`);
+    points.push(...children);
+  }
+  return { points, others: suivis.filter((entry) => !SUIVI_FILES.exec(entry)[1]) };
+}
+
+async function researchPoints(api, folder) {
+  const { projets = [] } = await api.tabularFn({ action: 'lister', project: folder });
+  return projets.filter((draft) => draft.mode === 'recherche').map((draft) => {
+    const blocked = draft.erreur || draft.a_completer?.length;
+    return { ok: !blocked, texte: `Recherche « ${draft.nom} » : ${blocked ? 'bloquée → pm tabular_review lister' : 'en attente'}` };
+  });
+}
+
+async function check(api, folder) {
+  const { lignes, enCours } = await dossierState(api, folder);
+  const preparation = ['conversion', 'anonymisation', 'mapping'].map((nom, index) => {
+    const ligne = lignes.find((entry) => entry.nom === nom);
+    return { numero: `${index + 1}°`, depth: 0, ok: ligne.ok, texte: `${DOSSIER_LABELS[nom]} : ${ligne.ok ? 'valide' : ligne.texte.split('\n')[0]}` };
+  });
+  if (enCours) preparation[0].texte += ` ${EN_COURS_CHECK}`;
+  const okfResult = await api.okfFn({ action: 'verify', folder });
+  const { points, others } = await reasoningPoints(api, folder, okfResult.manques ?? []);
+  const research = await researchPoints(api, folder);
+  const suivis = await Promise.all(others.map(async (suivi) => point('', `Suivi ${suivi}`, await suiviState(api, folder, suivi), `pm suivi_dossiers verifier --suivi ${suivi}`)));
+  const tail = [...research, ...suivis].map((entry, index) => ({ ...entry, numero: `${6 + index}°`, depth: 0 }));
+  const all = [...preparation, indexPoint(okfResult), ...points, ...tail];
+  const failing = all.filter((entry) => !entry.titre && !entry.ok).length;
+  return [
+    failing ? `Dossier : ${failing} point(s) à traiter.` : 'Dossier : valide.',
+    ...all.map((entry) => `${'  '.repeat(entry.depth)}${entry.numero} ${entry.texte}`),
+  ].join('\n');
+}
+
+export async function etatDossier(project, { deps } = {}) {
+  const resolved = path.resolve(project);
+  return dossierState(deps || await defaultDeps(resolved), resolved);
+}
+
+async function dossier(api, positional, flags, resolved) {
+  const commande = positional[1];
+  if (!DOSSIER_COMMANDS.includes(commande)) usage(`dossier attend ${DOSSIER_COMMANDS.join(', ')}.`);
+  const project = path.resolve(resolved);
+  if (commande === 'conversion') return conversion(api, resolved, positional.slice(2), flags.force === true);
+  if (commande === 'sql') {
+    const requete = positional.slice(2).join(' ').trim();
+    if (!requete) usage('Indiquez une requête SQL.');
+    const result = await api.sqlFn({ requete, cwd: resolved });
+    const target = sqlPanelTarget(requete, resolved);
+    if (!target) return result;
+    return withNotice(result, await followPanel(api, { project: resolved, tab: target.tab, view: target.view }, target));
+  }
+  const target = voletTarget(project, 'index');
+  if (commande === 'arborescence') {
+    const proposal = value(flags.dossiers) ? { dossiers: parseJson(flags.dossiers, 'dossiers'), ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) } : {};
+    const result = await api.tabularIndex(api.tabularFn, { action: 'arborescence', project, ...proposal });
+    return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, target), target));
+  }
+  if (commande === 'classer') {
+    const [document, directory] = positional.slice(2);
+    if (!document || !directory) usage('dossier classer attend <document> <dossier>.');
+    const { dossiers = [] } = await api.tabularIndex(api.tabularFn, { action: 'arborescence', project });
+    const names = dossiers.map((entry) => String(entry.nom));
+    if (names.length && !names.some((name) => directory === name || directory.startsWith(`${name}/`))) usage(`dossier classer attend un dossier de l’arborescence : ${names.join(', ')}.`);
+    const moved = await api.moveFn({ folder: project, path: document, directory });
+    return withNotice(`Classé : ${moved.previous} → ${moved.current}`, await followPanel(api, panelRequest(project, target), target));
+  }
+  const action = positional[2];
+  if (!INDEX_ACTIONS.includes(action)) usage(`dossier index attend ${INDEX_ACTIONS.join(', ')}.`);
+  const result = await api.tabularIndex(api.tabularFn, { ...reviewInput(flags), action, project });
+  const analysis = { ...target, view: 'index-analysis' };
+  return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, analysis), analysis));
+}
+
+async function tabularReview(api, positional, flags, resolved) {
+  const action = positional[1];
+  if (!REVIEW_ACTIONS.includes(action)) usage('tabular_review attend une action connue.');
+  const project = path.resolve(resolved);
+  if (action === 'verifier') return (await researchPoints(api, project)).filter((entry) => !entry.ok).map((entry) => entry.texte).join('\n');
+  await api.refuseIndex(api.tabularFn, project, { fichier: flags.fichier, projet: flags.projet });
+  const result = await api.tabularFn({ ...reviewInput(flags), action, project });
+  const text = JSON.stringify(result);
+  if (result?.index) {
+    const target = { ...voletTarget(project, 'index'), view: 'index-analysis' };
+    return withNotice(text, await followPanel(api, panelRequest(project, target), target));
+  }
+  if (REVIEW_FOLLOWED.includes(action) || action === 'lister' || action === 'preparer' || action === 'lancer') {
+    const review = (REVIEW_FOLLOWED.includes(action) || action === 'preparer') && result?.fichier ? String(result.fichier) : undefined;
+    const draft = result && typeof result === 'object' && result.projet ? String(result.projet) : undefined;
+    const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review, draft };
+    return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft }, target));
+  }
+  return text;
+}
+
+async function okf(api, positional, flags, resolved) {
+  const action = positional[1];
+  if (!OKF_COMMANDS.includes(action)) usage(`okf attend ${OKF_COMMANDS.join(', ')}.`);
+  const folder = path.resolve(resolved);
+  if (action === 'verify') {
+    const { erreurs, contradictions = [], manques, examinees = [] } = await api.okfFn({ action, folder });
+    return [
+      erreurs.length ? `Index OKF : ${erreurs.length} erreur(s).` : 'Index OKF : aucune erreur.',
+      ...erreurs.map((entry) => `- ${entry.fiche} : ${entry.erreur}`),
+      ...(contradictions.length ? [`Contradictions : ${contradictions.length}.`] : []),
+      ...contradictions.map((entry) => `- ${entry.titre} : ${entry.valeurs.map((item) => `${item.piece} → ${item.valeur}`).join(' ; ')}`),
+      ...(manques ? [manques.length ? `Graphe : ${manques.length} élément(s) manquant(s).` : 'Graphe : aucun élément manquant.'] : []),
+      ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}${entry.programmes?.length ? ` (programme ${entry.programmes.join(', ')})` : ''}`),
+      ...(examinees.length ? [`Examinées sans lien (information, pas un manque) : ${examinees.length}.`] : []),
+      ...examinees.map((entry) => `- ${entry.element} : ${entry.motif}`),
+    ].join('\n');
+  }
+  if (action === 'types' || (action === 'ontologie' && positional[2] === 'proposer')) {
+    if (!value(flags.json)) usage(action === 'types' ? 'okf types attend --json : liste complète des types {name, icon}.' : 'okf ontologie proposer attend --json \'{"relations":[...],"documentTypes":[...]}\'.');
+    let proposee;
+    try { proposee = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
+    const ontologie = { ...(action === 'types' ? { documentTypes: proposee } : Array.isArray(proposee) ? { relations: proposee } : proposee), ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) };
+    const proposition = await api.okfFn({ action: 'proposer', folder, ontologie });
+    const parts = [...(proposition.relations ? [`${proposition.relations.length} relation(s)`] : []), ...(proposition.documentTypes ? [`${proposition.documentTypes.length} type(s) de documents`] : [])];
+    return parts.length ? `Proposition enregistrée (${parts.join(', ')}) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Ontologie.` : 'Aucun changement par rapport à l’ontologie actuelle : aucune proposition en attente.';
+  }
+  if (action === 'ontologie') {
+    const { relations, systeme, erreur, proposition, documentTypes = [], types = [], icones = [] } = await api.okfFn({ action, folder });
+    // Noms des relations de l'ontologie scellée, plus les relations système : le schéma de l'outil OkfWrite.
+    if (flags.noms) return JSON.stringify([...new Set([...relations, ...systeme].map((entry) => entry.name).filter((name) => name !== 'mentions'))]);
+    return [
+      ...(erreur ? [`Attention : ${erreur}`] : []),
+      ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}) : ${[...(proposition.relations || []), ...(proposition.documentTypes || [])].map((entry) => entry.name).join(', ')}.`] : []),
+      'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :',
+      ...relations.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source.join(', ')} → ${entry.target.join(', ')}${entry.description ? ` — ${entry.description}` : ''}`),
+      `Types principaux du dossier : ${types.join(', ')}. Classement : pm dossier arborescence.`,
+      `Icônes disponibles : ${icones.join(', ')}.`,
+      'Types de documents (pm okf types --json pour proposer la liste complète) :',
+      ...documentTypes.map((entry) => `- ${entry.name} : ${entry.icon}`),
+      'Relations système :',
+      ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),
+    ].join('\n');
+  }
+  if (action === 'examinee') {
+    const piece = positional[2];
+    if (!piece) usage('okf examinee attend <pièce>.');
+    if (!flags.retirer && !value(flags.motif)) usage('okf examinee attend --motif "raison", ou --retirer.');
+    const examen = await api.okfFn({ action, folder, source: piece, ...(flags.retirer ? { retirer: true } : { motif: String(flags.motif) }) });
+    return flags.retirer ? `Examen retiré : ${examen.source} redevient à examiner.` : `Examinée sans lien : ${examen.source} — ${examen.motif}\nLe manque revient si le document change. Annuler : pm okf examinee ${piece} --retirer`;
+  }
+  if (action === 'revues') {
+    const revues = await api.okfFn({ action, folder });
+    if (!revues.length) return 'Aucune revue tabulaire des pièces dans ce dossier.';
+    return revues.map((entry) => [`${entry.fichier} — ${entry.titre}`, ...entry.colonnes.map((column) => `  ${column.index} « ${column.nom} » (${column.format})`)].join('\n')).join('\n');
+  }
+  if (action === 'revue') {
+    const premise = positional[2];
+    if (!premise || !value(flags.fichier) || flags.colonne === undefined || flags.colonne === true) usage('okf revue attend "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index>.');
+    const lien = await api.okfFn({ action, folder, premise, fichier: String(flags.fichier), colonne: String(flags.colonne), ...(flags.retirer ? { retirer: true } : {}) });
+    return flags.retirer ? `Revue déliée : ${lien.fichier} › colonne ${lien.colonne} de ${lien.premise}.` : `Revue liée : ${lien.fichier} › colonne ${lien.colonne} établit ${lien.premise}. Ses lignes positives sont des pièces de la prémisse ; l’avocat les vérifie dans la revue.`;
+  }
+  const [source, relation, target] = positional.slice(2);
+  if (!source || !relation || !target) usage(`okf ${action} attend <source> <relation> <target>.`);
+  if (action === 'link' && relation !== 'involves' && !value(flags.citation)) usage('okf link attend --citation.');
+  const detail = action === 'link' ? {
+    ...(value(flags.citation) ? { citation: String(flags.citation) } : {}),
+    ...(value(flags.value) ? { value: String(flags.value) } : {}),
+    ...(flags.single ? { single: true } : {}),
+  } : {};
+  const lien = await api.okfFn({ action, folder, source, relation, target, ...detail });
+  return `${action === 'link' ? 'Lien enregistré' : 'Lien retiré'} : ${lien.source} ${lien.relation} ${lien.target}`;
+}
+
+async function suiviDossiers(api, positional, flags, resolved) {
+  const [, commande, chemin] = positional;
+  if (!SUIVI_COMMANDS.includes(commande)) usage(`suivi_dossiers attend ${SUIVI_COMMANDS.join(', ')}.`);
+  const cwd = path.resolve(resolved);
+  if (commande === 'verifier') {
+    if (flags.suivi === true) usage('Indiquez une valeur pour --suivi.');
+    return api.suiviFn({ commande, cwd, ...(flags.suivi ? { suivi: String(flags.suivi) } : {}) });
+  }
+  if (!chemin) usage(`suivi_dossiers ${commande} attend un chemin.`);
+  if (commande === 'lire') return api.suiviFn({ commande, chemin, cwd });
+  if (!value(flags.json)) usage('suivi_dossiers ecrire attend --json.');
+  let donnees;
+  try { donnees = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
+  return api.suiviFn({ commande, chemin, donnees, cwd });
+}
+
+function memoire(positional, flags, resolved) {
+  if (positional[1] !== 'verifier') usage('memoire attend verifier.');
+  if (flags.memoire === true) usage('Indiquez une valeur pour --memoire.');
+  const folder = path.resolve(resolved);
+  const directory = path.join(folder, MEMOIRES_DIR);
+  let noms = flags.memoire ? [String(flags.memoire)] : [];
+  if (!flags.memoire) { try { noms = fs.readdirSync(directory).filter((entry) => entry.endsWith('.md')).map((entry) => entry.slice(0, -3)).sort(); } catch {} }
+  let etapes = {};
+  try { etapes = JSON.parse(fs.readFileSync(path.join(folder, '.piecemaker', 'etapes.json'), 'utf8')); } catch {}
+  const acte = (nom) => Boolean(etapes.raisonnements?.[nom]) || [`catala/${nom}`, `${nom}-suivi.json`].some((relative) => fs.existsSync(path.join(folder, '.piecemaker', relative)));
+  return noms.flatMap((nom) => {
+    const fichier = `${MEMOIRES_DIR}/${nom}.md`;
+    let texte;
+    try { texte = fs.readFileSync(path.join(directory, `${nom}.md`), 'utf8'); } catch { return [`${fichier} : introuvable.`]; }
+    return [
+      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans .piecemaker/${nom}-suivi.json ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
+      ...(acte(nom) ? [] : [`${fichier} : manque : aucun programme Catala, suivi ni carte du tableau ne s’appelle ${nom}. Nommez la mémoire comme son acte.`]),
+    ];
+  }).join('\n');
+}
+
+async function catala(api, positional, flags, resolved) {
+  const [, commande, ...args] = positional;
+  if (!CATALA_COMMANDS.includes(commande)) usage(`catala attend ${CATALA_COMMANDS.join(', ')}.`);
+  if (flags.programme === true) usage('Indiquez une valeur pour --programme.');
+  const input = { commande, cwd: path.resolve(resolved), flags, args, ...(flags.programme ? { programme: String(flags.programme) } : {}) };
+  if (commande === 'verifier' && api.catalaCitations) input.deps = { citations: api.catalaCitations };
+  const updatePanel = ['verifier', 'preuve', 'catleg', 'expliquer'].includes(commande) && api.catalaUpdated;
+  try {
+    const result = await (api.catalaFn || runCatala)(input);
+    if (updatePanel) {
+      try { await api.catalaUpdated({ cwd: input.cwd }); } catch { return `${result}\nVolet non actualisé : rouvrez le volet Catala.`; }
+    }
+    return result;
+  } catch (error) {
+    if (updatePanel) { try { await api.catalaUpdated({ cwd: input.cwd }); } catch {} }
+    if (error instanceof TypeError) usage(error.message);
+    fail(error.message);
+  }
+}
+
 export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   const { flags, positional } = parseArgv(argv);
   if (flags.help && !positional.length) return HELP;
@@ -349,28 +919,14 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   const api = deps || await defaultDeps(cwd);
   const resolved = resolveDossier(flags.dossier, flags.dossier || !api.sessionDossier ? cwd : await api.sessionDossier(cwd));
 
-  if (tool === 'conversion') {
-    const pieces = positional.slice(1);
-    const result = await api.execFn(conversionArgs({
-      dossier: resolved,
-      pieces,
-      force: flags.force === true || flags.force === 'true',
-    }), resolved);
-    if (result.code !== 0) {
-      fail((result.stderr && result.stderr.trim()) || (result.stdout && result.stdout.trim()) || `Échec de la conversion (code ${result.code}).`);
-    }
-    return result.stdout;
-  }
-
-  if (tool === 'sql') {
-    const requete = flags.requete && flags.requete !== true ? String(flags.requete) : positional.slice(1).join(' ').trim();
-    if (!requete) usage('Indiquez une requête SQL (--requete ou arguments).');
-    const result = await api.sqlFn({ requete, cwd: resolved });
-    const target = sqlPanelTarget(requete, resolved);
-    if (!target) return result;
-    const request = { project: resolved, tab: target.tab, view: target.view };
-    return withNotice(result, await followPanel(api, request, target));
-  }
+  if (tool === 'check') return check(api, path.resolve(resolved));
+  if (tool === 'tab') return tab(api, positional, cwd, resolved);
+  if (tool === 'dossier') return dossier(api, positional, flags, resolved);
+  if (tool === 'tabular_review') return tabularReview(api, positional, flags, resolved);
+  if (tool === 'suivi_dossiers') return suiviDossiers(api, positional, flags, resolved);
+  if (tool === 'catala') return catala(api, positional, flags, resolved);
+  if (tool === 'okf') return okf(api, positional, flags, resolved);
+  if (tool === 'memoire') return memoire(positional, flags, resolved);
 
   if (tool === 'bordereau') {
     const pieces = positional.slice(1);
@@ -378,137 +934,23 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
     const project = path.resolve(resolved);
     const { results, message } = await api.stampFn({ folder: project, pieces });
     const lines = results.map((entry) => `Pièce n°${entry.pieceNumber} : ${entry.success ? entry.filename : `ÉCHEC, ${entry.error}`}`);
-    const target = voletTarget(project, 'tampon');
+    const target = voletTarget(project, 'bordereau');
     const request = { project, tab: target.tab };
     if (await api.waitPanel(target, 0)) await api.openPanel(request);
     return withNotice([...lines, message].join('\n'), await followPanel(api, request, target));
   }
 
-  if (tool === 'afficher') {
-    const closing = flags.fermer === true;
-    if ((!flags.fichier || flags.fichier === true) && (!flags.volet || flags.volet === true)) {
-      if (closing) usage('Indiquez --fichier ou --volet avec --fermer.');
-      return api.describePanels ? api.describePanels(resolved) : 'Aucun volet ouvert à côté du chat.';
-    }
-    if (flags.fichier && flags.fichier !== true) {
-      const file = path.resolve(cwd, String(flags.fichier));
-      if (!closing && !api.exists(file)) fail(`Fichier introuvable : ${flags.fichier}`);
-      const target = { cwd: resolved, tab: 'files', document: file };
-      const request = { project: resolved, tab: 'files', document: file };
-      if (closing) {
-        const { closed, alreadyClosed } = await confirmClose(api, request, target);
-        if (!closed) fail('La fermeture du fichier n’a pas été confirmée dans PieceMaker.');
-        return alreadyClosed ? `Déjà fermé : ${flags.fichier}` : `Fermé : ${flags.fichier}`;
-      }
-      const { opened, alreadyOpen } = await confirmPanel(api, request, target);
-      if (!opened) fail('L’ouverture du fichier n’a pas été confirmée dans PieceMaker.');
-      return alreadyOpen
-        ? `Déjà affiché dans le volet de lecture : ${flags.fichier}`
-        : `Affiché dans le volet de lecture : ${flags.fichier}`;
-    }
-    if (!VOLETS.includes(flags.volet)) usage(`Volet inconnu : ${flags.volet}`);
-    const review = flags.review && flags.review !== true ? path.basename(String(flags.review)) : '';
-    const target = voletTarget(resolved, flags.volet, review);
-    const request = { project: resolved, ...target };
-    delete request.cwd;
-    if (closing) {
-      const { closed, alreadyClosed } = await confirmClose(api, request, target);
-      if (!closed) fail(`La fermeture du volet ${flags.volet} n’a pas été confirmée dans PieceMaker.`);
-      const label = `${flags.volet}${review ? ` (${review})` : ''}`;
-      return alreadyClosed ? `Déjà fermé : ${label}` : `Fermé : ${label}`;
-    }
-    const { opened, alreadyOpen } = await confirmPanel(api, request, target);
-    if (!opened) fail(`L’ouverture du volet ${flags.volet} n’a pas été confirmée dans PieceMaker.`);
-    const label = `${flags.volet}${review ? ` (${review})` : ''}`;
-    return alreadyOpen ? `Déjà affiché : ${label}` : `Volet affiché : ${label}`;
-  }
-
-  if (tool === 'tabular_review_index') {
-    const action = positional[1];
-    if (!INDEX_ACTIONS.includes(action)) usage('tabular_review_index attend une action connue.');
-    const project = path.resolve(resolved);
-    const target = voletTarget(project, 'index');
-    const result = action === 'lister' || action === 'modifier'
-      ? await api.sqlFn({
-        requete: api.chronologieSql({
-          action,
-          dossier: flags.dossier && flags.dossier !== true ? flags.dossier : undefined,
-          piece: flags.piece,
-          date: flags.date === true ? undefined : flags.date,
-          libelle: flags.libelle === true ? undefined : flags.libelle,
-        }),
-        cwd,
-      })
-      : JSON.stringify(await api.tabularIndex(api.tabularFn, { ...reviewInput(flags), action, project }));
-    return withNotice(result, await followPanel(api, { project, ...target }, target));
-  }
-
-  if (tool === 'tabular_review') {
-    const action = positional[1];
-    if (!REVIEW_ACTIONS.includes(action)) usage('tabular_review attend une action connue.');
-    const project = path.resolve(resolved);
-    await api.refuseIndex(api.tabularFn, project, { fichier: flags.fichier, projet: flags.projet });
-    if (action === 'ouvrir') {
-      const draft = flags.projet && flags.projet !== true ? String(flags.projet) : '';
-      const name = draft ? undefined : api.reviewFile(project, flags.fichier);
-      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review: name, draft: draft || undefined };
-      const request = { project, tab: 'plugin:piecemaker-tabular-review', review: name, draft: draft || undefined };
-      const notice = await followPanel(api, request, target);
-      if (draft) return notice;
-      return withNotice(`Analyse affichée dans le volet Tabular Review. Contenu : « Tabular Review/${name} ».`, notice);
-    }
-    const result = await api.tabularFn({ ...reviewInput(flags), action, project });
-    const text = Array.isArray(result) && action === 'documents' ? result.join('\n') : JSON.stringify(result);
-    if (result?.index) {
-      const target = voletTarget(project, 'index');
-      return withNotice(text, await followPanel(api, { project, ...target }, target));
-    }
-    if (REVIEW_FOLLOWED.includes(action)) {
-      const review = result?.fichier ? String(result.fichier) : undefined;
-      const draft = result?.projet ? String(result.projet) : undefined;
-      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review, draft };
-      return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft }, target));
-    }
-    if (action === 'lister' || action === 'preparer' || action === 'lancer') {
-      const review = action === 'preparer' && result?.fichier ? String(result.fichier) : undefined;
-      const draft = result && typeof result === 'object' && result.projet ? String(result.projet) : '';
-      const target = { cwd: project, tab: 'plugin:piecemaker-tabular-review', review, draft: draft || undefined };
-      return withNotice(text, await followPanel(api, { project, tab: target.tab, review, draft: target.draft }, target));
-    }
-    return text;
-  }
-
-  if (tool === 'raisonnement') {
-    const commande = positional[1];
-    if (!REASONING_COMMANDS.includes(commande)) usage(`raisonnement attend ${REASONING_COMMANDS.join(', ')}.`);
-    if (commande === 'consignes') return api.reasoningInstructions();
-    if (flags.raisonnement === true) usage('Indiquez une valeur pour --raisonnement.');
-    const input = { commande, cwd: path.resolve(resolved), ...(flags.raisonnement ? { raisonnement: String(flags.raisonnement) } : {}) };
-    const result = await api.reasoningFn(input);
-    const target = { cwd: input.cwd, tab: 'plugin:piecemaker-raisonnement' };
-    return withNotice(result, await followPanel(api, { project: input.cwd, tab: target.tab }, target));
-  }
-
-  if (tool === 'suivi') {
-    if (positional[1] === 'lire' || positional[1] === 'ecrire') {
-      if (!positional[2]) usage(`suivi ${positional[1]} attend un chemin.`);
-      if (positional[1] === 'lire') return api.suiviFn({ commande: 'lire', chemin: positional[2], cwd: path.resolve(resolved) });
-      if (!flags.json || flags.json === true) usage('suivi ecrire attend --json.');
-      let donnees;
-      try { donnees = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
-      return api.suiviFn({ commande: 'ecrire', chemin: positional[2], donnees, cwd: path.resolve(resolved) });
-    }
-    if (positional[1] !== 'verifier') usage('suivi attend verifier, lire ou ecrire.');
-    if (flags.suivi === true) usage('Indiquez une valeur pour --suivi.');
-    return api.suiviFn({ commande: 'verifier', cwd: path.resolve(resolved), ...(flags.suivi ? { suivi: String(flags.suivi) } : {}) });
-  }
-
-  usage(`Outil inconnu : ${tool}`);
+  usage();
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
 if (isMain) {
+  if (process.env.NO_COLOR) delete process.env.FORCE_COLOR;
   run(process.argv.slice(2)).then((text) => {
+    if (text && typeof text === 'object') {
+      process.exitCode = text.exitCode;
+      return;
+    }
     process.stdout.write(text.endsWith('\n') ? text : `${text}\n`);
   }).catch((error) => {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

@@ -57,6 +57,38 @@ test('le TTL expiré force la marche suivante', async () => {
   assert.deepEqual(await cache.listOriginalsCached('/dossiers/affaire'), [{ call: 2 }]);
 });
 
+test('une marche plus longue que le TTL reste partagée et le TTL court depuis sa fin', async () => {
+  let calls = 0;
+  let currentTime = 100;
+  let resolveList;
+  const cache = createOriginalsCache({
+    list: async () => {
+      calls += 1;
+      return new Promise((resolve) => {
+        resolveList = resolve;
+      });
+    },
+    now: () => currentTime,
+    realpath: () => '/dossiers/depot',
+    ttlMs: 5_000,
+  });
+
+  const first = cache.listOriginalsCached('/dossiers/depot');
+  await new Promise((resolve) => setImmediate(resolve));
+  currentTime += 60_000;
+  assert.strictEqual(cache.listOriginalsCached('/dossiers/depot'), first);
+  resolveList([{ call: calls }]);
+  await first;
+  currentTime += 4_999;
+  assert.strictEqual(cache.listOriginalsCached('/dossiers/depot'), first);
+  assert.equal(calls, 1);
+  currentTime += 1;
+  assert.notStrictEqual(cache.listOriginalsCached('/dossiers/depot'), first);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(calls, 2);
+  resolveList([]);
+});
+
 test('la capacité bornée évince la dernière entrée ajoutée', async () => {
   const calls = new Map();
   const cache = createOriginalsCache({

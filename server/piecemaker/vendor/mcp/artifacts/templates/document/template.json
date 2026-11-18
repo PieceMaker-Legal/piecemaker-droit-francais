@@ -1,0 +1,1 @@
+{ "title": "Document", "description": "Note, mémo, rapport ou synthèse à relire et à faire circuler, mis en page pour l'impression.", "intent": "document", "icon": "document", "entry": "index.html", "read_first": ["README.md"] }

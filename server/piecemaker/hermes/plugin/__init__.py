@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-COMMANDS = {"commande", "sql", "raisonnement", "suivi"}
+COMMANDS = {"commande", "sql", "catala", "suivi"}
 FUNCTIONS = COMMANDS | {"print", "len", "str", "int", "float", "bool", "list", "dict", "set", "tuple", "sorted", "sum", "min", "max", "enumerate", "range", "zip", "abs", "round"}
 METHODS = {"get", "items", "keys", "values", "append", "extend", "strip", "split", "join", "lower", "upper", "replace", "startswith", "endswith", "count"}
 
@@ -130,8 +130,8 @@ def register(ctx):
     if skill.is_file():
         ctx.register_skill("piecemaker", skill)
     ctx.register_tool(name="piecemaker", toolset="piecemaker", handler=command, schema={
-        "name": "piecemaker", "description": "Exécute une commande pm dans le dossier courant. En Python : from piecemaker import commande, sql, raisonnement, suivi. Utilisez commande(outil, *arguments, **options).",
+        "name": "piecemaker", "description": "Exécute une commande pm dans le dossier courant. En Python : from piecemaker import commande, sql, catala, suivi. Utilisez commande(outil, *arguments, **options).",
         "parameters": {"type": "object", "properties": {
-            "outil": {"type": "string", "enum": ["check", "tab", "dossier", "tabular_review", "bordereau", "raisonnement", "suivi_dossiers", "memoire", "okf"]},
+            "outil": {"type": "string", "enum": ["check", "tab", "dossier", "tabular_review", "bordereau", "suivi_dossiers", "memoire", "catala", "okf"]},
             "arguments": {"type": "array", "items": {"type": "string"}},
             "options": {"type": "object"}}, "required": ["outil"]}})

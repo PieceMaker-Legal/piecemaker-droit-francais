@@ -71,7 +71,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
   <figure>
     <div class="map">
-      <svg viewBox="0 0 1180 940" role="img" aria-label="Le moteur passe par le proxy pour parler au modèle. Il appelle le MCP legifrance sans hook. Il lit les skills piecemaker et docx-cli, sources des commandes pm et docx, puis les lance par Bash sous le contrôle des hooks. Il lance aussi les sous-agents sous ce contrôle. Le MCP piecemaker est retiré par défaut.">
+      <svg viewBox="0 0 1180 940" role="img" aria-label="Le moteur passe par le proxy pour parler au modèle. Il appelle le MCP legifrance sans hook. Il lit les skills piecemaker et docx-cli, sources des commandes pm et docx, puis les lance par Bash sous le contrôle des hooks. Il lance aussi les sous-agents sous ce contrôle. Seul ResearchMaker cherche sur Légifrance. Le MCP piecemaker est retiré par défaut.">
         <defs>
           <marker id="n" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8c8c93"/></marker>
           <marker id="m" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#7ea2ff"/></marker>
@@ -144,33 +144,36 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-mono" x="560" y="232">dictionnaire_juridique</text>
 
         <text class="t-title t-skill-c" x="306" y="286">Skill piecemaker</text>
-        <text class="t-note" x="306" y="306">Source de la commande pm :</text>
-        <text class="t-note" x="306" y="322"><tspan class="t-mono">scripts/pm</tspan> est dans le skill.</text>
+        <text class="t-note" x="306" y="306">pm est dans le PATH (~/.piecemaker/bin).</text>
+        <text class="t-note" x="306" y="322">Le serveur l'écrit à chaque démarrage.</text>
         <text class="t-note" x="306" y="346">Le serveur doit tourner. pm passe par</text>
         <text class="t-note" x="306" y="362">HTTP en boucle locale, vers la base</text>
         <text class="t-note" x="306" y="378">et les volets.</text>
         <text class="t-name t-skill-c" x="306" y="426">legal-code</text>
-        <text class="t-note" x="306" y="444">skill : raisonnement, session /legal-code,</text>
-        <text class="t-note" x="306" y="460">utilise pm raisonnement et pm sql</text>
+        <text class="t-note" x="306" y="444">skill : session /legal-code sur Catala,</text>
+        <text class="t-note" x="306" y="460">utilise pm catala et pm dossier sql</text>
+        <text class="t-name t-skill-c" x="306" y="498">catala</text>
+        <text class="t-note" x="306" y="516">skill : programme Catala, utilise pm catala</text>
 
-        <text class="t-name" x="560" y="276">pm conversion</text><text class="t-mono" x="730" y="276">[pièce…] --dossier --force</text>
-        <text class="t-name" x="560" y="294">pm sql</text><text class="t-mono" x="730" y="294">--requete --dossier</text>
-        <text class="t-name" x="560" y="312">pm afficher</text><text class="t-mono" x="730" y="312">--fichier --review --fermer</text>
-        <text class="t-mono" x="730" y="330">--volet dossier|index|tabular-review|tampon</text>
-        <text class="t-name" x="560" y="348">pm raisonnement</text><text class="t-mono" x="730" y="348">consignes | verifier | lister</text>
-        <text class="t-name" x="560" y="366">pm suivi</text><text class="t-mono" x="730" y="366">verifier | lire | ecrire</text>
-        <text class="t-name" x="560" y="384">pm tabular_review</text><text class="t-mono" x="730" y="384">lister | ouvrir | documents | modeles</text>
-        <text class="t-mono" x="730" y="402">enregistrer_modele | preparer | lancer</text>
-        <text class="t-mono" x="730" y="420">lire | colonnes | relancer</text>
-        <text class="t-name" x="560" y="438">pm tabular_review_index</text><text class="t-mono" x="730" y="438">ouvrir | preparer | lancer | lire</text>
-        <text class="t-mono" x="730" y="456">colonnes | classement | arborescence</text>
-        <text class="t-mono" x="730" y="474">relancer | lister | modifier</text>
-        <text class="t-name" x="560" y="492">pm bordereau</text><text class="t-mono" x="730" y="492">pièce… dans l'ordre --dossier</text>
-        <text class="t-note" x="560" y="514">Lancer ou relancer : accord de l'avocat. L'index reste dans l'onglet Dossier.</text>
+        <text class="t-name" x="560" y="276">pm tab</text><text class="t-mono" x="730" y="276">lister | afficher | fermer</text>
+        <text class="t-mono" x="730" y="294">dossier | index | tabular_review | bordereau</text>
+        <text class="t-mono" x="730" y="312">suivi_dossiers | catala | fichier</text>
+        <text class="t-name" x="560" y="330">pm check</text><text class="t-mono" x="730" y="330">bilan : préparation, OKF, Catala, suivi, étape</text>
+        <text class="t-name" x="560" y="348">pm dossier</text><text class="t-mono" x="730" y="348">sql "REQUÊTE" | conversion [pièce…] --force</text>
+        <text class="t-mono" x="730" y="366">arborescence --dossiers</text>
+        <text class="t-mono" x="730" y="384">index lancer | lire | colonnes</text>
+        <text class="t-name" x="560" y="402">pm tabular_review</text><text class="t-mono" x="730" y="402">lister | modeles | create_template</text>
+        <text class="t-mono" x="730" y="420">preparer | lancer | lire | colonnes | relancer</text>
+        <text class="t-name" x="560" y="438">pm bordereau</text><text class="t-mono" x="730" y="438">pièce… dans l'ordre</text>
+        <text class="t-name" x="560" y="456">pm suivi_dossiers</text><text class="t-mono" x="730" y="456">verifier | lire | ecrire · pm memoire verifier</text>
+        <text class="t-name" x="560" y="474">pm catala</text><text class="t-mono" x="730" y="474">verifier (tous les contrôles)</text>
+        <text class="t-mono" x="730" y="492">executer | exceptions | expliquer | squelette</text>
+        <text class="t-name" x="560" y="510">pm okf</text><text class="t-mono" x="730" y="510">verify | ontologie [proposer] | types --json | link | unlink | examinee</text>
+        <text class="t-note" x="560" y="532">--dossier vise un autre dossier. Lancer l'index : accord de l'avocat.</text>
 
         <text class="t-title t-skill-c" x="306" y="584">Skill docx-cli</text>
-        <text class="t-note" x="306" y="602">Source de la commande docx : le skill</text>
-        <text class="t-note" x="306" y="618">installe ce binaire externe.</text>
+        <text class="t-note" x="306" y="602">docx : édition directe, versions et cartes</text>
+        <text class="t-note" x="306" y="618">Versions et cartes Mike dans Eigenpal</text>
         <text class="t-name t-skill-c" x="306" y="642">style-redaction-cabinet</text>
         <text class="t-note" x="306" y="660">skill : styles, modèles, style-docx.py, avec docx</text>
         <text class="t-mono" x="560" y="576">docx create | read | find | insert | replace | edit | delete</text>
@@ -184,16 +187,16 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <text class="t-mono" x="560" y="724">~/.claude/skills · ~/.piecemaker/{templates,custom}</text>
 
         <text class="t-title t-agent" x="306" y="796">Sous-agents</text>
-        <text class="t-note" x="306" y="816">déclarés pour Claude, sans skill</text>
-        <text class="t-name t-agent" x="560" y="806">analyste-pieces</text><text class="t-mono" x="730" y="806">sonnet · Read Grep Glob Bash</text>
+        <text class="t-note" x="306" y="816">activés par dossier, Bibliothèque</text>
+        <text class="t-name t-agent" x="560" y="806">ResearchMaker</text><text class="t-mono" x="720" y="806">haiku · legifrance</text>
 
         <text class="t-title t-mcp" x="306" y="882">MCP piecemaker</text>
         <text class="t-note" x="306" y="902">retiré par défaut, remplacé par pm</text>
-        <text class="t-off" x="560" y="880">conversion · sql · raisonnement · suivi</text>
+        <text class="t-off" x="560" y="880">conversion · sql · suivi</text>
         <text class="t-off" x="560" y="900">afficher · tabular_review · tabular_review_index</text>
       </svg>
     </div>
-    <figcaption>La ligne Légifrance ne traverse pas la bande des hooks : leurs filtres visent <code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Bash</code> et <code>Write</code>, pas les outils MCP. Le moteur va chercher le skill : le skill n'appelle ni le moteur ni un outil. Les commandes <code>docx</code> viennent de <code>docx --help</code>, version 0.28.0.</figcaption>
+    <figcaption>Les filtres des hooks visent <code>Read</code>, <code>Grep</code>, <code>Glob</code>, <code>Bash</code>, <code>Write</code> et, après un sous-agent, <code>Agent</code> (bilan de vérification), et, avant une recherche Légifrance, ses outils <code>Search_*</code> : réservés à ResearchMaker, la lecture d'une source reste à l'agent principal. Le moteur va chercher le skill : le skill n'appelle ni le moteur ni un outil. Les commandes <code>docx</code> viennent de <code>docx --help</code>, version 0.28.0.</figcaption>
   </figure>
 
   <div class="cards">
@@ -202,12 +205,32 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Élément</th><th>Claude</th><th>Codex</th><th>Mistral</th></tr>
         <tr><td class="c-mcp">MCP legifrance</td><td><code>.mcp.json</code></td><td><code>.codex/config.toml</code></td><td><code>.vibe/config.toml</code></td></tr>
+        <tr><td class="c-mcp">MCP features</td><td><code>.mcp.json</code></td><td><code>.codex/config.toml</code></td><td><code>.vibe/config.toml</code></td></tr>
         <tr><td class="c-skill">Skills du dossier</td><td><code>.claude/skills</code></td><td><code>.agents/skills</code></td><td><code>.agents/skills</code>, outil <code>skill</code></td></tr>
         <tr><td class="c-skill">Skills globaux</td><td><code>~/.claude</code></td><td><code>~/.codex/skills</code></td><td><code>~/.vibe/skills</code>, <code>~/.agents/skills</code> : lus, mais l'installateur n'y écrit rien</td></tr>
         <tr><td class="c-agent">Sous-agents</td><td><code>~/.claude</code></td><td><code>.codex/agents</code>, depuis la Bibliothèque seulement</td><td><code>.vibe/agents</code>, depuis la Bibliothèque seulement</td></tr>
-        <tr><td>Hooks</td><td><code>~/.claude/settings.json</code></td><td><code>~/.codex/hooks.json</code></td><td>en code, <code>mistral-sdk/tools.ts</code></td></tr>
+        <tr><td>Hooks</td><td><code>~/.claude/settings.json</code></td><td><code>~/.codex/hooks.json</code>, approuvés dans <code>config.toml</code></td><td>en code, <code>mistral-sdk/tools.ts</code></td></tr>
         <tr><td class="c-skill">pm, docx</td><td>Bash</td><td>Bash</td><td>Bash</td></tr>
       </table></div>
+    </section>
+
+    <section class="card">
+      <h2>Table de routage</h2>
+      <p>La règle 6° de l'<code>AGENTS.md</code> du dossier dit au moteur quel skill charger avant d'agir. Claude la reçoit par l'import <code>@AGENTS.md</code> de <code>CLAUDE.md</code>. Le serveur l'ajoute une fois aux <code>AGENTS.md</code> issus du modèle ; il ne touche pas un fichier écrit par l'avocat.</p>
+      <div class="scroll"><table>
+        <tr><th>Demande</th><th>À charger</th></tr>
+        <tr><td>Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances</td><td class="c-mcp">MCP features : <code>Feature quickstart</code>, puis les pages qu'il indique (<code>Feature read &lt;feature&gt; path=…</code>)</td></tr>
+        <tr><td>Index OKF du dossier : liens entre pièces (ontologie commune, réglée par l'avocat ; l'agent propose en modifiant <code>ontologie.json</code> avec Edit ou Write), prémisses, parties, contradictions, manques du graphe</td><td class="c-skill">okf, puis piecemaker (<code>pm okf</code>, outil <code>OkfWrite</code>)</td></tr>
+        <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala ; prémisses avec okf</td></tr>
+        <tr><td>Question de droit à documenter</td><td class="c-agent">research-maker ; l'agent principal relit chaque source avant de la citer</td></tr>
+        <tr><td>Lire, modifier, annoter ou créer un fichier Word <code>.docx</code></td><td class="c-skill">docx-cli</td></tr>
+        <tr><td>Rédiger ou relire un acte, un courrier, un document juridique</td><td class="c-skill">style-redaction-cabinet, puis docx-cli</td></tr>
+        <tr><td>Instruction, gabarit ou skill personnels</td><td class="c-skill">ajout-de-fonctionnalites</td></tr>
+        <tr><td>Textes, jurisprudence, BODACC</td><td class="c-mcp">MCP legifrance, sans skill</td></tr>
+        <tr><td>Fonction d'un onglet : commandes <code>pm</code> en anglais, données et commentaires de l'avocat</td><td class="c-mcp">MCP features : <code>Feature quickstart</code>, puis <code>Feature run</code>, <code>FeatureData</code>, <code>FeatureComments</code></td></tr>
+        <tr><td>Syntaxe d'une commande</td><td><code>pm --help</code></td></tr>
+      </table></div>
+      <p><code>legal-code</code> n'y figure pas : il s'ouvre par <code>/legal-code</code>.</p>
     </section>
 
     <section class="card">
@@ -215,29 +238,40 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <div class="scroll"><table>
         <tr><th>Hook</th><th>Moment</th><th>Outils visés</th></tr>
         <tr><td><code>protect-originals</code></td><td>avant</td><td><code>Read|Grep|Glob|Bash</code></td></tr>
+        <tr><td><code>guard-ontologie</code></td><td>avant</td><td><code>Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob</code> (Claude), <code>Bash|apply_patch</code> (Codex), chat Mistral : pas d'écriture directe de l'ontologie commune (scellée), de l'arborescence ni des fiches OKF, shell en lecture seule sur ces fichiers ; une modification de l'ontologie ou de l'arborescence par Edit, Write ou apply_patch devient une proposition (le hook la fusionne, la fait valider par <code>pm</code> et répond ce qui a changé) ; passer par <code>pm okf link</code> pour les fiches</td></tr>
+        <tr><td><code>guard-legal-search</code></td><td>avant</td><td><code>Search_*</code> (Claude, Codex) : recherche réservée à research-maker ; Mistral : outil <code>research_maker</code> (délégation serveur)</td></tr>
         <tr><td><code>guard-secrets</code></td><td>avant</td><td>global, hors plugin</td></tr>
         <tr><td><code>classify-ai-documents</code></td><td>après</td><td><code>Write|Bash</code></td></tr>
+        <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude), <code>SubagentStop</code> (Codex), bilan ajouté au compte rendu (Mistral) : décisions citées par research-maker et jamais lues, relance du sous-agent</td></tr>
       </table></div>
-      <p style="margin-top:12px">Codex reçoit la protection des pièces. Mistral exécute <code>protect-originals</code> et <code>guard-secrets</code> avant ses outils intégrés.</p>
-      <p>Hermes utilise le plugin PieceMaker et les fonctions Python <code>commande</code>, <code>sql</code>, <code>raisonnement</code> et <code>suivi</code>. Ses hooks s'exécutent avant et après les outils concernés. <a href="hermes-piecemaker.md">Détail du raccordement Hermes</a></p>
+      <p style="margin-top:12px">Codex reçoit la protection des pièces, le garde de recherche et la vérification des sous-agents. Mistral exécute <code>protect-originals</code> et <code>guard-secrets</code> avant ses outils intégrés ; il délègue les recherches <code>Search_*</code> à l'outil <code>research_maker</code>. Chaque sous-agent de <code>.vibe/agents</code> devient un outil de délégation du SDK Mistral (<code>research_maker</code>) ; ses outils d'écriture demandent la même autorisation que ceux de l'agent principal.</p>
+      <p>Hermes utilise le plugin PieceMaker et les fonctions Python <code>commande</code>, <code>sql</code>, <code>catala</code> et <code>suivi</code>. Ses hooks s'exécutent avant et après les outils concernés. <a href="hermes-piecemaker.md">Détail du raccordement Hermes</a></p>
     </section>
 
     <section class="card wide">
       <h2>Index</h2>
-      <p>L'index est une tabular review à part. <code>tabular_review_index</code> reprend ses sous-commandes et déduit le fichier et le projet. L'index s'affiche toujours dans l'onglet Dossier, jamais dans le volet Tabular Review. <code>tabular_review</code> refuse son fichier et son projet.</p>
+      <p>L'index est une tabular review à part : une ligne par pièce, pour la chronologie et le classement. <code>pm dossier index</code> déduit le fichier et le projet. L'index s'affiche toujours dans l'onglet Dossier, jamais dans le volet Tabular Review : <code>pm dossier index lancer|lire|colonnes</code> et <code>tabular_review_index</code> ouvrent sa fenêtre « Analyse tabulaire ». Après un lancement par <code>pm</code> ou par l'outil MCP, le serveur range chaque pièce selon la colonne Classement dès que sa ligne est analysée. <code>tabular_review</code> refuse son fichier et son projet.</p>
       <div class="scroll"><table>
         <tr><th>Commande</th><th>Effet</th><th>Lit les pièces</th></tr>
-        <tr><td><code>pm afficher --volet index</code></td><td>Ouvre l'onglet Index du volet Dossier.</td><td>non</td></tr>
-        <tr><td><code>pm tabular_review_index ouvrir</code></td><td>Retrouve ou prépare l'unique analyse de toutes les pièces, puis l'ouvre dans l'onglet Dossier.</td><td>oui, au lancement</td></tr>
-        <tr><td><code>pm tabular_review_index preparer|lancer|lire|colonnes|classement|arborescence|relancer</code></td><td>Mêmes actions que <code>tabular_review</code>, sur l'index. Le résultat s'ouvre dans l'onglet Dossier.</td><td>oui, à <code>lancer</code> et <code>relancer</code></td></tr>
-        <tr><td><code>pm tabular_review_index lister|modifier</code></td><td>Lit ou modifie les dates et les libellés des pièces en base.</td><td>non</td></tr>
+        <tr><td><code>pm tab afficher index</code></td><td>Ouvre l'onglet Index du volet Dossier.</td><td>non</td></tr>
+        <tr><td><code>pm dossier index lancer</code></td><td>Crée l'index s'il manque et l'analyse (modèle medium par défaut). S'il existe, analyse les pièces converties qui en sont absentes.</td><td>oui</td></tr>
+        <tr><td><code>pm dossier index lire|colonnes</code></td><td>Résume l'index, ou ajoute, modifie, retire une question.</td><td>non</td></tr>
+        <tr><td><code>pm dossier arborescence [--dossiers JSON] [--motif]</code></td><td>Lit l'arborescence et la proposition en attente ; avec <code>--dossiers</code>, propose une arborescence que l'avocat accepte, refuse ou modifie dans Index › Classement.</td><td>non</td></tr>
+        <tr><td><code>pm dossier classer &lt;document&gt; &lt;dossier&gt;</code></td><td>Range un document dans un dossier de l'arborescence : il prend le type de ce dossier. <code>pm check</code> nomme les documents sans type.</td><td>non</td></tr>
+        <tr><td><code>pm dossier sql "REQUÊTE"</code></td><td>Lit ou modifie les dates et les libellés des pièces en base (requêtes d'exemple dans la skill).</td><td>non</td></tr>
+        <tr><td><code>pm check</code></td><td>Bilan du dossier : anonymisation, mapping, conversion, index OKF, prémisses, programmes Catala, suivi, revues de recherche, étape. Chaque défaut donne la commande ou le sous-agent qui le corrige.</td><td>non</td></tr>
       </table></div>
+    </section>
+
+    <section class="card wide">
+      <h2>Pack Catala</h2>
+      <p>L'app de bureau installe automatiquement une archive précompilée et vérifie son SHA-256. Le pack Mac et Windows comprend <code>catala</code>, <code>clerk</code>, <code>catala-lsp</code>, <code>catala-format</code>, <code>catala-dap</code>, le runtime Python Catala et <code>catala-proof</code> avec Z3. Aucune compilation ne tourne sur le poste de l'avocat. <code>catleg</code> utilise le Python partagé et les identifiants PISTE existants. Son parseur natif dénombre les articles contrôlés ; un contrôle vide ne valide rien. <code>pm catala verifier --au AAAA-MM-JJ</code> compare le numéro du titre, le texte intégral recopié (<code>catleg diff</code>) et la période officielle à cette date ; sans <code>--au</code>, Catleg n'est pas effectué. La date du jour est admise. Les liens Légifrance du graphe ouvrent le lecteur interne avec contrôle de citation.</p>
+      <p>Le skill <code>catala</code> donne une fiche de syntaxe vérifiée et ses pièges. <code>pm catala</code> sépare trois groupes. Contrôler : <code>verifier</code>, commande unique, qui met les fichiers au format officiel puis lance typage, tests, preuves, Catleg et citations. Comprendre un échec : <code>executer</code> (trace d'exécution), <code>exceptions</code> (arbre des exceptions), <code>expliquer</code> (graphe d'un autre scénario). Écrire : <code>squelette</code> (test généré) et <code>section</code> (titre, extrait vérifié mot pour mot et texte officiel d'une source, lus dans le cache local). Avant chaque écriture d'un programme, le hook PreToolUse compile une copie (<code>clerk typecheck</code>) et refuse une erreur de compilation nouvelle ; sans pack ou après 10 s, l'écriture passe. Le skill ne présente plus <code>formater</code>, <code>preuve</code> ni <code>catleg</code> ; le bilan montre les erreurs du compilateur ligne par ligne. Les programmes vivent dans <code>.piecemaker/catala/&lt;nom&gt;/</code>, les résultats dans <code>resultats/</code>. L'onglet Catala (<code>piecemaker-catala</code>) montre le bilan regroupé (typage, format, tests, preuves, Catleg, citations PieceMaker) et le graphe produit après <code>pm catala verifier</code>. Le volet se met à jour par la connexion existante, sans surveillance des fichiers. Ce graphe décrit une exécution et ne prouve pas les faits. Le graphe partagé relie conditions, données, sources et points ouverts. Chaque application aligne horizontalement règle, conditions, faits et pièces. La conséquence juridique apparaît en dessous et peut alimenter une autre application. Le code reste du Catala natif, sans attribut propre. Chaque définition ou règle se place directement sous le titre <code>## … | LEGIARTI…</code> (JORFARTI, JURITEXT, CETATEXT, CONSTEXT) de son texte, suivi de l'extrait cité puis du texte intégral. Une citation qui ne diffère que par la ponctuation est corrigée seule ; une décision frappée de recours porte « Non rendue en dernier ressort, voir … », ouvert dans la visionneuse. Chaque entrée porte un titre <code>##</code> de 2 à 7 mots. Chaque fait d'un scénario porte juste au-dessus <code>## okf:/_premises/&lt;fiche&gt;.md</code> : le contrôle compare sa valeur à la prémisse et avertit d'un lien posé par l'avocat. <code>tache.json</code> exige <code>type</code> (<code>litigation</code>, <code>transactional</code>) et <code>date_vigueur</code>. Il refuse aussi un bloc mal ouvert, ignoré par Catala, un test sans <code>assertion</code> et tout avertissement du typage. Les sources des titres et les pièces des prémisses alimentent le graphe. Le détail conserve les définitions, conditions et positions natives ; les traces du compilateur restent hors du dessin principal. Le graphe utilise aussi les arbres d’exceptions et la trace JSON ; il conserve un repli JSON si le DOT échoue. Le choix du scénario utilise les traces Catala des tests Clerk ; Vrai/Faux reste distinct de la preuve. Les notes Markdown rattachent questions, justifications et démarches aux nœuds. Origine de chaque élément et limites : <code>docs/graphe-catala.md</code>. Les archives des deux plateformes doivent être construites, testées et épinglées avant livraison. Détail : <code>docs/catala.md</code>.</p>
     </section>
 
     <section class="card">
       <h2>Skills réservés au développement</h2>
       <ul>
-        <li><code class="c-skill">verifieur-raisonnement</code> : cadre de <code>pm raisonnement</code>.</li>
         <li><code class="c-skill">backend-module-standards</code> : architecture de <code>server/</code>.</li>
         <li><code class="c-skill">frontend-module-standards</code> : architecture de <code>src/</code>.</li>
         <li><code class="c-skill">electron-cloudcli</code> : packaging, installation, mises à jour.</li>
@@ -246,8 +280,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     <section class="card">
       <h2>Volets de l'interface</h2>
-      <p>Ces plugins servent l'avocat. Leurs manifestes ne déclarent aucun outil IA. Le moteur ouvre Dossier, Analyse tabulaire et Bordereau avec <code>pm afficher</code>. <code>pm bordereau</code> tamponne les pièces et recharge le volet Bordereau. L'index est un onglet du volet Dossier, pas un plugin.</p>
-      <p><code>piecemaker-dossier</code>, <code>piecemaker-echeances</code>, <code>piecemaker-library</code>, <code>piecemaker-raisonnement</code>, <code>piecemaker-tabular-review</code>, <code>piecemaker-tampon</code>, <code>piecemaker-timesheet</code>.</p>
+      <p>Ces plugins servent l'avocat. Leurs manifestes ne déclarent aucun outil IA. Le moteur ouvre Dossier, Analyse tabulaire, Bordereau, Suivi des dossiers et Catala avec <code>pm tab afficher</code>. <code>pm bordereau</code> tamponne les pièces et recharge le volet Bordereau. L'index est un onglet du volet Dossier, pas un plugin.</p>
+      <p><code>piecemaker-catala</code>, <code>piecemaker-dossier</code>, <code>piecemaker-echeances</code>, <code>piecemaker-library</code>, <code>piecemaker-tabular-review</code>, <code>piecemaker-tampon</code>, <code>piecemaker-timesheet</code>.</p>
     </section>
 
     <section class="card">
@@ -257,6 +291,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <li>Outils : <code>mcp_definitions.py</code>, <code>server.mjs</code>, <code>pm.mjs</code>.</li>
         <li>Skills : les <code>SKILL.md</code>, <code>server/piecemaker/skill-declaration.ts</code>.</li>
         <li>MCP par dossier : <code>server/piecemaker/mcp-declaration.ts</code>.</li>
+        <li>Table de routage : <code>server/piecemaker/agent-instructions.ts</code>.</li>
         <li>Binaire : <code>docx --help</code>.</li>
       </ul>
     </section>

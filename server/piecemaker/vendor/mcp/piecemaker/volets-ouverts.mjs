@@ -8,12 +8,15 @@ const LABELS = {
   browser: 'Navigateur',
   'plugin:piecemaker-dossier': 'Dossier',
   'plugin:piecemaker-tabular-review': 'Analyse tabulaire',
+  'plugin:piecemaker-artifacts': 'Artifacts',
   'plugin:piecemaker-library': 'Bibliothèque',
   'plugin:piecemaker-tampon': 'Bordereau',
   'plugin:piecemaker-timesheet': 'Timesheet',
+  'plugin:piecemaker-echeances': 'Suivi des dossiers',
+  'plugin:piecemaker-catala': 'Catala',
 };
 
-const VIEWS = { chronology: 'index', general: 'vue générale' };
+const VIEWS = { chronology: 'index', general: 'vue générale', 'index-analysis': 'analyse tabulaire de l’index' };
 
 export const openPanelsFile = (home = process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker')) => path.join(home, 'volets-ouverts.json');
 
@@ -30,6 +33,10 @@ function readEntry(file, cwd) {
   return project ? { project, entry: store[project] } : null;
 }
 
+// L'analyse tabulaire de l'Index est l'onglet Index même : « index-analysis » en reste un alias.
+const viewOf = (view) => view === 'index-analysis' ? 'chronology' : view;
+const sameView = (left, right) => viewOf(left) === viewOf(right);
+
 export async function waitForOpenPanel({ cwd, tab, document, view, review }, file = openPanelsFile(), timeoutMs = 8000) {
   const deadline = Date.now() + timeoutMs;
   while (true) {
@@ -38,7 +45,7 @@ export async function waitForOpenPanel({ cwd, tab, document, view, review }, fil
     const opened = Array.isArray(entry?.panels) && entry.panels.includes(tab);
     const documentMatches = !document || entry?.document === document;
     const focus = entry?.focus?.[tab] ?? {};
-    const viewMatches = !view || focus.view === view;
+    const viewMatches = !view || sameView(focus.view, view);
     const reviewMatches = !review || (typeof focus.file === 'string' && path.basename(focus.file) === review);
     if (opened && documentMatches && viewMatches && reviewMatches) return true;
     const remaining = deadline - Date.now();

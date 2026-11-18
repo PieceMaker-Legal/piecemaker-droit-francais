@@ -1,0 +1,14 @@
+{
+  "name": "piecemaker-catala",
+  "displayName": "Catala",
+  "version": "0.2.0",
+  "description": "État du pack Catala et bilans des programmes Catala du dossier.",
+  "icon": "icon.svg",
+  "type": "module",
+  "slot": "tab",
+  "entry": "dist/index.js",
+  "permissions": [],
+  "piecemakerSources": {
+    "index": "src/client.ts"
+  }
+}

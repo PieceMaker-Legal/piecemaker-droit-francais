@@ -16,11 +16,11 @@ import type { ProviderModelsDefinition } from '@/shared/types';
 
 const CODEX_CATALOG: ProviderModelsDefinition = {
   OPTIONS: [
+    { value: 'gpt-6.2-sol', label: 'GPT-6.2 Sol' },
     { value: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' },
-    { value: 'gpt-5.6-sol', label: 'GPT-5.6 Sol' },
     { value: 'gpt-5.5', label: 'GPT-5.5' },
   ],
-  DEFAULT: 'gpt-5.6-sol',
+  DEFAULT: 'gpt-6.2-sol',
 };
 
 // What GET /api/providers/codex/models answers with; null keeps the catalog
@@ -79,7 +79,7 @@ test('a new browser starts Codex chats on the catalog default before the catalog
   await waitFor(() => {
     assert.equal(result.current.provider, 'codex');
   });
-  assert.equal(result.current.currentProviderModel, 'gpt-5.6-sol');
+  assert.equal(result.current.currentProviderModel, 'gpt-6.2-sol');
 });
 
 test('a browser that remembered GPT-5.4 moves to the catalog default once the catalog loads', async () => {
@@ -89,8 +89,8 @@ test('a browser that remembered GPT-5.4 moves to the catalog default once the ca
   const { result } = await renderCodexProviderState();
 
   await waitFor(() => {
-    assert.equal(result.current.providerModelCatalog.codex?.DEFAULT, 'gpt-5.6-sol');
-    assert.equal(result.current.currentProviderModel, 'gpt-5.6-sol');
+    assert.equal(result.current.providerModelCatalog.codex?.DEFAULT, 'gpt-6.2-sol');
+    assert.equal(result.current.currentProviderModel, 'gpt-6.2-sol');
   });
-  assert.equal(localStorage.getItem('codex-model'), 'gpt-5.6-sol');
+  assert.equal(localStorage.getItem('codex-model'), 'gpt-6.2-sol');
 });

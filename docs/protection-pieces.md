@@ -96,16 +96,38 @@ Toujours interdits, sans exception possible : les mappings (`mapping*.json`,
 
 | Code | Rôle |
 | --- | --- |
-| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | sous bouclier vert seulement : refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine |
+| `protect-originals.mjs` (`PreToolUse` Read/Grep/Glob/Bash ; tous outils pour Codex) | sous bouclier vert seulement : refus + renvoi vers le Markdown ; mappings, secrets, Grep/Glob à la racine ; un appel `pm okf …` peut citer une pièce protégée (voir ci-dessous) |
 | `classify-ai-documents.mjs` (`PostToolUse` Write/Bash) | exceptions pour les PDF/images produits par l'IA |
 | `lib/commits.cjs` | historique : pas d'extraction de texte des pièces protégées |
 | `knowledge/pipeline.ts` | exclut les « ressources » de la conversion et du scan |
 | proxy PII | ne lit ni `protection.json` ni le drapeau (voir couche 2) |
 
+### Commandes `pm okf`
+
+`pm okf` désigne la fiche d'une pièce dans l'index : il ne lit jamais la pièce
+originale. `protect-originals` et `guard-ontologie` laissent donc passer un
+appel `pm okf …`, même s'il cite une pièce ou une fiche de `.piecemaker/okf/`.
+Le mapping et les secrets restent refusés.
+
+`lib/shell-segments.mjs` découpe la commande en segments aux opérateurs
+`;`, `&&`, `||`, `|`, `&` et au saut de ligne, en respectant guillemets,
+échappements et commentaires. Seul le segment `pm okf` est exempté ; chaque
+autre segment est contrôlé comme avant. `pm okf verify; cat "Pièces/x.pdf"`
+reste refusé pour `cat`.
+
+Formes reconnues : `pm`, chemin du lanceur, `node …/pm.mjs`, affectations de
+variables avant le programme, `cd … &&` avant, `| head` après, plusieurs lignes.
+
+Le segment n'est pas exempté s'il contient une substitution (`$(…)`, accent
+grave, `$'…'`), une redirection autre que `2>&1` ou `>/dev/null`, ou si la
+commande contient une parenthèse hors guillemets ou un mot `alias`/`function`
+(redéfinition possible de `pm`).
+
 ## Limites connues (audit du 2026-09-26)
 
-- Seuls Claude Code et Codex ont les hooks CloudCLI. Hermes utilise des hooks
-  natifs et des fonctions Python PieceMaker. Voir
+- Claude Code, Codex, le CLI `vibe` (`~/.vibe/hooks.toml`, adaptateur
+  `scripts/vibe-hook.mjs`) et le chat Mistral de l'app ont les hooks. Hermes
+  utilise des hooks natifs et des fonctions Python PieceMaker. Voir
   [les protections Hermes](hermes-piecemaker.md). Les autres fournisseurs
   pilotés par CloudCLI ne sont couverts que par le proxy.
 - Le hook analyse le texte des commandes : `python -c`, variables, globs
@@ -137,6 +159,14 @@ Limites structurelles, à connaître avant de s'y fier :
   changement de logique. `installer/lib/codex-skills.mjs` installe ce même
   script dans `~/.codex/hooks.json` (matcher `"*"`, Codex n'exposant pas de
   tools Read/Grep/Glob distincts).
+- **Codex n'exécute un hook de `hooks.json` qu'approuvé.** Codex (vérifié
+  en 0.167.2) ignore un hook sans entrée `[hooks.state."<hooks.json>:<événement>:<groupe>:<handler>"]`
+  dont le `trusted_hash` égale le hash courant du hook. Au démarrage,
+  `reconcileCodexHooks` écrit cette approbation (`trustCodexHooks`,
+  `codex-skills.mjs`) pour les seuls hooks PieceMaker, comme le ferait
+  `/hooks`, sans toucher aux autres entrées. Si `config.toml` est illisible,
+  rien n'est écrit : approuver alors par `/hooks`. Un appel d'outil fait dans un
+  `exec` Codex (mode code) passe aussi par `PreToolUse`.
 - **Un hook analyse du texte de commande, pas des syscalls.** `python -c
   "open(...)"`, `find -exec cat`, une variable de shell ou un chemin relatif
   après un `cd` échappent à toute analyse textuelle. C'est la raison d'être de

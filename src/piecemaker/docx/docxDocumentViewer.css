@@ -33,11 +33,6 @@
   padding-left: 16px !important;
 }
 
-.piecemaker-docx-viewer .docx-editor__scroll-container > div > div > button {
-  left: auto !important;
-  right: 4px;
-}
-
 .piecemaker-docx-viewer .docx-unified-sidebar {
   left: auto !important;
   right: 0;
@@ -108,11 +103,46 @@
   font-weight: 500;
 }
 
-.piecemaker-docx-viewer .docx-comment-pending p {
+.piecemaker-docx-viewer .docx-comment-pending-answer {
   max-height: 12rem;
   margin-top: 4px;
   overflow-y: auto;
-  white-space: pre-wrap;
+}
+
+.piecemaker-docx-viewer .docx-comment-text-source {
+  display: none !important;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) > * + * {
+  margin-top: 6px;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) :is(ul, ol) {
+  padding-left: 18px;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) ul {
+  list-style: disc;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) ol {
+  list-style: decimal;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) :is(h1, h2, h3, h4, strong) {
+  font-weight: 600;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background-color: var(--doc-bg-hover);
+  font-size: 12px;
+}
+
+.piecemaker-docx-viewer :is(.docx-comment-markdown, .docx-comment-pending-answer) a {
+  color: var(--doc-primary);
+  text-decoration: underline;
 }
 
 .piecemaker-docx-viewer div[style*="transform-origin: center top"] {
@@ -120,8 +150,8 @@
 }
 
 .piecemaker-docx-viewer {
-  --docx-revision-ins: #0000ff;
-  --docx-revision-del: #ff0000;
+  --docx-revision-ins: #496b93;
+  --docx-revision-del: #a45b5b;
 }
 
 .piecemaker-docx-viewer .paged-editor__pages span.docx-insertion,
@@ -168,7 +198,7 @@
 
 .piecemaker-docx-viewer .ep-revision-cell.ep-revision-ins {
   box-shadow: inset 0 3px 0 var(--docx-revision-ins) !important;
-  background-color: rgb(0 0 255 / 0.05) !important;
+  background-color: color-mix(in srgb, var(--docx-revision-ins) 5%, transparent) !important;
 }
 
 .piecemaker-docx-viewer .docx-revision-shortcut-hint {
@@ -186,4 +216,18 @@
   font-size: 0.75rem;
   line-height: 1.25rem;
   white-space: nowrap;
+}
+
+.piecemaker-docx-viewer .docx-comment-avatar-ai {
+  position: relative;
+  overflow: hidden;
+  font-size: 0 !important;
+  background-color: var(--doc-surface, #fff) !important;
+  color: var(--doc-text, #000) !important;
+  box-shadow: inset 0 0 0 1px var(--doc-border-light, rgba(0, 0, 0, 0.1));
+}
+
+.piecemaker-docx-viewer .docx-comment-avatar-logo {
+  width: 70%;
+  height: 70%;
 }

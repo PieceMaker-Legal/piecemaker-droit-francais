@@ -1,0 +1,8 @@
+{
+  "tache": "Demande en paiement de l'indemnité de départ du directeur général",
+  "type": "litigation",
+  "date_vigueur": "2026-10-21",
+  "raisonnements": [
+    { "champ": "AnalyseIndemnité", "objectif": "Obtenir le paiement de l'indemnité de départ", "rang": "À titre principal" }
+  ]
+}

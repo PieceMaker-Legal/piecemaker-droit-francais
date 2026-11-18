@@ -1,0 +1,658 @@
+{
+  "features": [
+    {
+      "nom": "ontologie",
+      "cible": "^ontologie(\\.proposition)?\\.json$",
+      "ecriture": "proposition",
+      "skill": "okf",
+      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: relations, document types and the folder tree under the key arborescence), in the Index › Ontologie and Index › Classement tabs. Read it with pm okf ontologie and pm dossier arborescence. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
+    },
+    {
+      "nom": "okf",
+      "cible": "^okf(/|$)",
+      "ecriture": "agent",
+      "skill": "okf",
+      "verifier": ["okf", "verify"],
+      "commande": "\\bpm okf (link|unlink|examinee|revue)\\b",
+      "erreur": "Index OKF : \\d+ erreur|Contradictions : \\d|Graphe : \\d+ élément",
+      "delai": 30
+    },
+    {
+      "nom": "features",
+      "cible": "^features(/|$)",
+      "ecriture": "serveur",
+      "skill": "piecemaker",
+      "motif": "Only the features MCP writes the feature data and comments (.piecemaker/features/). Use FeatureData to write a document and FeatureComments to answer a comment of the lawyer. Never write these files with Edit, Write or the shell."
+    },
+    {
+      "nom": "artifacts",
+      "cible": "^artifacts(/|$)",
+      "ecriture": "serveur",
+      "skill": "creation-artifacts",
+      "motif": "Only the artifacts MCP writes the artifacts of the case (.piecemaker/artifacts/): their versions, data, comments and reviews. Publish a page with Artifact publish, write its data with ArtifactData and answer a comment with ArtifactComments. Never write these files with Edit, Write or the shell."
+    },
+    {
+      "nom": "etapes",
+      "cible": "^etapes\\.json$",
+      "ecriture": "serveur",
+      "skill": "piecemaker",
+      "motif": "Only the lawyer sets the case steps (.piecemaker/etapes.json), on the board of the Suivi des dossiers tab. Read the current step and the document to produce with pm check. Never write this file. To change a step, ask the lawyer."
+    },
+    {
+      "nom": "protection",
+      "cible": "^protection\\.json$",
+      "ecriture": "serveur",
+      "skill": "piecemaker",
+      "motif": "Only the PieceMaker server writes the document protection file (.piecemaker/protection.json). Only the lawyer removes the protection, with the shield of the case in the sidebar. Never write this file. Read the converted Markdown of a protected document, not the PDF or the image."
+    },
+    {
+      "nom": "suivi",
+      "cible": "^(?<nom>(?:[^/]+-)?suivi\\.json)$",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["suivi_dossiers", "verifier", "--suivi", "{nom}"],
+      "erreur": "\\d+ erreur\\(s\\), \\d+ manque\\(s\\)\\.",
+      "delai": 60,
+      "format": "suivi"
+    },
+    {
+      "nom": "memoire",
+      "cible": "^memoires/(?<nom>[^/]+)\\.md$",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["memoire", "verifier", "--memoire", "{nom}"],
+      "delai": 10,
+      "format": "memoire"
+    },
+    {
+      "nom": "catala",
+      "cible": "^catala/(?<nom>[^/]+)/[^/]+\\.(catala_fr|toml)$",
+      "ecriture": "agent",
+      "skill": "catala",
+      "verifier": ["catala", "verifier", "--programme", "{nom}"],
+      "commande": "\\bpm okf (link|unlink)\\b.*\\b(states|involves)\\b",
+      "cite": "okf:/_premises/",
+      "format": "catala",
+      "erreur": ": à corriger\\.",
+      "delai": 60
+    },
+    {
+      "nom": "revue",
+      "cible": "^(?!)",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["tabular_review", "verifier"],
+      "commande": "\\bpm tabular_review (preparer|lancer)\\b",
+      "erreur": ": bloquée",
+      "delai": 30
+    }
+  ],
+  "catalogue": [
+    {
+      "nom": "case",
+      "titre": "Dossier",
+      "volet": "dossier",
+      "description": "Case state, document conversion, folder tree, filing and the case database: start here with check_case.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "check.md",
+            "dossier.md"
+          ]
+        }
+      ],
+            "commandes": [
+        {
+          "nom": "check_case",
+          "pm": [
+            "check"
+          ],
+          "role": "Numbered state of the case, in work order; each defect names its fix."
+        },
+        {
+          "nom": "query_database",
+          "pm": [
+            "dossier",
+            "sql"
+          ],
+          "role": "SQL query on the case database (masked data).",
+          "parametres": {
+            "query": "#"
+          }
+        },
+        {
+          "nom": "convert_documents",
+          "pm": [
+            "dossier",
+            "conversion"
+          ],
+          "role": "Convert the documents to Markdown (all pending ones without documents).",
+          "parametres": {
+            "documents": "#?",
+            "force": "--force"
+          }
+        },
+        {
+          "nom": "read_folder_tree",
+          "pm": [
+            "dossier",
+            "arborescence"
+          ],
+          "role": "Read the folder tree of the case."
+        },
+        {
+          "nom": "propose_folder_tree",
+          "pm": [
+            "dossier",
+            "arborescence"
+          ],
+          "role": "Propose a folder tree to the lawyer, common to all cases: folders = [{\"nom\",\"explication\",\"type\"}].",
+          "parametres": {
+            "folders": "--dossiers",
+            "reason": "--motif"
+          }
+        },
+        {
+          "nom": "file_document",
+          "pm": [
+            "dossier",
+            "classer"
+          ],
+          "role": "File a document in a folder of the tree; it takes the folder type.",
+          "parametres": {
+            "document": "#",
+            "folder": "#"
+          }
+        },
+        {
+          "nom": "build_index",
+          "pm": [
+            "dossier",
+            "index",
+            "lancer"
+          ],
+          "role": "Build the document index, or add the missing documents.",
+          "parametres": {
+            "ai": "--ia",
+            "ai_model": "--modele-ia"
+          }
+        },
+        {
+          "nom": "read_index",
+          "pm": [
+            "dossier",
+            "index",
+            "lire"
+          ],
+          "role": "Read the document index."
+        },
+        {
+          "nom": "add_index_columns",
+          "pm": [
+            "dossier",
+            "index",
+            "colonnes"
+          ],
+          "role": "Add question columns to the document index.",
+          "parametres": {
+            "questions": "--questions"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "index",
+      "titre": "Index",
+      "volet": "index",
+      "description": "OKF index of the case documents: cited links between documents, premises, parties and the link ontology.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/okf"
+        }
+      ],
+      "demarrage": [
+        "Feature run index verify_index",
+        "Feature run index read_ontology"
+      ],
+      "commandes": [
+        {
+          "nom": "verify_index",
+          "pm": [
+            "okf",
+            "verify"
+          ],
+          "role": "Rebuild the OKF records and list errors, contradictions and missing elements."
+        },
+        {
+          "nom": "read_ontology",
+          "pm": [
+            "okf",
+            "ontologie"
+          ],
+          "role": "Relations allowed between documents (read-only)."
+        },
+        {
+          "nom": "propose_ontology",
+          "pm": [
+            "okf",
+            "ontologie",
+            "proposer"
+          ],
+          "role": "Propose relations and/or document types to the lawyer.",
+          "parametres": {
+            "ontology": "--json",
+            "reason": "--motif"
+          }
+        },
+        {
+          "nom": "propose_document_types",
+          "pm": [
+            "okf",
+            "types"
+          ],
+          "role": "Propose the full catalogue of document types to the lawyer.",
+          "parametres": {
+            "types": "--json",
+            "reason": "--motif"
+          }
+        },
+        {
+          "nom": "link",
+          "pm": [
+            "okf",
+            "link"
+          ],
+          "role": "Cited link: document relation document, document states \"premise\", or \"premise\" involves PARTY.",
+          "parametres": {
+            "source": "#",
+            "relation": "#",
+            "target": "#",
+            "citation": "--citation",
+            "value": "--value",
+            "single": "--single"
+          }
+        },
+        {
+          "nom": "unlink",
+          "pm": [
+            "okf",
+            "unlink"
+          ],
+          "role": "Remove a link.",
+          "parametres": {
+            "source": "#",
+            "relation": "#",
+            "target": "#"
+          }
+        },
+        {
+          "nom": "mark_examined",
+          "pm": [
+            "okf",
+            "examinee"
+          ],
+          "role": "Mark a document as read with nothing to link (remove = undo).",
+          "parametres": {
+            "document": "#",
+            "reason": "--motif",
+            "remove": "--retirer"
+          }
+        },
+        {
+          "nom": "list_linkable_reviews",
+          "pm": [
+            "okf",
+            "revues"
+          ],
+          "role": "Tabular reviews of the case documents and their columns, to link to a premise.",
+          "parametres": {}
+        },
+        {
+          "nom": "link_review",
+          "pm": [
+            "okf",
+            "revue"
+          ],
+          "role": "Link a tabular review column to \"premise\" (created if missing): its positive rows are pieces stating it, author agent until the lawyer checks them in the review (remove = unlink).",
+          "parametres": {
+            "premise": "#",
+            "file": "--fichier",
+            "column": "--colonne",
+            "remove": "--retirer"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "tabular_review",
+      "titre": "Analyse tabulaire",
+      "volet": "tabular_review",
+      "description": "Tabular review: one question per column, one document per row, each answer with a verified quotation.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "tabular.md"
+          ]
+        }
+      ],
+      "demarrage": [
+        "Feature run tabular_review list_reviews",
+        "Feature run tabular_review list_templates"
+      ],
+      "parametres": {
+        "file": "--fichier",
+        "project": "--projet",
+        "mode": "--mode",
+        "name": "--nom",
+        "template": "--modele",
+        "description": "--description",
+        "questions": "--questions",
+        "documents": "--documents",
+        "search": "--recherche",
+        "ai": "--ia",
+        "ai_model": "--modele-ia"
+      },
+      "commandes": [
+        {
+          "nom": "list_reviews",
+          "pm": [
+            "tabular_review",
+            "lister"
+          ],
+          "role": "List the reviews of the case."
+        },
+        {
+          "nom": "list_templates",
+          "pm": [
+            "tabular_review",
+            "modeles"
+          ],
+          "role": "List the review templates."
+        },
+        {
+          "nom": "create_template",
+          "pm": [
+            "tabular_review",
+            "create_template"
+          ],
+          "role": "Create a review template."
+        },
+        {
+          "nom": "prepare_review",
+          "pm": [
+            "tabular_review",
+            "preparer"
+          ],
+          "role": "Prepare a review (analysis or research mode)."
+        },
+        {
+          "nom": "run_review",
+          "pm": [
+            "tabular_review",
+            "lancer"
+          ],
+          "role": "Run a prepared review."
+        },
+        {
+          "nom": "read_review",
+          "pm": [
+            "tabular_review",
+            "lire"
+          ],
+          "role": "Read the answers of a review."
+        },
+        {
+          "nom": "add_columns",
+          "pm": [
+            "tabular_review",
+            "colonnes"
+          ],
+          "role": "Add question columns to a review."
+        },
+        {
+          "nom": "rerun_review",
+          "pm": [
+            "tabular_review",
+            "relancer"
+          ],
+          "role": "Run a review again."
+        },
+        {
+          "nom": "verify_review",
+          "pm": [
+            "tabular_review",
+            "verifier"
+          ],
+          "role": "Verify the quotations of a review."
+        }
+      ]
+    },
+    {
+      "nom": "exhibits",
+      "titre": "Bordereau",
+      "volet": "bordereau",
+      "description": "Exhibit list (bordereau) and stamping of the exhibits.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "bordereau.md"
+          ]
+        }
+      ],
+      "demarrage": [
+        "Feature run exhibits stamp_exhibits exhibits=[...]"
+      ],
+      "commandes": [
+        {
+          "nom": "stamp_exhibits",
+          "pm": [
+            "bordereau"
+          ],
+          "role": "Stamp the exhibits in this order: Pièces tamponnées/Pièce n°N.pdf.",
+          "parametres": {
+            "exhibits": "#"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "deadlines",
+      "titre": "Suivi des dossiers",
+      "volet": "suivi_dossiers",
+      "description": "Procedural events and deadlines of each act, project memories and the Matter board.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/Skill-PieceMaker",
+          "references": [
+            "suivi.md",
+            "tableau.md"
+          ]
+        }
+      ],
+      "demarrage": [
+        "Feature run deadlines verify_deadlines",
+        "FeatureData list feature=case collection=deadlines"
+      ],
+      "commandes": [
+        {
+          "nom": "verify_deadlines",
+          "pm": [
+            "suivi_dossiers",
+            "verifier"
+          ],
+          "role": "Verify a deadline file and recompute the deadlines.",
+          "parametres": {
+            "deadlines": "--suivi"
+          }
+        },
+        {
+          "nom": "read_board",
+          "pm": [
+            "suivi_dossiers",
+            "lire"
+          ],
+          "role": "Read a document of the Matter board.",
+          "parametres": {
+            "path": "#"
+          }
+        },
+        {
+          "nom": "write_board",
+          "pm": [
+            "suivi_dossiers",
+            "ecrire"
+          ],
+          "role": "Write a document of the Matter board.",
+          "parametres": {
+            "path": "#",
+            "data": "--json"
+          }
+        },
+        {
+          "nom": "verify_project_memory",
+          "pm": [
+            "memoire",
+            "verifier"
+          ],
+          "role": "Verify the project memories.",
+          "parametres": {
+            "memory": "--memoire"
+          }
+        }
+      ]
+    },
+    {
+      "nom": "catala",
+      "titre": "Catala",
+      "volet": "catala",
+      "description": "A legal rule as a Catala program, run and proved on the case premises.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/catala"
+        }
+      ],
+      "demarrage": [
+        "Feature run catala list_programs",
+        "Feature run catala verify_program"
+      ],
+      "parametres": {
+        "program": "--programme",
+        "file": "--fichier",
+        "scope": "--scope",
+        "variable": "--variable",
+        "date": "--au",
+        "source": "--source",
+        "excerpt": "--extrait",
+        "title": "--titre"
+      },
+      "commandes": [
+        {
+          "nom": "verify_program",
+          "pm": [
+            "catala",
+            "verifier"
+          ],
+          "role": "Format, type-check, test, prove and check the citations of a program."
+        },
+        {
+          "nom": "list_programs",
+          "pm": [
+            "catala",
+            "lister"
+          ],
+          "role": "List the Catala programs of the case."
+        },
+        {
+          "nom": "show_environment",
+          "pm": [
+            "catala",
+            "env"
+          ],
+          "role": "Show the Catala tools installed."
+        },
+        {
+          "nom": "format_program",
+          "pm": [
+            "catala",
+            "formater"
+          ],
+          "role": "Format a program."
+        },
+        {
+          "nom": "prove",
+          "pm": [
+            "catala",
+            "preuve"
+          ],
+          "role": "Prove a scope with Z3."
+        },
+        {
+          "nom": "explain",
+          "pm": [
+            "catala",
+            "expliquer"
+          ],
+          "role": "Graph of formulas and conditions for a scope without inputs."
+        },
+        {
+          "nom": "show_exceptions",
+          "pm": [
+            "catala",
+            "exceptions"
+          ],
+          "role": "Exception tree of a variable."
+        },
+        {
+          "nom": "run_scenario",
+          "pm": [
+            "catala",
+            "executer"
+          ],
+          "role": "Run a scenario and show its trace."
+        },
+        {
+          "nom": "test_skeleton",
+          "pm": [
+            "catala",
+            "squelette"
+          ],
+          "role": "Test skeleton, inputs at their default value."
+        },
+        {
+          "nom": "check_articles",
+          "pm": [
+            "catala",
+            "catleg"
+          ],
+          "role": "Check that the cited articles are in force at a date."
+        },
+        {
+          "nom": "add_section",
+          "pm": [
+            "catala",
+            "section"
+          ],
+          "role": "Add a section with a verified excerpt and the official text."
+        }
+      ]
+    },
+    {
+      "nom": "projects",
+      "titre": "Projets",
+      "volet": null,
+      "description": "Files of the case folder, Word documents first: read, draft and edit them.",
+      "skills": [
+        {
+          "chemin": "vendor/skills/docx-cli"
+        },
+        {
+          "chemin": "vendor/piecemaker-plugin/skills/style-redaction-cabinet"
+        }
+      ],
+      "commandes": []
+    }
+  ]
+}

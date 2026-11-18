@@ -1,5 +1,5 @@
 import type { Cell, CitationSource, ClassificationFolder, ExportFormat, ExportResult, MarkdownDocument, Provider, Review, ReviewColumn, ResearchState, ReviewDetail, ReviewRow } from '../shared.js';
-import { CATEGORY_LABELS, citationIssue, classificationFolders, classificationSubtreeEnd, classificationTreeRows, classifyColumn, defaultUpdateSince, emptyColumns, FLAG_LABELS, isCellFilled, isCaseIndex, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
+import { CATEGORY_LABELS, DOCUMENT_TITLE_INDEX, documentTitle, documentTitleCell, citationIssue, classificationFolders, classificationSubtreeEnd, classificationTreeRows, classifyColumn, defaultUpdateSince, emptyColumns, FLAG_LABELS, isCellFilled, isCaseIndex, MAX_CITATION_CORRECTIONS, RESEARCH_SOURCES, REVIEW_FOLDER, reviewStatusLabel } from '../shared.js';
 import type { App, View } from './app.js';
 import { confirmDialog, errorMessage, escapeHtml, flagDot, formatDate, downloadBase64, openModal, renderMarkdown, toast } from './dom.js';
 import { anonymizationProxyOrigin, caseFiles, loadModels } from './host.js';
@@ -8,7 +8,7 @@ import { openDocumentsDrawer } from './documents-drawer.js';
 import { nextSort, sortBy, sortButton } from './ordering.js';
 import type { SortState } from './ordering.js';
 import { openQuestionsDrawer } from './questions-drawer.js';
-import { actionValue, classifiedChange, classifiedFolder, newNotes, newPieces, pieceOf, plannedChange, targetPath } from './sorting.js';
+import { actionValue, classifiedChange, classifiedFolder, matchingFolder, newNotes, newPieces, pieceOf, plannedChange, targetPath } from './sorting.js';
 import type { PlannedChange } from './sorting.js';
 import { selectMenu } from './select-menu.js';
 
@@ -51,8 +51,8 @@ function pieceStatus(row: ReviewRow): string {
 }
 
 function classificationSelect(column: ReviewColumn, cell: Cell | undefined, row: ReviewRow): string {
-  const value = actionValue(cell);
   const tags = column.tags ?? [];
+  const value = matchingFolder(tags, actionValue(cell)) || actionValue(cell);
   const options = value && !tags.includes(value) ? [...tags, value] : tags;
   return `<select class="ptr-input ptr-ghost" data-edit-summary aria-label="Dossier de classement"${row.status === 'running' ? ' disabled' : ''}><option value="">Non classé</option>${options.map((tag) => `<option value="${escapeHtml(tag)}"${tag === value ? ' selected' : ''}>${escapeHtml(tag)}</option>`).join('')}</select>`;
 }
@@ -98,6 +98,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
   let draft: { key: string; value: string } | null = null;
   let timer = 0;
   let destroyed = false;
+  const stopChronology = app.chronology?.subscribe(() => { if (detail && !destroyed) render(); }) ?? (() => {});
   let busy = false;
   let scroll = { top: 0, left: 0 };
   let choice: { provider: Provider; model: string } | null = null;
@@ -189,8 +190,8 @@ export function createReviewView(app: App, project: string, file: string, onBack
       <aside class="ptr-detail" aria-label="Détail de la cellule">
         <div style="display:flex;align-items:flex-start;gap:6px"><h3 style="flex:1">${escapeHtml(column.name)}</h3><button type="button" class="ptr-icon-button" data-close-detail aria-label="Fermer le détail">×</button></div>
         <div class="ptr-small ptr-muted">${escapeHtml(row.label)}</div>
-        <div><div class="ptr-label">Réponse${cell?.edited ? ' · modifiée à la main' : ''}</div><div style="display:flex;gap:6px">${cell ? flagDot(cell.flag) : ''}${answer}</div>${cell ? `<div class="ptr-small ptr-muted">${escapeHtml(FLAG_LABELS[cell.flag])}</div>` : rowStatus(row)}</div>
-        <div><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button></div>
+        <div><div class="ptr-label">Réponse${cell?.edited ? ' · modifiée à la main' : ''}${cell?.checked ? ` · vérifiée le ${escapeHtml(new Date(cell.checked.at).toLocaleDateString('fr-FR'))}` : ''}</div><div style="display:flex;gap:6px">${cell ? flagDot(cell.flag) : ''}${answer}</div>${cell ? `<div class="ptr-small ptr-muted">${escapeHtml(FLAG_LABELS[cell.flag])}</div>` : rowStatus(row)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button>${isCellFilled(cell) ? `<button type="button" class="ptr-button" data-check-cell title="Une réponse vérifiée compte comme pièce d’auteur humain dans une prémisse liée">${cell.checked ? 'Retirer la vérification' : 'Marquer vérifiée'}</button>` : ''}</div>
         ${cell ? `
           <div><div class="ptr-label">Justification</div><div class="ptr-md">${cell.reasoning ? renderMarkdown(cell.reasoning) : '<p class="ptr-muted">—</p>'}</div></div>
           <div><div class="ptr-label">Citations</div>${citationList(cell)}${row.corrections ? `<div class="ptr-small ptr-muted">${row.corrections} demande${row.corrections > 1 ? 's' : ''} de correction envoyée${row.corrections > 1 ? 's' : ''} à la session.</div>` : ''}</div>` : ''}
@@ -223,6 +224,12 @@ export function createReviewView(app: App, project: string, file: string, onBack
       ? `Effectuée le ${formatDate(review.createdAt)} · Dossier ${app.projectName(project)} · Recherche : ${review.research.query} · Juridictions : ${review.research.criteria.join(' · ')}`
       : `${review.templateName} · ${app.projectName(project)} · ${formatDate(review.createdAt)}`;
     const research = review.category === 'recherche-juridique';
+    const extra = research ? undefined : app.rowColumn;
+    // Mode chronologie : les seules pièces, de la plus ancienne à la plus récente ; sans date, en fin de liste.
+    const chronology = !research && app.chronology?.active() ? app.chronology : null;
+    const dateColumn = review.columns.find((column) => column.format === 'date') ?? review.columns.find((column) => column.name.trim().toLocaleLowerCase('fr') === 'date');
+    const shownRows = chronology ? review.rows.filter((row) => chronology.isPiece(row)) : review.rows;
+    const order: SortState = chronology ? (dateColumn ? { key: `c${dateColumn.index}`, direction: 1 } : null) : sort;
     const classification = classifyColumn(review.columns);
     element.innerHTML = `
       <div class="ptr-review-top">
@@ -248,22 +255,22 @@ export function createReviewView(app: App, project: string, file: string, onBack
       </div>
       <div class="ptr-review-body">
         <div class="ptr-table-wrap">
-          <table class="ptr-table">
-            <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${research ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${review.columns.map(columnHeading).join('')}<th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button>${research || classification ? '' : ' <button type="button" class="ptr-add" data-add-classification title="Ajouter la colonne de classement dans l’arborescence du dossier">+ Classement</button>'}</th></tr></thead>
-            <tbody>${sortBy(review.rows, sort, (row, key) => key === 'label' ? row.label : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
+          <table class="ptr-table">${chronology ? `<caption class="ptr-chronology-caption" data-chronology>Chronologie : ${shownRows.length} pièce${shownRows.length > 1 ? 's' : ''} sur ${review.rows.length} ligne${review.rows.length > 1 ? 's' : ''}, par date${dateColumn ? '' : ' (aucune colonne Date)'}</caption>` : ''}
+            <thead><tr><th scope="col"><div class="ptr-th-sortable"><span>${research ? 'Décision' : 'Document'}</span>${sortButton(sort, 'label', 'document')}</div></th>${extra ? `<th scope="col">${escapeHtml(extra.title)}</th>` : ''}${review.columns.map(columnHeading).join('')}<th scope="col" class="ptr-add-col"><button type="button" class="ptr-add" data-add-questions title="Ajouter des questions (colonnes)">+ Question</button>${research || classification ? '' : ' <button type="button" class="ptr-add" data-add-classification title="Ajouter la colonne de classement dans l’arborescence du dossier">+ Classement</button>'}</th></tr></thead>
+            <tbody>${sortBy(shownRows, order, (row, key) => key === 'label' ? documentTitle(review, row) : review.cells[row.id]?.[key.slice(1)]?.summary ?? '').map((row) => `
               <tr>
-                <td><div class="ptr-row-label">${escapeHtml(row.label)}</div>${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>
+                <td data-title-row="${escapeHtml(row.id)}"><div class="ptr-row-label">${escapeHtml(documentTitle(review, row))}</div>${documentTitleCell(review, row) ? citationLinks(documentTitleCell(review, row)!) : ''}${row.documents.length > 1 ? `<div class="ptr-row-status">${row.documents.length} documents</div>` : ''}${rowStatus(row)}${pieceStatus(row)}${sorting && row.piece ? `<button type="button" class="ptr-button" data-apply-row="${escapeHtml(row.id)}" style="margin-top:4px"${row.status === 'running' ? ' disabled' : ''}>Appliquer</button>` : ''}</td>${extra ? `<td class="ptr-row-extra">${extra.cell(row)}</td>` : ''}
                 ${review.columns.map((column) => {
                   const cell = review.cells[row.id]?.[String(column.index)];
                   const isSelected = selected?.row === row.id && selected.column === column.index;
                   const content = cell
-                    ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div>${cell.edited ? '<span class="ptr-small ptr-muted" title="Réponse modifiée à la main">✎</span>' : ''}</div>${citationLinks(cell)}`
+                    ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div>${cell.edited ? '<span class="ptr-small ptr-muted" title="Réponse modifiée à la main">✎</span>' : ''}${cell.checked ? '<span class="ptr-small ptr-muted" title="Réponse vérifiée par l’avocat">✓</span>' : ''}</div>${citationLinks(cell)}`
                     : row.status === 'running' ? '<span class="ptr-muted"><span class="ptr-spinner"></span></span>' : '<span class="ptr-muted">—</span>';
                   return `<td class="ptr-cell" tabindex="0" data-row="${escapeHtml(row.id)}" data-column="${column.index}" aria-selected="${isSelected}">${content}</td>`;
                 }).join('')}
                 <td class="ptr-add-col"></td>
               </tr>`).join('')}
-              ${research ? '' : `<tr><td><button type="button" class="ptr-add" data-add-documents title="Ajouter des documents (lignes)">+ Documents</button></td><td colspan="${review.columns.length + 1}"></td></tr>`}
+              ${research ? '' : `<tr><td><button type="button" class="ptr-add" data-add-documents title="Ajouter des documents (lignes)">+ Documents</button></td><td colspan="${review.columns.length + 1 + (extra ? 1 : 0)}"></td></tr>`}
             </tbody>
           </table>
         </div>
@@ -549,6 +556,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     let rows = classificationTreeRows(folders);
     const rowsHtml = () => rows.map((folder, index) => `
       <div class="ptr-tree-row" data-tree-row data-tree-depth="${folder.depth}">
+        <input type="hidden" data-tree-type value="${escapeHtml(folder.type || '')}">
         <input class="ptr-input" data-tree-name maxlength="60" style="margin-left:${folder.depth * 24}px;width:calc(100% - ${folder.depth * 24}px)" value="${escapeHtml(folder.name)}" placeholder="${folder.depth ? 'Sous-dossier' : 'Dossier'}" aria-label="Nom du dossier">
         <input class="ptr-input" data-tree-explanation maxlength="500" value="${escapeHtml(folder.explanation)}" placeholder="Ce qu’on y range" aria-label="Explication du dossier">
         <button type="button" class="ptr-icon-button" data-tree-add-child="${index}" title="Ajouter un sous-dossier" aria-label="Ajouter un sous-dossier">+</button>
@@ -568,6 +576,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
             depth: Number(row.dataset.treeDepth),
             name: row.querySelector<HTMLInputElement>('[data-tree-name]')!.value,
             explanation: row.querySelector<HTMLInputElement>('[data-tree-explanation]')!.value,
+            type: row.querySelector<HTMLInputElement>('[data-tree-type]')!.value || undefined,
           }));
         };
         dialog.addEventListener('input', sync);
@@ -677,7 +686,8 @@ export function createReviewView(app: App, project: string, file: string, onBack
     if (citation) {
       event.preventDefault();
       const host = citation.closest<HTMLElement>('td.ptr-cell');
-      const position = host ? { row: host.dataset.row ?? '', column: Number(host.dataset.column) } : selected;
+      const title = citation.closest<HTMLElement>('[data-title-row]');
+      const position = host ? { row: host.dataset.row ?? '', column: Number(host.dataset.column) } : title ? { row: title.dataset.titleRow!, column: DOCUMENT_TITLE_INDEX } : selected;
       if (position) openCitation(position.row, position.column, Number(citation.dataset.citation));
       return;
     }
@@ -762,6 +772,15 @@ export function createReviewView(app: App, project: string, file: string, onBack
       });
       return;
     }
+    if (target.closest('[data-check-cell]') && detail && selected) {
+      const { row: rowId, column } = selected;
+      const checked = !detail.review.cells[rowId]?.[String(column)]?.checked;
+      void action(async () => {
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/check', { project, file, rowId, column, checked }));
+        toast(app.root, checked ? 'Réponse marquée vérifiée.' : 'Vérification retirée.');
+      });
+      return;
+    }
     if (target.closest('[data-run-cell]') && detail && selected) {
       const { row: rowId, column: index } = selected;
       const filled = isCellFilled(detail.review.cells[rowId]?.[String(index)]);
@@ -835,6 +854,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
     },
     destroy() {
       destroyed = true;
+      stopChronology();
       window.clearTimeout(timer);
       window.clearTimeout(researchTimer);
     },

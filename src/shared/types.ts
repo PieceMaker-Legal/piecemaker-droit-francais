@@ -2061,3 +2061,8 @@ type TaskStatus =
 
 /** A TaskMaster task's priority; high, medium and low are the known values and the string fallback tolerates anything else TaskMaster emits. */
 type TaskPriority = 'high' | 'medium' | 'low' | string;
+
+//----------------- WORD REVIEW ------------
+
+/** Versions et propositions Word échangées avec le serveur. */
+export type { DocxEditAnnotation, DocxReview } from '@piecemaker/docx-review';

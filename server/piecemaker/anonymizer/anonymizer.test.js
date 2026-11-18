@@ -172,6 +172,16 @@ test('une filiale au nom plus long garde son propre code', () => {
   );
 });
 
+test('un code posé à l’aller n’est jamais recodé par une entité plus courte', () => {
+  const dictionary = buildDictionary({
+    mapping: { 'Société Exemple SAS': 'SA_10', Exemple: 'SA_10', SA: 'SA_11' },
+    reverse_mapping: { SA_10: ['Société Exemple SAS', 'Exemple'], SA_11: ['SA'] },
+  }, 1);
+  const coded = anonymize('Lettre_par_Exemple_SA.pdf', dictionary);
+  assert.equal(coded, 'Lettre_par_SA_10_SA_11.pdf');
+  assert.equal(anonymize(deanonymize(coded, dictionary), dictionary), coded);
+});
+
 test('les identifiants d’appel et de résultat restent appariés', () => {
   const toolUseId = 'toolu_01JeanDupont_X';
   const payload = {
@@ -187,6 +197,18 @@ test('les identifiants d’appel et de résultat restent appariés', () => {
 
   assert.equal(rewritten.messages[0].content[0].id, toolUseId);
   assert.equal(rewritten.messages[1].content[0].tool_use_id, toolUseId);
+});
+
+test('le nom d’outil d’une référence d’outil reste intact', () => {
+  const payload = {
+    messages: [{ role: 'user', content: [{ type: 'tool_reference', tool_name: 'mcp__JeanDupont__lire' }] }],
+  };
+  const rewritten = JSON.parse(rewriteJsonBody(
+    JSON.stringify(payload),
+    (text) => text.split('JeanDupont').join(CODE),
+  ));
+
+  assert.equal(rewritten.messages[0].content[0].tool_name, 'mcp__JeanDupont__lire');
 });
 
 test('les schémas gardent leur contrat et anonymisent leurs données', () => {
@@ -524,4 +546,182 @@ test('les événements finaux Responses (.done, completed) et Anthropic (content
   assert.ok(!output.includes('PERSONNE_PHYSIQUE_01'), output);
   assert.equal(output.split('Jean Dupont').length - 1, 4);
   assert.ok(output.includes('"id":"r1"'));
+});
+
+const MASK = (text) => text.replace(/dupont/gi, 'PSEUDO');
+
+function assertNoLeak(serialized, spared) {
+  let rest = serialized;
+  for (const token of spared) rest = rest.split(token).join('');
+  assert.ok(!/dupont/i.test(rest), rest);
+}
+
+test('Anthropic : aucun nom d’outil ni de serveur MCP n’est pseudonymisé, le reste l’est', () => {
+  const payload = {
+    system: [{ type: 'text', text: 'Outils différés :\nmcp__dupont__lire\nlire_dupont\nClient : Jean Dupont.' }],
+    tools: [
+      { name: 'mcp__dupont__lire', description: 'Lit le dossier de Jean Dupont via mcp__dupont__lire.', input_schema: { type: 'object' } },
+      { name: 'lire_dupont', description: 'Voir lire_dupont, pas Dupont.', input_schema: { type: 'object' } },
+    ],
+    mcp_servers: [{ type: 'url', name: 'dupont', url: 'https://exemple.test/mcp', tool_configuration: { allowed_tools: ['lire_dupont'] } }],
+    tool_choice: { type: 'tool', name: 'lire_dupont' },
+    messages: [
+      { role: 'user', content: [{ type: 'text', text: '<system-reminder>mcp__dupont__lire est prêt. Jean Dupont attend.</system-reminder>' }] },
+      { role: 'assistant', content: [
+        { type: 'server_tool_use', id: 's1', name: 'lire_dupont', input: { q: 'Dupont' } },
+        { type: 'mcp_tool_use', id: 'm1', name: 'lire_dupont', server_name: 'dupont', input: { q: 'Dupont' } },
+        { type: 'tool_use', id: 't1', name: 'mcp__dupont__lire', input: { q: 'Dupont' } },
+      ] },
+      { role: 'user', content: [
+        { type: 'tool_result', tool_use_id: 't1', content: [{ type: 'tool_reference', tool_name: 'mcp__dupont__lire' }] },
+        { type: 'text', text: 'Pièce de Dupont, outil mcp__dupont__lire.' },
+      ] },
+    ],
+  };
+  const output = rewriteJsonBody(JSON.stringify(payload), MASK);
+  const rewritten = JSON.parse(output);
+
+  assert.equal(rewritten.system[0].text, 'Outils différés :\nmcp__dupont__lire\nlire_dupont\nClient : Jean PSEUDO.');
+  assert.equal(rewritten.tools[0].name, 'mcp__dupont__lire');
+  assert.equal(rewritten.tools[0].description, 'Lit le dossier de Jean PSEUDO via mcp__dupont__lire.');
+  assert.equal(rewritten.tools[1].description, 'Voir lire_dupont, pas PSEUDO.');
+  assert.equal(rewritten.mcp_servers[0].name, 'dupont');
+  assert.deepEqual(rewritten.mcp_servers[0].tool_configuration.allowed_tools, ['lire_dupont']);
+  assert.deepEqual(rewritten.tool_choice, payload.tool_choice);
+  assert.equal(rewritten.messages[0].content[0].text, '<system-reminder>mcp__dupont__lire est prêt. Jean PSEUDO attend.</system-reminder>');
+  const [server, mcp, tool] = rewritten.messages[1].content;
+  assert.equal(server.name, 'lire_dupont');
+  assert.equal(mcp.name, 'lire_dupont');
+  assert.equal(mcp.server_name, 'dupont');
+  assert.equal(tool.name, 'mcp__dupont__lire');
+  assert.equal(tool.input.q, 'PSEUDO');
+  assert.equal(rewritten.messages[2].content[0].content[0].tool_name, 'mcp__dupont__lire');
+  assert.equal(rewritten.messages[2].content[1].text, 'Pièce de PSEUDO, outil mcp__dupont__lire.');
+  assertNoLeak(output, ['mcp__dupont__lire', 'lire_dupont', '"name":"dupont"', '"server_name":"dupont"']);
+});
+
+test('un nom d’outil connu n’épargne que son jeton exact', () => {
+  const payload = {
+    tools: [{ name: 'lire_dupont', input_schema: { type: 'object' } }],
+    messages: [{ role: 'user', content: 'lire_dupont_bis, xlire_dupont, Dupont, mcp__dupont et lire_dupont.' }],
+  };
+  const rewritten = JSON.parse(rewriteJsonBody(JSON.stringify(payload), MASK));
+
+  assert.equal(rewritten.messages[0].content, 'lire_PSEUDO_bis, xlire_PSEUDO, PSEUDO, mcp__PSEUDO et lire_dupont.');
+});
+
+test('Responses : noms de fonction, d’outil personnalisé et de serveur MCP intacts', () => {
+  const payload = {
+    instructions: 'Appelle lire_dupont ou mcp__dupont__lire pour Jean Dupont.',
+    tools: [
+      { type: 'function', name: 'lire_dupont', description: 'Dossier Dupont.', parameters: { type: 'object' } },
+      { type: 'custom', name: 'mcp__dupont__lire' },
+      { type: 'mcp', server_label: 'dupont', server_url: 'https://exemple.test/mcp', allowed_tools: ['lire_dupont'] },
+    ],
+    tool_choice: { type: 'function', name: 'lire_dupont' },
+    input: [
+      { type: 'function_call', call_id: 'c1', name: 'lire_dupont', arguments: '{"q":"Dupont"}' },
+      { type: 'custom_tool_call', call_id: 'c2', name: 'mcp__dupont__lire', input: 'Dupont' },
+      { type: 'mcp_call', id: 'm1', name: 'lire_dupont', server_label: 'dupont', arguments: '{"q":"Dupont"}', output: 'Dupont' },
+      { type: 'mcp_list_tools', id: 'l1', server_label: 'dupont', tools: [{ name: 'lire_dupont', input_schema: {} }] },
+      { type: 'mcp_approval_request', id: 'a1', name: 'lire_dupont', server_label: 'dupont', arguments: '{}' },
+    ],
+  };
+  const output = rewriteJsonBody(JSON.stringify(payload), MASK);
+  const rewritten = JSON.parse(output);
+
+  assert.equal(rewritten.instructions, 'Appelle lire_dupont ou mcp__dupont__lire pour Jean PSEUDO.');
+  assert.deepEqual(rewritten.tools.map((tool) => tool.name ?? tool.server_label), ['lire_dupont', 'mcp__dupont__lire', 'dupont']);
+  assert.deepEqual(rewritten.tools[2].allowed_tools, ['lire_dupont']);
+  assert.equal(rewritten.tools[0].description, 'Dossier PSEUDO.');
+  const [call, custom, mcp, list, approval] = rewritten.input;
+  assert.equal(call.name, 'lire_dupont');
+  assert.equal(call.arguments, '{"q":"PSEUDO"}');
+  assert.equal(custom.name, 'mcp__dupont__lire');
+  assert.equal(custom.input, 'PSEUDO');
+  assert.equal(mcp.name, 'lire_dupont');
+  assert.equal(mcp.server_label, 'dupont');
+  assert.equal(mcp.output, 'PSEUDO');
+  assert.equal(list.server_label, 'dupont');
+  assert.equal(list.tools[0].name, 'lire_dupont');
+  assert.equal(approval.name, 'lire_dupont');
+  assert.equal(approval.server_label, 'dupont');
+  assertNoLeak(output, ['mcp__dupont__lire', 'lire_dupont', '"server_label":"dupont"']);
+});
+
+test('Chat Completions et Mistral : noms de fonction intacts dans les définitions, appels et résultats', () => {
+  const payload = {
+    tools: [{ type: 'function', function: { name: 'lire_dupont', description: 'Dossier Dupont.', parameters: { type: 'object' } } }],
+    tool_choice: { type: 'function', function: { name: 'lire_dupont' } },
+    messages: [
+      { role: 'system', content: 'Outils : lire_dupont, mcp__dupont__lire. Client : Jean Dupont.' },
+      { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'lire_dupont', arguments: '{"q":"Dupont"}' } }] },
+      { role: 'tool', tool_call_id: 'c1', name: 'lire_dupont', content: 'Dupont' },
+      { role: 'function', name: 'mcp__dupont__lire', content: 'Dupont' },
+    ],
+  };
+  const output = rewriteJsonBody(JSON.stringify(payload), MASK);
+  const rewritten = JSON.parse(output);
+
+  assert.equal(rewritten.tools[0].function.name, 'lire_dupont');
+  assert.equal(rewritten.tools[0].function.description, 'Dossier PSEUDO.');
+  assert.deepEqual(rewritten.tool_choice, payload.tool_choice);
+  assert.equal(rewritten.messages[0].content, 'Outils : lire_dupont, mcp__dupont__lire. Client : Jean PSEUDO.');
+  assert.equal(rewritten.messages[1].tool_calls[0].function.name, 'lire_dupont');
+  assert.equal(rewritten.messages[1].tool_calls[0].function.arguments, '{"q":"PSEUDO"}');
+  assert.equal(rewritten.messages[2].name, 'lire_dupont');
+  assert.equal(rewritten.messages[2].content, 'PSEUDO');
+  assert.equal(rewritten.messages[3].name, 'mcp__dupont__lire');
+  assert.equal(rewritten.messages[3].content, 'PSEUDO');
+  assertNoLeak(output, ['mcp__dupont__lire', 'lire_dupont']);
+});
+
+test('réponse JSON : les noms d’outils ne sont pas touchés au retour', () => {
+  const unmask = (text) => text.replace(/dupont/gi, 'Martin');
+  const payload = {
+    content: [
+      { type: 'text', text: 'J’appelle mcp__dupont__lire pour Dupont.' },
+      { type: 'tool_use', id: 't1', name: 'mcp__dupont__lire', input: {} },
+      { type: 'mcp_tool_use', id: 'm1', name: 'lire_dupont', server_name: 'dupont', input: {} },
+    ],
+  };
+  const rewritten = JSON.parse(rewriteJsonBody(JSON.stringify(payload), unmask));
+
+  assert.equal(rewritten.content[0].text, 'J’appelle mcp__dupont__lire pour Martin.');
+  assert.equal(rewritten.content[1].name, 'mcp__dupont__lire');
+  assert.equal(rewritten.content[2].name, 'lire_dupont');
+  assert.equal(rewritten.content[2].server_name, 'dupont');
+});
+
+test('flux SSE : les noms d’outils restent intacts pour chaque fournisseur', () => {
+  const rewriter = createSseRewriter(MASK);
+  const events = [
+    { type: 'content_block_start', index: 0, content_block: { type: 'server_tool_use', id: 's1', name: 'lire_dupont', input: {} } },
+    { type: 'content_block_start', index: 1, content_block: { type: 'mcp_tool_use', id: 'm1', name: 'lire_dupont', server_name: 'dupont', input: {} } },
+    { type: 'content_block_start', index: 2, content_block: { type: 'tool_use', id: 't1', name: 'mcp__dupont__lire', input: {} } },
+    { type: 'content_block_delta', index: 3, delta: { type: 'text_delta', text: 'Outil mcp__du' } },
+    { type: 'content_block_delta', index: 3, delta: { type: 'text_delta', text: 'pont__lire pour Dupont.' } },
+    { type: 'content_block_stop', index: 3 },
+    { type: 'response.output_item.added', output_index: 0, item: { type: 'mcp_call', id: 'm2', name: 'lire_dupont', server_label: 'dupont' } },
+    { type: 'response.output_item.added', output_index: 1, item: { type: 'function_call', id: 'f1', call_id: 'c1', name: 'lire_dupont', arguments: '' } },
+    { type: 'response.function_call_arguments.done', item_id: 'f1', output_index: 1, name: 'lire_dupont', arguments: '{"q":"Dupont"}' },
+    { id: 'k1', choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'c1', type: 'function', function: { name: 'lire_dupont', arguments: '' } }] } }] },
+  ];
+  const output = rewriter.push(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')) + rewriter.end();
+  const parsed = output.split('\n').filter((line) => line.startsWith('data: {')).map((line) => JSON.parse(line.slice(6)));
+  const text = parsed.filter((event) => event.index === 3 && event.delta).map((event) => event.delta.text).join('');
+
+  assert.equal(parsed[0].content_block.name, 'lire_dupont');
+  assert.equal(parsed[1].content_block.name, 'lire_dupont');
+  assert.equal(parsed[1].content_block.server_name, 'dupont');
+  assert.equal(parsed[2].content_block.name, 'mcp__dupont__lire');
+  assert.equal(text, 'Outil mcp__dupont__lire pour PSEUDO.');
+  const mcpItem = parsed.find((event) => event.item?.type === 'mcp_call').item;
+  assert.equal(mcpItem.name, 'lire_dupont');
+  assert.equal(mcpItem.server_label, 'dupont');
+  assert.equal(parsed.find((event) => event.item?.type === 'function_call').item.name, 'lire_dupont');
+  const done = parsed.find((event) => event.type === 'response.function_call_arguments.done');
+  assert.equal(done.name, 'lire_dupont');
+  assert.equal(done.arguments, '{"q":"PSEUDO"}');
+  assert.equal(parsed.find((event) => event.choices).choices[0].delta.tool_calls[0].function.name, 'lire_dupont');
 });

@@ -14,6 +14,7 @@ const docxSave = vi.hoisted(() => vi.fn<() => Promise<ArrayBuffer>>());
 vi.mock('@/shared/api', () => ({
   api: { readFileBlob: vi.fn() },
   authenticatedFetch: vi.fn(),
+  docxReviewRequest: vi.fn(async () => ({ versions: [], annotations: [] })),
 }));
 
 
@@ -58,6 +59,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
         onChange: () => void;
         onCommentsChange: (comments: { id: number; parentId?: number }[]) => void;
         onCommentsSidebarOpenChange?: (open: boolean) => void;
+        onCommentReply?: (reply: { id: number; parentId: number; content: [] }, parent: { id: number; content: [] }) => void;
         renderLogo: () => React.ReactNode;
         renderTitleBarRight: () => React.ReactNode;
       }
@@ -78,6 +80,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
           {props.renderTitleBarRight()}
           <button type="button" onClick={props.onChange}>{props.documentName}</button>
           <button type="button" onClick={() => props.onCommentsChange([{ id: 1 }, { id: 2 }, { id: 3, parentId: 1 }])}>emit-comments</button>
+          <button type="button" onClick={() => props.onCommentReply?.({ id: 2, parentId: 1, content: [] }, { id: 1, content: [] })}>reply-comment</button>
           <span
             className="docx-insertion"
             data-revision-id="7"
@@ -178,10 +181,10 @@ test('keeps a literal percent sequence when that file exists', async () => {
   assert.deepEqual(vi.mocked(api.readFileBlob).mock.calls[0], ['project-1', filePath]);
 });
 
-test('tracked insertions are Word blue without highlight; deletions are red strikethrough', () => {
+test('tracked insertions are muted blue without highlight; deletions are muted red strikethrough', () => {
   const css = readFileSync('src/piecemaker/docx/docxDocumentViewer.css', 'utf8');
-  assert.match(css, /--docx-revision-ins:\s*#0000ff/);
-  assert.match(css, /--docx-revision-del:\s*#ff0000/);
+  assert.match(css, /--docx-revision-ins:\s*#496b93/);
+  assert.match(css, /--docx-revision-del:\s*#a45b5b/);
   assert.match(css, /\.docx-insertion[\s\S]*color:\s*var\(--docx-revision-ins\)/);
   assert.match(css, /\.docx-insertion[\s\S]*background-color:\s*transparent/);
   assert.match(css, /\.docx-insertion[\s\S]*text-decoration:\s*underline/);
@@ -301,6 +304,16 @@ test('closing before the debounce saves before closing the document', async () =
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Fermer' })); });
   assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
   assert.equal(onClose.mock.calls.length, 1);
+});
+
+test('a reply in a comment thread is saved', async () => {
+  vi.mocked(authenticatedFetch).mockImplementation(async () => new Response(JSON.stringify({ version: 1 }), { status: 200 }));
+  render(<DocxDocumentViewer file={{ name: 'sample.docx', path: '/case/sample.docx' }} projectId="project-1" isSidebar onClose={() => undefined} />);
+  await screen.findByRole('button', { name: 'sample.docx' });
+  vi.useFakeTimers();
+  fireEvent.click(screen.getByRole('button', { name: 'reply-comment' }));
+  await act(async () => { await vi.advanceTimersByTimeAsync(800); });
+  assert.equal(vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT').length, 1);
 });
 
 test('unmounting with a pending edit still saves its snapshot', async () => {

@@ -1,3 +1,5 @@
+import { authenticatedFetch } from '../../../src/shared/authToken.js';
+
 const mounts = new WeakMap();
 const ORIGINS = { personnel: 'Personnel', dossier: 'Dossier', 'bibliothèque': 'Bibliothèque' };
 
@@ -85,22 +87,11 @@ export function mount(container, api) {
   }
 
   async function request(method, path, body) {
-    const headers = { Accept: 'application/json' };
-    const token = localStorage.getItem('auth-token');
-    if (token) headers.Authorization = `Bearer ${token}`;
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
-    const response = await fetch(`/api/piecemaker/library${path}`, {
+    const response = await authenticatedFetch(`/api/piecemaker/library${path}`, {
       method,
-      headers,
+      headers: { Accept: 'application/json' },
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      credentials: 'same-origin',
     });
-    const refreshed = response.headers.get('X-Refreshed-Token');
-    if (refreshed) {
-      localStorage.setItem('auth-token', refreshed);
-      window.dispatchEvent(new CustomEvent('auth-token-refreshed', { detail: refreshed }));
-    }
-    if (response.headers.get('X-Auth-Error')) localStorage.removeItem('auth-token');
     let result = null;
     try { result = await response.json(); } catch { result = null; }
     if (!response.ok || result?.error || result?.ok === false) {

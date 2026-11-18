@@ -1,4 +1,4 @@
-import type { ReasoningIssue } from './piecemaker-reasoning.js';
+export type SuiviIssue = { id: string; kind: 'erreur' | 'manque' | 'conseil'; path: string; line: number | null; text: string; regle?: string; correction?: string; avocat?: string; cible?: string; ailleurs?: Array<{ path: string; line: number | null }> };
 
 export type SuiviProof = { piece: string; citation: string; titre?: string };
 
@@ -31,7 +31,7 @@ export type SuiviSnapshot = {
   hash: string | null;
   evenements: SuiviEvent[];
   echeances: SuiviDeadline[];
-  issues: ReasoningIssue[];
+  issues: SuiviIssue[];
   stale?: boolean;
   absent?: boolean;
 };

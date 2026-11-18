@@ -12,13 +12,29 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
   - `style-redaction-cabinet` — rédaction/relecture de documents juridiques
     français, citations sourcées via legifrance (MCP).
 - **Agents** (`agents/`) :
-  - `analyste-pieces` — synthèse structurée d'une pièce du dossier.
+  - `research-maker` — recherche Légifrance et Judilibre (modèle léger) ; l'agent principal relit chaque source.
+  Nom d'affichage (`metadata.title`) : ResearchMaker.
+- **Hooks Vibe** : `scripts/vibe-hook.mjs` traduit le protocole de `~/.vibe/hooks.toml` vers les scripts ci-dessous ; le serveur y installe au démarrage les entrées `piecemaker-*` (`installer/lib/vibe-hooks.mjs`), sans toucher aux hooks personnels.
+- **Hooks** : `guard-legal-search` (Claude, Codex, Vibe) refuse les outils `Search_*` à tout agent autre que
+  `research-maker` quand celui-ci est installé ; Mistral les remplace par l'outil `research_maker` ; il lui laisse `consulter_article` et `consulter_decision`.
+  Avec le SDK Mistral, chaque `.vibe/agents/*.toml` devient un outil de délégation (`research_maker`) : boucle `chat.complete`, outils d'écriture soumis à la même autorisation que l'agent principal.
+- **Hooks** : `guard-ontologie` (Claude, Codex, Vibe, chat Mistral) refuse toute écriture directe dans
+  `~/.piecemaker/ontologie.json`, qui porte les relations, les natures et l'arborescence communes à tous
+  les dossiers. Une modification de l'ontologie ou de l'arborescence par Edit, Write ou apply_patch devient une proposition pour l'avocat
+  (`scripts/lib/proposition-edit.mjs`). Les liens des fiches OKF passent par l'outil `OkfWrite` du MCP
+  `features` ou par `pm okf link|unlink|examinee|revue` ; le Hérisson vérifie l'index après chaque écriture.
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).
   Un document créé par l'IA dans un dossier enregistré est classé d'office
   « espace de travail » (`classify-ai-documents.mjs`, `PostToolUse`) : sans
   quoi il naîtrait au coffre-fort et l'IA ne pourrait pas se relire.
+  Après `research-maker`, `verify-subagent.mjs` (`PostToolUse` sur `Agent|Task`
+  sous Claude, `SubagentStop` sous Codex) signale les décisions citées absentes
+  du cache `~/.piecemaker/decisions/`, donc jamais lues. Claude donne le bilan à
+  l'agent principal, avec l'invitation à relancer le sous-agent ; Codex renvoie
+  une fois le sous-agent au travail. L'index OKF et le programme Catala sont écrits par
+  l'agent principal.
   Le mapping PII est appliqué par le proxy PII, pas par ces hooks. Tous
   les hooks échouent "ouverts" (fail-open) : aucune erreur, timeout ou
   absence de configuration ne bloque jamais une session.

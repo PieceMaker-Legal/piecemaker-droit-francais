@@ -41,8 +41,8 @@ def sql(requete):
     return commande("dossier", "sql", requete)
 
 
-def raisonnement(action, **options):
-    return commande("raisonnement", action, **options)
+def catala(action, *arguments, **options):
+    return commande("catala", action, *arguments, **options)
 
 
 def suivi(action, *arguments, **options):

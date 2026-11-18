@@ -406,7 +406,7 @@ class LegifranceClient:
             "id": article_id
         }
         
-        return self._request("/consult/getArticle", payload)
+        return decision_cache.obtenir_article(article_id, lambda: self._request("/consult/getArticle", payload))
     
 # Instance globale
 legifrance_client = LegifranceClient()

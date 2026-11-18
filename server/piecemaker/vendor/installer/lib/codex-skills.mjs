@@ -7,9 +7,11 @@
  * jamais remplacé.
  */
 
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import TOML from '@iarna/toml';
 
 const PLUGIN_DIRECTORY = 'piecemaker-plugin';
 const PLUGIN_SKILL_PATH = /(^|[\\/])piecemaker-plugin[\\/]skills[\\/][^\\/]+$/;
@@ -30,7 +32,7 @@ export function codexHooksFile(userHome = os.homedir()) {
   return path.join(userHome, '.codex', 'hooks.json');
 }
 
-function readCodexHooks(userHome) {
+function readCodexHooks(userHome, event = 'PreToolUse') {
   const file = codexHooksFile(userHome);
   if (!fs.existsSync(file)) return { file, document: { hooks: {} } };
   try {
@@ -40,7 +42,7 @@ function readCodexHooks(userHome) {
     }
     if (document.hooks === undefined) document.hooks = {};
     if (!document.hooks || typeof document.hooks !== 'object' || Array.isArray(document.hooks)
-      || (document.hooks.PreToolUse !== undefined && !Array.isArray(document.hooks.PreToolUse))) {
+      || (document.hooks[event] !== undefined && !Array.isArray(document.hooks[event]))) {
       return { file, error: 'hooks-invalides' };
     }
     return { file, document };
@@ -76,14 +78,21 @@ function codexProtectionGroup(repoRoot) {
 }
 
 export function codexProtectionHookStatus(repoRoot, userHome = os.homedir()) {
-  const loaded = readCodexHooks(userHome);
+  return codexHookGroupStatus(userHome, codexProtectionGroup(repoRoot), isPieceMakerProtection);
+}
+
+export function codexLegalSearchHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexLegalSearchGroup(repoRoot), isPieceMakerLegalSearch);
+}
+
+function codexHookGroupStatus(userHome, expected, owned, event = 'PreToolUse') {
+  const loaded = readCodexHooks(userHome, event);
   if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
-  const expected = codexProtectionGroup(repoRoot);
-  const groups = Array.isArray(loaded.document.hooks.PreToolUse)
-    ? loaded.document.hooks.PreToolUse
+  const groups = Array.isArray(loaded.document.hooks[event])
+    ? loaded.document.hooks[event]
     : [];
   const managed = groups.flatMap((group) => Array.isArray(group?.hooks) ? group.hooks : [])
-    .filter(isPieceMakerProtection);
+    .filter(owned);
   const exact = groups.some((group) => group?.matcher === expected.matcher
     && Array.isArray(group.hooks)
     && group.hooks.some((handler) => JSON.stringify(handler) === JSON.stringify(expected.hooks[0])));
@@ -97,11 +106,135 @@ export function codexProtectionHookStatus(repoRoot, userHome = os.homedir()) {
 
 /** Fusionne uniquement le refus PreToolUse de lecture des pièces ; tous les hooks personnels sont conservés. */
 export function installCodexProtectionHook(repoRoot, userHome = os.homedir()) {
-  const loaded = readCodexHooks(userHome);
+  return installCodexHookGroup(userHome, codexProtectionGroup(repoRoot), isPieceMakerProtection);
+}
+
+function isPieceMakerLegalSearch(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return command.includes('guard-legal-search.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexLegalSearchGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'guard-legal-search.mjs');
+  return {
+    matcher: 'mcp__.*legifrance.*__Search_.*',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 5,
+      statusMessage: 'Recherche Légifrance réservée à research-maker',
+    }],
+  };
+}
+
+/** Réserve les recherches Légifrance au sous-agent research-maker ; tous les hooks personnels sont conservés. */
+export function installCodexLegalSearchHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexLegalSearchGroup(repoRoot), isPieceMakerLegalSearch);
+}
+
+function isPieceMakerOntologyGuard(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return command.includes('guard-ontologie.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexOntologyGuardGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'guard-ontologie.mjs');
+  return {
+    matcher: '^(Bash|apply_patch)$',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 30,
+      statusMessage: 'Ontologie, arborescence et fiches OKF : modification transformée en proposition pour l’avocat',
+    }],
+  };
+}
+
+export function installCodexOntologyGuardHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexOntologyGuardGroup(repoRoot), isPieceMakerOntologyGuard);
+}
+
+export function codexOntologyGuardHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexOntologyGuardGroup(repoRoot), isPieceMakerOntologyGuard);
+}
+
+function isPieceMakerSubagentCheck(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return command.includes('verify-subagent.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexSubagentCheckGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'verify-subagent.mjs');
+  return {
+    matcher: '^research-maker$',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 60,
+      statusMessage: 'Vérification du travail du sous-agent PieceMaker',
+    }],
+  };
+}
+
+/** Vérifie les décisions citées avant qu'un sous-agent PieceMaker ne rende son compte rendu. */
+export function installCodexSubagentCheckHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexSubagentCheckGroup(repoRoot), isPieceMakerSubagentCheck, 'SubagentStop');
+}
+
+export function codexSubagentCheckHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexSubagentCheckGroup(repoRoot), isPieceMakerSubagentCheck, 'SubagentStop');
+}
+
+function isPieceMakerHerisson(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return /(feature-hook|herisson)\.mjs/.test(command) && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexHerissonGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'herisson.mjs');
+  return {
+    matcher: '^(Bash|apply_patch|mcp__features__Feature|mcp__features__OkfWrite)$',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 90,
+      statusMessage: 'Le Hérisson : vérification du fichier PieceMaker modifié',
+    }],
+  };
+}
+
+/** Lance le vérificateur de la feature (herisson.json, le Hérisson) après chaque écriture de l'agent. */
+export function installCodexHerissonHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexHerissonGroup(repoRoot), isPieceMakerHerisson, 'PostToolUse');
+}
+
+export function codexHerissonHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexHerissonGroup(repoRoot), isPieceMakerHerisson, 'PostToolUse');
+}
+
+function codexHerissonTurnEndGroup(repoRoot) {
+  const [hook] = codexHerissonGroup(repoRoot).hooks;
+  return { hooks: [{ ...hook, statusMessage: 'Le Hérisson : erreurs restantes en fin de tour' }] };
+}
+
+export function installCodexHerissonTurnEndHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexHerissonTurnEndGroup(repoRoot), isPieceMakerHerisson, 'Stop');
+}
+
+export function codexHerissonTurnEndHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexHerissonTurnEndGroup(repoRoot), isPieceMakerHerisson, 'Stop');
+}
+
+function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') {
+  const loaded = readCodexHooks(userHome, event);
   if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
   const document = loaded.document;
-  const groups = Array.isArray(document.hooks.PreToolUse)
-    ? document.hooks.PreToolUse
+  const groups = Array.isArray(document.hooks[event])
+    ? document.hooks[event]
     : [];
   const preserved = [];
   for (const group of groups) {
@@ -109,11 +242,11 @@ export function installCodexProtectionHook(repoRoot, userHome = os.homedir()) {
       preserved.push(group);
       continue;
     }
-    const hooks = Array.isArray(group.hooks) ? group.hooks.filter((handler) => !isPieceMakerProtection(handler)) : [];
+    const hooks = Array.isArray(group.hooks) ? group.hooks.filter((handler) => !owned(handler)) : [];
     if (hooks.length || !Array.isArray(group.hooks)) preserved.push({ ...group, hooks });
   }
   document.description ||= 'Hooks locaux Codex, dont la protection des pièces PieceMaker.';
-  document.hooks.PreToolUse = [...preserved, codexProtectionGroup(repoRoot)];
+  document.hooks[event] = [...preserved, expected];
   const output = `${JSON.stringify(document, null, 2)}\n`;
   let current = null;
   try { current = fs.readFileSync(loaded.file, 'utf8'); } catch { /* fichier absent */ }
@@ -126,6 +259,87 @@ export function installCodexProtectionHook(repoRoot, userHome = os.homedir()) {
     return { ok: true, changed: true, file: loaded.file, registered: 1 };
   } catch (error) {
     return { ok: false, changed: false, file: loaded.file, reason: error?.message || 'ecriture-impossible' };
+  }
+}
+
+const PIECEMAKER_HOOKS = [isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerHerisson];
+const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use', SubagentStop: 'subagent_stop', Stop: 'stop' };
+
+function sortedKeys(value) {
+  if (Array.isArray(value)) return value.map(sortedKeys);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortedKeys(value[key])]));
+}
+
+export function codexHookTrustedHash(event, matcher, handler, platform = process.platform) {
+  const hook = {
+    type: 'command',
+    command: platform === 'win32' && handler.commandWindows ? handler.commandWindows : handler.command,
+    timeout: Math.max(1, handler.timeout ?? 600),
+    async: handler.async === true,
+    ...(handler.statusMessage === undefined ? {} : { statusMessage: handler.statusMessage }),
+  };
+  const identity = { event_name: CODEX_EVENT_KEYS[event], ...(matcher == null ? {} : { matcher }), hooks: [hook] };
+  return `sha256:${createHash('sha256').update(JSON.stringify(sortedKeys(identity))).digest('hex')}`;
+}
+
+function pieceMakerHookTrust(file, document) {
+  const entries = [];
+  for (const [event, label] of Object.entries(CODEX_EVENT_KEYS)) {
+    const groups = Array.isArray(document.hooks[event]) ? document.hooks[event] : [];
+    groups.forEach((group, groupIndex) => {
+      const handlers = Array.isArray(group?.hooks) ? group.hooks : [];
+      handlers.forEach((handler, handlerIndex) => {
+        if (handler?.type === 'command' && PIECEMAKER_HOOKS.some((owned) => owned(handler))) {
+          entries.push([`${file}:${label}:${groupIndex}:${handlerIndex}`, codexHookTrustedHash(event, group.matcher, handler)]);
+        }
+      });
+    });
+  }
+  return entries;
+}
+
+function withTrustedHash(text, key, hash) {
+  const headers = [`[hooks.state.${JSON.stringify(key)}]`, `[hooks.state.'${key}']`];
+  const line = `trusted_hash = ${JSON.stringify(hash)}`;
+  const lines = text.split('\n');
+  const start = lines.findIndex((entry) => headers.includes(entry.trim()));
+  if (start === -1) return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n${headers[0]}\n${line}\n`;
+  const next = lines.findIndex((entry, index) => index > start && /^\s*\[/.test(entry));
+  const end = next === -1 ? lines.length : next;
+  const at = lines.findIndex((entry, index) => index > start && index < end && /^\s*trusted_hash\s*=/.test(entry));
+  if (at === -1) lines.splice(start + 1, 0, line);
+  else lines[at] = line;
+  return lines.join('\n');
+}
+
+export function codexConfigFile(userHome = os.homedir()) {
+  return path.join(userHome, '.codex', 'config.toml');
+}
+
+export function trustCodexHooks(userHome = os.homedir()) {
+  const loaded = readCodexHooks(userHome);
+  if (loaded.error) return { ok: false, changed: false, file: loaded.file, reason: loaded.error };
+  const file = codexConfigFile(userHome);
+  const entries = pieceMakerHookTrust(loaded.file, loaded.document);
+  let current = '';
+  try { current = fs.readFileSync(file, 'utf8'); } catch { current = ''; }
+  const output = entries.reduce((text, [key, hash]) => withTrustedHash(text, key, hash), current);
+  try {
+    const state = TOML.parse(output).hooks?.state ?? {};
+    if (!entries.every(([key, hash]) => state[key]?.trusted_hash === hash)) throw new Error('approbation-illisible');
+  } catch {
+    return { ok: false, changed: false, file, reason: 'config-toml-non-modifiable' };
+  }
+  if (output === current) return { ok: true, changed: false, file, trusted: entries.length };
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const temporary = `${file}.tmp-${process.pid}`;
+    fs.writeFileSync(temporary, output, 'utf8');
+    fs.renameSync(temporary, file);
+    return { ok: true, changed: true, file, trusted: entries.length };
+  } catch (error) {
+    return { ok: false, changed: false, file, reason: error?.message || 'ecriture-impossible' };
   }
 }
 

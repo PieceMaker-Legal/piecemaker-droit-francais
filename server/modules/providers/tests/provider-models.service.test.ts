@@ -127,6 +127,7 @@ const createTestService = (options: {
   sessions?: ReturnType<typeof createSessionStore>;
   settings?: ReturnType<typeof createSettingsStore>;
   activeModel?: (provider: LLMProvider, sessionId?: string) => string;
+  servedModel?: (provider: LLMProvider, sessionId: string) => string | null;
   onCatalogRead?: (provider: LLMProvider) => void;
 } = {}) => {
   const catalog = options.catalog ?? createCatalogStore();
@@ -145,6 +146,9 @@ const createTestService = (options: {
         getCurrentActiveModel: async (sessionId) => createCurrentActiveModel(
           options.activeModel?.(provider, sessionId) ?? `${provider}-default`,
         ),
+        ...(options.servedModel
+          ? { getServedModel: async (sessionId: string) => options.servedModel?.(provider, sessionId) ?? null }
+          : {}),
       },
     }),
   });
@@ -630,4 +634,27 @@ test('resolveResumeModel never consults provider-global state', async () => {
 
   assert.equal(model, 'gpt-5.5');
   assert.equal(providerLookups, 0);
+});
+
+test('resolveSessionModel reports the exact model behind an alias when the provider knows it', async () => {
+  const { service } = createTestService({
+    sessions: createSessionStore({ 'session-1': 'default' }),
+    servedModel: () => 'claude-opus-5-5',
+  });
+
+  const resolved = await service.resolveSessionModel('claude', { sessionId: 'session-1' });
+
+  assert.equal(resolved.model, 'default');
+  assert.equal(resolved.servedModel, 'claude-opus-5-5');
+});
+
+test('resolveSessionModel leaves servedModel out when the provider cannot say', async () => {
+  const { service } = createTestService({
+    sessions: createSessionStore({ 'session-1': 'default' }),
+  });
+
+  const resolved = await service.resolveSessionModel('claude', { sessionId: 'session-1' });
+
+  assert.equal(resolved.model, 'default');
+  assert.equal('servedModel' in resolved, false);
 });

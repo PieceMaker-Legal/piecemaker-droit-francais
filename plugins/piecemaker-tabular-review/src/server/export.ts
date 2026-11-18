@@ -4,7 +4,7 @@ import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import type { PDFFont, PDFPage } from 'pdf-lib';
 
 import type { Cell, ExportFormat, ExportResult, Flag, Review, ReviewRow } from '../shared.js';
-import { FLAG_COLORS, FLAG_LABELS, FLAGS } from '../shared.js';
+import { FLAG_COLORS, FLAG_LABELS, FLAGS, documentTitle } from '../shared.js';
 import { reviewDirectory, UserError, writeFileAtomic } from './paths.js';
 import { readReview } from './reviews.js';
 import { createZip } from './zip.js';
@@ -92,7 +92,7 @@ export function buildDocx(review: Review): Buffer {
   const grid = `<w:tblGrid><w:gridCol w:w="${labelWidth}"/>${review.columns.map(() => `<w:gridCol w:w="${columnWidth}"/>`).join('')}</w:tblGrid>`;
   const header = `<w:tr><w:trPr><w:tblHeader/></w:trPr>${tableCell(paragraph(run('Document', { bold: true })), labelWidth, 'F3F4F6')}${review.columns.map((column) => tableCell(paragraph(run(column.name, { bold: true })), columnWidth, 'F3F4F6')).join('')}</w:tr>`;
   const rows = review.rows.map((row) => {
-    const label = paragraph(run(row.label, { bold: true })) + row.documents.map((document) => paragraph(run(document.source, { color: '#6b7280', size: 14 }))).join('');
+    const label = paragraph(run(documentTitle(review, row), { bold: true })) + row.documents.map((document) => paragraph(run(document.source, { color: '#6b7280', size: 14 }))).join('');
     return `<w:tr><w:trPr><w:cantSplit/></w:trPr>${tableCell(label, labelWidth)}${review.columns.map((column) => tableCell(docxCell(cellContent(review, row, column.index)), columnWidth)).join('')}</w:tr>`;
   }).join('');
   const legend = paragraph(FLAGS.map((flag) => `${run('● ', { color: FLAG_COLORS[flag] })}${run(`${FLAG_LABELS[flag]}    `, { size: 16 })}`).join(''), 160);
@@ -251,7 +251,7 @@ export async function buildPdf(review: Review): Promise<Buffer> {
 
   for (const row of review.rows) {
     const labelLines = [
-      ...toLines(row.label, bold, size, ink, labelWidth - 2 * padding),
+      ...toLines(documentTitle(review, row), bold, size, ink, labelWidth - 2 * padding),
       ...row.documents.flatMap((document) => toLines(document.source, regular, smallSize, muted, labelWidth - 2 * padding)),
     ];
     const cells = [
@@ -285,7 +285,7 @@ export async function buildPdf(review: Review): Promise<Buffer> {
 
 export async function exportReview(project: string, file: string, format: unknown): Promise<ExportResult> {
   if (format !== 'docx' && format !== 'pdf') throw new UserError('Format d’export non pris en charge.');
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const content = format === 'docx' ? buildDocx(review) : await buildPdf(review);
   const filename = `${path.basename(file, '.json')}.${format satisfies ExportFormat}`;
   const target = path.join(reviewDirectory(project), filename);

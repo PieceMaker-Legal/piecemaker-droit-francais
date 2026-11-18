@@ -24,6 +24,18 @@ fichier sur disque ; chacun voit les modifications de l'autre.
   qui inspecte aussi les commandes shell. Par défaut seuls PDF et images sont
   protégés (`lib/protection.cjs`, `PROTECTED_EXTENSIONS`) : un `.docx` n'est
   jamais protégé, même s'il figure dans `.piecemaker/protection.json`.
+- Variantes de nom : le proxy rétablit un code (`SAS_N`) sous sa variante
+  principale, alors que le nom du fichier peut contenir une autre variante. Si
+  un mot de la commande désigne un fichier absent, le hook le masque avec le
+  dictionnaire (`auth.db`) et cherche dans le dossier le seul fichier dont le
+  nom masqué est identique. Il renvoie alors la commande corrigée
+  (`updatedInput`) : `allow` pour une lecture `docx` et pour Codex, `ask` sinon
+  pour Claude. Mistral applique la même correction par `guard`
+  (`server/piecemaker/mistral-sdk/tools.ts`). Plusieurs fichiers possibles :
+  le hook refuse la commande et liste leur taille exacte et leurs dates, sans
+  nom. L'IA relance la commande précédée de `PIECEMAKER_TAILLE=<octets>` ; le
+  hook retient le fichier de cette taille, le plus récemment créé en cas
+  d'égalité. Les contrôles de protection portent sur la commande corrigée.
 
 ## 2. Côté avocat — visionneuse / éditeur intégré
 
@@ -44,7 +56,16 @@ Fonctionnement :
 
 - Lecture des octets par l'API CloudCLI existante (`api.readFileBlob`).
 - Toutes les secondes, comparaison du `mtime` : si le fichier a changé sur
-  disque (par exemple `docx-cli` côté assistant), l'éditeur se recharge.
+  disque (par exemple `docx-cli` côté assistant), le document est mis à jour
+  sur place, sans rechargement : `loadDocument` remplace le modèle, puis une
+  transaction ProseMirror n'applique que la différence. Le défilement et le
+  panneau des commentaires sont conservés.
+- Le bouton d'ajout de commentaire de la bibliothèque est repositionné
+  au-dessus du début de la sélection. Un clic ouvre directement le panneau
+  des commentaires.
+- Le texte des commentaires et la réponse en cours de l'assistant sont rendus
+  en Markdown (`CommentMarkdown.tsx`, `react-markdown` avec GFM). Le texte
+  brut de la bibliothèque reste dans le DOM, masqué.
 - Après une frappe ou un clic de l'utilisateur, chaque `onChange` programme un
   enregistrement 800 ms plus tard. `save()` est sélectif par défaut : seules
   les parties modifiées de l'archive sont repackagées. Les sauvegardes sont
@@ -61,7 +82,10 @@ Fonctionnement :
 ### Question à l'assistant depuis un commentaire
 
 Une case « Envoyer à Claude / Codex / Mistral » s'ajoute au formulaire de
-commentaire quand un chat du même dossier est ouvert. Le choix est mémorisé.
+commentaire quand le chat affiche le même dossier. Le choix est mémorisé.
+Le fournisseur est celui de la session ouverte ; sans session, celui choisi
+pour la nouvelle conversation. La question démarre alors cette conversation,
+et la session créée est rattachée à la question au sondage suivant.
 
 | Fichier | Rôle |
 | --- | --- |
@@ -73,8 +97,13 @@ commentaire quand un chat du même dossier est ouvert. Le choix est mémorisé.
 
 - La question passe par le composeur : même modèle, mêmes permissions, même file
   d'attente. Le chat refuse l'envoi si un message y attend déjà.
-- Le prompt contient le passage commenté, son paragraphe et la question, sans
-  consigne. L'assistant répond dans la session ; il n'a rien à écrire au document.
+- Le prompt contient l'identifiant du commentaire (`cN`, celui de `docx comments
+  list`), le passage commenté, son paragraphe et la question. Une phrase finale
+  dit que la réponse du chat est copiée dans le commentaire, et que le document
+  ne se modifie que si la question le demande, en suivi des modifications.
+- Ce prompt part sans la consigne de citation du Harness Legal
+  (`citation-instructions.ts`) : la réponse n'a donc ni marqueurs ni liste
+  Sources vérifiée.
 - Un script retrouve le tour par le texte du prompt, envoyé après la question. Le
   sondage a lieu toutes les 3 s, seulement tant qu'une question est en attente.
 - `protect-originals.mjs` autorise sans demande, pour Claude, les lectures `docx`
@@ -88,8 +117,13 @@ commentaire quand un chat du même dossier est ouvert. Le choix est mémorisé.
 - Une bannière signale un envoi refusé, une question non reçue après 10 min, une
   réponse vide ou une copie impossible. Le chat refuse aussi l'envoi pendant un
   travail en arrière-plan, pour ne pas ouvrir son dialogue à la place de l'avocat.
-- Limites : pas de case sur une réponse dans un fil ; seul le texte de
-  l'assistant est repris, sans les outils ; le Markdown reste brut.
+- La même case s'ajoute au champ de réponse d'un fil. La réponse part avec le
+  passage et les messages précédents du fil ; l'assistant répond dans ce fil.
+  Toute réponse manuelle déclenche l'enregistrement du `.docx`.
+- Limite : seul le texte de l'assistant est repris, sans les outils.
+- La skill `docx-cli` demande de signer avec `DOCX_AUTHOR` (nom du fournisseur).
+  Elle signale aussi que `docx edit` sur un intervalle vide n'est jamais suivi
+  (docx 0.28.0, même avec `--track`) : l'assistant remplace le mot voisin.
 
 ## 3. Défauts connus (audit du 2026-09-26)
 

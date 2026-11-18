@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
 
+import { useCatalaUpdates } from '@/modules/piecemaker-catala';
 import { setCitationPassage } from '@/piecemaker/citations/citationPassage';
 import { OPEN_IN_EDITOR_EVENT } from '@/piecemaker/editor-tabs/editorPanels';
 
 export function usePiecemakerEditorBridge(openFile: (path: string) => unknown) {
+  useCatalaUpdates();
   useEffect(() => {
     const open = (event: Event) => {
       const { path, passage } = (event as CustomEvent<{ path?: unknown; passage?: { quote?: unknown } }>).detail ?? {};

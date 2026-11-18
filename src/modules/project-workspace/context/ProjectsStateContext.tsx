@@ -185,6 +185,10 @@ export function useProjectCommandState(): ProjectCommandState {
   return useRequiredProjectContext(useContext(ProjectCommandContext), 'useProjectCommandState');
 }
 
+export function useOptionalProjectCommandState(): ProjectCommandState | null {
+  return useContext(ProjectCommandContext);
+}
+
 export function useProjectEffectsState(): ProjectEffectsState {
   return useRequiredProjectContext(useContext(ProjectEffectsContext), 'useProjectEffectsState');
 }

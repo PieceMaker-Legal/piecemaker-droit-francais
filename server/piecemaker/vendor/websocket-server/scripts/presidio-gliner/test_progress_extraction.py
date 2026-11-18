@@ -21,7 +21,8 @@ class ProgressExtractionTest(unittest.TestCase):
 
         model = GLiNER2.from_pretrained(gliner_snapshot_directory(), local_files_only=True, map_location="cpu")
         reference = model.extract_entities_long(
-            SAMPLE, ENTITY_DESCRIPTIONS, threshold=0.5, include_confidence=True, include_spans=True
+            SAMPLE, ENTITY_DESCRIPTIONS, threshold=0.5, include_confidence=True, include_spans=True,
+            batch_size=8,
         )
         progress = []
         actual = extract_entities_with_progress(

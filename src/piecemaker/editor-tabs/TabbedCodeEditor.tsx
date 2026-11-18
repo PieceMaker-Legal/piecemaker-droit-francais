@@ -123,6 +123,8 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
 
   const active = tabs.find((tab) => tabKey(tab) === activeKey) ?? tabs[tabs.length - 1];
   const activeDocument = isSidebar && !parseEditorPanel(active.path) ? active.path : null;
+  const activeKind = parseEditorPanel(active.path)?.kind;
+  const activeHasNoCloseButton = activeKind === 'plan' || activeKind === 'session';
 
   useEffect(() => {
     setActiveDocument(activeDocument);
@@ -197,7 +199,7 @@ export default function TabbedCodeEditor(props: CodeEditorProps) {
 
   return (
     <div className="flex h-full min-w-0 flex-col">
-      {isSidebar && tabs.length > 1 && <div role="tablist" aria-label="Documents ouverts" className="flex shrink-0 overflow-x-auto border-b border-border bg-muted/40">
+      {isSidebar && (tabs.length > 1 || activeHasNoCloseButton) && <div role="tablist" aria-label="Documents ouverts" className="flex shrink-0 overflow-x-auto border-b border-border bg-muted/40">
         {tabs.map((tab) => {
           const key = tabKey(tab);
           const selected = key === tabKey(active);

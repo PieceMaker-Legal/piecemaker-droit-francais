@@ -77,4 +77,29 @@ test('green-shield original and mapping guards apply to SDK reads, edits and she
   await assert.rejects(toolbox.tools.get('Read')!.execute({ file_path: 'mapping_default.json' }), /mapping/);
   await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cat contrat-fictif.pdf' }), /protégée/);
   assert.equal(await toolbox.tools.get('Read')!.execute({ file_path: 'notes.md' }), 'Notes fictives.');
+  await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cp notes.md ~/.piecemaker/ontologie.json' }), /pm dossier arborescence/);
+  await toolbox.tools.get('Bash')!.execute({ command: "printf 'PDF fictif' > note-ia.pdf" });
+  assert.equal(await toolbox.tools.get('Read')!.execute({ file_path: 'note-ia.pdf' }), 'PDF fictif');
+  await assert.rejects(toolbox.tools.get('Read')!.execute({ file_path: path.join(home, '.piecemaker', 'ontologie.cle') }), /seal key/);
+});
+
+test('an SDK write to a registered feature file returns its verifier report', { skip: process.platform === 'win32' }, async t => {
+  await fs.mkdir('.tmp', { recursive: true });
+  const root = await fs.mkdtemp(path.resolve('.tmp/mistral-feature-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const caseRoot = path.join(root, 'Dossier Exemple');
+  const bin = path.join(root, 'home', '.piecemaker', 'bin');
+  await fs.mkdir(caseRoot, { recursive: true });
+  await fs.mkdir(bin, { recursive: true });
+  await fs.writeFile(path.join(bin, 'pm'), '#!/bin/sh\necho "pm $*"\n', { mode: 0o755 });
+  const previousHome = process.env.HOME;
+  process.env.HOME = path.join(root, 'home');
+  t.after(() => { process.env.HOME = previousHome; });
+  t.mock.method(providerSkillsService, 'listProviderSkills', async () => []);
+  const toolbox = await createMistralTools(caseRoot, [], AbortSignal.timeout(20000), path.join(root, 'home'));
+  t.after(() => toolbox.close());
+  const report = await toolbox.tools.get('Write')!.execute({ file_path: '.piecemaker/appel-suivi.json', content: '{}\n' });
+  assert.match(report, /^Fichier enregistré\.\n\nAutomatic check \(suivi\)/);
+  assert.match(report, /pm suivi_dossiers verifier --suivi appel-suivi.json --dossier /);
+  assert.equal(await toolbox.tools.get('Write')!.execute({ file_path: 'notes.md', content: 'Notes fictives.' }), 'Fichier enregistré.');
 });

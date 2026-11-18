@@ -191,3 +191,17 @@ test('si aucun document ne se convertit, le pipeline se termine normalement et l
     fs.rmSync(folder.root, { recursive: true, force: true });
   }
 });
+
+test('--rescan réanalyse les pièces déjà marquées analysées sans les reconvertir', { skip: !python && 'Python avec pypdf introuvable' }, () => {
+  const folder = caseFolder();
+  try {
+    assert.equal(runPipeline(python, folder, 'present', ['--ocr-missing', 'continue', '--skip-existing']).scanned.length, 3);
+    const cached = runPipeline(python, folder, 'present', ['--ocr-missing', 'continue', '--skip-existing']);
+    assert.deepEqual([cached.converted, cached.scanned], [[], []]);
+    const rescanned = runPipeline(python, folder, 'present', ['--ocr-missing', 'continue', '--skip-existing', '--rescan']);
+    assert.deepEqual(rescanned.converted, []);
+    assert.equal(rescanned.scanned.length, 3);
+  } finally {
+    fs.rmSync(folder.root, { recursive: true, force: true });
+  }
+});

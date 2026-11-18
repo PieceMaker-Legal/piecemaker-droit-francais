@@ -175,15 +175,20 @@ export async function runSql({ requete, cwd }) {
   return response.resultat;
 }
 
-export async function runReasoning(body) {
+export async function movePiece(body) {
   await adoptRunningServerPort();
-  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/reasoning`, body, timeout: 180_000 });
-  return response.resultat;
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/rename`, body });
 }
 
 export async function runSuivi(body) {
   await adoptRunningServerPort();
   const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/suivi`, body, timeout: 180_000 });
+  return response.resultat;
+}
+
+export async function runOkf(body) {
+  await adoptRunningServerPort();
+  const response = await requestJson({ method: 'POST', path: `${LOCAL_BASE}/okf`, body, timeout: 180_000 });
   return response.resultat;
 }
 
@@ -241,4 +246,25 @@ export async function panelCloseCompleted({ project, id }) {
 export function readLocalScanJob({ folder, id }) {
   const query = new URLSearchParams({ folder, ...(id ? { id } : {}) });
   return requestJson({ method: 'GET', path: `${LOCAL_BASE}/scan/job?${query}` });
+}
+
+export async function readLocalPieces({ folder }) {
+  await adoptRunningServerPort();
+  const query = new URLSearchParams({ folder });
+  return requestJson({ method: 'GET', path: `${LOCAL_BASE}/pieces?${query}` });
+}
+
+export async function readConversionJob({ folder }) {
+  await adoptRunningServerPort();
+  return readLocalScanJob({ folder });
+}
+
+export async function notifyCatalaUpdated({ cwd }) {
+  await adoptRunningServerPort();
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/catala-updated`, body: { cwd }, timeout: 5000 });
+}
+
+export async function verifyCatalaCitations({ cwd, programme }) {
+  await adoptRunningServerPort();
+  return requestJson({ method: 'POST', path: `${LOCAL_BASE}/catala-citations`, body: { cwd, programme }, timeout: 300000 });
 }

@@ -1,8 +1,7 @@
+import { authenticatedFetch } from '../../../src/shared/authToken.js';
 import type { PluginAPI, PluginContext, TimesheetEntry, TimesheetScope } from './types.js';
 
-const AUTH_TOKEN_KEY = 'auth-token';
 const TIMESHEET_PATH = '/api/piecemaker/timesheet';
-const TOKEN_EXPIRY_SKEW_MS = 60_000;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -19,22 +18,6 @@ const numberValue = (value: unknown, fallback = 0): number => {
     if (Number.isFinite(parsed)) return parsed;
   }
   return fallback;
-};
-
-const tokenExpiry = (token: string): number | null => {
-  try {
-    const payloadPart = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const paddedPayload = payloadPart.padEnd(payloadPart.length + ((4 - (payloadPart.length % 4)) % 4), '=');
-    const payload = JSON.parse(atob(paddedPayload)) as { exp?: unknown };
-    return typeof payload.exp === 'number' && Number.isFinite(payload.exp) ? payload.exp * 1000 : null;
-  } catch {
-    return null;
-  }
-};
-
-const isExpiredToken = (token: string): boolean => {
-  const expiresAt = tokenExpiry(token);
-  return expiresAt !== null && Date.now() >= expiresAt - TOKEN_EXPIRY_SKEW_MS;
 };
 
 const nullableText = (value: unknown): string | null => {
@@ -76,37 +59,6 @@ const unwrapEntries = (value: unknown): TimesheetEntry[] => {
   return [];
 };
 
-const readToken = (): string | null => {
-  try {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (token && isExpiredToken(token)) {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-    return token;
-  } catch {
-    return null;
-  }
-};
-
-const storeRefreshedToken = (value: string | null): void => {
-  if (!value || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) return;
-  if (isExpiredToken(value)) return;
-  try {
-    localStorage.setItem(AUTH_TOKEN_KEY, value);
-  } catch {
-    return;
-  }
-};
-
-const expireToken = (): void => {
-  try {
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-  } catch {
-    return;
-  }
-};
-
 const getErrorMessage = (value: unknown, status: number): string => {
   if (isRecord(value)) {
     const message = value.error ?? value.message ?? value.details;
@@ -116,20 +68,12 @@ const getErrorMessage = (value: unknown, status: number): string => {
 };
 
 const request = async (method: 'GET' | 'POST', url: string, body: unknown, signal?: AbortSignal): Promise<unknown> => {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = readToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (method === 'POST') headers['Content-Type'] = 'application/json';
-
-  const response = await fetch(url, {
+  const response = await authenticatedFetch(url, {
     method,
-    headers,
+    headers: { Accept: 'application/json' },
     body: method === 'POST' ? JSON.stringify(body) : undefined,
-    credentials: 'same-origin',
     signal,
   });
-  storeRefreshedToken(response.headers.get('X-Refreshed-Token'));
-  if (response.headers.get('X-Auth-Error')) expireToken();
   let payload: unknown = null;
   try {
     payload = await response.json();

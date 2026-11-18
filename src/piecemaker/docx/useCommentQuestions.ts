@@ -7,6 +7,7 @@ import type { Comment } from '@eigenpal/docx-editor-core/types/content';
 import { useOptionalProjectMainState } from '@/modules/project-workspace/context/ProjectsStateContext';
 import { askOpenChat } from '@/piecemaker/chat/useDocxCommentQuestions';
 import {
+  bindQuestionSession,
   buildQuestionPrompt,
   createQuestionToken,
   readAskMode,
@@ -16,9 +17,10 @@ import {
   storeQuestion,
   writeAskMode,
 } from '@/piecemaker/docx/commentQuestions';
-import type { CommentQuestion } from '@/piecemaker/docx/commentQuestions';
+import type { CommentQuestion, ThreadMessage } from '@/piecemaker/docx/commentQuestions';
 import { api } from '@/shared/api';
 import { MCP_PROVIDER_NAMES } from '@/shared/constants';
+import { useSelectedProvider } from '@/shared/hooks/useSelectedProvider';
 
 const ANSWER_POLL_MS = 3000;
 const RECENT_MESSAGES = 200;
@@ -62,10 +64,13 @@ function commentedPassage(editor: DocxEditorRef | null, commentId: number) {
 }
 
 export function useCommentQuestions({ projectId, filePath, documentName, editorRef, onAnswered }: UseCommentQuestionsOptions) {
-  const selectedSession = useOptionalProjectMainState()?.selectedSession;
+  const mainState = useOptionalProjectMainState();
+  const chosenProvider = useSelectedProvider();
+  const selectedSession = mainState?.selectedSession?.__projectId === projectId ? mainState?.selectedSession : null;
   const sessionId = selectedSession?.id ?? null;
-  const provider = selectedSession?.__provider;
-  const providerLabel = provider && selectedSession?.__projectId === projectId ? MCP_PROVIDER_NAMES[provider] : null;
+  const chatProjectId = mainState?.selectedProject?.projectId;
+  const provider = selectedSession ? selectedSession.__provider : chatProjectId === projectId ? chosenProvider : null;
+  const providerLabel = provider ? MCP_PROVIDER_NAMES[provider] : null;
   const [askEnabled, setAskEnabled] = useState(readAskMode);
   const [questions, setQuestions] = useState<CommentQuestion[]>([]);
   const [partialAnswers, setPartialAnswers] = useState<Record<string, string>>({});
@@ -90,25 +95,37 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
     setQuestions((current) => current.filter((question) => question.token !== token));
   }, []);
 
-  const askComment = useCallback((comment: Comment) => {
-    if (!askEnabled || !providerLabel || !sessionId || !projectId || !filePath) return;
+  const ask = useCallback((commentId: number, text: string, thread: ThreadMessage[]) => {
+    if (!askEnabled || !providerLabel || !projectId || !filePath) return;
     setNotice(null);
     const token = createQuestionToken();
     const prompt = buildQuestionPrompt({
       documentName,
       filePath,
-      ...commentedPassage(editorRef.current, comment.id),
-      question: getCommentText(comment.content),
+      commentId,
+      ...commentedPassage(editorRef.current, commentId),
+      thread,
+      question: text,
     });
-    const question = { token, sessionId, providerLabel, projectId, filePath, commentId: comment.id, prompt, askedAt: Date.now() };
+    const question = { token, sessionId, providerLabel, projectId, filePath, commentId, prompt, askedAt: Date.now() };
     storeQuestion(question);
-    if (!askOpenChat(sessionId, prompt)) {
+    if (!askOpenChat(projectId, sessionId, prompt)) {
       removeQuestion(token);
       setNotice(`Le commentaire est enregistré, mais ${providerLabel} ne l’a pas reçu : le chat n’est pas ouvert, un message y attend déjà ou un travail s’y déroule en arrière-plan.`);
       return;
     }
     setQuestions((current) => [...current, question]);
   }, [askEnabled, documentName, editorRef, filePath, projectId, providerLabel, sessionId]);
+
+  const askComment = useCallback((comment: Comment) => {
+    ask(comment.id, getCommentText(comment.content), []);
+  }, [ask]);
+
+  const askReply = useCallback((reply: Comment, parent: Comment) => {
+    const earlier = (editorRef.current?.getComments() ?? []).filter((comment) => comment.parentId === parent.id && comment.id !== reply.id);
+    const thread = [parent, ...earlier].map((comment) => ({ author: comment.author || 'Inconnu', text: getCommentText(comment.content) }));
+    ask(parent.id, getCommentText(reply.content), thread);
+  }, [ask, editorRef]);
 
   const forgetComment = useCallback((comment: Comment) => {
     setQuestions((current) => {
@@ -120,9 +137,21 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
   useEffect(() => {
     if (questions.length === 0) return undefined;
     const followQuestion = async (question: CommentQuestion, running: Set<string>) => {
-      const isRunning = running.has(question.sessionId);
-      let turn = readQuestionTurn(await readMessages(question.sessionId, RECENT_MESSAGES), question.prompt, question.askedAt);
-      if (turn === null && !isRunning) turn = readQuestionTurn(await readMessages(question.sessionId, null), question.prompt, question.askedAt);
+      const questionSession = question.sessionId ?? sessionId;
+      if (!questionSession) {
+        if (Date.now() - question.askedAt > UNSENT_QUESTION_MS) {
+          finish(question.token);
+          setNotice(`${question.providerLabel} n’a pas reçu la question : aucune conversation n’a démarré.`);
+        }
+        return;
+      }
+      if (!question.sessionId) {
+        bindQuestionSession(question.token, questionSession);
+        setQuestions((current) => current.map((asked) => asked.token === question.token ? { ...asked, sessionId: questionSession } : asked));
+      }
+      const isRunning = running.has(questionSession);
+      let turn = readQuestionTurn(await readMessages(questionSession, RECENT_MESSAGES), question.prompt, question.askedAt);
+      if (turn === null && !isRunning) turn = readQuestionTurn(await readMessages(questionSession, null), question.prompt, question.askedAt);
       if (turn === null) {
         if (!isRunning && Date.now() - question.askedAt > UNSENT_QUESTION_MS) {
           finish(question.token);
@@ -169,7 +198,7 @@ export function useCommentQuestions({ projectId, filePath, documentName, editorR
     void poll();
     const timer = window.setInterval(() => { void poll(); }, ANSWER_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [editorRef, finish, questions]);
+  }, [editorRef, finish, questions, sessionId]);
 
-  return { providerLabel, askEnabled, changeAskEnabled, askComment, forgetComment, questions, partialAnswers, notice };
+  return { providerLabel, askEnabled, changeAskEnabled, askComment, askReply, forgetComment, questions, partialAnswers, notice };
 }

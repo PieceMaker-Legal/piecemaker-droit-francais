@@ -1,9 +1,13 @@
+import { DEFAULT_DOCUMENT_TYPES, documentTypeNames, iconSvg } from './document-types.js';
+import type { DocumentType } from './document-types.js';
 import { NODE_KINDS } from './types.js';
 import { nodePosition } from './party-codes.js';
-import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
+import type { KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import type { CompanySearchResult, ScanJob } from './api.js';
+import { ficheLinks } from './okf.js';
+import type { OkfContradiction, OkfError, OkfIndex, OkfView, PendingProposals } from './okf.js';
 
-export type Tab = 'general' | 'chronology';
+export type Tab = 'general' | 'chronology' | 'graph';
 export type BodaccScanState = {
   status: 'idle' | 'loading' | 'error';
   error?: string;
@@ -13,6 +17,7 @@ export type BodaccScanState = {
 };
 export type ViewData = {
   graph: KnowledgeSnapshot;
+  okf?: OkfIndex | null;
 };
 
 export const labels: Record<NodeKind, string> = {
@@ -73,7 +78,6 @@ export function citationListMarkup(entries: CitationEntry[]): string {
 
 const userIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 21a8 8 0 0 0-16 0"></path><circle cx="10" cy="7" r="4"></circle><path d="M22 21a8 8 0 0 0-5-7.7"></path></svg>';
 const companyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4c0-.5.4-1 1-1h10c.6 0 1 .5 1 1v18"></path><path d="M6 12H4c-.6 0-1 .4-1 1v9"></path><path d="M18 9h2c.6 0 1 .4 1 1v12"></path><path d="M10 6h4M10 10h4M10 14h4M10 18h4"></path></svg>';
-const cpuIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><path d="M15 2v2"></path><path d="M15 20v2"></path><path d="M2 15h2"></path><path d="M2 9h2"></path><path d="M20 15h2"></path><path d="M20 9h2"></path><path d="M9 2v2"></path><path d="M9 20v2"></path></svg>';
 const tagIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.6 2.8A2 2 0 0 0 11.2 2H4a2 2 0 0 0-2 2v7.2a2 2 0 0 0 .8 1.4l8.5 8.5a2.4 2.4 0 0 0 3.4 0l6.4-6.4a2.4 2.4 0 0 0 0-3.4z"></path><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>';
 const gearIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.2a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.5a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.2a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.2a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.5a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.2a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
 const moreIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>';
@@ -132,24 +136,18 @@ const scanSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColo
 const tiersProfileIcon = '<svg class="pmd-tiers-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 21a8 8 0 0 0-16 0"></path><circle cx="10" cy="7" r="4"></circle><path d="M22 21a8 8 0 0 0-5-7.7"></path></svg>';
 
 const folderTreeIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2.5a1 1 0 0 1-.8-.4l-.9-1.2A1 1 0 0 0 15 3h-2a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M20 21a1 1 0 0 0 1-1v-3a1 1 0 0 0-1-1h-2.9a1 1 0 0 1-.88-.55l-.42-.85a1 1 0 0 0-.92-.6H13a1 1 0 0 0-1 1v5a1 1 0 0 0 1 1Z"></path><path d="M3 5a2 2 0 0 0 2 2h3"></path><path d="M3 3v13a2 2 0 0 0 2 2h3"></path></svg>';
-const calendarClockIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"></path><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h5"></path><circle cx="16" cy="16" r="6"></circle><path d="M16 14v2l1 1"></path></svg>';
+const partiesIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>';
 const bodaccSearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h10v16H4z"></path><path d="M7 8h4M7 12h4"></path><circle cx="16.5" cy="16.5" r="3.5"></circle><path d="m19.2 19.2 2 2"></path></svg>';
 const companySearchIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-4-4"></path></svg>';
+const graphIcon = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"></circle><circle cx="18" cy="8" r="3"></circle><circle cx="9" cy="18" r="3"></circle><path d="m8.7 7.3 6.5.4M7 8.8l1.4 6.3M16.3 10.4l-5.4 5.4"></path></svg>';
 const TABS: Array<{ id: Tab; label: string; icon: string }> = [
-  { id: 'general', label: 'Parties', icon: folderTreeIcon },
-  { id: 'chronology', label: 'Index', icon: calendarClockIcon },
+  { id: 'general', label: 'Parties', icon: partiesIcon },
+  { id: 'chronology', label: 'Index', icon: folderTreeIcon },
+  { id: 'graph', label: 'Graphe', icon: graphIcon },
 ];
 
 export function scanPercentLabel(job: ScanJob): string {
   return `${Math.round(Math.max(0, Math.min(100, job.percent || 0)))} %`;
-}
-
-export function scanStatusMarkup(mappingCount = 0, job: ScanJob | null = null, scanned = false): string {
-  const scanning = Boolean(job && job.state === 'running');
-  const ready = scanned || mappingCount > 0;
-  return `<button type="button" class="pmd-status-icon" data-action="mapping" aria-label="Ouvrir le mapping">${shieldCheckIcon}</button>
-        ${scanning && job ? scanProgress(job) : `<button type="button" class="pmd-status-label" data-action="mapping">${mappingCount} anonymisé(s)</button>`}
-        <button class="pmd-scan-button piecemaker-button piecemaker-button--black piecemaker-button--xs" data-action="scan" ${scanning ? 'disabled' : ''}>${scanSearchIcon}<span>${scanning ? 'Analyse en cours…' : ready ? 'Relancer' : 'Lancer'}</span></button>`;
 }
 
 export function scanProgress(job: ScanJob): string {
@@ -164,18 +162,14 @@ export function scanProgress(job: ScanJob): string {
     </span>`;
 }
 
-export function shell(active: Tab, mappingCount = 0, job: ScanJob | null = null, scanned = false): string {
-  const scanning = Boolean(job && job.state === 'running');
+export function shell(active: Tab, job: ScanJob | null = null): string {
   return `
     <div class="pmd-header">
       <div class="pmd-tabs" role="tablist">
         ${TABS.map(({ id, label, icon }) => `<button type="button" class="pmd-tab piecemaker-button piecemaker-button--sm" role="tab" data-tab="${id}" aria-selected="${active === id}" tabindex="${active === id ? 0 : -1}">${icon}<span>${label}</span></button>`).join('')}
         <button class="pmd-button pmd-agents-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="agents"><span>▤</span> Agents.md</button>
       </div>
-      <div class="pmd-scan-status" data-ready="${scanned || mappingCount > 0}" data-scanning="${scanning}">
-        ${scanStatusMarkup(mappingCount, job, scanned)}
-      </div>
-      <button type="button" class="pmd-icon-button piecemaker-button piecemaker-button--sm" data-action="local-models" title="Système de pseudonymisation" aria-label="Voir l’installation du système de pseudonymisation">${cpuIcon}</button>
+      <div class="pmd-scan-status">${job?.state === 'running' ? scanProgress(job) : ''}</div>
     </div>
     <div data-error></div>
     <div class="pmd-workspace"><main class="pmd-content" data-content></main></div>`;
@@ -259,31 +253,20 @@ function companySearchStateMarkup(state: BodaccScanState, companyId: string): st
   return `<p class="pmd-bodacc-summary">${state.companySearchResults.length} résultat${state.companySearchResults.length > 1 ? 's' : ''} Registre Public.</p><div class="pmd-company-search-results">${state.companySearchResults.map((result, index) => companySearchResultMarkup(result, companyId, index)).join('')}</div>`;
 }
 
-export function mappingView(data: ViewData): string {
+export function mappingView(data: ViewData, mappingValidated: string | null = null): string {
   const entries = data.graph.nodes.filter((node) => node.kind !== 'document');
   const categories = entityKinds.map((kind) => ({ kind, label: labels[kind], entries: entries.filter((node) => node.kind === kind) })).filter((category) => category.entries.length);
   return `<div class="pmd-mapping-dialog"><div class="pmd-mapping-header"><h2 class="piecemaker-display">Mapping de pseudonymisation</h2><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-action="institutional-terms" aria-label="Termes institutionnels" title="Termes institutionnels jamais pseudonymisés">${gearIcon}</button><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-close>×</button></div><div class="pmd-mapping-body"><p>Le code est ce que voit l’IA. Le nom principal et les autres écritures sont rétablis à l’affichage. Toutes les variantes détectées par GLiNER apparaissent ici.</p>${categories.map((category) => `<section class="pmd-mapping-category"><header><h3>${escapeHtml(category.label)} <span>${category.entries.length}</span></h3><button type="button" class="piecemaker-button piecemaker-button--glass piecemaker-button--xs" data-action="add-node">＋ Ajouter</button></header><div class="pmd-mapping-legend"><span>Code</span><span>Nom principal</span><span>Autres écritures</span></div><div>${category.entries.map((node) => {
     const mappings = data.graph.mappings.filter((mapping) => mapping.nodeId === node.id);
     const variants = nodeVariants(node, data.graph.mappings);
     return `<form class="pmd-mapping-row" data-mapping-row data-node-id="${escapeHtml(node.id)}"><input class="pmd-mapping-input" name="masked" aria-label="Code anonymisé" value="${escapeHtml(mappings[0]?.masked || textValue(node.data.code) || node.id)}"><input class="pmd-mapping-input" name="label" aria-label="Nom principal" value="${escapeHtml(node.label)}" required>${aliasEditorMarkup(variants)}<div class="pmd-mapping-actions"><div class="pmd-profile-menu-wrap"><button type="button" class="pmd-profile-menu-trigger pmd-mapping-menu-trigger" data-row-menu aria-label="Options pour ${escapeHtml(node.label)}">${moreIcon}</button><div class="pmd-profile-menu"><button type="button" data-edit-node="${escapeHtml(node.id)}">${pencilIcon}<span>Modifier</span></button><button type="button" class="pmd-menu-danger" data-delete-node="${escapeHtml(node.id)}">${trashIcon}<span>Supprimer</span></button></div></div></div></form>`;
-  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-save-mapping>✓ Enregistrer le mapping</button></div></div>`;
+  }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-save-mapping>Enregistrer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan">Relancer l’anonymisation</button>${mappingValidated ? `<span class="pmd-mapping-validated">✓ Validé le ${escapeHtml(new Date(mappingValidated).toLocaleDateString('fr-FR'))}</span>` : '<button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-validate-mapping>✓ Valider le mapping</button>'}</div></div>`;
 }
 
-export const PIECE_NATURES = ['assignation', 'conclusions', 'requête', 'courrier', 'courriel', 'mise en demeure', 'contrat', 'facture', 'devis', 'attestation', 'jugement', 'arrêt', 'ordonnance', 'procès-verbal', 'constat', 'expertise', 'statuts de société', 'extrait Kbis', 'relevé bancaire', 'acte notarié', 'bordereau de pièces'];
-export const CUSTOM_NATURE = '__piecemaker_custom_nature__';
-
-export function natureOptionsMarkup(nature: string): string {
-  return [...new Set([nature, ...PIECE_NATURES].filter(Boolean))]
+export function natureOptionsMarkup(nature: string, types: DocumentType[] = DEFAULT_DOCUMENT_TYPES): string {
+  return [...new Set([nature, ...documentTypeNames(types)].filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, 'fr', { sensitivity: 'base' }))
     .map((value) => `<option value="${escapeHtml(value)}" ${value === nature ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
-}
-
-export function natureSelectMarkup(node: KnowledgeNode): string {
-  return `<select class="pmd-nature-select" data-nature-select="${escapeHtml(node.id)}" aria-label="Nature de ${escapeHtml(node.label)}"><option value="">— Aucune —</option>${natureOptionsMarkup(textValue(node.data.nature))}<option value="${CUSTOM_NATURE}">Autre type…</option></select>`;
-}
-
-export function natureInputMarkup(nodeId: string): string {
-  return `<input class="pmd-nature-select" data-nature-input="${escapeHtml(nodeId)}" aria-label="Type de pièce personnalisé" placeholder="Saisissez le type de pièce">`;
 }
 
 /** Nom proposé `AAAA-MM-JJ_<Type>[ - <lieu>]`, vide tant que la date ou le type manque. */
@@ -295,24 +278,6 @@ export function proposedPieceName(date: string, nature: string, localisation: st
   return `${date}_${title.replace(/[\\/:*?"<>|]/g, '-')}`;
 }
 
-function chronologyDateLabel(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
-}
-
-function chronologyFields(node: KnowledgeNode): { label: string; value: string }[] {
-  const fields = Array.isArray(node.data.fields) ? node.data.fields : [];
-  return fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string');
-}
-
-const MENTION_FIELD = /^(siren|siret)$/i;
-
-function chronologyMentions(node: KnowledgeNode, related: KnowledgeNode[]): string[] {
-  const mentions = [...new Set([...related.map((entry) => entry.label), textValue(node.data.localisation)].filter(Boolean))];
-  const identifiers = chronologyFields(node).filter((field) => MENTION_FIELD.test(field.label) && field.value && !mentions.includes(field.value));
-  return [...mentions, ...identifiers.map((field) => `${field.label} ${field.value}`)];
-}
-
 function chronologyFolder(node: KnowledgeNode, projectPath: string): string {
   const current = textValue(node.data.path).replace(/\\/g, '/');
   const root = projectPath.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -320,46 +285,52 @@ function chronologyFolder(node: KnowledgeNode, projectPath: string): string {
   return relative.includes('/') ? relative.slice(0, relative.lastIndexOf('/')) : '';
 }
 
-function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string): string {
-  const related = links
-    .filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id))
-    .map((link) => byId.get(link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId))
-    .filter((entry): entry is KnowledgeNode => Boolean(entry && entry.kind !== 'document'));
-  const date = dateFor(node);
-  const fields = chronologyFields(node);
-  const fieldCells = fieldLabels.map((label) => `<td>${escapeHtml(fields.find((field) => field.label === label)?.value ?? '')}</td>`).join('');
-  const nature = textValue(node.data.nature);
-  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(node.label)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
+export function documentResource(node: KnowledgeNode, projectPath: string): string {
+  const folder = chronologyFolder(node, projectPath);
+  const name = textValue(node.data.path).replace(/\\/g, '/').split('/').pop() || '';
+  return folder ? `${folder}/${name}` : name;
 }
 
-export type ChronologySort = { column: 'document' | 'date' | 'classification'; direction: 'ascending' | 'descending' };
-
-function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string, sort: ChronologySort): string {
-  if (!nodes.length) return '<div class="pmd-empty">Aucun document indexé.</div>';
-  const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))].filter((label) => !MENTION_FIELD.test(label));
-  const heading = (label: string) => `<th scope="col">${escapeHtml(label)}</th>`;
-  const sortHeading = (label: string, column: ChronologySort['column']) => {
-    const direction = sort.column === column ? sort.direction : 'none';
-    const arrow = direction === 'none' ? '↕' : direction === 'ascending' ? '↑' : '↓';
-    const edit = column === 'classification' ? '<button type="button" class="pmd-chronology-heading" data-action="edit-tree" title="Organiser l’arborescence du dossier">Classement ▾</button> ' : '';
-    return `<th scope="col" aria-sort="${direction}">${edit}<button type="button" class="pmd-chronology-heading" data-sort="${column}" aria-label="Trier par ${label.toLowerCase()}">${edit ? '' : label + ' '}${arrow}</button></th>`;
-  };
-  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${sortHeading('Document', 'document')}${sortHeading('Date', 'date')}${heading('Mentions')}${sortHeading('Classement', 'classification')}${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath)).join('')}</tbody></table></div>`;
+export function documentTitle(node: KnowledgeNode, okf: OkfIndex | null | undefined, projectPath: string): string {
+  return okf?.fiches.find((fiche) => fiche.resource === documentResource(node, projectPath))?.title || textValue(node.data.title) || textValue(node.data.titre) || node.label;
 }
 
-export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }): string {
-  const value = (node: KnowledgeNode) => sort.column === 'date' ? dateFor(node) : sort.column === 'classification' ? chronologyFolder(node, projectPath) : node.label;
-  const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
-  const documents = data.graph.nodes.filter((node) => node.kind === 'document').sort((left, right) => {
-    const a = value(left);
-    const b = value(right);
-    if (Boolean(a) !== Boolean(b)) return a ? -1 : 1;
-    const comparison = collator.compare(a, b) || collator.compare(left.label, right.label);
-    return sort.direction === 'ascending' ? comparison : -comparison;
-  });
-  const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
-  const label = { document: 'Document', date: 'Date', classification: 'Classement' }[sort.column];
+export function linksMarkup(okf: OkfIndex | null, resource: string): string {
+  return ficheLinks(okf, resource).map((link) => `<span class="pmd-badge" title="${escapeHtml(link.citation)}">${escapeHtml(`${link.label} ${link.title}`)}</span>`).join('');
+}
+
+function okfContradictions(contradictions: OkfContradiction[]): string {
+  if (!contradictions.length) return '';
+  return `<div class="pmd-okf-report" data-okf-report="contradictions"><strong>${contradictions.length} contradiction${contradictions.length > 1 ? 's' : ''} entre pièces</strong><ul>${contradictions.map((entry) => `<li><span class="pmd-okf-premise">${escapeHtml(entry.titre)}</span> <span class="pmd-badges">${entry.valeurs.map((value) => `<span class="pmd-badge">${escapeHtml(value.piece)} : ${escapeHtml(value.valeur)}</span>`).join('')}</span></li>`).join('')}</ul></div>`;
+}
+
+function okfErrors(errors: OkfError[] | null): string {
+  if (!errors) return '';
+  if (!errors.length) return '<div class="pmd-okf-report" data-okf-report="ok">Index vérifié : aucune erreur.</div>';
+  return `<div class="pmd-okf-report" data-okf-report="errors"><strong>${errors.length} erreur${errors.length > 1 ? 's' : ''} dans l’index</strong><ul>${errors.map((entry) => `<li><code>${escapeHtml(entry.fiche)}</code> ${escapeHtml(entry.erreur)}</li>`).join('')}</ul></div>`;
+}
+
+export function graphView(okf: OkfIndex | null, withPremises = false): string {
+  if (!okf) return '<div class="pmd-empty">Index indisponible.</div>';
+  const count = okf.fiches.filter((fiche) => okf.typesGraphe.includes(fiche.type)).length;
+  if (!count) return `<div class="pmd-empty">Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.</div>`;
+  const key = (kind: string, label: string) => `<span class="pmd-okf-key">${iconSvg(kind)}${label}</span>`;
+  return `<div class="pmd-toolbar"><div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, ${withPremises ? 'prémisses et ' : ''}parties.</div><span class="pmd-spacer"></span><label class="pmd-okf-toggle"><input type="checkbox" data-okf-premises${withPremises ? ' checked' : ''}> Afficher les prémisses</label><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}</div><div class="pmd-okf-graph-wrap" data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, prémisses et parties : fiches dans .piecemaker/okf/"><button type="button" class="pmd-icon-button pmd-okf-center" data-okf-center title="Centrer le graphe" aria-label="Centrer le graphe">⌖</button><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div></div>`;
+}
+
+export function proposalBanner(proposals?: PendingProposals): string {
+  const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
+  const entries = [
+    proposals?.ontologie ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--sm" data-action="edit-ontology">Ontologie : ${plural(proposals.ontologie, 'modification')}</button>` : '',
+    proposals?.arborescence ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--sm" data-action="edit-tree">Arborescence : ${plural(proposals.arborescence, 'modification')}</button>` : '',
+  ].filter(Boolean);
+  return `<div class="pmd-proposals" data-proposals role="status"${entries.length ? '' : ' hidden'}><span>L’assistant propose des modifications à examiner.</span>${entries.join('')}</div>`;
+}
+
+/** L'onglet Index : une seule vue, la revue tabulaire de l'Index (SQLite), montée dans `[data-index-analysis]` avec les liens OKF de chaque pièce. */
+export function chronologyView(view: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null }, chronology = false): string {
   return `
-    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-action="index-analysis">Analyse tabulaire</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
-    ${chronologyTable(documents, byId, data.graph.links, projectPath, sort)}`;
+    <div class="pmd-toolbar"><div class="pmd-subtitle">Une ligne par pièce, une colonne par question : l’Index du dossier.</div><span class="pmd-spacer"></span><button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${chronology ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="index-chronology" aria-pressed="${chronology}" title="Afficher seulement les pièces, de la plus ancienne à la plus récente">Chronologie</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="okf-verify" title="Contrôler les fiches, les types et les liens de l’index">Vérifier l’index</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="edit-tree" title="Organiser l’arborescence du dossier (colonne Classement)">Arborescence</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
+    ${proposalBanner(view.proposals)}${okfErrors(view.errors)}${okfContradictions(view.contradictions || [])}
+    <div class="pmd-index-analysis" data-index-analysis></div>`;
 }
