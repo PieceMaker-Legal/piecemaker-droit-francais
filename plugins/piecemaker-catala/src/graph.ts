@@ -11,7 +11,7 @@ export type Clause = { kind: 'all' | 'any' | 'not' | 'leaf'; text: string; ref: 
 type Notes = { question: string; justification: string; recherche: string; demarches: string[] };
 type CoveredRange = { range: { start: { line: number }; end: { line: number } }; reached_by: number[]; subtree: CoveredRange[] };
 export type Coverage = { scopes: Array<{ index: number; name: string }>; locations: Array<{ file: string; tree: CoveredRange[] }> };
-export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string; title: string; blockStart: number; blockEnd: number };
+export type Origin = NativeOrigin & { key: string; sources: Source[]; text: string; body: string; comment: string; title: string; blockStart: number; blockEnd: number };
 export type Step = { id: string; kind: 'fact' | 'condition' | 'rule'; type: string; answer: boolean; conditional: boolean; name: string; title: string; formula: string; expression: string; value: string; sources: Source[]; parents: string[]; level: number; issue: string; clause: Clause | null; notes: Notes; tests: string[]; origins: Origin[] };
 export type Reasoning = { steps: Step[]; others: Source[]; nativeIssues: string[]; objective?: string; mode?: Mode };
 
@@ -308,8 +308,14 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     const opened = /\b(?:définition|règle|definition|rule)\b/.test(content[entry.line - 1] ?? '');
     const end = content.findIndex((line, at) => at >= entry.line && (/^\s*(?:```|#\[|étiquette\b|exception\b|label\b)/.test(line) || (opened || at > entry.line) && /^\s*(?:définition|règle|definition|rule)\b/.test(line) || !line.trim()));
     const body = content.slice(entry.line - 1, end < 0 ? undefined : end).join('\n').slice(Math.max(0, entry.column - 1));
+    const comments: string[] = [];
+    if (entry.role === 'definition') for (let at = entry.line - 2; at >= 0; at--) {
+      const comment = content[at]?.match(/^\s*#(?![#\[])\s*(.*)$/)?.[1];
+      if (comment === undefined) break;
+      comments.unshift(comment.trim());
+    }
     const block = documentation.get(entry.file)?.find((item) => item.startLine <= entry.line && entry.line <= item.endLine);
-    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n'), body, title: docTitle(entry.file, entry.line), blockStart: block?.startLine ?? entry.line, blockEnd: block?.endLine ?? entry.endLine };
+    return { ...entry, key: JSON.stringify([entry.file, entry.line, entry.column, entry.endLine, entry.endColumn, entry.role]), sources: located(source), text: selected.join('\n'), body, comment: comments.join(' ').trim(), title: docTitle(entry.file, entry.line), blockStart: block?.startLine ?? entry.line, blockEnd: block?.endLine ?? entry.endLine };
   };
   const steps = new Map<string, Step>();
   for (const [id, node] of nodes) {
@@ -395,7 +401,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
 }
 
 const FACT: Record<string, [string, string]> = { Vrai: ['neutral', 'Oui'], Faux: ['neutral', 'Non'], Disputé: ['warn', 'Contesté'] };
-const pill = (kind: string, label: string) => `<span class="pmc-value pmc-${kind}">${escape(label)}</span>`;
+const pill = (kind: string, label: string) => label ? `<span class="pmc-value pmc-${kind}">${escape(label)}</span>` : '';
 const factPill = (step: Step) => pill(...(FACT[step.value] ?? (/^(?:Indéterminé|null|None|)$/.test(step.value) ? ['warn', 'Indéterminé'] : ['neutral', display(step)])) as [string, string]);
 const clausePill = (clause: Clause) => {
   if (!clause.met) return '';
@@ -502,7 +508,8 @@ function writer(model: Reasoning) {
   };
   const card = (step: Step, rank = 0) => {
     const native = step.origins.length || model.nativeIssues.length ? `<details class="pmc-native"><summary>Origine native Catala</summary>${model.nativeIssues.map((issue) => `<p class="pmc-warn">${escape(issue)}</p>`).join('')}${step.origins.map((entry) => `<section><h4>${entry.role === 'declaration' ? 'Déclaration' : entry.role === 'condition' ? 'Condition' : 'Définition'}${entry.selected ? ' · appliquée au scénario' : ' · autre règle'}</h4>${sourceLink({ kind: 'origin', label: entry.headings.join(' › ') || 'Passage du programme', target: entry.file, origin: entry.file, quote: entry.text, status: '' })}<p class="pmc-muted">Ligne ${entry.line}, colonne ${entry.column} à ligne ${entry.endLine}, colonne ${entry.endColumn}</p>${entry.expression && !structured(entry.expression) ? `<p>${escape(human(entry.expression))}</p>` : ''}${sourceList(entry.sources)}</section>`).join('')}</details>` : '';
-    const notes = `${native}${step.notes.justification ? `<p>${escape(step.notes.justification)}</p>` : ''}${step.tests.length ? `<p class="pmc-muted">Exercé par les tests : ${step.tests.map(escape).join(', ')}.</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${step.notes.demarches.length ? `<h4>Démarches effectuées</h4><ul>${step.notes.demarches.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}`;
+    const comment = structured(step.value) ? formula(step, human) : '';
+    const notes = `${comment ? `<p>${escape(comment)}</p>` : ''}${native}${step.notes.justification ? `<p>${escape(step.notes.justification)}</p>` : ''}${step.tests.length ? `<p class="pmc-muted">Exercé par les tests : ${step.tests.map(escape).join(', ')}.</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${step.notes.demarches.length ? `<h4>Démarches effectuées</h4><ul>${step.notes.demarches.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}`;
     const application = conditionApplication(step, model);
     if (application) return `<section class="pmc-rule" data-card="${step.id}" data-kind="${application.kind}"><header><span class="pmc-kind">${application.kind === 'exception' ? words.exception : words.rule}</span><h3>${escape(step.title)}</h3></header>${applicationMarkup(application, sourceLink, mode)}${step.clause ? `<details><summary>Conditions de cette qualification</summary>${rulePart(step)}</details>` : ''}${notes}</section>`;
     if (step.kind === 'fact') {

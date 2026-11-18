@@ -9,6 +9,7 @@ const number = (value: number, digits = 3) => value.toLocaleString('fr-FR', { ma
 const ratio = (text: string) => { const [a, b] = text.split('/').map(Number); return b ? a / b : a; };
 
 const bare = (value: string) => value.trim().replace(/\s*\(\)$/, '');
+export const structured = (value: string) => value.startsWith('{') || value.startsWith('[');
 
 export const structured = (value: string) => /^(?:\[|(?:[\p{L}_][\p{L}\p{N}_]*\s*)?\{)/u.test(value);
 
@@ -33,7 +34,7 @@ export function display(step: Step) {
 }
 
 export function tone(step: Step) {
-  const value = bare(step.value);
+  const value = structured(step.value) ? display(step) || step.value : bare(step.value);
   if (/^(?:Confirmé|Établi)$/i.test(value)) return 'ok';
   if (/^Réfuté$/i.test(value)) return 'ko';
   if (/^(?:Inconnu|Indéterminé|Disputé|Contesté|Non Tranchée|null|None|)$/i.test(value)) return 'warn';
@@ -42,11 +43,11 @@ export function tone(step: Step) {
   return 'neutral';
 }
 
-const definition = (step: Step) => step.origins.find((origin) => origin.selected && origin.role === 'definition' && !origin.overrides)?.body
-  ?? step.origins.find((origin) => origin.selected && origin.role === 'definition')?.body ?? '';
-
 export function formula(step: Step, human: (text: string) => string) {
-  const text = definition(step).replace(/\s+/g, ' ').match(/(?:^|\s)égal à\s+(.+)$/)?.[1]?.trim() ?? step.expression;
+  const definitions = step.origins.filter((origin) => origin.selected && origin.role === 'definition');
+  if (structured(step.value)) return definitions.find((origin) => origin.overrides)?.comment || definitions[0]?.comment || '';
+  const body = (definitions.find((origin) => !origin.overrides) ?? definitions[0])?.body ?? '';
+  const text = body.replace(/\s+/g, ' ').match(/(?:^|\s)égal à\s+(.+)$/)?.[1]?.trim() ?? step.expression;
   const plain = text.replace(/^qualifier de\s*\((.*)\)$/, '$1').replace(/^qualifier de\s+/, '');
   if (!plain || structured(step.value) || structured(plain) || /\b(?:cumul|qualifier|selon|si|soit|existe|pour)\b/.test(plain)) return '';
   return date(plain).replace(/[\p{L}_][\p{L}\p{N}_]*/gu, (word) => /^(?:et|ou|non)$/.test(word) || /^(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|1er)$/.test(word) ? word : /_/.test(word) ? human(word) : word)
