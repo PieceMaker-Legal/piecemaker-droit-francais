@@ -2,7 +2,6 @@ import { citeCatala, loadCatala, verifyCatala } from './api.js';
 import { mountExplanation } from './graph-view.js';
 import { human, reasoning, reasoningGraph, reasoningIssues, reasoningBrief, reasoningText, type Reasoning, type Coverage, type Step } from './graph.js';
 import type { NativeProvenance } from './native-provenance.js';
-import { programDocument } from './program-view.js';
 import { STYLES } from './styles.js';
 
 type Context = { theme: 'dark' | 'light'; project: { name: string; path: string } | null };
@@ -142,7 +141,7 @@ export function mount(container: HTMLElement, api: Host) {
     const reference = check ? `<p class="pmc-scenario" data-part="reference-date">Droit apprécié au : <strong>${dates.length ? dates.map(day).join(', ') : `${day(check.date_controle)} (jour du contrôle)`}</strong>${check.passed ? '' : ' <span class="pmc-warn">vigueur à vérifier</span>'}</p>` : '';
     const tab = (mode: string, label: string) => `<button role="tab" data-mode="${mode}" aria-selected="${viewMode === mode}">${label}</button>`;
     const zoom = graph && viewMode === 'graph' ? '<span class="pmc-map-tools"><button data-map-zoom="out" aria-label="Dézoomer" title="Dézoomer">−</button><button data-map-zoom="in" aria-label="Zoomer" title="Zoomer">+</button><button data-map-zoom="fit" aria-label="Ajuster à la largeur" title="Ajuster à la largeur">↔</button></span>' : '';
-    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-bar"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement">${tab('graph', 'Graphe')}${tab('written', 'Raisonnement')}${tab('program', 'Programme')}</div>${choice}${partChoice}${scenario}${zoom}${run}</div>${list}${drafts}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${task}${reference}${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div>` : empty}</div>${viewMode === 'program' ? `<div class="pmc-program" role="tabpanel">${programDocument(model, program.fichiers)}</div>` : ''}</section>`;
+    return `<section class="pmc-view" data-mode="${viewMode}"><div class="pmc-bar"><div class="pmc-tabs" role="tablist" aria-label="Présentation du raisonnement">${tab('graph', 'Graphe')}${tab('written', 'Raisonnement')}</div>${choice}${partChoice}${scenario}${zoom}${run}</div>${list}${drafts}<div class="pmc-written" role="tabpanel"${viewMode === 'written' ? '' : ' hidden'}>${task}${reference}${model.steps.length ? '' : empty}${reasoningText(model)}</div><div class="pmc-explanation" role="tabpanel"${viewMode === 'graph' ? '' : ' hidden'}>${graph ? `<div class="pmc-map-scroll" aria-label="Graphe du raisonnement">${graph}</div>` : empty}</div></section>`;
   };
   const paint = () => {
     stopGraph();

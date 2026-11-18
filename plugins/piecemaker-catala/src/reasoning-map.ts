@@ -9,7 +9,7 @@ const number = (value: number, digits = 3) => value.toLocaleString('fr-FR', { ma
 const ratio = (text: string) => { const [a, b] = text.split('/').map(Number); return b ? a / b : a; };
 
 const bare = (value: string) => value.trim().replace(/\s*\(\)$/, '');
-export const structured = (value: string) => value.startsWith('{') || value.startsWith('[');
+export const structured = (value: string) => /^(?:\[|(?:[\p{L}_][\p{L}\p{N}_]*\s*)?\{)/u.test(value);
 
 export function display(step: Step) {
   const value = bare(step.value);
@@ -53,7 +53,7 @@ export function formula(step: Step, human: (text: string) => string) {
     .replace(/>=/g, '≥').replace(/<=/g, '≤').replace(/\s\*\s/g, ' × ').replace(/\s\/\s/g, ' ÷ ').replace(/\s=\s/g, ' = ');
 }
 
-export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source) => string, only?: Step[]) {
+export function reasoningMap(model: Reasoning, human: (text: string) => string, sourceLink: (source: Source) => string) {
   if (!model.steps.length) return '';
   const steps = new Map(model.steps.map((step) => [step.id, step]));
   const rules = model.steps.filter((step) => step.kind === 'rule' && !container(step));
@@ -88,14 +88,14 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   const references = (clause: Clause, negated: boolean): Array<[Step, boolean]> => clause.kind !== 'leaf'
     ? clause.members.flatMap((member) => references(member, clause.kind === 'not' ? !negated : negated))
     : (steps.has(clause.ref) ? [clause.ref] : clause.refs).map((id) => steps.get(id)).filter((step): step is Step => Boolean(step)).map((step) => [step, negated]);
-  const candidates = (only ?? spine).filter((step) => !container(step));
+  const candidates = spine.filter((step) => !container(step));
   const dependencies = new Set(model.steps.filter((step) => !container(step)).flatMap((step) => [
     ...step.parents,
     ...(step.clause ? references(step.clause, false).map(([reference]) => reference.id) : []),
   ].filter((id) => id !== step.id)));
   const roots = candidates.filter((step) => !dependencies.has(step.id));
   const resultGroups = new Map<string, Step[]>();
-  for (const step of only ? [] : roots) {
+  for (const step of roots) {
     if (step.clause || step.parents.length !== 1 || steps.get(step.parents[0])?.kind !== 'rule') continue;
     const parent = step.parents[0];
     resultGroups.set(parent, [...resultGroups.get(parent) ?? [], step]);
@@ -166,9 +166,8 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     });
     return branch(`<div class="pmc-root-results">${card}${cards.join('')}</div>`, children, current);
   };
-  const orderedRoots = principal ? [principal.state, ...roots] : only ? roots : [...roots].sort((a, b) => Number(b === goal) - Number(a === goal));
+  const orderedRoots = principal ? [principal.state, ...roots] : [...roots].sort((a, b) => Number(b === goal) - Number(a === goal));
   const trees = [...orderedRoots.filter((step) => !grouped.has(step.id)).map((step) => node(step, null)), ...candidates.map((step) => rendered.has(step.id) || summarized.has(step.id) ? '' : node(step, null))].join('');
-  if (only) return `<div class="pmc-map" data-layout="columns"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;
   const unused = model.others.length ? `<details class="pmc-unused"><summary>${model.others.length} document${model.others.length > 1 ? 's' : ''} cité${model.others.length > 1 ? 's' : ''} à rattacher</summary>${documents(model.others, '', 'other')}</details>` : '';
   const legend = '<p class="pmc-map-legend"><span data-state="ok">Validé</span><span data-state="warn">À établir ou à justifier</span><span data-state="ko">Non rempli</span></p>';
   return `<div class="pmc-map-summary">${legend}</div>${unused}<div class="pmc-map" data-layout="columns" aria-label="Graphe du raisonnement : objectif à gauche, étapes, conditions et faits vers la droite"><svg class="pmc-wires" aria-hidden="true"></svg>${links.map((edge) => `<i hidden data-from="${edge.from}" data-to="${edge.to}"></i>`).join('')}${trees}</div>`;

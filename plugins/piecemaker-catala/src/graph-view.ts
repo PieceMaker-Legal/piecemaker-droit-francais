@@ -3,7 +3,6 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const canvas = view.querySelector<HTMLElement>('.pmc-map');
   const edges = [...view.querySelectorAll<HTMLElement>('[data-from][data-to]')];
   const scroll = view.querySelector<HTMLElement>('.pmc-map-scroll');
-  const program = view.querySelector<HTMLElement>('.pmc-program');
   const draw = () => [...view.querySelectorAll<HTMLElement>('.pmc-map')].forEach((canvas) => {
     const wires = canvas.querySelector<SVGSVGElement>(':scope > .pmc-wires');
     if (!wires) return;
@@ -84,9 +83,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
   const watch = Observer ? new Observer(draw) : null;
   if (canvas) watch?.observe(canvas);
   if (scroll) watch?.observe(scroll);
-  if (program) watch?.observe(program);
   scroll?.addEventListener('scroll', draw);
-  program?.addEventListener('scroll', draw);
   draw();
   view.ownerDocument.addEventListener('click', click);
   view.addEventListener('keydown', key);
@@ -94,7 +91,6 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     select('');
     watch?.disconnect();
     scroll?.removeEventListener('scroll', draw);
-    program?.removeEventListener('scroll', draw);
     view.ownerDocument.removeEventListener('click', click);
     view.removeEventListener('keydown', key);
   };
