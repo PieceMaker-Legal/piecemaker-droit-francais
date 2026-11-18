@@ -16,7 +16,7 @@ const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee'];
+const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee', 'revue', 'revues'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
 const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer', 'noms']);
@@ -106,6 +106,12 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       en information, plus en manque ; le manque revient si le document change
   okf examinee <pièce> --retirer
       retire cette marque : la pièce redevient à examiner
+  okf revues
+      revues tabulaires des pièces du dossier et leurs colonnes, à lier à une prémisse
+  okf revue "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index> [--retirer]
+      les lignes positives de la colonne (réponse trouvée, « Oui » pour une question Oui / Non) établissent
+      la prémisse, créée si elle manque ; chaque ligne est une pièce d'auteur agent, humain une fois vérifiée
+      par l'avocat dans la revue ; lues dans la revue à chaque lecture : une revue relancée remonte aussitôt
 
   catala verifier [--au today|AAAA-MM-JJ] [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
@@ -820,6 +826,17 @@ async function okf(api, positional, flags, resolved) {
     if (!flags.retirer && !value(flags.motif)) usage('okf examinee attend --motif "raison", ou --retirer.');
     const examen = await api.okfFn({ action, folder, source: piece, ...(flags.retirer ? { retirer: true } : { motif: String(flags.motif) }) });
     return flags.retirer ? `Examen retiré : ${examen.source} redevient à examiner.` : `Examinée sans lien : ${examen.source} — ${examen.motif}\nLe manque revient si le document change. Annuler : pm okf examinee ${piece} --retirer`;
+  }
+  if (action === 'revues') {
+    const revues = await api.okfFn({ action, folder });
+    if (!revues.length) return 'Aucune revue tabulaire des pièces dans ce dossier.';
+    return revues.map((entry) => [`${entry.fichier} — ${entry.titre}`, ...entry.colonnes.map((column) => `  ${column.index} « ${column.nom} » (${column.format})`)].join('\n')).join('\n');
+  }
+  if (action === 'revue') {
+    const premise = positional[2];
+    if (!premise || !value(flags.fichier) || flags.colonne === undefined || flags.colonne === true) usage('okf revue attend "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index>.');
+    const lien = await api.okfFn({ action, folder, premise, fichier: String(flags.fichier), colonne: String(flags.colonne), ...(flags.retirer ? { retirer: true } : {}) });
+    return flags.retirer ? `Revue déliée : ${lien.fichier} › colonne ${lien.colonne} de ${lien.premise}.` : `Revue liée : ${lien.fichier} › colonne ${lien.colonne} établit ${lien.premise}. Ses lignes positives sont des pièces de la prémisse ; l’avocat les vérifie dans la revue.`;
   }
   const [source, relation, target] = positional.slice(2);
   if (!source || !relation || !target) usage(`okf ${action} attend <source> <relation> <target>.`);

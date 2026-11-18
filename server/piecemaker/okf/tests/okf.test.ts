@@ -13,7 +13,7 @@ import { buildBundle as writeBundle, datesIn, documentsFromSnapshot, legacyRecor
 import { bundleRoot, conceptFile, parseConcept, readBundle, readTypes, relationsOf } from '../bundle.js';
 import { graphGaps, graphReport, premiseEvidence } from '../premises.js';
 import type { ExamInput, LinkInput, OkfTarget } from '../links.js';
-import { addLink as addLinkTo, markExamined as markExaminedOf, removeLink as removeLinkOf, unmarkExamined as unmarkExaminedOf } from '../links.js';
+import { addLink as addLinkTo, linkReview, markExamined as markExaminedOf, removeLink as removeLinkOf, unlinkReview, unmarkExamined as unmarkExaminedOf } from '../links.js';
 import { createOkfStore } from '../store.js';
 import { graphTypesOf, ontologyFile, readOntology, migrateArborescence, saveOntology } from '../ontology.js';
 import { createOkfBackend } from '../index.js';
@@ -621,4 +621,58 @@ test('l\'arborescence est commune, scellée avec l\'ontologie, et reprise une fo
   fs.writeFileSync(ontologyFile(), JSON.stringify(stored));
   assert.match(readOntology(projectPath).erreur || '', /modifiée hors/);
   assert.deepEqual(readTypes(projectPath), ['Projets', 'Pièces', 'Archives', 'Notes et recherches']);
+});
+
+test('une revue liée à une prémisse l\'établit par ses lignes positives, d\'auteur agent puis humain une fois vérifiées', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  const folder = path.join(projectPath, REVIEW_FOLDER);
+  fs.mkdirSync(folder, { recursive: true });
+  const reviewPath = path.join(folder, 'resiliation.json');
+  const cells = {
+    r1: { 0: { summary: 'Oui, le contrat est résilié', flag: 'red', reasoning: '', citations: [{ document: 'Courrier.pdf', quote: 'Il est résilié.', verified: true }] } },
+    r2: { 0: { summary: 'Non', flag: 'grey', reasoning: '', citations: [{ document: 'Contrat.pdf', quote: 'Contrat de prestation', verified: true }] } },
+    r3: { 0: { summary: 'Non trouvé', flag: 'grey', reasoning: '', citations: [] } },
+  };
+  const review = { version: 1, title: 'Résiliations', category: 'documents', columns: [{ index: 0, name: 'Résilié', prompt: 'Le contrat est-il résilié ?', format: 'yes_no' }], rows: [
+    { id: 'r1', label: 'Courrier', documents: [{ source: LETTER, copy: 'x', chars: 1 }], status: 'done' },
+    { id: 'r2', label: 'Contrat', documents: [{ source: CONTRACT, copy: 'y', chars: 1 }], status: 'done' },
+    { id: 'r3', label: 'Conclusions', documents: [{ source: DRAFT, copy: 'z', chars: 1 }], status: 'done' },
+  ], cells };
+  fs.writeFileSync(reviewPath, JSON.stringify(review));
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+
+  assert.throws(() => linkReview(okf(projectPath), { premise: 'Résiliation du contrat', fichier: 'resiliation.json', colonne: 'Inconnue' }), /aucune colonne « Inconnue »/);
+  const link = rebuilt(projectPath, linkReview(okf(projectPath), { premise: 'Résiliation du contrat', fichier: 'resiliation.json', colonne: 'résilié' }, 'piecemaker/agent', AT));
+  assert.deepEqual(link, { premise: '/_premises/resiliation-du-contrat.md', fichier: 'resiliation.json', colonne: 0 });
+  const premise = parseConcept(fs.readFileSync(conceptFile(projectPath, link.premise), 'utf8'));
+  assert.deepEqual(premise.frontmatter.revues, [{ fichier: 'resiliation.json', colonne: 0, by: 'piecemaker/agent', at: AT }]);
+  assert.match(premise.body, /# Revues tabulaires/);
+  assert.match(premise.body, /Oui, le contrat est résilié \(agent, non vérifiée\)\n  > Il est résilié\./);
+  assert.doesNotMatch(premise.body, /Contrat de prestation/);
+
+  const piece = { resource: LETTER, title: 'Courrier.pdf', citation: 'Il est résilié.', value: 'Oui, le contrat est résilié', origin: 'piecemaker/tabular-review', author: 'agent', review: 'resiliation.json' };
+  assert.deepEqual(premiseEvidence(projectPath, `okf:${link.premise}`)?.pieces, [piece]);
+  assert.ok(!graphGaps(projectPath).some((gap) => gap.element === link.premise && /sans pièce citée/.test(gap.manque)));
+
+  // La vérification de l'avocat, écrite dans la revue, remonte sans reconstruction.
+  cells.r1[0] = { ...cells.r1[0], checked: { at: AT } } as typeof cells.r1[0];
+  fs.writeFileSync(reviewPath, JSON.stringify(review));
+  assert.equal(premiseEvidence(projectPath, `okf:${link.premise}`)?.pieces[0].author, 'human');
+  const view = backendOf(projectPath, markdownOf).read('p').fiches.find((fiche) => fiche.id === link.premise);
+  assert.equal(view?.revues?.[0].lignes[0].author, 'human');
+
+  fs.rmSync(reviewPath);
+  assert.ok(verifyBundle({ projectPath, resources, markdownOf }).some((entry) => entry.fiche === link.premise && /revue tabulaire introuvable/.test(entry.erreur)));
+  rebuilt(projectPath, unlinkReview(okf(projectPath), { premise: 'Résiliation du contrat', fichier: 'resiliation.json', colonne: 0 }));
+  assert.equal(fs.existsSync(conceptFile(projectPath, link.premise)), false);
+});
+
+test('une recherche juridique ne se lie pas à une prémisse', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  const folder = path.join(projectPath, REVIEW_FOLDER);
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'recherche.json'), JSON.stringify({ category: 'recherche-juridique', columns: [{ index: 0, name: 'Solution', format: 'text' }], rows: [], cells: {} }));
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+  assert.throws(() => linkReview(okf(projectPath), { premise: 'Solution', fichier: 'recherche.json', colonne: 0 }), /recherche juridique/);
+  assert.deepEqual(backendOf(projectPath, markdownOf).read('p').fiches.filter((fiche) => fiche.type === 'Premise'), []);
 });

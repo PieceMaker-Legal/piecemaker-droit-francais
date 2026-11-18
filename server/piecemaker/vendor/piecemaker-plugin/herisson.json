@@ -13,7 +13,7 @@
       "ecriture": "agent",
       "skill": "okf",
       "verifier": ["okf", "verify"],
-      "commande": "\\bpm okf (link|unlink|examinee)\\b",
+      "commande": "\\bpm okf (link|unlink|examinee|revue)\\b",
       "erreur": "Index OKF : \\d+ erreur|Contradictions : \\d|Graphe : \\d+ élément",
       "delai": 30
     },
@@ -289,6 +289,29 @@
           "parametres": {
             "document": "#",
             "reason": "--motif",
+            "remove": "--retirer"
+          }
+        },
+        {
+          "nom": "list_linkable_reviews",
+          "pm": [
+            "okf",
+            "revues"
+          ],
+          "role": "Tabular reviews of the case documents and their columns, to link to a premise.",
+          "parametres": {}
+        },
+        {
+          "nom": "link_review",
+          "pm": [
+            "okf",
+            "revue"
+          ],
+          "role": "Link a tabular review column to \"premise\" (created if missing): its positive rows are pieces stating it, author agent until the lawyer checks them in the review (remove = unlink).",
+          "parametres": {
+            "premise": "#",
+            "file": "--fichier",
+            "column": "--colonne",
             "remove": "--retirer"
           }
         }

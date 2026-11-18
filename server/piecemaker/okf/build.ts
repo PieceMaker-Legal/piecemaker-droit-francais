@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { sentenceContaining } from '../../../plugins/piecemaker-dossier/src/excerpt.js';
+import { REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
 
 import type { Frontmatter, Relation, Relations } from './bundle.js';
@@ -31,9 +32,9 @@ import {
   writeIfChanged,
 } from './bundle.js';
 import { isSystemRelation, readOntology, ruleOf } from './ontology.js';
-import { EXAMINED } from './premises.js';
-import { documentMetadataFromReviews } from './reviews.js';
-import type { OkfRecords } from './store.js';
+import { EXAMINED, REVIEWS } from './premises.js';
+import { documentMetadataFromReviews, reviewRowPieces } from './reviews.js';
+import type { OkfRecords, StoredReviewLink } from './store.js';
 
 export type PartyMention = { code: string; citation: string };
 export type SourceDocument = { resource: string; title: string; nature: string; date: string; parties: PartyMention[]; updatedAt?: string };
@@ -146,6 +147,17 @@ function backlinksBody(id: string, relation: string, documents: Array<{ id: stri
   return sections.length ? ['# Pièces', ...sections].join('\n\n') : '';
 }
 
+export const AUTHOR_LABELS: Record<string, string> = { human: 'vérifiée par l’avocat', agent: 'agent, non vérifiée' };
+
+function reviewsBody(projectPath: string, links: StoredReviewLink[]): string {
+  const sections = links.map((link) => {
+    const { titre, question, lignes, erreur } = reviewRowPieces(projectPath, link.file, link.column);
+    const rows = lignes.map((row) => [`* [${row.label}](${encodeURI(conceptId(row.resource))}) : ${row.value} (${AUTHOR_LABELS[row.author]})`, ...(row.citation ? [`  > ${row.citation}`] : [])].join('\n'));
+    return [`## ${titre} › ${question || `colonne ${link.column}`}`, `Revue : ${REVIEW_FOLDER}/${link.file}`, ...(erreur ? [`⚠ ${erreur}`] : rows.length ? [rows.join('\n')] : ['Aucune ligne positive.'])].join('\n\n');
+  });
+  return sections.length ? ['# Revues tabulaires', ...sections].join('\n\n') : '';
+}
+
 function pruneEmptyDirectories(directory: string, root: string): void {
   for (let current = directory; current.startsWith(root) && current !== root; current = path.dirname(current)) {
     if (fs.readdirSync(current).length) return;
@@ -155,7 +167,7 @@ function pruneEmptyDirectories(directory: string, root: string): void {
 
 /** Authoritative parts of fiches written before SQLite held them, for a one-time import. Mentions and scan links are derived: they are not imported. */
 export function legacyRecords(projectPath: string): OkfRecords {
-  const records: OkfRecords = { premises: [], relations: [], exams: [] };
+  const records: OkfRecords = { premises: [], relations: [], exams: [], reviews: [] };
   for (const concept of readBundle(projectPath)) {
     if (concept.error) continue;
     const id = migratedId(concept.id);
@@ -229,14 +241,17 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
 
   for (const premise of records.premises) {
     const relations = mergedRelations(storedRelations(records, premise.id), {});
+    const reviews = (records.reviews || []).filter((link) => link.premise === premise.id);
     const frontmatter: Frontmatter = {
       type: PREMISE_TYPE,
       title: premise.title,
       description: premise.description || premise.title,
       ...(premise.single ? { single_value: true } : {}),
       ...(Object.keys(relations).length ? { relations } : {}),
+      ...(reviews.length ? { [REVIEWS]: reviews.map((link) => ({ fichier: link.file, colonne: link.column, by: link.by, at: link.at })) } : {}),
     };
-    write(premise.id, frontmatter, backlinksBody(premise.id, STATES, documentEntries), premise.by, premise.at);
+    const body = [backlinksBody(premise.id, STATES, documentEntries), reviewsBody(projectPath, reviews)].filter(Boolean).join('\n\n');
+    write(premise.id, frontmatter, body, premise.by, latest(premise.at, ...reviews.map((link) => link.at)));
   }
   for (const party of parties) {
     const id = partyId(party.code);

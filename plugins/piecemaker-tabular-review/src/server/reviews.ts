@@ -203,6 +203,19 @@ export function editCell(project: string, file: string, rowId: unknown, column: 
   });
 }
 
+/** Marque une réponse comme vérifiée par l'avocat, ou retire la marque. Une nouvelle analyse de la cellule l'efface. */
+export function checkCell(project: string, file: string, rowId: unknown, column: unknown, checked: unknown): Promise<Review> {
+  return updateReview(project, file, (review) => {
+    const row = review.rows.find((entry) => entry.id === rowId);
+    const target = review.columns.find((entry) => entry.index === Number(column));
+    const cell = row && target ? review.cells[row.id]?.[String(target.index)] : undefined;
+    if (!row || !target || !cell) throw new UserError('Cellule introuvable.');
+    if (row.status === 'running') throw new UserError('Attendez la fin de l’analyse de cette ligne pour la vérifier.');
+    if (checked === false) delete cell.checked;
+    else cell.checked = { at: new Date().toISOString() };
+  });
+}
+
 /** Ajoute une question (colonne sans index) ou modifie celle d'une colonne. Sans titre, une question reçoit le début de son texte. */
 export async function saveQuestion(project: string, file: string, column: unknown, prompt: unknown, title: unknown, format?: unknown, tags?: unknown): Promise<Review> {
   const text = typeof prompt === 'string' ? prompt.trim().slice(0, 4000) : '';

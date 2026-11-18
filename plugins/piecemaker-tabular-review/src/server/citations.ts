@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 
 import type { Cell, CellCitation, CitationSource, ReviewColumn, TextRange } from '../shared.js';
-import { citationIssue, DOCUMENT_TITLE_INDEX, documentTitleCell } from '../shared.js';
+import { citationIssue, DOCUMENT_TITLE_INDEX, documentTitleCell, sameDocument } from '../shared.js';
 import { assertReviewFile, documentPath, isInside, reviewDirectory, UserError } from './paths.js';
 import { readReview } from './reviews.js';
 
@@ -70,13 +70,6 @@ export function quoteRanges(source: string, quote: string): TextRange[] | null {
     ranges.push(range);
   }
   return ranges;
-}
-
-function sameDocument(left: string, right: string): boolean {
-  const normalize = (value: string) => value.trim().toLowerCase().replace(/\\/g, '/');
-  const a = normalize(left);
-  const b = normalize(right);
-  return a === b || a.split('/').pop() === b.split('/').pop();
 }
 
 export function verifyCitation(documents: CitationDocument[], citation: Pick<CellCitation, 'document' | 'quote'>): CellCitation {

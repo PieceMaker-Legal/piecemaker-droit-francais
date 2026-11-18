@@ -24,6 +24,7 @@ import {
 import type { Ontology } from './ontology.js';
 import { readOntology, relationNames, ruleOf } from './ontology.js';
 import { EXAMINED, fingerprintOf } from './premises.js';
+import { reviewColumn, reviewFileName } from './reviews.js';
 import type { OkfStore } from './store.js';
 import { quoted } from './verify.js';
 
@@ -34,6 +35,8 @@ export type OkfTarget = { projectPath: string; projectId: string; store: OkfStor
 export type LinkInput = { source?: unknown; relation?: unknown; target?: unknown; citation?: unknown; value?: unknown; single?: unknown };
 export type Link = { source: string; relation: string; target: string };
 export type ExamInput = { source?: unknown; motif?: unknown };
+export type ReviewLinkInput = { premise?: unknown; fichier?: unknown; colonne?: unknown };
+export type ReviewLink = { premise: string; fichier: string; colonne: number };
 
 function load(projectPath: string, id: string, role: string) {
   const filePath = conceptFile(projectPath, id);
@@ -136,4 +139,32 @@ export function unmarkExamined(target: OkfTarget, input: ExamInput): { source: s
   if (!concept.frontmatter[EXAMINED]) throw new TypeError(`${concept.id} n'est pas marquée examinée sans lien.`);
   store.clearExam(projectId, concept.id);
   return { source: concept.id };
+}
+
+/** Lie une colonne d'une revue tabulaire à une prémisse, créée au besoin d'après son titre : ses lignes positives l'établissent. */
+export function linkReview(target: OkfTarget, input: ReviewLinkInput, origin = AGENT_ACTOR, now = new Date().toISOString()): ReviewLink {
+  const { projectPath, projectId, store } = target;
+  const title = squash(text(input.premise));
+  if (!title) throw new TypeError('prémisse : donner le titre ou le chemin de la prémisse.');
+  const id = premiseId(title);
+  const file = reviewFileName(input.fichier);
+  const { index } = reviewColumn(projectPath, file, input.colonne);
+  const exists = fs.existsSync(conceptFile(projectPath, id));
+  if (!exists && isPremiseId(title)) throw new TypeError(`prémisse : aucune fiche ${title}. Donner le titre de la prémisse pour la créer.`);
+  store.transaction(() => {
+    if (!exists) store.upsertPremise(projectId, { id, title, description: title, single: false, by: origin, at: now });
+    store.upsertReviewLink(projectId, { premise: id, file, column: index, by: origin, at: now });
+  });
+  return { premise: id, fichier: file, colonne: index };
+}
+
+export function unlinkReview(target: OkfTarget, input: ReviewLinkInput): ReviewLink {
+  const { projectPath, projectId, store } = target;
+  const id = premiseId(squash(text(input.premise)));
+  const file = reviewFileName(input.fichier);
+  const given = Number(text(String(input.colonne ?? '')));
+  const column = Number.isInteger(given) && text(String(input.colonne ?? '')) !== '' ? given : reviewColumn(projectPath, file, input.colonne).index;
+  if (!store.deleteReviewLink(projectId, id, file, column)) throw new TypeError(`aucune revue ${file} › colonne ${column} liée à ${id}.`);
+  store.dropUnstatedPremise(projectId, id);
+  return { premise: id, fichier: file, colonne: column };
 }

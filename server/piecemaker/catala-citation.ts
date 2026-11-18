@@ -73,13 +73,17 @@ export function createCatalaCitation(connectors: Pick<SourceConnectors, 'source'
             const pieces = [];
             for (const piece of evidence.pieces) {
               const id = path.join(cwd, piece.resource);
-              const located = { target: encodeURI(path.relative(path.dirname(ref.origin), id).split(path.sep).join('/')), quote: piece.citation, id };
+              const located = { target: encodeURI(path.relative(path.dirname(ref.origin), id).split(path.sep).join('/')), quote: piece.citation, id, ...(piece.author ? { author: piece.author, review: piece.review } : {}) };
               try { pieces.push({ ...located, ...await inspect(cwd, id, piece.citation) }); } catch (error) { pieces.push({ ...located, title: piece.title, verified: false, status: 'failed', message: error instanceof Error ? error.message : String(error) }); }
             }
             const stated = evidence.pieces.map((piece) => piece.value).filter(Boolean);
             const differs = (ref.values ?? []).find((expression) => { const expected = expectedValue(expression); return expected && stated.length && !stated.some((value) => matchesExpected(expected, value)); });
             const verified = pieces.length > 0 && pieces.every((piece) => piece.verified) && !differs;
-            const warning = evidence.pieces.some((piece) => piece.origin === LAWYER_ACTOR) ? `${ref.target} : lien posé par l’avocat, vérification manuelle requise.` : undefined;
+            const unchecked = evidence.pieces.filter((piece) => piece.author === 'agent').length;
+            const warning = [
+              evidence.pieces.some((piece) => piece.origin === LAWYER_ACTOR) ? `${ref.target} : lien posé par l’avocat, vérification manuelle requise.` : '',
+              unchecked ? `${ref.target} : ${unchecked} ligne(s) de revue tabulaire d’auteur agent, à faire vérifier par l’avocat dans la revue.` : '',
+            ].filter(Boolean).join(' ') || undefined;
             results.push({ ...ref, title: evidence.title, verified, status: verified ? 'passed' : pieces.length ? 'failed' : 'missing', message: differs ? `Valeur du scénario (${differs}) différente de la prémisse (${stated.join(' ; ')}).` : verified ? 'Prémisse établie par des pièces citées.' : pieces.length ? 'Citation non retrouvée dans une pièce de la prémisse.' : 'Prémisse sans pièce citée.', pieces, ...(warning ? { warning } : {}) });
             continue;
           }

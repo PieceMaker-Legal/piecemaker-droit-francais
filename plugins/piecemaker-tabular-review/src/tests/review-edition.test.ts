@@ -5,9 +5,9 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { Review, ResearchFilters } from '../shared.js';
-import { researchCriteria } from '../shared.js';
+import { cellAuthor, isPositiveCell, researchCriteria } from '../shared.js';
 import { updateResearchFilters } from '../server/research.js';
-import { readReview, saveQuestion } from '../server/reviews.js';
+import { checkCell, readReview, saveQuestion } from '../server/reviews.js';
 
 const directories: string[] = [];
 const FILE = 'revue.json';
@@ -80,5 +80,28 @@ describe('édition d’une analyse tabulaire dans la page', () => {
   it('refuse une recherche sans critères enregistrés', async () => {
     const project = writeReview({ category: 'recherche-juridique', research: { query: '"exemple"', criteria: [], dispositifOnly: true, total: 0 } });
     await expect(updateResearchFilters(project, FILE, { dateDebut: '', dateFin: '', sources: ['cassation'] })).rejects.toThrow('ne peuvent pas être modifiées');
+  });
+
+  it('marque une réponse vérifiée par l’avocat, ce qui en fait une réponse d’auteur humain', async () => {
+    const project = writeReview({
+      columns: [{ index: 0, name: 'Résilié', prompt: 'Résilié ?', format: 'yes_no' }],
+      rows: [{ id: 'r', label: 'Courrier', documents: [], status: 'done' }],
+      cells: { r: { 0: { summary: 'Oui', flag: 'red', reasoning: '', citations: [{ document: 'c', quote: 'q', verified: true }] } } },
+    });
+    expect(cellAuthor(readReview(project, FILE).cells.r[0])).toBe('agent');
+    const checked = await checkCell(project, FILE, 'r', 0, true);
+    expect(checked.cells.r[0].checked?.at).toBeTruthy();
+    expect(cellAuthor(checked.cells.r[0])).toBe('human');
+    expect((await checkCell(project, FILE, 'r', 0, false)).cells.r[0].checked).toBeUndefined();
+    await expect(checkCell(project, FILE, 'r', 3, true)).rejects.toThrow('Cellule introuvable.');
+  });
+
+  it('ne retient comme positive qu’une réponse trouvée, et « Oui » pour une question Oui / Non', () => {
+    const cell = (summary: string) => ({ summary, flag: 'grey' as const, reasoning: '' });
+    expect(isPositiveCell({ format: 'yes_no' }, cell('Oui, page 2'))).toBe(true);
+    expect(isPositiveCell({ format: 'yes_no' }, cell('Non'))).toBe(false);
+    expect(isPositiveCell({ format: 'date' }, cell('2024-01-09'))).toBe(true);
+    expect(isPositiveCell({ format: 'text' }, cell('Non trouvé.'))).toBe(false);
+    expect(isPositiveCell({ format: 'text' }, cell('Non traité'))).toBe(false);
   });
 });

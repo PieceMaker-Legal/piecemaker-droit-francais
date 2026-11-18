@@ -4,7 +4,7 @@ L'index du dossier suit Open Knowledge Format 0.2, avec les relations typées d'
 
 ## Autorité
 
-SQLite fait foi. Les prémisses, les liens cités et les examens sans lien sont dans les tables `piecemaker_okf_premises`, `piecemaker_okf_relations` et `piecemaker_okf_exams` (`server/piecemaker/okf/store.ts`). Les personnes, pseudonymes, mentions et qualifications de partie sont dans les tables de la connaissance. Les fiches `.md` de `.piecemaker/okf/` sont des vues : le serveur les régénère depuis SQLite après chaque écriture dans la base. Une fiche modifiée ou supprimée à la main est réécrite à la reconstruction suivante. Une prémisse n'existe que par un lien `states` cité.
+SQLite fait foi. Les prémisses, les liens cités, les examens sans lien et les revues tabulaires liées sont dans les tables `piecemaker_okf_premises`, `piecemaker_okf_relations`, `piecemaker_okf_exams` et `piecemaker_okf_reviews` (`server/piecemaker/okf/store.ts`). Les personnes, pseudonymes, mentions et qualifications de partie sont dans les tables de la connaissance. Les fiches `.md` de `.piecemaker/okf/` sont des vues : le serveur les régénère depuis SQLite après chaque écriture dans la base. Une fiche modifiée ou supprimée à la main est réécrite à la reconstruction suivante. Une prémisse n'existe que par un lien `states` cité ou une revue tabulaire liée.
 
 Les fiches écrites avant que SQLite ne porte ces données sont importées une seule fois par dossier (`piecemaker_okf_imports`). Les fiches Partie portent des codes, pas des noms. Les citations et les titres de pièces sont en clair et peuvent contenir des identités réelles.
 
@@ -42,7 +42,7 @@ Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA2
 - `verify` contrôle aussi `ontologie.json` et `ontologie.proposition.json` : clés de premier niveau (`relations`, `documentTypes`, `arborescence`, `motif`, `sceau`, `date`), clés de chaque relation (`name`, `label`, `inverse`, `description`, `source`, `target`) et de chaque type (`name`, `icon`), présentes et sans clé inconnue, puis valeurs conformes aux règles (nom, longueurs, types réservés, doublons, icône connue).
 - Les libellés du tableau et du graphe suivent l'ontologie.
 - Le hook `guard-ontologie` refuse à l'agent toute écriture directe dans `~/.piecemaker/ontologie.json` (relations, natures et arborescence), et tout accès à `ontologie.cle`. Il est branché sous Claude (`Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob`), sous Codex (`Bash|apply_patch`, patch lu dans `tool_input.command`) et dans le chat Mistral (`mistral-sdk/tools.ts`, avec `protect-originals`).
-- L'agent écrit les liens par l'outil MCP `OkfWrite` (serveur `features`) : `link`, `unlink`, `mark_examined`, une ou plusieurs opérations par appel (`writes`), toutes validées avant la première et arrêtées au premier échec. Son schéma n'admet que les relations de l'ontologie, plus `states` et `involves` ; il les reçoit du serveur au démarrage (`pm okf ontologie --noms`), qui vérifie le sceau : une ontologie modifiée hors de l'onglet Index n'y entre pas. Il exige la citation sauf pour `involves`. Il passe par `pm okf link|unlink|examinee`, donc par la vérification du serveur. Aucun hook ne refuse plus l'écriture dans `.piecemaker/okf/` ; le Hérisson lance `pm okf verify` après toute écriture d'une fiche.
+- L'agent écrit les liens par l'outil MCP `OkfWrite` (serveur `features`) : `link`, `unlink`, `mark_examined`, `link_review`, une ou plusieurs opérations par appel (`writes`), toutes validées avant la première et arrêtées au premier échec. Son schéma n'admet que les relations de l'ontologie, plus `states` et `involves` ; il les reçoit du serveur au démarrage (`pm okf ontologie --noms`), qui vérifie le sceau : une ontologie modifiée hors de l'onglet Index n'y entre pas. Il exige la citation sauf pour `involves`. Il passe par `pm okf link|unlink|examinee|revue`, donc par la vérification du serveur. Aucun hook ne refuse plus l'écriture dans `.piecemaker/okf/` ; le Hérisson lance `pm okf verify` après toute écriture d'une fiche.
 - Une commande shell qui nomme l'un de ces fichiers n'est admise que si chacun de ses segments est une lecture (`cat`, `grep`, `jq` sans `-i`, `find` sans `-delete` ni `-exec`, `pm`…), sans redirection vers un fichier ni substitution de commande.
 
 ## Relations
@@ -71,11 +71,25 @@ Deux sources :
 1. **Visionneuse** — l'avocat sélectionne un passage, clic droit, « Prémisse », choisit ou crée la prémisse. Le passage devient la citation du lien `states`.
 2. **Agent** — `pm okf link <pièce> states "<titre>" --citation "…" [--value "…"] [--single]`.
 
-La revue tabulaire ne crée ni ne supprime de prémisse.
+3. **Revue tabulaire liée** — voir ci-dessous.
+
+### Revue tabulaire liée
+
+Une colonne d'une revue tabulaire des pièces se lie à une prémisse, créée au besoin d'après son titre. Chaque ligne positive de la colonne devient une pièce qui établit la prémisse : réponse trouvée (ni « Non trouvé » ni « Non traité »), et « Oui » pour une question Oui / Non. La pièce porte la valeur de la cellule, sa première citation vérifiée et un auteur :
+
+- `agent` : la réponse de la session IA, telle quelle ;
+- `human` : la réponse que l'avocat a marquée vérifiée dans la revue (bouton « Marquer vérifiée » du détail de la cellule) ou corrigée à la main. Relancer la cellule efface la vérification.
+
+Le lien (`piecemaker_okf_reviews` : prémisse, fichier de la revue, index de colonne, auteur du lien, date) est seul écrit dans SQLite. Les lignes sont lues dans la revue à chaque lecture : une revue relancée ou vérifiée remonte aussitôt dans `premiseEvidence`, donc dans `pm catala verifier` et dans la fiche de l'onglet Index. La fiche `.md` de la prémisse porte `revues: [{fichier, colonne, by, at}]` et, dans son corps, la section « Revues tabulaires » régénérée à chaque reconstruction.
+
+- Agent : `pm okf revues` liste les revues et leurs colonnes ; `pm okf revue "<titre>" --fichier <revue.json> --colonne <nom|index> [--retirer]`, ou `OkfWrite` action `link_review` (`source` = titre de la prémisse, `file`, `column`, `remove`).
+- Avocat : fiche de la prémisse dans l'onglet Index, « Lier une revue tabulaire » ; « Délier » sur chaque revue liée.
+
+Une recherche juridique ne se lie pas : elle cite des décisions, pas des pièces du dossier. Une revue liée supprimée ou privée de sa colonne est une erreur de `pm okf verify`. Hors de ce lien, la revue tabulaire ne crée ni ne supprime de prémisse.
 
 `single_value` marque une prémisse vue par plusieurs pièces qui doit garder une seule valeur : un écart entre pièces est une contradiction. Sans ce marquage, des valeurs différentes sont attendues (un point de contrôle appliqué à chaque contrat).
 
-Une prémisse vit tant qu'un lien `states` la vise. Retirer son dernier lien la supprime.
+Une prémisse vit tant qu'un lien `states` ou une revue liée la vise. Retirer le dernier la supprime.
 
 ## Raisonnement Catala
 
@@ -88,10 +102,10 @@ flowchart LR
 ```
 
 1. Un fait de scénario Catala se justifie par une prémisse : `## okf:/_premises/<titre normalisé>.md` juste au-dessus de lui.
-2. Une prémisse se justifie par des pièces citées (`states`).
+2. Une prémisse se justifie par des pièces citées (`states`) ou par les lignes positives d'une revue tabulaire liée.
 3. Une condition ne cite jamais une pièce directement.
 
-`pm catala verifier` développe chaque lien `okf:/_premises/…` du programme en ses pièces et contrôle chaque citation. Le volet Catala affiche ces pièces sous l'étape.
+`pm catala verifier` développe chaque lien `okf:/_premises/…` du programme en ses pièces, lignes de revues liées comprises, et contrôle chaque citation. Une ligne d'auteur `agent` passe le contrôle si sa citation est retrouvée, avec un avertissement : elle reste à faire vérifier par l'avocat dans la revue. Le volet Catala affiche ces pièces sous l'étape.
 
 ## Production, sans token
 

@@ -4,7 +4,10 @@ import { iconSvg } from './document-types.js';
 import type { DocumentType } from './document-types.js';
 
 export type OkfRelation = { relation: string; target: string; citation: string; origin: string; at?: string; value?: string };
-export type OkfFiche = { id: string; type: string; title: string; titleCitation?: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; generated?: { by: string; at: string }; examen?: { motif: string; by: string; at: string } | null; relations: OkfRelation[] };
+export type OkfReviewRow = { row: string; label: string; resource: string; value: string; citation: string; author: 'human' | 'agent'; checkedAt?: string };
+export type OkfReviewLink = { fichier: string; colonne: number; titre: string; question: string; by: string; at: string; lignes: OkfReviewRow[]; erreur?: string };
+export type OkfReviewChoice = { fichier: string; titre: string; colonnes: Array<{ index: number; nom: string; format: string }> };
+export type OkfFiche = { id: string; type: string; title: string; titleCitation?: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; generated?: { by: string; at: string }; examen?: { motif: string; by: string; at: string } | null; revues?: OkfReviewLink[]; relations: OkfRelation[] };
 export type OkfRelationLabel = { name: string; label: string; inverse: string };
 export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[]; documentTypes?: DocumentType[] };
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
@@ -36,6 +39,8 @@ export const okfApi = {
   verify: (projectId: string) => request<OkfReport>(`/verify?projectId=${encodeURIComponent(projectId)}`),
   link: (projectId: string, link: OkfLink) => request<OkfLink>('/link', { projectId, ...link }),
   unlink: (projectId: string, link: OkfLink) => request<OkfLink>('/unlink', { projectId, ...link }),
+  reviews: (projectId: string) => request<{ revues: OkfReviewChoice[] }>(`/revues?projectId=${encodeURIComponent(projectId)}`),
+  linkReview: (projectId: string, premise: string, fichier: string, colonne: number, retirer = false) => request<{ premise: string; fichier: string; colonne: number }>('/revue', { projectId, premise, fichier, colonne, ...(retirer ? { retirer: true } : {}) }),
   ontology: (projectId: string) => request<OntologyState>(`/ontologie?projectId=${encodeURIComponent(projectId)}`),
   saveOntology: (projectId: string, relations: OntologyRelation[]) => request<OntologyState>('/ontologie', { projectId, relations }, 'PUT'),
   saveTypes: (projectId: string, documentTypes: DocumentType[]) => request<OntologyState>('/types', { projectId, documentTypes }, 'PUT'),
@@ -82,10 +87,14 @@ export function graphElements(index: OkfIndex, withPremises = true): Array<{ dat
   ];
 }
 
-export function premiseEstablishers(index: OkfIndex, premiseId: string): Array<{ piece: string; resource: string; value: string; citation: string; origin: string; at?: string }> {
-  return index.fiches.flatMap((fiche) => fiche.relations
+export function premiseEstablishers(index: OkfIndex, premiseId: string): Array<{ piece: string; resource: string; value: string; citation: string; origin: string; at?: string; author?: 'human' | 'agent'; review?: string }> {
+  const linked = index.fiches.flatMap((fiche) => fiche.relations
     .filter((entry) => entry.relation === 'states' && entry.target === premiseId)
     .map((entry) => ({ piece: fiche.title, resource: fiche.resource, value: entry.value || '', citation: entry.citation, origin: entry.origin, at: entry.at })));
+  const reviewed = (index.fiches.find((fiche) => fiche.id === premiseId)?.revues || []).flatMap((review) => review.lignes.map((row) => ({
+    piece: index.fiches.find((fiche) => fiche.resource === row.resource)?.title || row.label, resource: row.resource, value: row.value, citation: row.citation, origin: 'piecemaker/tabular-review', at: row.checkedAt, author: row.author, review: review.titre,
+  })));
+  return [...linked, ...reviewed];
 }
 
 export function premiseParties(index: OkfIndex, premiseId: string): OkfFiche[] {

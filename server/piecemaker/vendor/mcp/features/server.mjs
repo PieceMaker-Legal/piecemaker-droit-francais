@@ -50,7 +50,12 @@ function required(value, name, action) {
   return value;
 }
 
-export function okfArgv({ action, source, relation, target, citation, value, single, reason, remove }) {
+export function okfArgv({ action, source, relation, target, citation, value, single, reason, remove, file, column }) {
+  if (action === 'link_review') {
+    required(file, 'file', action);
+    required(column, 'column', action);
+    return pmArgv('index', action, { premise: source, file, column: String(column), remove });
+  }
   if (action === 'mark_examined') {
     if (!remove) required(reason, 'reason', action);
     return pmArgv('index', action, { document: source, reason, remove });
@@ -201,18 +206,20 @@ export function createServer({ root = process.cwd(), pm = runPmScript, relations
   });
 
   server.registerTool('OkfWrite', {
-    description: 'Writes the OKF index of the case, with the ontology enforced and the citation checked against the source by the server. writes holds one or more operations, run in order; all are validated before the first runs, and the run stops at the first failure. link adds a cited link: between documents (a relation of the ontology), document states premise (citation, optional value and single), premise involves party code (no citation). unlink removes a link. mark_examined records that a document was read and nothing justifies a link (reason), or undoes it (remove). Read the ontology with Feature run index read_ontology.',
+    description: 'Writes the OKF index of the case, with the ontology enforced and the citation checked against the source by the server. writes holds one or more operations, run in order; all are validated before the first runs, and the run stops at the first failure. link adds a cited link: between documents (a relation of the ontology), document states premise (citation, optional value and single), premise involves party code (no citation). unlink removes a link. mark_examined records that a document was read and nothing justifies a link (reason), or undoes it (remove). link_review links a tabular review column (file, column) to the premise titled source: its positive rows become pieces stating the premise, author agent until the lawyer checks them in the review; remove unlinks. Read the ontology with Feature run index read_ontology.',
     inputSchema: {
       writes: z.array(z.object({
-        action: z.enum(['link', 'unlink', 'mark_examined']),
-        source: z.string().min(1).describe('The source document (path in the case), or the premise title for involves. mark_examined: the document.'),
+        action: z.enum(['link', 'unlink', 'mark_examined', 'link_review']),
+        source: z.string().min(1).describe('The source document (path in the case), or the premise title for involves. mark_examined: the document. link_review: the premise title.'),
         relation: z.enum(relations).optional().describe('link, unlink: a relation of the ontology, or states (document → premise) or involves (premise → party).'),
         target: z.string().min(1).optional().describe('link, unlink: the target document, premise title or party code.'),
         citation: z.string().min(1).optional().describe('link: the exact sentence of the source that proves the link. Not for involves.'),
         value: z.string().optional().describe('link states: the value of the premise.'),
         single: z.boolean().optional().describe('link states: the premise has a single value.'),
         reason: z.string().min(1).optional().describe('mark_examined: why no link is justified.'),
-        remove: z.boolean().optional().describe('mark_examined: undo the mark.'),
+        remove: z.boolean().optional().describe('mark_examined: undo the mark. link_review: unlink the review.'),
+        file: z.string().min(1).optional().describe('link_review: the review file (.json), from Feature run index list_linkable_reviews.'),
+        column: z.union([z.string().min(1), z.number().int()]).optional().describe('link_review: the column name or index.'),
       })).min(1).max(50).describe('The operations, run in order.'),
     },
   }, async ({ writes }) => {

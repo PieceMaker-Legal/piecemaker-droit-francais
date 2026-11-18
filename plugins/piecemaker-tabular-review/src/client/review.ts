@@ -189,8 +189,8 @@ export function createReviewView(app: App, project: string, file: string, onBack
       <aside class="ptr-detail" aria-label="Détail de la cellule">
         <div style="display:flex;align-items:flex-start;gap:6px"><h3 style="flex:1">${escapeHtml(column.name)}</h3><button type="button" class="ptr-icon-button" data-close-detail aria-label="Fermer le détail">×</button></div>
         <div class="ptr-small ptr-muted">${escapeHtml(row.label)}</div>
-        <div><div class="ptr-label">Réponse${cell?.edited ? ' · modifiée à la main' : ''}</div><div style="display:flex;gap:6px">${cell ? flagDot(cell.flag) : ''}${answer}</div>${cell ? `<div class="ptr-small ptr-muted">${escapeHtml(FLAG_LABELS[cell.flag])}</div>` : rowStatus(row)}</div>
-        <div><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button></div>
+        <div><div class="ptr-label">Réponse${cell?.edited ? ' · modifiée à la main' : ''}${cell?.checked ? ` · vérifiée le ${escapeHtml(new Date(cell.checked.at).toLocaleDateString('fr-FR'))}` : ''}</div><div style="display:flex;gap:6px">${cell ? flagDot(cell.flag) : ''}${answer}</div>${cell ? `<div class="ptr-small ptr-muted">${escapeHtml(FLAG_LABELS[cell.flag])}</div>` : rowStatus(row)}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="ptr-button" data-run-cell>${isCellFilled(cell) ? 'Relancer cette cellule' : 'Lancer la session pour cette cellule'}</button>${isCellFilled(cell) ? `<button type="button" class="ptr-button" data-check-cell title="Une réponse vérifiée compte comme pièce d’auteur humain dans une prémisse liée">${cell.checked ? 'Retirer la vérification' : 'Marquer vérifiée'}</button>` : ''}</div>
         ${cell ? `
           <div><div class="ptr-label">Justification</div><div class="ptr-md">${cell.reasoning ? renderMarkdown(cell.reasoning) : '<p class="ptr-muted">—</p>'}</div></div>
           <div><div class="ptr-label">Citations</div>${citationList(cell)}${row.corrections ? `<div class="ptr-small ptr-muted">${row.corrections} demande${row.corrections > 1 ? 's' : ''} de correction envoyée${row.corrections > 1 ? 's' : ''} à la session.</div>` : ''}</div>` : ''}
@@ -257,7 +257,7 @@ export function createReviewView(app: App, project: string, file: string, onBack
                   const cell = review.cells[row.id]?.[String(column.index)];
                   const isSelected = selected?.row === row.id && selected.column === column.index;
                   const content = cell
-                    ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div>${cell.edited ? '<span class="ptr-small ptr-muted" title="Réponse modifiée à la main">✎</span>' : ''}</div>${citationLinks(cell)}`
+                    ? `<div class="ptr-cell-content">${flagDot(cell.flag)}<div class="ptr-md">${renderMarkdown(cell.summary)}</div>${cell.edited ? '<span class="ptr-small ptr-muted" title="Réponse modifiée à la main">✎</span>' : ''}${cell.checked ? '<span class="ptr-small ptr-muted" title="Réponse vérifiée par l’avocat">✓</span>' : ''}</div>${citationLinks(cell)}`
                     : row.status === 'running' ? '<span class="ptr-muted"><span class="ptr-spinner"></span></span>' : '<span class="ptr-muted">—</span>';
                   return `<td class="ptr-cell" tabindex="0" data-row="${escapeHtml(row.id)}" data-column="${column.index}" aria-selected="${isSelected}">${content}</td>`;
                 }).join('')}
@@ -762,6 +762,15 @@ export function createReviewView(app: App, project: string, file: string, onBack
         if (!confirmed) return;
         const proxyOrigin = await anonymizationProxyOrigin();
         applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/run', { project, file, column: index, proxyOrigin, ...choiceBody() }));
+      });
+      return;
+    }
+    if (target.closest('[data-check-cell]') && detail && selected) {
+      const { row: rowId, column } = selected;
+      const checked = !detail.review.cells[rowId]?.[String(column)]?.checked;
+      void action(async () => {
+        applyDetail(await app.rpc<ReviewDetail>('POST', '/reviews/check', { project, file, rowId, column, checked }));
+        toast(app.root, checked ? 'Réponse marquée vérifiée.' : 'Vérification retirée.');
       });
       return;
     }

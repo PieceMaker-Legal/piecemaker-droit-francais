@@ -24,10 +24,12 @@ const signature = (verb: string, by?: string, at?: string) => by || when(at) ? `
 const fileButton = (resource: string) => resource ? `<button type="button" class="pmd-fact-file" data-open-file="${escapeText(resource)}" title="Ouvrir dans le volet Fichier">${escapeText(resource)}</button>` : '';
 const quote = (citation: string) => citation ? `<small class="pmd-fact-quote">« ${escapeText(citation)} »</small>` : '';
 
-function sourceRow(index: OkfIndex, fiche: OkfFiche, label: string, citation: string, link?: { origin: string; at?: string }): string {
+const AUTHORS: Record<string, string> = { human: 'vérifiée par l’avocat', agent: 'réponse de l’agent, à vérifier dans la revue' };
+
+function sourceRow(index: OkfIndex, fiche: OkfFiche, label: string, citation: string, link?: { origin: string; at?: string; author?: string; review?: string }): string {
   const file = fiche.type === PREMISE_TYPE || fiche.type === PARTY_TYPE ? ficheFile(fiche) : fiche.resource;
   const icon = fiche.type === PREMISE_TYPE ? 'diamond' : fiche.type === PARTY_TYPE ? 'users' : fiche.icon || 'file';
-  const signed = link ? signature('Lien posé', link.origin, link.at) : '';
+  const signed = link?.author ? `Revue « ${escapeText(link.review || '')} » · ${AUTHORS[link.author] || link.author}${link.author === 'human' && when(link.at) ? ` le ${when(link.at)}` : ''}` : link ? signature('Lien posé', link.origin, link.at) : '';
   return `<div class="pmd-fact-source"${chatAttributes(fiche.title, fiche.type === PREMISE_TYPE ? 'Prémisse' : fiche.type === PARTY_TYPE ? 'Partie' : 'Document', citation ? `Citation : « ${citation} »` : '', { fichier: file })}>${iconSvg(icon)}<span class="pmd-fact-source-copy">${label ? `<span class="pmd-fact-source-label">${escapeText(label)}</span>` : ''}<button type="button" class="pmd-fact-source-title" data-open-fiche="${escapeText(fiche.id)}">${escapeText(fiche.title)}</button>${fileButton(fiche.resource)}${quote(citation)}${signed ? `<small class="pmd-fact-signature">${signed}</small>` : ''}</span></div>`;
 }
 
@@ -48,7 +50,7 @@ function premiseBody(index: OkfIndex, premise: OkfFiche) {
   return {
     kind: 'Prémisse',
     meta: premise.single ? 'Prémisse · valeur unique' : 'Prémisse',
-    actions: '',
+    actions: '<button type="button" class="pmd-button piecemaker-button piecemaker-button--black piecemaker-button--sm" data-link-review>Lier une revue tabulaire</button><div class="pmd-review-picker" data-review-picker hidden></div>',
     props: row(premise.single ? 'Valeur' : 'Valeurs', values.map((value) => text(value, diverge ? 'warning' : 'value')).join(''))
       + row('Parties', parties.map((party) => pill(index, party)).join(''))
       + row('Pièces', text(String(sources.length))),
@@ -57,7 +59,8 @@ function premiseBody(index: OkfIndex, premise: OkfFiche) {
       + section('Pièces sources', sources.map((entry) => {
         const piece = index.fiches.find((fiche) => fiche.resource === entry.resource);
         return piece ? sourceRow(index, piece, entry.value, entry.citation, entry) : '';
-      }).join('')),
+      }).join(''))
+      + section('Revues tabulaires liées', (premise.revues || []).map((review) => `<div class="pmd-fact-source">${iconSvg('list')}<span class="pmd-fact-source-copy"><span class="pmd-fact-source-label">${escapeText(review.question || `Colonne ${review.colonne}`)}</span><span class="pmd-fact-source-title">${escapeText(review.titre)}</span><small class="pmd-fact-signature">${review.erreur ? `⚠ ${escapeText(review.erreur)}` : `${review.lignes.length} ligne${review.lignes.length > 1 ? 's' : ''} positive${review.lignes.length > 1 ? 's' : ''}, dont ${review.lignes.filter((line) => line.author === 'human').length} vérifiée${review.lignes.filter((line) => line.author === 'human').length > 1 ? 's' : ''}`}${signature(' · Liée', review.by, review.at)}</small><button type="button" class="pmd-fact-file" data-unlink-review="${escapeText(review.fichier)}" data-review-column="${review.colonne}">Délier</button></span></div>`).join('')),
   };
 }
 

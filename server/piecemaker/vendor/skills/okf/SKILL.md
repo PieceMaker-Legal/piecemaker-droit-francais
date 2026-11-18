@@ -38,17 +38,18 @@ La cible de `involves` est le code d'une partie : `pm okf link "<titre de la pr�
 ## Chaîne de justification
 
 1. Un fait d'un programme Catala se justifie par une `Premise` : la fiche `_premises/<titre normalisé>.md`.
-2. Une `Premise` se justifie par des pièces citées (`states`).
+2. Une `Premise` se justifie par des pièces citées (`states`) ou par les lignes positives d'une revue tabulaire liée (`pm okf revue`).
 
 ## Lire et écrire
 
 1. Lisez les fiches directement avec Read et Grep dans `.piecemaker/okf/`.
-2. N'écrivez pas une fiche à la main. Posez et retirez les liens avec l'outil MCP `OkfWrite` (`link`, `unlink`, `mark_examined`), plusieurs liens en un appel par la liste `writes`, ou `pm okf` sans MCP : le schéma impose une relation de l'ontologie et la citation. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json`, qui porte aussi l'arborescence commune à tous les dossiers.
+2. N'écrivez pas une fiche à la main. Posez et retirez les liens avec l'outil MCP `OkfWrite` (`link`, `unlink`, `mark_examined`, `link_review`), plusieurs liens en un appel par la liste `writes`, ou `pm okf` sans MCP : le schéma impose une relation de l'ontologie et la citation. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json`, qui porte aussi l'arborescence commune à tous les dossiers.
 3. Avant la première écriture, lisez `references/okf.md` du skill `piecemaker` (`.agents/skills/Skill-PieceMaker/references/okf.md`). Cette référence décrit les sous-commandes à jour.
 4. Pour régler les natures et icônes, lisez `pm okf ontologie`. Proposez la liste complète avec `pm okf types --json`. Comme les relations, elle reste une proposition jusqu’à la décision de l’avocat.
 5. Le Hérisson lance `pm okf verify` après chaque `pm okf link` ou `unlink` : corrigez chaque erreur qu'il rend, sans relancer la commande.
 6. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce à examiner, prémisse sans pièce, sans valeur ou sans partie, partie isolée.
 7. Pour une pièce à examiner, lisez la pièce entière. Posez le lien qu'un passage justifie. Si aucun passage ne justifie de lien, lancez `pm okf examinee <pièce> --motif "raison en une phrase"`. `pm okf verify` liste alors la pièce en information, plus en manque. Le manque revient si le document change. `pm okf examinee <pièce> --retirer` annule la marque. Ne marquez jamais une pièce que vous n'avez pas lue.
+8. Quand une revue tabulaire répond à la question d'une prémisse sur plusieurs pièces, liez sa colonne à la prémisse plutôt que de recopier chaque ligne : `pm okf revues`, puis `pm okf revue "<titre>" --fichier <revue.json> --colonne <nom|index>`. Ses lignes positives deviennent des pièces d'auteur agent. Seul l'avocat les fait passer à humain, en les vérifiant dans la revue : ne les présentez pas comme vérifiées.
 
 ## Règles de conduite
 

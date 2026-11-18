@@ -9,12 +9,12 @@ import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/
 import type { Renamed } from './build.js';
 import { buildBundle, documentsFromSnapshot, legacyRecords, partiesFromSnapshot } from './build.js';
 import { LAWYER_ACTOR, conceptId, readBundle, readTypes, relationsOf, resourceOf, text } from './bundle.js';
-import type { ExamInput, LinkInput } from './links.js';
-import { addLink, markExamined, removeLink, unmarkExamined } from './links.js';
+import type { ExamInput, LinkInput, ReviewLinkInput } from './links.js';
+import { addLink, linkReview, markExamined, removeLink, unlinkReview, unmarkExamined } from './links.js';
 import { SYSTEM_RELATIONS, graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
 import { dropProposal, ontologyLines, proposeOntology, readProposal } from './ontology-proposal.js';
-import { EXAMINED, graphReport } from './premises.js';
-import { documentMetadataFromReviews } from './reviews.js';
+import { EXAMINED, graphReport, linkedReviews } from './premises.js';
+import { documentMetadataFromReviews, reviewCatalog, reviewRowPieces } from './reviews.js';
 import type { OkfStore } from './store.js';
 import { contradictions, verifyBundle } from './verify.js';
 
@@ -108,6 +108,10 @@ export function createOkfBackend(options: OkfOptions) {
           single: concept.frontmatter.single_value === true,
           generated: { by: text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.by), at: text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.at) },
           examen: exam ? { motif: text(exam.motif), by: text(exam.by), at: text(exam.at) } : null,
+          revues: linkedReviews(concept).map((link) => {
+            const stored = (concept.frontmatter.revues as Array<Record<string, unknown>>).find((entry) => text(entry.fichier) === link.fichier && Number(entry.colonne) === link.colonne) || {};
+            return { fichier: link.fichier, colonne: link.colonne, by: text(stored.by), at: text(stored.at), ...reviewRowPieces(projectPath, link.fichier, link.colonne) };
+          }),
           relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
             .filter((entry) => !entry.dismissed)
             .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin, at: entry.at || '', value: entry.value || '' }))),
@@ -128,6 +132,13 @@ export function createOkfBackend(options: OkfOptions) {
     const removed = removeLink(target(projectId), input);
     build(projectId);
     return removed;
+  };
+
+  const review = (projectId: string, input: ReviewLinkInput & { retirer?: unknown }, origin?: string) => {
+    build(projectId);
+    const result = input.retirer === true ? unlinkReview(target(projectId), input) : linkReview(target(projectId), input, origin);
+    build(projectId);
+    return result;
   };
 
   const examine = (projectId: string, input: ExamInput & { retirer?: unknown }) => {
@@ -153,9 +164,11 @@ export function createOkfBackend(options: OkfOptions) {
   router.get('/okf/verify', (request, response) => respond(() => verify(String(request.query.projectId || '')), response));
   router.post('/okf/rebuild', express.json(), (request, response) => respond(() => build(String(request.body?.projectId || '')), response));
   router.post('/okf/link', express.json(), (request, response) => respond(() => link(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
+  router.get('/okf/revues', (request, response) => respond(() => ({ revues: reviewCatalog(projectPathOf(String(request.query.projectId || ''))) }), response));
+  router.post('/okf/revue', express.json(), (request, response) => respond(() => review(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
   router.post('/okf/unlink', express.json(), (request, response) => respond(() => unlink(String(request.body?.projectId || ''), request.body), response));
 
-  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, ontologie: ontology, proposer: (projectId, body) => propose(projectId, body as { ontologie?: unknown }), link: (projectId, body) => link(projectId, body), unlink, examinee: (projectId, body) => examine(projectId, body as ExamInput & { retirer?: unknown }) };
+  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, ontologie: ontology, proposer: (projectId, body) => propose(projectId, body as { ontologie?: unknown }), link: (projectId, body) => link(projectId, body), unlink, revue: (projectId, body) => review(projectId, body as ReviewLinkInput & { retirer?: unknown }), revues: (projectId) => reviewCatalog(projectPathOf(projectId)), examinee: (projectId, body) => examine(projectId, body as ExamInput & { retirer?: unknown }) };
   const localRouter = express.Router();
   localRouter.post('/okf', express.json(), (request, response) => {
     if (!options.isLoopback(request)) {

@@ -131,6 +131,8 @@ export type Cell = {
   citations?: CellCitation[];
   /** Réponse corrigée à la main : elle n'a pas à être étayée par une citation. */
   edited?: boolean;
+  /** Réponse vérifiée par l'avocat : une ligne liée à une prémisse compte alors comme pièce de source humaine. */
+  checked?: { at: string };
 };
 
 export type CitationSource = {
@@ -354,6 +356,23 @@ export function citationIssue(cell: Cell): 'missing' | 'unverified' | null {
   if (!cell.citations?.length) return 'missing';
   return cell.citations.some((citation) => !citation.verified) ? 'unverified' : null;
 }
+
+/** Même document, au chemin près : les sessions citent parfois le seul nom du fichier. */
+export function sameDocument(left: string, right: string): boolean {
+  const normalize = (value: string) => value.trim().toLowerCase().replace(/\\/g, '/');
+  const a = normalize(left);
+  const b = normalize(right);
+  return a === b || a.split('/').pop() === b.split('/').pop();
+}
+
+/** Réponse positive : trouvée, et « Oui » pour une question Oui / Non. Seules ces lignes établissent une prémisse liée. */
+export function isPositiveCell(column: Pick<ReviewColumn, 'format'>, cell: Cell | undefined): cell is Cell {
+  if (!isCellFilled(cell) || !citationRequired(cell)) return false;
+  return column.format !== 'yes_no' || /^oui\b/i.test(cell.summary.trim());
+}
+
+/** Auteur d'une réponse : humain si l'avocat l'a vérifiée ou corrigée, agent sinon. */
+export const cellAuthor = (cell: Cell): 'human' | 'agent' => cell.checked || cell.edited ? 'human' : 'agent';
 
 export function isCellFilled(cell: Cell | undefined): cell is Cell {
   return Boolean(cell) && cell!.summary.trim() !== '' && cell!.summary !== EMPTY_CELL_SUMMARY;

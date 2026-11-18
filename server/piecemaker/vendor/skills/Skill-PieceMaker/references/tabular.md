@@ -21,3 +21,7 @@ pm tabular_review verifier
 `relancer` analyse les nouveaux documents Markdown : lancez `pm dossier conversion` avant pour les pièces non converties. L’index se gère avec `pm dossier index`.
 
 `--recherche` JSON : `query`, `sources` (`cassation` `appel` `conseil_etat` `caa` `premiere_instance`), `matieres` (cassation : `CIVIL` `COMMERCIAL` `PENAL` `SOCIAL`), `publicationBulletin` (`TOUS` `PUBLIE` `INEDIT`), `sieges`, `publicationConseilEtat` (`TOUS` `PUBLIE` `NON_PUBLIE`), `villesCaa`, `publicationCaa` (`TOUS` `PUBLIE` `NON_PUBLIE`), `typesPremiereInstance` (`TRIBUNAL_JUDICIAIRE` `TRIBUNAL_GRANDE_INSTANCE` `TRIBUNAL_INSTANCE` `TRIBUNAL_COMMERCE` `CONSEIL_PRUDHOMMES` `TRIBUNAL_CORRECTIONNEL` `TRIBUNAL_SECURITE_SOCIALE` `TRIBUNAL_BAUX_RURAUX` `JURIDICTION_PROXIMITE` `OUTRE_MER` `TRIBUNAL_CONFLITS`), `dateDebut`, `dateFin`, `dispositifOnly`.
+
+## Lier une revue à une prémisse
+
+Une colonne qui répond à la question d'une prémisse sur plusieurs pièces se lie à elle : `pm okf revue "<titre>" --fichier <revue.json> --colonne <nom|index>` (voir `okf.md`). Ses lignes positives deviennent des pièces de la prémisse, d'auteur agent. L'avocat les fait passer à humain avec « Marquer vérifiée » dans le détail de la cellule ; l'assistant ne marque jamais une cellule vérifiée.

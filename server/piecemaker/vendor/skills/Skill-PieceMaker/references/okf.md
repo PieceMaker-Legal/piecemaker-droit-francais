@@ -119,3 +119,13 @@ pm okf examinee "Pièces/Courrier.pdf" --retirer
 ```
 
 La marque est écrite dans la fiche (`examen_sans_lien` : motif, auteur, date, empreinte du document). `verify` liste alors la pièce sous « Examinées sans lien », en information, plus en manque. Le manque revient si le document change ou si la marque est retirée. Ne marque jamais une pièce que tu n'as pas lue.
+
+Une revue tabulaire des pièces peut établir une prémisse : lie la colonne qui répond à sa question.
+
+```bash
+pm okf revues
+pm okf revue "Résiliation du contrat" --fichier "resiliations.json" --colonne "Résilié"
+pm okf revue "Résiliation du contrat" --fichier "resiliations.json" --colonne 0 --retirer
+```
+
+Chaque ligne positive (réponse trouvée, « Oui » pour une question Oui / Non) devient une pièce de la prémisse, avec sa valeur et sa citation. Son auteur est `agent` tant que l'avocat ne l'a pas vérifiée dans la revue, `human` ensuite. Les lignes sont relues dans la revue à chaque lecture : une revue relancée remonte aussitôt. `pm catala verifier` les contrôle comme les autres pièces et avertit des lignes d'auteur agent. Une recherche juridique ne se lie pas.

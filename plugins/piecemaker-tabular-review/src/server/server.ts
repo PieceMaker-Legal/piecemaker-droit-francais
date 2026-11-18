@@ -12,7 +12,7 @@ import { exportReview } from './export.js';
 import { pickFiles } from './picker.js';
 import { assertProject, assertReviewFile, protectedProjects, registeredProjects, UserError } from './paths.js';
 import { appendResearchUpdate, cancelResearch, createResearchReview, discardResearch, legifranceConfigured, researchPage, researchState, researchText, startResearch, startResearchUpdate, stopAllResearch, updateResearchFilters } from './research.js';
-import { appendRows, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, saveQuestion, updateReview } from './reviews.js';
+import { appendRows, checkCell, createReview, deleteReview, editCell, listReviews, markApplied, readReview, reviewDetail, saveQuestion, updateReview } from './reviews.js';
 import { assertHostOrigin } from './classify.js';
 import { cancelJob, isRunning, pendingTasks, queueTasks, stopAllJobs } from './runner.js';
 import type { RowTask } from './runner.js';
@@ -232,6 +232,11 @@ async function route(method: string, url: URL, body: Body): Promise<unknown> {
   if (method === 'POST' && pathname === '/reviews/cell') {
     const { project, file } = reviewTarget(body);
     await editCell(project, file, body.rowId, body.column, body.summary);
+    return reviewDetail(project, file, isRunning(project, file));
+  }
+  if (method === 'POST' && pathname === '/reviews/check') {
+    const { project, file } = reviewTarget(body);
+    await checkCell(project, file, body.rowId, body.column, body.checked);
     return reviewDetail(project, file, isRunning(project, file));
   }
   if (method === 'POST' && pathname === '/reviews/column') {

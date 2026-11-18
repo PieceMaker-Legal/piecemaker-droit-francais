@@ -152,6 +152,38 @@ test('develops an OKF premise into its cited pieces and fails without evidence',
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 
+test('counts the positive rows of a linked tabular review as pieces of the premise, with their author', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-review-'));
+  try {
+    const bundle = path.join(home, '.piecemaker', 'okf');
+    await mkdir(path.join(bundle, '_premises'), { recursive: true });
+    await mkdir(path.join(home, 'Tabular Review'), { recursive: true });
+    await writeFile(path.join(bundle, '_premises', 'resiliation.md'), '---\ntype: Premise\ntitle: Résiliation\nrevues:\n  - fichier: revue.json\n    colonne: 0\n    by: piecemaker/agent\n    at: 2026-01-01T00:00:00.000Z\n---\n');
+    const review = (checked: boolean) => JSON.stringify({ title: 'Revue', category: 'documents', columns: [{ index: 0, name: 'Résilié', format: 'yes_no' }], rows: [
+      { id: 'a', label: 'Courrier', status: 'done', documents: [{ source: 'Pièces/Courrier.pdf' }] },
+      { id: 'b', label: 'Contrat', status: 'done', documents: [{ source: 'Pièces/Contrat.pdf' }] },
+    ], cells: {
+      a: { 0: { summary: 'Oui', flag: 'red', reasoning: '', citations: [{ document: 'Courrier.pdf', quote: 'Il est résilié.', verified: true }], ...(checked ? { checked: { at: '2026-01-02T00:00:00.000Z' } } : {}) } },
+      b: { 0: { summary: 'Non', flag: 'grey', reasoning: '', citations: [] } },
+    } });
+    await writeFile(path.join(home, 'Tabular Review', 'revue.json'), review(false));
+    const service = createCatalaCitation({
+      source: async () => ({ kind: 'piece', title: 'Courrier.pdf', text: 'Il est résilié.' }),
+      match: (text, quote) => text.includes(quote) ? quote : null,
+    }, createCitationStore(home));
+    const file = { nom: 'prime.catala_fr', chemin: path.join(home, '.piecemaker/catala/prime/prime.catala_fr'), contenu: '[Résiliation](okf:/_premises/resiliation.md)' };
+    const agent = await service.verify(home, [file]);
+    const pieces = (agent.results[0] as { pieces?: Array<{ quote: string; verified: boolean; author?: string; review?: string }> }).pieces;
+    assert.equal(agent.passed, true);
+    assert.deepEqual(pieces?.map((piece) => [piece.quote, piece.verified, piece.author, piece.review]), [['Il est résilié.', true, 'agent', 'revue.json']]);
+    assert.deepEqual(agent.warnings, ['okf:/_premises/resiliation.md : 1 ligne(s) de revue tabulaire d’auteur agent, à faire vérifier par l’avocat dans la revue.']);
+    await writeFile(path.join(home, 'Tabular Review', 'revue.json'), review(true));
+    const human = await service.verify(home, [file]);
+    assert.equal((human.results[0] as { pieces?: Array<{ author?: string }> }).pieces?.[0].author, 'human');
+    assert.deepEqual(human.warnings, []);
+  } finally { await rm(home, { recursive: true, force: true }); }
+});
+
 const appealsConnectors = (details: string[] | undefined, text = 'Extrait exact.', requested: string[] = []): Pick<SourceConnectors, 'source' | 'match'> => ({
   source: async (_cwd, id) => { requested.push(id); return { kind: 'decision', title: 'Cour fictive, 12 mars 2026', text, ...(details ? { history: { statut: 'remise en cause' as const, details } } : {}) }; },
   match: (found: string, quote: string) => found.includes(quote) ? quote : null,
