@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '../../../src/shared/authToken.js';
 import { tabularReviewRpc } from './api.js';
 import { modal } from './editors.js';
 
@@ -21,8 +22,7 @@ type AnalysisModule = {
 export async function openIndexAnalysis(root: HTMLElement, api: AnalysisApi, onBack: () => void): Promise<() => void> {
   const project = api.context.project?.path;
   if (!project) return () => {};
-  const token = localStorage.getItem('auth-token');
-  const response = await fetch('/api/plugins/piecemaker-tabular-review/assets/dist/index.js', { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const response = await authenticatedFetch('/api/plugins/piecemaker-tabular-review/assets/dist/index.js');
   if (!response.ok) throw new Error(`Analyse tabulaire indisponible (${response.status}).`);
   const url = URL.createObjectURL(new Blob([await response.text()], { type: 'application/javascript' }));
   let analysis: AnalysisModule;

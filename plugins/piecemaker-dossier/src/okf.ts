@@ -1,3 +1,5 @@
+import { requestJson } from '../../../src/shared/authToken.js';
+
 import { iconSvg } from './document-types.js';
 import type { DocumentType } from './document-types.js';
 
@@ -26,14 +28,7 @@ export function relationLabel(index: OkfIndex | null, name: string, incoming = f
   return (incoming ? entry?.inverse : entry?.label) || (incoming ? INCOMING_LABELS : RELATION_LABELS)[name] || name;
 }
 
-async function request<T>(path: string, payload?: unknown, method = 'POST'): Promise<T> {
-  const token = localStorage.getItem('auth-token');
-  const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(payload ? { 'Content-Type': 'application/json' } : {}) };
-  const response = await fetch(`/api/piecemaker/okf${path}`, payload ? { method, headers, body: JSON.stringify(payload) } : { method: method === 'POST' ? 'GET' : method, headers });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `Index OKF indisponible (${response.status}).`);
-  return body as T;
-}
+const request = <T>(path: string, payload?: unknown, method?: string): Promise<T> => requestJson<T>(`/api/piecemaker/okf${path}`, payload, method);
 
 export const okfApi = {
   read: (projectId: string) => request<OkfIndex>(`?projectId=${encodeURIComponent(projectId)}`),
