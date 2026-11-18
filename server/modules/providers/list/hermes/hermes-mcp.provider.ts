@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
+import { getHermesHome } from '@/modules/providers/list/hermes/hermes-home.js';
 import { McpProvider } from '@/modules/providers/shared/mcp/mcp.provider.js';
 import type { McpScope, ProviderMcpServer, UpsertProviderMcpServerInput } from '@/shared/types.js';
 import {
@@ -214,7 +214,7 @@ export class HermesMcpProvider extends McpProvider {
 
   protected async readScopedServers(scope: McpScope, workspacePath: string): Promise<Record<string, unknown>> {
     const filePath = scope === 'user'
-      ? path.join(os.homedir(), '.hermes', 'config.yaml')
+      ? path.join(getHermesHome(), 'config.yaml')
       : path.join(workspacePath, '.hermes', 'config.yaml');
     return readMcpServers(filePath);
   }
@@ -225,7 +225,7 @@ export class HermesMcpProvider extends McpProvider {
     servers: Record<string, unknown>,
   ): Promise<void> {
     const filePath = scope === 'user'
-      ? path.join(os.homedir(), '.hermes', 'config.yaml')
+      ? path.join(getHermesHome(), 'config.yaml')
       : path.join(workspacePath, '.hermes', 'config.yaml');
     await writeMcpServers(filePath, servers);
   }

@@ -1,7 +1,54 @@
 # Commandes PieceMaker dans Hermes
 
+## Rôle d'Hermes
+
+Hermes est un provider facultatif. Dans un dossier, il travaille comme les autres
+providers : il lit l'`AGENTS.md` du dossier (donc `~/.piecemaker/custom/perso.md`),
+tient la mémoire de l'acte dans `.piecemaker/memoires/<nom>.md` et passe par `pm`.
+Il apporte en plus deux usages : l'accès par téléphone, par sa passerelle, et les
+rappels d'échéances. Sans Hermes, seuls ces deux usages manquent.
+
+PieceMaker n'ajoute pas de « brain » séparé : ce qui vaut pour tous les dossiers
+est dans `~/.piecemaker` (profil de pratique, Bibliothèque, ontologie et
+arborescence, citations vérifiées, suivi des dossiers).
+
+## Profil dédié
+
+Le serveur utilise le profil Hermes `piecemaker` (`~/.hermes/profiles/piecemaker`),
+sauf si `HERMES_HOME` est déjà défini. Toutes ses commandes Hermes (sessions,
+passerelle, plugin, modèles, sessions listées) visent ce profil.
+
+- Création : au premier usage (session, onglet Passerelle ou rappels), par
+  `hermes profile create piecemaker --clone`. Le clone reprend les modèles et les
+  identifiants de l'utilisateur, sans les canaux de messagerie. Le profil
+  personnel n'est jamais modifié. Un profil `piecemaker` que PieceMaker n'a pas
+  créé (sans `.piecemaker-owned`) est refusé.
+- Mémoire : `memory.memory_enabled` et `memory.user_profile_enabled` sont mis à
+  `false` à chaque démarrage, et les mémoires copiées par le clone sont vidées. La
+  mémoire Hermes est commune à toutes les sessions d'un profil : un fait d'un
+  dossier pourrait ressortir dans un autre.
+- Passerelle : Réglages › Agents › Hermes › Passerelle lance
+  `hermes -p piecemaker gateway setup`. Le téléphone se connecte donc à ce profil,
+  pas au profil personnel.
+- Les sessions Hermes lancées avant ce profil restent dans le profil personnel et
+  n'apparaissent plus dans PieceMaker.
+
+## Rappels d'échéances
+
+Réglages › Agents › Hermes › Passerelle › Rappels d'échéances crée la tâche
+planifiée Hermes `piecemaker-rappels` (heure et destination au choix, par défaut
+8 h vers `telegram`). La tâche lance le script `piecemaker-rappels.py` du profil,
+sans modèle (`--no-agent`). Le script lit le port de l'instance PieceMaker ouverte
+et appelle `GET /api/piecemaker/local/suivi/rappels` (boucle locale seulement) :
+échéances non faites en retard ou dans les 7 jours, tous dossiers confondus. Une
+sortie vide n'envoie rien. Hermes exécute la tâche tant que sa passerelle tourne ;
+PieceMaker fermé, la tâche échoue sans envoi. Le message contient le nom des
+dossiers et l'intitulé des échéances : il part vers la plateforme choisie.
+
+## Commandes
+
 La première session Hermes lancée par PieceMaker installe et active le plugin
-local `piecemaker` dans le profil Hermes courant. Aucun modèle n'est appelé
+local `piecemaker` dans le profil Hermes `piecemaker` (voir ci-dessous). Aucun modèle n'est appelé
 pendant cette installation. Le moteur Hermes reste inchangé.
 
 Le plugin fournit l'outil `piecemaker`, le skill PieceMaker et les fonctions
@@ -50,8 +97,8 @@ Les outils natifs restent disponibles pour les autres opérations permises.
 - L'activation utilise `hermes plugins enable`, qui recharge la passerelle lorsque
   Hermes le permet. Si Hermes annonce un redémarrage nécessaire, ne pas utiliser
   la session avant ce redémarrage. Le serveur ne redémarre aucun processus.
-- Les modèles, les identifiants, la mémoire et la passerelle restent communs au
-  profil Hermes. Cette intégration ne crée pas de profil par dossier.
+- Le profil `piecemaker` est commun à tous les dossiers. Il n'y a pas de profil
+  par dossier : la mémoire Hermes y est donc coupée.
 - Les appels `pm` réutilisent les contrôles et le masquage existants. Le harnais
   de citations juridiques du chat n'est pas étendu par cette modification.
 

@@ -1,8 +1,8 @@
-import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import { getHermesHome } from '@/modules/providers/list/hermes/hermes-home.js';
 import { SkillsProvider } from '@/modules/providers/shared/skills/skills.provider.js';
 import type {
   ProviderSkillRegistryActionResult,
@@ -136,7 +136,7 @@ export class HermesSkillsProvider extends SkillsProvider {
     });
     addUniqueProviderSkillSource(sources, seenRootDirs, {
       scope: 'user',
-      rootDir: path.join(os.homedir(), '.hermes', 'skills'),
+      rootDir: path.join(getHermesHome(), 'skills'),
       commandPrefix: '/',
       recursive: true,
     });
@@ -147,7 +147,7 @@ export class HermesSkillsProvider extends SkillsProvider {
   protected async getGlobalSkillSource(): Promise<ProviderSkillSource> {
     return {
       scope: 'user',
-      rootDir: path.join(os.homedir(), '.hermes', 'skills'),
+      rootDir: path.join(getHermesHome(), 'skills'),
       commandPrefix: '/',
       recursive: true,
     };

@@ -1,9 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 import spawn from 'cross-spawn';
 
+import { getHermesHome, getHermesRoot } from '@/modules/providers/list/hermes/hermes-home.js';
 import type { IProviderAuth } from '@/shared/interfaces.js';
 import type { CliVersionProbe, ProviderAuthStatus } from '@/shared/types.js';
 import { readObjectRecord, readOptionalString } from '@/shared/utils.js';
@@ -53,25 +53,28 @@ export class HermesProviderAuth implements IProviderAuth {
       return { authenticated: true, email: 'API Key Auth', method: 'env' };
     }
 
-    const hermesHome = process.env.HERMES_HOME || path.join(os.homedir(), '.hermes');
-    try {
-      const authJson = readObjectRecord(JSON.parse(await readFile(path.join(hermesHome, 'auth.json'), 'utf8')));
-      const providers = readObjectRecord(authJson?.providers) ?? {};
-      const pools = readObjectRecord(authJson?.credential_pool) ?? {};
-      const credentials = [authJson, ...Object.values(providers), ...Object.values(pools).flatMap((pool) => Array.isArray(pool) ? pool : [])];
-      if (credentials.some((value) => {
-        const record = readObjectRecord(value);
-        return record?.last_status !== 'dead' && ['apiKey', 'api_key', 'token', 'access_token', 'refresh_token']
-          .some((key) => readOptionalString(record?.[key]));
-      })) {
-        return {
-          authenticated: true,
-          email: readOptionalString(authJson?.email) ?? 'Hermes Auth',
-          method: 'credentials_file',
-        };
+    const hermesHome = getHermesHome();
+    // A named profile can read single-use OAuth grants from the root profile.
+    for (const authHome of new Set([hermesHome, getHermesRoot()])) {
+      try {
+        const authJson = readObjectRecord(JSON.parse(await readFile(path.join(authHome, 'auth.json'), 'utf8')));
+        const providers = readObjectRecord(authJson?.providers) ?? {};
+        const pools = readObjectRecord(authJson?.credential_pool) ?? {};
+        const credentials = [authJson, ...Object.values(providers), ...Object.values(pools).flatMap((pool) => Array.isArray(pool) ? pool : [])];
+        if (credentials.some((value) => {
+          const record = readObjectRecord(value);
+          return record?.last_status !== 'dead' && ['apiKey', 'api_key', 'token', 'access_token', 'refresh_token']
+            .some((key) => readOptionalString(record?.[key]));
+        })) {
+          return {
+            authenticated: true,
+            email: readOptionalString(authJson?.email) ?? 'Hermes Auth',
+            method: 'credentials_file',
+          };
+        }
+      } catch {
+        // Try the next home, then the dotenv check.
       }
-    } catch {
-      // Fall through to dotenv check.
     }
 
     try {
