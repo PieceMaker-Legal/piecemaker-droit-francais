@@ -53,6 +53,24 @@ describe('Index', () => {
     expect(mountIndexAnalysis).toHaveBeenCalledOnce();
   });
 
+  it('bascule l’Index en mode chronologie et prévient la revue', async () => {
+    vi.mocked(mountIndexAnalysis).mockClear();
+    vi.stubGlobal('localStorage', dom.window.localStorage);
+    (dom.window as unknown as Record<string, unknown>).__piecemakerDossierView = 'chronology';
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => undefined, rpc: vi.fn(), openFileInEditor: vi.fn() } as never);
+    await vi.waitFor(() => expect(mountIndexAnalysis).toHaveBeenCalledOnce());
+    const chronology = vi.mocked(mountIndexAnalysis).mock.calls[0][3]!;
+    const changed = vi.fn();
+    chronology.subscribe(changed);
+    expect(chronology.active()).toBe(false);
+    container.querySelector<HTMLButtonElement>('[data-action="index-chronology"]')!.click();
+    expect(chronology.active()).toBe(true);
+    expect(changed).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-action="index-chronology"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(localStorage.getItem('pmd-index-chronologie')).toBe('1');
+    expect(mountIndexAnalysis).toHaveBeenCalledOnce();
+  });
+
   it('ouvre l’Index quand pm demande l’analyse de l’Index', async () => {
     vi.mocked(mountIndexAnalysis).mockClear();
     const focus: unknown[] = [];

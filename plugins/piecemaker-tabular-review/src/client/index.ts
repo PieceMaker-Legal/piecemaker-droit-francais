@@ -1,6 +1,6 @@
 import type { Draft, Template } from '../shared.js';
 import { OPEN_EVENT, PANEL_FOCUS_EVENT, PENDING_SHOW_KEY, PENDING_TARGET_KEY, REVIEW_FOLDER, SHOW_EVENT } from '../shared.js';
-import type { App, RowColumn, View } from './app.js';
+import type { App, Chronology, RowColumn, View } from './app.js';
 import { basename, errorMessage, escapeHtml, openModal, toast } from './dom.js';
 import { createHistoryView } from './history.js';
 import { createRpc, loadHostProjects } from './host.js';
@@ -47,7 +47,7 @@ function takeShowRequest(): ShowRequest | null {
 }
 
 /** `index` : l'Index du dossier affiché par l'onglet Dossier. Sans `onBack`, il y est la vue même de l'onglet (pas de retour). */
-export type IndexMount = { project: string; onBack?(): void; draft?: string; rowColumn?: RowColumn };
+export type IndexMount = { project: string; onBack?(): void; draft?: string; rowColumn?: RowColumn; chronology?: Chronology };
 
 export function mount(container: HTMLElement, api: PluginApi, index?: IndexMount): void {
   unmount(container);
@@ -78,6 +78,7 @@ export function mount(container: HTMLElement, api: PluginApi, index?: IndexMount
   const app: App = {
     root,
     rowColumn: index?.rowColumn,
+    chronology: index?.chronology,
     api,
     rpc: createRpc(api),
     context: () => api.context,

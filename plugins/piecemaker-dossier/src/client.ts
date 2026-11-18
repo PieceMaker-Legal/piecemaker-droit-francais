@@ -1,4 +1,5 @@
-import { mountIndexAnalysis } from './index-analysis.js';
+import { isPieceRow, mountIndexAnalysis } from './index-analysis.js';
+import type { IndexChronology } from './index-analysis.js';
 import { editOntology } from './ontology.js';
 import { pendingProposals } from './pending-proposals.js';
 import { etapesApi, knowledgeApi } from './api.js';
@@ -70,6 +71,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let indexHost: HTMLElement | null = null;
   let indexProject = '';
   let disposeIndex: (() => void) | null = null;
+  let indexChronology = (() => { try { return localStorage.getItem('pmd-index-chronologie') === '1'; } catch { return false; } })();
+  const chronologyListeners = new Set<() => void>();
+  const notifyChronology = () => chronologyListeners.forEach((listener) => listener());
+  const chronology: IndexChronology = {
+    active: () => indexChronology,
+    isPiece: (row) => isPieceRow(data?.okf, row),
+    subscribe: (callback) => { chronologyListeners.add(callback); return () => chronologyListeners.delete(callback); },
+  };
   const closeIndex = () => {
     disposeIndex?.();
     disposeIndex = null;
@@ -88,6 +97,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         viewCache.set(projectId, data);
         if (active === 'graph') paintContent();
         else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
+        if (indexChronology) notifyChronology();
       }, () => undefined),
     };
   };
@@ -254,6 +264,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         viewCache.set(projectId, data);
         if (active === 'graph') paintContent();
         else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
+        if (indexChronology) notifyChronology();
       }, () => undefined);
       viewCache.set(projectId, data);
       render();
@@ -430,7 +441,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     indexHost = host;
     indexProject = projectPath;
     slot.replaceWith(host);
-    void mountIndexAnalysis(host, api, (resource) => linksMarkup(data?.okf ?? null, resource)).then((dispose) => {
+    void mountIndexAnalysis(host, api, (resource) => linksMarkup(data?.okf ?? null, resource), chronology).then((dispose) => {
       if (indexHost === host) disposeIndex = dispose;
       else dispose();
     }).catch((error: unknown) => {
@@ -446,7 +457,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     destroyGraph = null;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (active === 'chronology') {
-      content.innerHTML = chronologyView(okfView);
+      content.innerHTML = chronologyView(okfView, indexChronology);
       attachIndex(content.querySelector<HTMLElement>('[data-index-analysis]'));
       return;
     } else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
@@ -544,6 +555,13 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         return;
       }
       const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
+      if (action === 'index-chronology') {
+        indexChronology = !indexChronology;
+        try { localStorage.setItem('pmd-index-chronologie', indexChronology ? '1' : '0'); } catch { /* préférence locale seulement */ }
+        paintContent();
+        notifyChronology();
+        return;
+      }
       if (action === 'okf-verify' && context.project) {
         void okfApi.verify(context.project.name).then(({ erreurs, contradictions }) => {
           okfView = { ...okfView, errors: erreurs, contradictions };
