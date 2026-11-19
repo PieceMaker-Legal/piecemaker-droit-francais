@@ -9,6 +9,7 @@ import {
   Terminal,
 } from 'lucide-react';
 
+import RappelsSection from '@/piecemaker/hermes/RappelsSection';
 import SettingsCard from '@/modules/settings/SettingsCard';
 import SettingsSection from '@/modules/settings/SettingsSection';
 import { authenticatedFetch } from '@/shared/api';
@@ -238,7 +239,7 @@ export default function GatewayContent({ onOpenSetup }: GatewayContentProps) {
                 <HelpTooltip content={setupTooltip} position="right" />
               </div>
               <div className="mt-1 text-sm text-muted-foreground">
-                Opens <span className="font-mono">hermes gateway setup</span> in the shell.
+                Opens <span className="font-mono">{status?.commands.setup ?? 'hermes gateway setup'}</span> in the shell.
               </div>
             </div>
             <Button
@@ -246,7 +247,7 @@ export default function GatewayContent({ onOpenSetup }: GatewayContentProps) {
               variant="outline"
               size="sm"
               className="w-full sm:w-auto"
-              onClick={() => onOpenSetup('hermes gateway setup', 'Hermes Gateway Setup')}
+              onClick={() => onOpenSetup(status?.commands.setup ?? 'hermes gateway setup', 'Hermes Gateway Setup')}
             >
               <Terminal className="h-4 w-4" />
               Open setup
@@ -254,6 +255,8 @@ export default function GatewayContent({ onOpenSetup }: GatewayContentProps) {
           </div>
         </SettingsCard>
       </SettingsSection>
+
+      <RappelsSection />
 
       <SettingsSection
         title="Profiles"

@@ -10,7 +10,7 @@ import { CATALA_COMMANDS, listPrograms, premiseLinks, runCatala } from './catala
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
-const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'fichier'];
+const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'artifacts', 'fichier'];
 const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
@@ -393,6 +393,7 @@ function voletTarget(cwd, volet, review) {
   if (volet === 'bordereau') return { cwd, tab: 'plugin:piecemaker-tampon' };
   if (volet === 'suivi_dossiers') return { cwd, tab: 'plugin:piecemaker-echeances' };
   if (volet === 'catala') return { cwd, tab: 'plugin:piecemaker-catala' };
+  if (volet === 'artifacts') return { cwd, tab: 'plugin:piecemaker-artifacts', review: review || undefined };
   if (volet === 'tabular_review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
   return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
 }
@@ -402,6 +403,7 @@ function panelNoticeLabel(target) {
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
   if (target.tab === 'plugin:piecemaker-echeances') return 'Suivi des dossiers';
   if (target.tab === 'plugin:piecemaker-catala') return 'Catala';
+  if (target.tab === 'plugin:piecemaker-artifacts') return target.review ? `Artifacts (${target.review})` : 'Artifacts';
   if (target.tab === 'plugin:piecemaker-tabular-review') {
     if (target.draft) return `Analyse tabulaire (projet ${target.draft})`;
     if (target.review) return `Analyse tabulaire (${target.review})`;
@@ -487,7 +489,7 @@ async function tab(api, positional, cwd, resolved) {
     if (!opened) fail('L’ouverture du fichier n’a pas été confirmée dans PieceMaker.');
     return alreadyOpen ? `Déjà affiché dans le volet de lecture : ${argument}` : `Affiché dans le volet de lecture : ${argument}`;
   }
-  const review = cible === 'tabular_review' && argument ? path.basename(argument) : '';
+  const review = (cible === 'tabular_review' || cible === 'artifacts') && argument ? path.basename(argument) : '';
   const target = voletTarget(resolved, cible, review);
   const request = panelRequest(resolved, target);
   const label = `${cible}${review ? ` (${review})` : ''}`;

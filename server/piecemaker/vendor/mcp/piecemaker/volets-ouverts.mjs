@@ -8,6 +8,7 @@ const LABELS = {
   browser: 'Navigateur',
   'plugin:piecemaker-dossier': 'Dossier',
   'plugin:piecemaker-tabular-review': 'Analyse tabulaire',
+  'plugin:piecemaker-artifacts': 'Artifacts',
   'plugin:piecemaker-library': 'Bibliothèque',
   'plugin:piecemaker-tampon': 'Bordereau',
   'plugin:piecemaker-timesheet': 'Timesheet',

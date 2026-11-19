@@ -1,0 +1,1 @@
+{ "title": "Page", "description": "Page libre : explication, schéma, synthèse visuelle, outil interactif simple.", "intent": "other", "icon": "page", "entry": "index.html", "read_first": ["README.md"] }

@@ -15,6 +15,7 @@ const MARKER = '.piecemaker/bundled-skills.json';
 const BUNDLED_SKILLS = [
   { slug: 'docx-cli', segments: ['vendor', 'skills', 'docx-cli'] },
   { slug: 'style-redaction-cabinet', segments: ['vendor', 'piecemaker-plugin', 'skills', 'style-redaction-cabinet'] },
+  { slug: 'creation-artifacts', segments: ['vendor', 'piecemaker-plugin', 'skills', 'creation-artifacts'] },
   { slug: 'Skill-PieceMaker', segments: ['vendor', 'skills', 'Skill-PieceMaker'] },
   { slug: 'catala', segments: ['vendor', 'skills', 'catala'] },
   { slug: 'okf', segments: ['vendor', 'skills', 'okf'] },

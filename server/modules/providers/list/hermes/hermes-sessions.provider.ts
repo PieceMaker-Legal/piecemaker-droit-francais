@@ -1,9 +1,9 @@
 import fsSync from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
+import { getHermesHome } from '@/modules/providers/list/hermes/hermes-home.js';
 import { sessionsDb } from '@/modules/database/index.js';
 import type { IProviderSessions } from '@/shared/interfaces.js';
 import type { AnyRecord, FetchHistoryOptions, FetchHistoryResult, NormalizedMessage } from '@/shared/types.js';
@@ -17,7 +17,7 @@ import {
 } from '@/shared/utils.js';
 
 const PROVIDER = 'hermes';
-const HERMES_DB_PATH = path.join(os.homedir(), '.hermes', 'state.db');
+const hermesDbPath = () => path.join(getHermesHome(), 'state.db');
 
 type HermesMessageRow = {
   id: number;
@@ -280,11 +280,11 @@ function parseJsonArray(value: string | null): unknown[] {
 
 function readHermesHistoryFromDatabase(sessionId: string): NormalizedMessage[] {
   const normalized: NormalizedMessage[] = [];
-  if (!fsSync.existsSync(HERMES_DB_PATH)) {
+  if (!fsSync.existsSync(hermesDbPath())) {
     return normalized;
   }
 
-  const db = new Database(HERMES_DB_PATH, { readonly: true, fileMustExist: true });
+  const db = new Database(hermesDbPath(), { readonly: true, fileMustExist: true });
   try {
     const rows = db.prepare(`
       SELECT id, role, content, tool_call_id, tool_calls, tool_name, timestamp, reasoning, reasoning_content, finish_reason
