@@ -130,17 +130,18 @@ function toolPreferences(provider: RunnableProvider, userId: number | null) {
   return readObjectRecord(preferences[`${provider}Permissions`]) ?? {};
 }
 
-let providerStatuses: { at: number; statuses: Promise<Array<{ provider: RunnableProvider; installed: boolean; authenticated: boolean }>> } | null = null;
+let providerStatuses: { until: number; statuses: Promise<Array<{ provider: RunnableProvider; installed: boolean; authenticated: boolean }>> } | null = null;
 const orchestrator = createOrchestratorService({
   now: () => new Date(),
   providers: () => {
-    if (!providerStatuses || providerStatuses.at < Date.now() - 60_000) {
+    if (!providerStatuses || providerStatuses.until < Date.now()) {
       const statuses = Promise.all(RUNNABLE_PROVIDERS.map(async provider => {
         const { installed, authenticated } = await providerAuthService.getProviderAuthStatus(provider);
         return { provider, installed, authenticated };
       }));
-      providerStatuses = { at: Date.now(), statuses };
-      statuses.catch(() => { providerStatuses = null; });
+      const entry = { until: Date.now() + 5_000, statuses };
+      providerStatuses = entry;
+      statuses.then(list => { if (list.every(status => status.authenticated)) entry.until = Date.now() + 60_000; }, () => { providerStatuses = null; });
     }
     return providerStatuses.statuses;
   },

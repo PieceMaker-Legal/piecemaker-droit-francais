@@ -328,7 +328,7 @@ test('La mise en route attend le choix de l’avocat et conserve le clic du widg
   await assert.rejects(f.service.setup(f.root, setupId, true), { code: 400 });
 });
 
-test('Sans fournisseur connecté, l’orchestrateur prévient une fois, attend une minute et garde les événements', async ctx => {
+test('Sans fournisseur connecté, l’orchestrateur prévient une fois, réessaie après 10 s et garde les événements', async ctx => {
   const f = fixture(ctx);
   let connected = false;
   f.deps.providers = async () => [{ provider: 'claude', authenticated: connected, installed: true }];
@@ -341,7 +341,7 @@ test('Sans fournisseur connecté, l’orchestrateur prévient une fois, attend u
   assert.equal(state.orchestrator.pending.length, 1);
   assert.equal(state.orchestrator.recaps, 0);
   connected = true;
-  await f.tick(61000);
+  await f.tick(11000);
   await flush();
   state = await f.state();
   assert.equal(f.turns.length, 1);

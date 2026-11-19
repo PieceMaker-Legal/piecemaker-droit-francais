@@ -168,7 +168,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       if (launched) add('system', String(error));
       else {
         orch.pending.unshift(...batch);
-        retryAt = deps.now().getTime() + 60000;
+        retryAt = deps.now().getTime() + 10000;
         const notice = "L'orchestrateur ne peut pas démarrer : " + (error instanceof Error ? error.message : String(error));
         if (state.messages.at(-1)?.text !== notice) add('system', notice, { connect: { target: state.settings.orchestratorProvider === 'auto' ? 'claude' : state.settings.orchestratorProvider, reconnect: false } });
       }
