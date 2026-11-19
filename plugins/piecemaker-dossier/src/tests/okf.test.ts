@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { spreadBoxes, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
-import { chronologyView, documentTitle, graphView, linksMarkup, shell } from '../views.js';
+import { chronologyView, documentTitle, linksMarkup, shell } from '../views.js';
 import { indexRowResource, isPieceRow } from '../index-analysis.js';
 
 const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', relations });
@@ -67,9 +67,6 @@ describe('index OKF', () => {
 
   it('le graphe a son propre onglet, à côté de l’Index', () => {
     expect(shell('graph')).toMatch(/data-tab="chronology"[\s\S]*data-tab="graph" aria-selected="true"/);
-    expect(graphView(index)).toContain('data-okf-graph');
-    expect(graphView(index)).not.toMatch(/data-okf-premises checked/);
-    expect(graphView(index, true)).toContain('data-okf-premises checked');
   });
 });
 

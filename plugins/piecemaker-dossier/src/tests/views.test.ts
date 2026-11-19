@@ -1,6 +1,7 @@
+import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName } from '../views.js';
+import { chronologyView, citationListMarkup, generalView, graphView, mappingView, proposedPieceName } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -28,7 +29,38 @@ describe('Index du dossier', () => {
     expect(html.match(/data-index-analysis/g)).toHaveLength(1);
     expect(html).not.toContain('pmd-chronology-table');
     expect(html).not.toContain('data-action="index-analysis"');
-    expect(html).toContain('data-action="okf-verify"');
+  });
+
+  it('affiche la chronologie et les liens de réglage dans la légende', () => {
+    const view = JSDOM.fragment(chronologyView());
+    const legend = view.querySelector('.pmd-okf-legend')!;
+    expect(legend.querySelector('button[data-action="index-chronology"][aria-pressed="false"]')?.textContent).toBe('Chronologie');
+    expect(Array.from(legend.querySelectorAll('a[href]'), (link) => link.textContent)).toEqual(['Arborescence', "Types d'actes"]);
+    expect(view.querySelector('.pmd-toolbar, .pmd-subtitle, [data-action="okf-verify"], [data-action="refresh"], [data-action="edit-ontology"]')).toBeNull();
+    expect(view.querySelectorAll('button')).toHaveLength(1);
+  });
+
+  it('conserve le bandeau de propositions et ses accès aux éditeurs', () => {
+    const view = JSDOM.fragment(chronologyView({ errors: null, proposals: { ontologie: 1, arborescence: 1 } }));
+    const banner = view.querySelector('[data-proposals]:not([hidden])')!;
+    expect(banner.querySelector('[data-action="edit-ontology"]')).not.toBeNull();
+    expect(banner.querySelector('[data-action="edit-tree"]')).not.toBeNull();
+  });
+});
+
+describe('Graphe du dossier', () => {
+  it('affiche les trois clés et le lien Ontologie sur le graphe', () => {
+    const view = JSDOM.fragment(graphView({
+      types: ['Pièces'],
+      typesGraphe: ['Pièces'],
+      fiches: [{ id: '/contrat.md', type: 'Pièces', title: 'Contrat', description: '', resource: 'Contrat.pdf', date: '', relations: [] }],
+    }));
+    const wrap = view.querySelector('.pmd-okf-graph-wrap')!;
+    expect(wrap.querySelector('[data-okf-graph]')).not.toBeNull();
+    const legend = wrap.querySelector('.pmd-okf-legend')!;
+    expect(Array.from(legend.querySelectorAll('.pmd-okf-key'), (key) => key.textContent)).toEqual(['Type du document', 'Prémisse', 'Partie']);
+    expect(legend.querySelector('a[href][data-action="edit-ontology"]')?.textContent).toBe('Ontologie');
+    expect(view.querySelector('.pmd-toolbar, .pmd-subtitle, button, [data-action="refresh"], [data-okf-center], [data-okf-premises]')).toBeNull();
   });
 });
 
