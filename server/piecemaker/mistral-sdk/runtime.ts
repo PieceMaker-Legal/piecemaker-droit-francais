@@ -33,9 +33,21 @@ async function readInstructions(file: string, visited: Set<string>): Promise<str
 
 function describeMistralError(error: unknown): string {
   const { statusCode, body } = (error ?? {}) as { statusCode?: unknown; body?: unknown };
-  if (statusCode !== 402) return error instanceof Error ? error.message : String(error);
+  if (statusCode !== 400 && statusCode !== 402 && statusCode !== 403) return error instanceof Error ? error.message : String(error);
   let detail = '';
-  try { detail = String(JSON.parse(String(body)).message ?? ''); } catch { detail = ''; }
+  try {
+    const parsed = JSON.parse(String(body));
+    const message = parsed.message ?? parsed.detail ?? parsed.error?.message;
+    if (typeof message === 'string') detail = message;
+  } catch {}
+  if (statusCode === 400) {
+    if (/invalid model/i.test(detail)) return `Mistral ne connaît pas ce modèle (HTTP 400). Choisissez un modèle Mistral.${detail ? ` ${detail}` : ''}`;
+    return error instanceof Error ? error.message : String(error);
+  }
+  if (statusCode === 403) {
+    if (/subscription tier/i.test(detail)) return 'Votre abonnement Mistral ne donne pas accès à ce modèle (HTTP 403). Choisissez un autre modèle.';
+    return `Mistral a refusé l’accès (HTTP 403).${detail ? ` ${detail}` : ''}`;
+  }
   return `Your Mistral credit or budget is exhausted (HTTP 402)${detail ? `: ${detail}` : '.'} Top up your Mistral account, then send the message again.`;
 }
 
@@ -85,7 +97,7 @@ export function createMistralSdkRuntime(
   authenticate = (userId: number) => mistralSdkAuth.createClient(userId),
   loadTools = createMistralTools,
 ): IProviderRuntime {
-  const active = new Map<string, AbortController>();
+  const active = new Map<string, { controller: AbortController; finished: Promise<void> }>();
   const pending = new Map<string, { sessionId: string; toolName: string; input: unknown; resolve(decision: ProviderPermissionDecision): void }>();
   return {
     permissions: {
@@ -96,10 +108,12 @@ export function createMistralSdkRuntime(
         }));
       },
     },
-    abort(sessionId) {
-      const controller = active.get(sessionId);
-      controller?.abort();
-      return Boolean(controller);
+    async abort(sessionId) {
+      const run = active.get(sessionId);
+      if (!run) return false;
+      run.controller.abort();
+      await run.finished;
+      return true;
     },
     async run(command: string, options: AnyRecord, writer: ProviderRuntimeWriter, context: ProviderRuntimeContext) {
       const userId = Number(writer.userId);
@@ -109,7 +123,9 @@ export function createMistralSdkRuntime(
       if (active.has(sessionId)) throw new Error('Une réponse Mistral est déjà en cours dans cette conversation.');
       const controller = new AbortController();
       const { signal } = controller;
-      active.set(sessionId, controller);
+      let finish!: () => void;
+      const finished = new Promise<void>(resolve => { finish = resolve; });
+      active.set(sessionId, { controller, finished });
       const cwd = path.resolve(String(options.cwd || options.projectPath || process.cwd()));
       let connection: ReturnType<typeof authenticate> | undefined;
       let toolbox: Awaited<ReturnType<typeof loadTools>> | undefined;
@@ -200,39 +216,47 @@ export function createMistralSdkRuntime(
           const chunks: ContentChunk[] = [];
           let thinking = '';
           let content = '';
-          for await (const event of response) {
-            signal.throwIfAborted();
-            const delta = event.data.choices[0]?.delta;
-            const text = typeof delta?.content === 'string' ? delta.content : delta?.content?.filter(chunk => chunk.type === 'text').map(chunk => chunk.type === 'text' ? chunk.text : '').join('') || '';
-            if (text) { content += text; emit({ id: textId, kind: 'stream_delta', content: text }); }
-            for (const chunk of typeof delta?.content === 'string' ? [{ type: 'text' as const, text: delta.content }] : delta?.content ?? []) {
-              const previous = chunks.at(-1);
-              if (chunk.type === 'text' && previous?.type === 'text') previous.text += chunk.text;
-              else if (chunk.type === 'thinking' && previous?.type === 'thinking' && !previous.closed) {
-                previous.thinking.push(...chunk.thinking);
-                if (chunk.signature) previous.signature = chunk.signature;
-                if (chunk.closed !== undefined) previous.closed = chunk.closed;
-              } else chunks.push(structuredClone(chunk));
-              if (chunk.type === 'thinking') {
-                thinking += chunk.thinking.filter(part => part.type === 'text').map(part => part.type === 'text' ? part.text : '').join('');
-                emit({ id: thinkingId, kind: 'thinking', content: thinking });
+          try {
+            for await (const event of response) {
+              signal.throwIfAborted();
+              const delta = event.data.choices[0]?.delta;
+              const text = typeof delta?.content === 'string' ? delta.content : delta?.content?.filter(chunk => chunk.type === 'text').map(chunk => chunk.type === 'text' ? chunk.text : '').join('') || '';
+              if (text) { content += text; emit({ id: textId, kind: 'stream_delta', content: text }); }
+              for (const chunk of typeof delta?.content === 'string' ? [{ type: 'text' as const, text: delta.content }] : delta?.content ?? []) {
+                const previous = chunks.at(-1);
+                if (chunk.type === 'text' && previous?.type === 'text') previous.text += chunk.text;
+                else if (chunk.type === 'thinking' && previous?.type === 'thinking' && !previous.closed) {
+                  previous.thinking.push(...chunk.thinking);
+                  if (chunk.signature) previous.signature = chunk.signature;
+                  if (chunk.closed !== undefined) previous.closed = chunk.closed;
+                } else chunks.push(structuredClone(chunk));
+                if (chunk.type === 'thinking') {
+                  thinking += chunk.thinking.filter(part => part.type === 'text').map(part => part.type === 'text' ? part.text : '').join('');
+                  emit({ id: thinkingId, kind: 'thinking', content: thinking });
+                }
+              }
+              for (const call of delta?.toolCalls ?? []) {
+                const index = call.index ?? 0;
+                const previous = calls.get(index);
+                const args = typeof call.function.arguments === 'string' ? call.function.arguments : JSON.stringify(call.function.arguments);
+                calls.set(index, {
+                  id: call.id && call.id !== 'null' ? call.id : previous?.id,
+                  type: 'function',
+                  function: { name: call.function.name || previous?.function.name || '', arguments: `${previous?.function.arguments ?? ''}${args ?? ''}` },
+                });
               }
             }
-            for (const call of delta?.toolCalls ?? []) {
-              const index = call.index ?? 0;
-              const previous = calls.get(index);
-              const args = typeof call.function.arguments === 'string' ? call.function.arguments : JSON.stringify(call.function.arguments);
-              calls.set(index, {
-                id: call.id && call.id !== 'null' ? call.id : previous?.id,
-                type: 'function',
-                function: { name: call.function.name || previous?.function.name || '', arguments: `${previous?.function.arguments ?? ''}${args ?? ''}` },
-              });
-            }
+          } catch (error) {
+            if (!signal.aborted) throw error;
           }
           if (thinking) transcript.push(createNormalizedMessage({ id: thinkingId, provider: 'mistral', sessionId: nativeId, kind: 'thinking', content: thinking, model }));
           if (content) {
             emit({ id: textId, kind: 'stream_end' });
             transcript.push(emit({ id: textId, kind: 'text', role: 'assistant', content, model }));
+          }
+          if (signal.aborted) {
+            if (content) messages.push({ role: 'assistant', content });
+            signal.throwIfAborted();
           }
           const toolCalls = [...calls.values()];
           messages.push({ role: 'assistant', content: chunks.length ? chunks : content || null, ...(toolCalls.length ? { toolCalls } : {}) });
@@ -254,12 +278,13 @@ export function createMistralSdkRuntime(
             try {
               input = typeof call.function.arguments === 'string' ? JSON.parse(call.function.arguments) : call.function.arguments;
               emit({ id: toolMessageId, kind: 'tool_use', toolName: name, toolInput: input, toolId });
+              signal.throwIfAborted();
               if (!tool) throw new Error(`Outil inconnu : ${apiName}.`);
               input = await authorize(tool, input);
               signal.throwIfAborted();
               result = await tool.execute(input);
             } catch (error) {
-              result = error instanceof Error ? error.message : String(error);
+              result = signal.aborted ? 'Appel d’outil interrompu.' : describeMistralError(error);
               isError = true;
             }
             const message = emit({ id: toolMessageId, kind: 'tool_use', toolName: name, toolInput: input, toolId, toolResult: { content: result, isError } });
@@ -270,15 +295,26 @@ export function createMistralSdkRuntime(
         }
         throw new Error('Limite de tours Mistral atteinte. Vous pouvez poursuivre dans un nouveau message.');
       } catch (error) {
+        if (signal.aborted) return;
         exitCode = 1;
-        if (!signal.aborted) transcript.push(emit({ kind: 'error', content: describeMistralError(error) }));
+        const content = describeMistralError(error);
+        transcript.push(emit({ kind: 'error', content }));
         if (messages.length && (!record || record.userId === userId)) await save();
-        if (!signal.aborted) throw error;
+        if ([400, 403].includes(Number((error as { statusCode?: number })?.statusCode))) throw new Error(content, { cause: error });
+        throw error;
       } finally {
-        active.delete(sessionId);
-        await toolbox?.close();
-        await connection?.close();
-        writer.send(createCompleteMessage({ provider: 'mistral', sessionId: nativeId, exitCode, ...(signal.aborted ? { aborted: true } : {}) }));
+        await Promise.allSettled([toolbox?.close(), connection?.close()]);
+        const complete = createCompleteMessage({ provider: 'mistral', sessionId: nativeId, exitCode: signal.aborted ? 0 : exitCode, aborted: signal.aborted });
+        try {
+          if (signal.aborted && messages.length && (!record || record.userId === userId)) {
+            transcript.push(complete);
+            await save();
+          }
+        } finally {
+          active.delete(sessionId);
+          finish();
+          writer.send(complete);
+        }
       }
     },
   };

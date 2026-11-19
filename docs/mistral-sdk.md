@@ -16,13 +16,17 @@ Le raccord appartient à `server/piecemaker/mistral-sdk/`. Il remplace le runtim
 
 Les instructions Markdown générales et du dossier sont chargées avec leurs imports `@fichier.md`. Les skills visibles et non désactivés sont annoncés au modèle ; `skill` lit leur contenu complet. `Read`, `Write`, `Edit` et `Bash` permettent leur exécution. Les pièces jointes sont des références de fichiers pour les outils locaux ; ce raccord n’envoie pas directement les images comme entrée vision.
 
-Les serveurs MCP viennent des configurations utilisateur et projet `.vibe/config.toml`, avec repli sur `.mcp.json`. Les serveurs désactivés restent exclus. Stdio, HTTP et SSE sont pris en charge. Un serveur indisponible est signalé dans le contexte du tour. Les erreurs MCP conservent leur statut d’erreur pour le vérificateur de citations.
+Les serveurs MCP viennent des configurations utilisateur et projet `.vibe/config.toml`, avec repli sur `.mcp.json`. Les serveurs désactivés restent exclus. Stdio, HTTP et SSE sont pris en charge. Un serveur indisponible est signalé dans le contexte du tour. Le chat et le modèle reçoivent le texte des blocs MCP dans leur ordre. Une image ou un son apparaît avec son type MIME. Un résultat uniquement structuré est transmis en JSON. Les erreurs MCP conservent leur statut d’erreur pour le vérificateur de citations.
 
 Les lectures s’exécutent directement ; les autres outils demandent l’autorisation, sauf les modes permissifs explicites. `acceptEdits` autorise les écritures de fichiers ; le mode plan exclut les outils modificateurs. Les hooks existants protègent pièces originales, mapping et secrets configurés. `Edit` et `Write` vérifient aussi le droit de lecture de leur cible. Le harnais juridique et l’historique automatique du dossier restent actifs.
 
 Le modèle nomme parfois un outil dans une autre casse (`bash` pour `Bash`) : la recherche de l’outil ignore la casse, dans le chat comme chez les sous-agents. Un nom réellement inconnu reçoit « Outil inconnu », distinct d’un refus lié au mode.
 
 Comme Claude, chaque réponse diffusée se termine par `stream_end` puis par un événement `text` complet de même identifiant. Le chat remplace alors la ligne diffusée au lieu de l’afficher deux fois. Le raisonnement précède le texte dans l’historique enregistré.
+
+Si l’utilisateur interrompt un outil, le chat affiche « Appel d’outil interrompu. ». Chaque appel annoncé reçoit un résultat avant l’unique événement `complete` marqué `aborted`. L’historique conserve cet état et le texte déjà diffusé pour la reprise.
+
+Un refus HTTP 403 lié à l’abonnement et un modèle inconnu (HTTP 400) s’affichent en clair et invitent à changer de modèle, sans le corps JSON de l’API.
 
 Chaque client SDK capture le proxy de sa session et sa CA locale. Une panne du proxy échoue sans connexion directe de secours. Les limites de tokens et de tours sont prises en charge ; une limite monétaire Vibe reçoit une erreur explicite.
 
