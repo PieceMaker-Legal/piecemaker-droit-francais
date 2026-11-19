@@ -193,7 +193,8 @@ export type TurnOptions = {
 export type OrchestratorDependencies = {
   now(): Date;
   providers(): Promise<ProviderStatus[]>;
-  defaultModel(provider: RunnableProvider): Promise<string>;
+  permissions(provider: RunnableProvider, userId: number | null): Promise<Pick<TurnOptions, 'allowedTools' | 'disallowedTools'>>;
+  defaultModel(provider: RunnableProvider, purpose?: 'lookup'): Promise<string>;
   openSession(provider: RunnableProvider, projectPath: string, title: string): string;
   runTurn(sessionId: string, userId: number | null, content: string, options: TurnOptions): Promise<TurnResult>;
   lastAnswer(sessionId: string): Promise<string>;
