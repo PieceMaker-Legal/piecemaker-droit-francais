@@ -3,16 +3,17 @@ import { useEffect } from 'react';
 export const AGENT_OPEN_EVENT = 'piecemaker:agent-open';
 
 const MARKER = 'piecemakerAgent';
+const SESSIONS = 'div.space-y-1.border-l';
 const ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z"/></svg>';
 
 function newSessionButtons(): HTMLButtonElement[] {
-  return [...document.querySelectorAll<HTMLElement>('div.ml-3.space-y-1.border-l')]
+  return [...document.querySelectorAll<HTMLElement>(SESSIONS)]
     .map((container) => container.querySelector<SVGElement>('.lucide-plus')?.closest<HTMLButtonElement>('button') ?? null)
     .filter((button): button is HTMLButtonElement => Boolean(button));
 }
 
 function projectPath(button: HTMLButtonElement): string | null {
-  const item = button.closest<HTMLElement>('div.ml-3.space-y-1.border-l')?.parentElement;
+  const item = button.closest<HTMLElement>(SESSIONS)?.parentElement;
   const title = item?.dataset.piecemakerProjectPath ?? item?.querySelector<HTMLElement>('.min-w-0.flex-1.text-left[title]')?.title ?? '';
   return /^([a-zA-Z]:[\\/]|\/)/.test(title) ? title : null;
 }

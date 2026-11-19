@@ -74,7 +74,7 @@ it('envoie le message du compositeur à l’orchestrateur', async () => {
 });
 
 it('insère PieceMaker Agent au-dessus de Nouvelle session et ouvre le dossier', async () => {
-  document.body.innerHTML = `<div data-piecemaker-project-path="/dossiers/Dupont"><div class="ml-3 space-y-1 border-l"><div class="px-3 pb-1 pt-1"><button class="nouvelle"><svg class="lucide-plus"></svg>Nouvelle session</button></div></div></div>`;
+  document.body.innerHTML = `<div data-piecemaker-project-path="/dossiers/Dupont"><div class="ml-1.5 space-y-1 border-l border-border/70 pl-1.5"><div class="px-3 pb-1 pt-1"><button class="nouvelle"><svg class="lucide-plus"></svg>Nouvelle session</button></div></div></div>`;
   const opened = vi.fn();
   window.addEventListener(AGENT_OPEN_EVENT, opened);
   const newSession = vi.fn();
