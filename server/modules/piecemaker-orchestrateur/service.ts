@@ -149,7 +149,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       orch.sessionId ??= deps.openSession(p, root, 'Orchestrateur du projet');
       save();
       const preamble = fresh ? formatPreamble({ state, projectPath: root, memory: store.memory(), sharedFolder: store.sharedFolder, recycled: orch.recaps > 0 }) + '\n' : '';
-      const content = preamble + formatWake({ ...orch, events: batch, now: deps.now(), reminder: !fresh });
+      const content = preamble + formatWake({ ...orch, events: batch, now: deps.now() });
       launched = true;
       const result = await deps.runTurn(orch.sessionId, orch.userId, content, {
         provider: p, model, effort: null, permissionMode: 'default',
@@ -194,7 +194,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   }
   function retry(t: Thread) {
     t.retries++;
-    t.inbox.unshift("Le tour précédent s'est interrompu : " + t.error + ". Reprends là où tu t'es arrêté.");
+    t.inbox.unshift('The previous turn was interrupted: ' + t.error + '. Pick up where you left off.');
     t.state = 'queued';
     threadWake(t, 'thread_retry', 'system', t.error ?? '');
   }
@@ -202,7 +202,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     runs.delete(t.id);
     clearApprovals(t);
     Object.assign(t, { state: 'stopped', updatedAt: now(), external: false });
-    threadWake(t, 'thread_stopped', 'system', 'Fil arrêté.');
+    threadWake(t, 'thread_stopped', 'system', 'Thread stopped.');
   }
   async function finish(t: Thread, run: { reply?: ThreadReply }, error: string | null) {
     if (runs.get(t.id) !== run) return;
@@ -392,7 +392,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     for (const [key, type] of [['quietAt', 'quiet'], ['holdingUntil', 'time_limit']] as const) {
       if (orch[key] && orch[key] <= stamp) {
         orch[key] = null;
-        wake(type, 'system', type === 'quiet' ? "L’avocat attend une réponse." : 'Poste les résultats retenus.');
+        wake(type, 'system', type === 'quiet' ? 'The user may be waiting for an answer.' : 'Post the results you are holding.');
       }
     }
     for (const t of state.threads) {
@@ -627,7 +627,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     postUserMessage(text: string, userId: number | null) {
       const row = add('user', parse(string, text));
       orch.userId = userId;
-      if (orch.lastUserAt && deps.now().getTime() - Date.parse(orch.lastUserAt) > 1800000) wake('catch_up', 'system', 'Poste les résultats retenus.');
+      if (orch.lastUserAt && deps.now().getTime() - Date.parse(orch.lastUserAt) > 1800000) wake('catch_up', 'system', 'The user is back after more than 30 minutes. Post the results you are holding.');
       orch.lastUserAt = row.at;
       orch.postsSinceUser = 0;
       retryAt = 0;

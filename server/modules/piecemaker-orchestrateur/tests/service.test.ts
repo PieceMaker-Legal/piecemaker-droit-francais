@@ -77,6 +77,7 @@ test('Un tour regroupe les événements en attente, retire les yeux et publie la
   await flush();
   assert.equal(f.turns.length, 2);
   assert.match(f.turns[1].content, /type="message".*Deuxième[^\n]*\n.*type="reaction"/);
+  assert.doesNotMatch(f.turns[1].content, /# Your role/);
   assert.equal(f.turns[0].session, f.turns[1].session);
   await f.call('react', { message_id: first.id, emoji: '👌' });
   f.turns[1].end();
@@ -227,7 +228,7 @@ test('La mémoire refuse une ancienne révision. Le recyclage invalide la clé e
   await flush();
   await assert.rejects(f.service.call(f.root, first.key, 'post_message', { text: 'Ancienne clé' }), { code: 403 });
   assert.notEqual(f.turns[1].session, first.sessionId);
-  assert.match(f.turns[1].content, /Ne reposte rien[\s\S]*Consigne fictive/);
+  assert.match(f.turns[1].content, /Do not repost anything[\s\S]*Consigne fictive/);
   f.service.updateSettings(f.root, { recycleAfter: 60 });
   f.turns[1].end({ started: true, error: 'Erreur' });
   await flush();
