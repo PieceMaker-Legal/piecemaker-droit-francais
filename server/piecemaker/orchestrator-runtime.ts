@@ -2,7 +2,7 @@ import type { providerRuntimeService, sessionsService } from '@/modules/provider
 import { wakeDisplay } from '@/modules/piecemaker-orchestrateur/index.js';
 import type { RunnableProvider } from '@/modules/piecemaker-orchestrateur/index.js';
 
-type TurnOptions = { provider: RunnableProvider; permissionMode: string; allowedTools: string[]; disallowedTools: string[] };
+type TurnOptions = { model: string; provider: RunnableProvider; permissionMode: string; allowedTools: string[]; disallowedTools: string[] };
 type TurnResult = { started: boolean; error: string | null };
 type Orchestrator = {
   isOrchestratorSession(sessionId: string): boolean;
@@ -24,11 +24,13 @@ export function installOrchestratorRuntime(
     if (options.piecemakerOrchestrator || !sessionId || !root || !orchestrator.isOrchestratorSession(sessionId)) return run(provider, command, options, writer);
     let result: unknown;
     let failure: unknown = null;
-    const handled = await orchestrator.composerTurn(root, sessionId, command, null, async (content, turn) => {
+    const id = Number(writer.userId);
+    const userId = Number.isSafeInteger(id) && id > 0 ? id : null;
+    const handled = await orchestrator.composerTurn(root, sessionId, command, userId, async (content, turn) => {
       try {
-        const overrides = runtimeOptions(null, turn);
+        const overrides = runtimeOptions(userId, turn);
         const toolsSettings = { ...options.toolsSettings as Record<string, unknown> | undefined, ...overrides.toolsSettings as Record<string, unknown> };
-        result = await run(provider, content, { ...options, ...overrides, toolsSettings }, writer);
+        result = await run(provider, content, { ...options, ...overrides, model: options.model ?? turn.model, toolsSettings }, writer);
         return { started: true, error: null };
       } catch (error) {
         failure = error;

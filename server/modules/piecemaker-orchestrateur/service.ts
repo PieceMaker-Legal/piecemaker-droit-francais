@@ -76,11 +76,30 @@ function parseCron(expression: string) {
     }
     return set;
   });
-  return (date: Date) => {
+  const matchesDay = (date: Date) => {
     const day = values[2].has(date.getDate());
     const weekday = values[4].has(date.getDay());
-    const matchesDay = fields[2].startsWith('*') || fields[4].startsWith('*') ? day && weekday : day || weekday;
-    return matchesDay && values[0].has(date.getMinutes()) && values[1].has(date.getHours()) && values[3].has(date.getMonth() + 1);
+    const matches = fields[2].startsWith('*') || fields[4].startsWith('*') ? day && weekday : day || weekday;
+    return matches && values[3].has(date.getMonth() + 1);
+  };
+  const matches = (date: Date) => matchesDay(date) && values[1].has(date.getHours()) && values[0].has(date.getMinutes());
+  return {
+    matches,
+    next(now: Date, lastFiredAt: string | null) {
+      const candidate = new Date(Math.floor(now.getTime() / 60000) * 60000);
+      if (lastFiredAt?.slice(0, 16) === candidate.toISOString().slice(0, 16)) candidate.setTime(candidate.getTime() + 60000);
+      const lastYear = now.getFullYear() + 400;
+      while (candidate.getFullYear() <= lastYear) {
+        if (matches(candidate)) return candidate.toISOString();
+        if (matchesDay(candidate)) candidate.setTime(candidate.getTime() + 60000);
+        else if (!values[3].has(candidate.getMonth() + 1)) {
+          candidate.setDate(1);
+          candidate.setMonth(candidate.getMonth() + 1);
+          candidate.setHours(0, 0, 0, 0);
+        } else candidate.setHours(24, 0, 0, 0);
+      }
+      return null;
+    },
   };
 }
 
@@ -121,7 +140,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     queueMicrotask(pump);
   }
   async function provider(choice: ProviderChoice) {
-    const available = await deps.providers();
+    const available = await deps.providers(orch.userId);
     return RUNNABLE_PROVIDERS.find(p => (choice === 'auto' || choice === p) && available.some(s => s.provider === p && s.authenticated))
       ?? refuse(400, 'Fournisseur déconnecté. Utilisez suggest_connectors.');
   }
@@ -144,7 +163,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     let launched = false;
     try {
       const p = orch.provider ?? await provider(state.settings.orchestratorProvider);
-      const model = state.settings.orchestratorModel || await deps.defaultModel(p);
+      const model = (orch.sessionId && deps.sessionModel(orch.sessionId)) || state.settings.orchestratorModel || await deps.defaultModel(p);
       const permissions = await deps.permissions(p, orch.userId);
       if (generation !== token) return;
       const fresh = !orch.sessionId || !orch.turns;
@@ -438,7 +457,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
         wake('send_later', 'system', schedule.text);
       }
       if (schedule.kind === 'cron' && schedule.thread && schedule.cron &&
-          schedule.lastFiredAt?.slice(0, 16) !== stamp.slice(0, 16) && parseCron(schedule.cron)(date)) {
+          schedule.lastFiredAt?.slice(0, 16) !== stamp.slice(0, 16) && parseCron(schedule.cron).matches(date)) {
         schedule.lastFiredAt = stamp;
         save();
         const input = schedule.thread;
@@ -599,7 +618,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
         const names: Record<string, keyof Settings> = { orchestrator_provider: 'orchestratorProvider', orchestrator_model: 'orchestratorModel', default_provider: 'defaultProvider', default_models: 'defaultModels', recycle_after: 'recycleAfter' };
         return applySettings(Object.fromEntries(Object.entries(args).map(([key, value]) => [names[key] ?? key, value])), false);
       }
-      case 'list_providers': return deps.providers();
+      case 'list_providers': return deps.providers(orch.userId);
       case 'list_devices': return [...new Set([root, ...state.settings.folders, ...deps.approvedFolders()].map(canonical))].map(folder => ({ folder, allowed: allowed(folder) }));
       case 'suggest_connectors': {
         const connect = parse(z.object({ target: string, reconnect: z.boolean().default(false), reason: string.optional() }), args);
@@ -634,9 +653,24 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   }
   return {
     tick,
-    async state() {
-      const providers = await deps.providers();
-      return structuredClone({ ...state, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files(), storage: store.storage() });
+    cancelScheduled(kind: unknown, id: unknown) {
+      if (kind === 'reminder') thread(id).reminderAt = null;
+      else {
+        if (kind !== 'once' && kind !== 'cron') refuse(400, 'Type de tâche inconnu.');
+        const schedule = find(state.schedules.filter(item => item.kind === kind), id, 'Tâche');
+        state.schedules.splice(state.schedules.indexOf(schedule), 1);
+      }
+      save();
+      return { ok: true };
+    },
+    async state(userId: number | null) {
+      const providers = await deps.providers(userId);
+      const date = deps.now();
+      const schedules = state.schedules.map(schedule => ({
+        ...schedule,
+        nextRunAt: schedule.cron ? parseCron(schedule.cron).next(date, schedule.lastFiredAt) : schedule.lastFiredAt ? null : schedule.at,
+      }));
+      return structuredClone({ ...state, schedules, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files(), storage: store.storage() });
     },
     postUserMessage(text: string, userId: number | null) {
       const row = userMessage(text, userId);
@@ -644,7 +678,10 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       return row;
     },
     async session(userId: number | null) {
-      orch.userId = userId ?? orch.userId;
+      if (userId !== null && userId !== orch.userId) {
+        orch.userId = userId;
+        save();
+      }
       if (!orch.sessionId) {
         const p = await provider(state.settings.orchestratorProvider);
         if (!orch.sessionId) {
@@ -799,7 +836,7 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
       timer.unref();
     },
     stop() { clearInterval(timer); timer = undefined; },
-    state: (root: string) => project(root).state(),
+    state: (root: string, userId: number | null = null) => project(root).state(userId),
     async call(root: string, sessionKey: string, tool: string, args: unknown = {}) {
       const folder = canonical(root);
       if (!projects.has(folder) && !existsSync(path.join(folder, '.piecemaker', 'orchestrateur', 'etat.json'))) {
@@ -827,6 +864,7 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
     updateMemory: (root: string, text: string, revision: number) => project(root).updateMemory(text, revision),
     updateDeliverable: (root: string, id: string, state: Deliverable['state']) => project(root).updateDeliverable(id, state),
     resolveThread: (root: string, threadId: string, resolved: boolean) => project(root).resolveThread(threadId, resolved),
+    cancelScheduled: (root: string, kind: unknown, id: unknown) => project(root).cancelScheduled(kind, id),
     stopThread: (root: string, threadId: string) => project(root).stopThread(threadId),
     recycle: (root: string) => project(root).recycle(),
   };

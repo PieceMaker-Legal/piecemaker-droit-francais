@@ -246,23 +246,27 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                     const label = plugin?.displayName ?? t(`tabs.${tab}`);
                     const hidden = Boolean(expandedTab && (hasExpandedPair ? tab !== expandedTab && tab !== expandedCompanion : expandedTab !== tab));
                     const style = { flexGrow: hasExpandedPair || expandedTab || column.tabs.length === 1 ? 1 : rowIndex === 0 ? column.split : 100 - column.split };
+                    const panelActions = <>
+                      <PanelPickButton tab={tab} closeOnPick={props.isMobile} />
+                      <PanelAnonymizationButton tab={tab} />
+                      <button type="button" aria-label={`${expandedTab === tab ? 'Réduire' : 'Agrandir'} ${label}`} onClick={() => { setExpanded(expandedTab === tab ? null : tab); setExpandedCompanion(null); }}>{expandedTab === tab ? <Minimize2 /> : <Maximize2 />}</button>
+                      <button type="button" aria-label={`Fermer ${label}`} onClick={() => close(tab)}><X /></button>
+                    </>;
                     return <Fragment key={tab}>
                       {rowIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="horizontal" label={`Hauteur fenêtres colonne ${columnIndex + 1}`} value={column.split} onMove={(delta) => resizeRows(column, delta)} />}
                       {tab === 'files' ? <WorkspaceFilesPanel label={label} selectedProject={props.selectedProject} documentOpen={viewerOpen} expanded={expandedTab === tab} hidden={hidden} style={style} onSlots={setFilesSlots} onToggleExpand={toggleFilesExpand} onClose={() => close(tab)} />
                       : <Card className="piecemaker-workspace-panel" hidden={hidden} style={style}>
-                        <header className="piecemaker-workspace-panel-header">
-                          <span className="truncate text-sm font-medium">{label}</span>
-                          <PanelPickButton tab={tab} closeOnPick={props.isMobile} />
-                          <PanelAnonymizationButton tab={tab} />
-                          <button type="button" aria-label={`${expandedTab === tab ? 'Réduire' : 'Agrandir'} ${label}`} onClick={() => { setExpanded(expandedTab === tab ? null : tab); setExpandedCompanion(null); }}>{expandedTab === tab ? <Minimize2 /> : <Maximize2 />}</button>
-                          <button type="button" aria-label={`Fermer ${label}`} onClick={() => close(tab)}><X /></button>
-                        </header>
-                        <div className="piecemaker-workspace-panel-content">
-                          {tab === 'git' && <GitPanel selectedProject={props.selectedProject} isMobile={props.isMobile} onFileOpen={(filePath) => openInEditor(filePath)} onProjectSelect={props.onProjectSelect} onProjectsRefresh={props.onProjectsRefresh} />}
-                          {tab === 'agent' && <AgentPanel projectPath={props.selectedProject!.fullPath} />}
-                          {tab === 'browser' && <BrowserUsePanel isVisible={!expandedTab || expandedTab === tab} onShowSettings={props.onShowSettings} />}
-                          {plugin && <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />}
-                        </div>
+                        {tab === 'agent' ? <AgentPanel projectPath={props.selectedProject!.fullPath} panelActions={panelActions} /> : <>
+                          <header className="piecemaker-workspace-panel-header">
+                            <span className="truncate text-sm font-medium">{label}</span>
+                            {panelActions}
+                          </header>
+                          <div className="piecemaker-workspace-panel-content">
+                            {tab === 'git' && <GitPanel selectedProject={props.selectedProject} isMobile={props.isMobile} onFileOpen={(filePath) => openInEditor(filePath)} onProjectSelect={props.onProjectSelect} onProjectsRefresh={props.onProjectsRefresh} />}
+                            {tab === 'browser' && <BrowserUsePanel isVisible={!expandedTab || expandedTab === tab} onShowSettings={props.onShowSettings} />}
+                            {plugin && <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />}
+                          </div>
+                        </>}
                       </Card>}
                     </Fragment>;
                   })}

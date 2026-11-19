@@ -8,7 +8,7 @@ import type { Router } from 'express';
 import { getConnection, projectsDb, sessionsDb, userPreferencesDb } from '@/modules/database/index.js';
 import { desktopAuthRoutes } from '@/modules/desktop-auth/index.js';
 import { createNotificationEvent, notifyUserIfEnabled } from '@/modules/notifications/index.js';
-import { createOrchestratorLocalRouter, createOrchestratorRouter, createOrchestratorService, RUNNABLE_PROVIDERS, wakeDisplay, type RunnableProvider } from '@/modules/piecemaker-orchestrateur/index.js';
+import { createOrchestratorLocalRouter, createOrchestratorRouter, createOrchestratorService, wakeDisplay, type RunnableProvider } from '@/modules/piecemaker-orchestrateur/index.js';
 import { chatRunRegistry, runDetachedChatTurn } from '@/modules/websocket/index.js';
 import { createBoardRouter, createBoardService, createEtapesRouter, createEtapesService, createSuiviLocalRouter, createSuiviRouter, createSuiviService, createTachesService } from '@/modules/piecemaker-suivi/index.js';
 import { providerModelsService, providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
@@ -64,6 +64,8 @@ import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-pa
 import { startRemoteAccess } from './remote/index.js';
 import { createTelegramRouter } from './telegram/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
+import { createOrchestratorProviderStatuses } from './orchestrator-providers.js';
+import { mistralSdkAuth } from './mistral-sdk/auth.service.js';
 import { createMistralSdkAuthRouter, createMistralTabularBridge, installMistralSdk } from './mistral-sdk/index.js';
 
 /**
@@ -137,21 +139,10 @@ function orchestratorTurnOptions(userId: number | null, { provider, permissionMo
   return { permissionMode, toolsSettings: { ...preferences, allowedTools, disallowedTools, permissionMode, skipPermissions }, skipPermissions };
 }
 
-let providerStatuses: { until: number; statuses: Promise<Array<{ provider: RunnableProvider; installed: boolean; authenticated: boolean }>> } | null = null;
 const orchestrator = createOrchestratorService({
   now: () => new Date(),
-  providers: () => {
-    if (!providerStatuses || providerStatuses.until < Date.now()) {
-      const statuses = Promise.all(RUNNABLE_PROVIDERS.map(async provider => {
-        const { installed, authenticated } = await providerAuthService.getProviderAuthStatus(provider);
-        return { provider, installed, authenticated };
-      }));
-      const entry = { until: Date.now() + 5_000, statuses };
-      providerStatuses = entry;
-      statuses.then(list => { if (list.every(status => status.authenticated)) entry.until = Date.now() + 60_000; }, () => { providerStatuses = null; });
-    }
-    return providerStatuses.statuses;
-  },
+  sessionModel: sessionId => sessionsDb.getSessionById(sessionId)?.model ?? null,
+  providers: createOrchestratorProviderStatuses(providerAuthService.getProviderAuthStatus, mistralSdkAuth.status),
   permissions: async (provider, userId) => {
     const { allowedTools, disallowedTools } = toolPreferences(provider, userId);
     return {

@@ -1,3 +1,5 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -62,6 +64,16 @@ export class ClaudeProviderAuth implements IProviderAuth {
     }
 
     const credentials = await this.checkCredentials();
+    if (!credentials.authenticated && process.platform === 'darwin') {
+      const executable = resolveClaudeCodeExecutablePath(process.env.CLAUDE_CLI_PATH);
+      const result = await promisify(execFile)(executable ?? 'claude', ['auth', 'status', '--json'], { timeout: 5000 })
+        .then(({ stdout }) => readObjectRecord(JSON.parse(stdout)))
+        .catch(() => null);
+      if (result?.loggedIn === true) {
+        return { installed, installedVersion, provider: 'claude', authenticated: true,
+          email: readOptionalString(result.email) ?? 'Authenticated', method: readOptionalString(result.authMethod) ?? 'cli' };
+      }
+    }
 
     return {
       installed,

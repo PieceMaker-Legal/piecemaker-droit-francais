@@ -3,7 +3,7 @@ import { Sparkles } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { agentApi } from '@/modules/piecemaker-workspace-tabs';
-import type { LLMProvider, Project, SessionWithProvider } from '@/shared/types';
+import type { Project, SessionWithProvider } from '@/shared/types';
 
 type SidebarAgentButtonProps = {
   project: Project;
@@ -21,9 +21,12 @@ export default function SidebarAgentButton({ project, sessions, onSessionSelect,
     setError(null);
     try {
       const { sessionId, provider } = await agentApi.openSession(project.fullPath);
-      const session = sessions.find((item) => item.id === sessionId)
-        ?? { id: sessionId, __provider: (provider ?? 'claude') as LLMProvider, __projectId: project.projectId, summary: t('sessions.piecemakerAgent') };
-      onSessionSelect(session, project.projectId);
+      const existing = sessions.find(item => item.id === sessionId);
+      onSessionSelect({
+        ...(existing ?? { id: sessionId, summary: t('sessions.piecemakerAgent') }),
+        __projectId: project.projectId,
+        __provider: provider ?? existing?.__provider ?? 'claude',
+      }, project.projectId);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {

@@ -14,15 +14,20 @@ vi.mock('@/shared/api', () => ({ api: { plugins: { rpc: mocks.rpc } } }));
 const t = ((key: string) => key) as unknown as TFunction;
 const project = { projectId: 'dupont', fullPath: '/dossiers/Dupont' } as Project;
 
-it('ouvre la session PieceMaker Agent du dossier comme une session du panneau', async () => {
-  mocks.openSession.mockResolvedValue({ sessionId: 'agent-1', provider: 'codex' });
-  const onSessionSelect = vi.fn();
-  render(<SidebarAgentButton project={project} sessions={[]} onSessionSelect={onSessionSelect} t={t} />);
-  fireEvent.click(screen.getByRole('button', { name: 'sessions.piecemakerAgent' }));
-  await act(async () => undefined);
-  expect(mocks.openSession).toHaveBeenCalledWith('/dossiers/Dupont');
-  expect(onSessionSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'agent-1', __provider: 'codex', __projectId: 'dupont' }), 'dupont');
-});
+it.each([
+  { sessions: [] },
+  { sessions: [{ id: 'agent-1', __provider: 'claude' as const }] },
+])(
+  'ouvre la session de l’agent avec le fournisseur actif du dossier', async ({ sessions }) => {
+    mocks.openSession.mockResolvedValue({ sessionId: 'agent-1', provider: 'codex' });
+    const onSessionSelect = vi.fn();
+    render(<SidebarAgentButton project={project} sessions={sessions} onSessionSelect={onSessionSelect} t={t} />);
+    fireEvent.click(screen.getByRole('button', { name: 'sessions.piecemakerAgent' }));
+    await act(async () => undefined);
+    expect(mocks.openSession).toHaveBeenCalledWith('/dossiers/Dupont');
+    expect(onSessionSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'agent-1', __provider: 'codex', __projectId: 'dupont' }), 'dupont');
+  },
+);
 
 it('montre Analyse Tabulaire pour un dossier protégé et ouvre son onglet sur une nouvelle session', async () => {
   mocks.rpc.mockResolvedValue({ ok: true, json: async () => ({ projects: ['/dossiers/Dupont'] }) });

@@ -32,7 +32,7 @@ vi.mock('@/piecemaker/dossier/api', () => ({ pmGet: vi.fn(async () => ({ active:
 const PROJECT = '/dossiers/Dupont';
 
 const thread: AgentThread = {
-  id: 'f1', title: 'Rédiger la note de synthèse', provider: 'claude', model: '', sessionId: 's1', ackThread: 'Je rédige la note.',
+  id: 'f1', reminderAt: null, title: 'Rédiger la note de synthèse', provider: 'claude', model: '', sessionId: 's1', ackThread: 'Je rédige la note.',
   state: 'working', createdAt: '2026-01-01T10:00:00Z', updatedAt: '2026-01-01T10:00:00Z', resolved: false, replies: [], error: null,
 };
 
@@ -110,4 +110,27 @@ it('n’affiche ni le volet ni le bouton dans une session ordinaire', async () =
   await act(async () => undefined);
   expect(screen.queryByRole('tab', { name: 'tabs.agent' })).toBeNull();
   expect(screen.queryByText('Fils de discussion')).toBeNull();
+});
+
+it('réunit les instructions et les réglages et permet d’annuler chaque type de tâche', async () => {
+  const data = state();
+  const at = '2026-01-05T10:00:00Z';
+  data.threads = [{ ...thread, reminderAt: at }];
+  data.schedules = [
+    { id: 's1', kind: 'once', text: 'Message fictif', at, nextRunAt: at, cron: null, thread: null, lastFiredAt: null },
+    { id: 's2', kind: 'cron', text: '', at: null, nextRunAt: at, cron: '0 * * * *', thread: { title: 'Routine fictive' }, lastFiredAt: null },
+  ];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  expect(await screen.findByRole('textbox', { name: /Instructions du projet/ })).toBeTruthy();
+  expect(screen.getAllByRole('tab')).toHaveLength(3);
+  fireEvent.click(screen.getByRole('tab', { name: 'Tâches planifiées' }));
+  for (const [title, kind, id] of [[thread.title, 'reminder', 'f1'], ['Message fictif', 'once', 's1'], ['Routine fictive', 'cron', 's2']]) {
+    const cancel = screen.getByRole('button', { name: `Annuler : ${title}` });
+    expect(cancel.closest('li')?.querySelector('time')?.dateTime).toBe(at);
+    fireEvent.click(cancel);
+    await act(async () => undefined);
+    expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/cancel', body: { project: PROJECT, kind, id }, method: undefined });
+  }
 });

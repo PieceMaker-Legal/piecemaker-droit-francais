@@ -32,7 +32,7 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
     });
   }
 
-  router.get('/state', route(root => service.state(root)));
+  router.get('/state', route((root, { user }) => service.state(root, user?.id ?? null)));
   router.get('/session', route(root => ({ sessionId: service.sessionId(root) })));
   router.post('/session', route((root, { user }) => service.session(root, user?.id ?? null)));
   router.post('/message', route((root, { body, user }) => service.postUserMessage(root, body.text, user?.id ?? null)));
@@ -48,6 +48,7 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
   router.put('/deliverable', route((root, { body }) => service.updateDeliverable(root, body.id, body.state)));
   router.post('/thread/resolve', route((root, { body }) => service.resolveThread(root, body.threadId, body.resolved)));
   router.post('/thread/stop', route((root, { body }) => service.stopThread(root, body.threadId)));
+  router.post('/schedule/cancel', route((root, { body }) => service.cancelScheduled(root, body.kind, body.id)));
   router.post('/recycle', route(root => service.recycle(root)));
   return router;
 }

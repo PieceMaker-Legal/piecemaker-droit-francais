@@ -50,6 +50,7 @@ export type AgentThread = {
   provider: AgentProvider;
   model: string;
   sessionId: string | null;
+  reminderAt: string | null;
   ackThread: string;
   state: AgentThreadState;
   createdAt: string;
@@ -59,7 +60,7 @@ export type AgentThread = {
   error: string | null;
 };
 export type AgentDeliverable = { id: string; kind: 'document' | 'piece' | 'artifact'; ref: string; title: string; state: 'brouillon' | 'a_relire' | 'valide'; threadId: string | null; updatedAt: string };
-export type AgentSchedule = { id: string; kind: 'once' | 'cron'; text: string; at: string | null; cron: string | null; thread: { title: string } | null; lastFiredAt: string | null };
+export type AgentSchedule = { id: string; kind: 'once' | 'cron'; nextRunAt: string | null; text: string; at: string | null; cron: string | null; thread: { title: string } | null; lastFiredAt: string | null };
 export type AgentSettings = {
   instructions: string;
   orchestratorProvider: AgentProviderChoice;

@@ -30,6 +30,7 @@ function fixture(ctx: TestContext) {
       aborted.delete(session);
       turns.push({ session, content, options, end(result = success) { processing.delete(session); resolve(result); } });
     }),
+    sessionModel: () => null,
     defaultModel: async (_p, purpose) => purpose === 'lookup' ? 'économique' : 'standard',
     permissions: async () => ({ allowedTools: ['Read'], disallowedTools: ['WebFetch'] }),
     lastAnswer: async session => 'Réponse de ' + session, history: async () => [], pending: session => requests.get(session) ?? [],
@@ -210,10 +211,29 @@ test('Le cron valide cinq champs et lance une seule routine par minute correspon
   await routine('*/15 10-13 * 1,3 1-5');
   await f.tick(60000);
   assert.equal((await f.state()).threads.length, 0);
+  assert.equal((await f.state()).schedules[0].nextRunAt, new Date(2026, 0, 5, 12, 15).toISOString());
   await f.tick(14 * 60000);
   await f.tick(3000);
   assert.equal((await f.state()).threads.length, 1);
   assert.equal((await f.state()).orchestrator.pending.filter(e => e.type === 'routine').length, 1);
+});
+
+test('Annuler un rappel, un message différé et une routine empêche leur exécution', async ctx => {
+  const f = fixture(ctx);
+  f.user('Planifie');
+  await flush();
+  const t = await f.start('Fil fictif');
+  await f.call('set_thread_reminder', { thread_id: t.id, days: 1 });
+  await f.call('send_later', { text: 'Message fictif', at: f.deps.now().toISOString() });
+  await f.call('create_routine', { cron: '* * * * *', title: 'Routine fictive', instructions: 'Lire' });
+  f.service.cancelScheduled(f.root, 'reminder', t.id);
+  for (const item of (await f.state()).schedules) f.service.cancelScheduled(f.root, item.kind, item.id);
+  await f.tick(86400000);
+  const state = await f.state();
+  assert.equal(state.threads[0].reminderAt, null);
+  assert.equal(state.schedules.length, 0);
+  assert.equal(state.threads.length, 1);
+  assert.ok(!state.orchestrator.pending.some(event => ['reminder', 'send_later', 'routine'].includes(event.type)));
 });
 
 test('La mémoire refuse une ancienne révision. Le recyclage invalide la clé et reprend avec la mémoire.', async ctx => {
@@ -334,7 +354,7 @@ test('La mise en route attend le choix de l’avocat et conserve le clic du widg
 test('Sans fournisseur connecté, l’orchestrateur prévient une fois, réessaie après 10 s et garde les événements', async ctx => {
   const f = fixture(ctx);
   let connected = false;
-  f.deps.providers = async () => [{ provider: 'claude', authenticated: connected, installed: true }];
+  f.deps.providers = async userId => [{ provider: 'mistral', authenticated: connected && userId === 1, installed: true }];
   f.user('Bonjour');
   await f.tick(0);
   await f.tick(3000);
@@ -344,6 +364,8 @@ test('Sans fournisseur connecté, l’orchestrateur prévient une fois, réessai
   assert.equal(state.orchestrator.pending.length, 1);
   assert.equal(state.orchestrator.recaps, 0);
   connected = true;
+  assert.equal((await f.service.state(f.root, 2)).providers[0].authenticated, false);
+  assert.equal((await f.service.state(f.root, 1)).providers[0].authenticated, true);
   await f.tick(11000);
   await flush();
   state = await f.state();
@@ -379,10 +401,14 @@ test('La session de l’agent est une session CloudCLI : le message écrit dans 
   assert.equal(s.orchestrator.turns, 1);
   assert.equal(s.messages[0].author, 'user');
   assert.equal(f.turns.length, 0);
+  f.deps.sessionModel = session => session === opened.sessionId ? 'modele-fictif' : null;
   await f.service.composerTurn(f.root, 'session-1', 'Et ensuite ?', null, async (content) => {
     assert.doesNotMatch(content, /# Your role/);
     return success;
   });
+  f.service.react(f.root, s.messages[0].id, '👍', true);
+  await flush();
+  assert.equal(f.turns[0].options.model, 'modele-fictif');
 });
 
 test('Un wake sans message de l’avocat s’affiche comme une ligne lisible', () => {

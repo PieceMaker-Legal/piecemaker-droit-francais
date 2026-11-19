@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -11,9 +11,9 @@ import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openA
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 
-type AgentPanelTab = 'threads' | 'context' | 'instructions' | 'settings' | 'scheduled';
+type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled';
 
-const TABS: Array<[AgentPanelTab, string]> = [['threads', 'Fils de discussion'], ['context', 'Contexte'], ['instructions', 'Instructions'], ['settings', 'Paramètres']];
+const TABS: Array<[AgentPanelTab, string]> = [['threads', 'Fils de discussion'], ['context', 'Contexte'], ['scheduled', 'Tâches planifiées']];
 const PROVIDERS: AgentProvider[] = ['claude', 'codex', 'mistral'];
 const VIEW_KEY = 'pm-agent-view';
 const inputClass = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring';
@@ -99,7 +99,7 @@ function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: Ag
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
       <div className="px-2 pb-2"><select aria-label="Visibilité" className="rounded-lg bg-transparent text-[15px] text-foreground" defaultValue="me"><option value="me">Vous uniquement</option></select></div>
       <Section title="Instructions" count={state.settings.instructions.trim() ? 1 : 0}>
-        <Row icon={<NotebookPen className="h-4 w-4" />} title="Instructions du projet" detail={state.settings.instructions.trim() || 'Aucune pour l’instant'} onClick={() => onTab('instructions')} />
+        <Row icon={<NotebookPen className="h-4 w-4" />} title="Instructions du projet" detail={state.settings.instructions.trim() || 'Aucune pour l’instant'} onClick={() => onTab('settings')} />
       </Section>
       <Section title="Mémoire" count={memoryLines} initiallyOpen={false}>
         {memoryLines ? <p className="whitespace-pre-wrap px-2 text-sm text-foreground/80">{state.memory.text}</p> : <p className="px-2 text-sm text-muted-foreground">La mémoire du projet est vide.</p>}
@@ -164,7 +164,7 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
     <fieldset className="space-y-2">
       <legend className="text-[15px] text-foreground">Agent</legend>
       <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={settings.orchestratorProvider} onChange={(event) => save({ orchestratorProvider: event.target.value as AgentSettings['orchestratorProvider'] })}>{providerOptions}</select></label>
-      <label className="block text-muted-foreground">Modèle (vide = modèle par défaut)<input className={`${inputClass} mt-1`} defaultValue={settings.orchestratorModel} onBlur={(event) => event.target.value !== settings.orchestratorModel && save({ orchestratorModel: event.target.value })} /></label>
+      <label className="block text-muted-foreground">Modèle initial (vide = modèle par défaut)<input className={`${inputClass} mt-1`} defaultValue={settings.orchestratorModel} onBlur={(event) => event.target.value !== settings.orchestratorModel && save({ orchestratorModel: event.target.value })} /></label>
       <label className="block text-muted-foreground">Recycler la conversation après (tours)<input type="number" min={1} className={`${inputClass} mt-1`} defaultValue={settings.recycleAfter} onBlur={(event) => Number(event.target.value) > 0 && save({ recycleAfter: Number(event.target.value) })} /></label>
       <button type="button" className={buttonClass} onClick={() => void act('recycle')}>Recycler l’orchestrateur maintenant</button>
     </fieldset>
@@ -190,15 +190,29 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
   </div>;
 }
 
-function Scheduled({ state }: { state: AgentState }) {
-  if (!state.schedules.length) return <p className="px-4 py-8 text-center text-sm text-muted-foreground">Aucune tâche planifiée. Demandez à l’agent un rappel ou une routine.</p>;
-  return <ul className="px-4 py-3">{state.schedules.map((schedule) => <li key={schedule.id} className="border-b border-border py-2 text-sm">
-    <span className="block text-foreground">{schedule.kind === 'cron' ? schedule.thread?.title ?? 'Routine' : schedule.text}</span>
-    <span className="block text-muted-foreground">{schedule.kind === 'cron' ? `Routine ${schedule.cron}` : `Le ${new Date(schedule.at ?? '').toLocaleString('fr-FR')}`}{schedule.lastFiredAt ? ` · dernière exécution il y a ${age(schedule.lastFiredAt)}` : ''}</span>
+function Scheduled({ state, act }: { state: AgentState; act: AgentActions }) {
+  const items = [
+    ...state.threads.filter(thread => thread.reminderAt).map(thread => ({
+      id: thread.id, kind: 'reminder', label: 'Rappel', title: thread.title, at: thread.reminderAt,
+    })),
+    ...state.schedules.filter(schedule => schedule.kind === 'cron' || !schedule.lastFiredAt).map(schedule => ({
+      id: schedule.id, kind: schedule.kind, label: schedule.kind === 'cron' ? 'Routine' : 'Message différé',
+      title: schedule.thread?.title ?? schedule.text, at: schedule.nextRunAt,
+    })),
+  ].sort((a, b) => (a.at ?? '~').localeCompare(b.at ?? '~'));
+  if (!items.length) return <p className="px-4 py-8 text-center text-sm text-muted-foreground">Aucune tâche planifiée.</p>;
+  return <ul className="px-4 py-3">{items.map(item => <li key={item.id} className="flex items-center gap-2 border-b border-border py-2 text-sm">
+    <div className="min-w-0 flex-1">
+      <span className="block text-foreground">{item.title}</span>
+      <span className="text-muted-foreground">{item.label} · {item.at
+        ? <time dateTime={item.at}>{new Date(item.at).toLocaleString('fr-FR')}</time>
+        : 'Aucune prochaine exécution'}</span>
+    </div>
+    <button type="button" className={buttonClass} aria-label={`Annuler : ${item.title}`} onClick={() => void act('schedule/cancel', { kind: item.kind, id: item.id })}>Annuler</button>
   </li>)}</ul>;
 }
 
-export function AgentPanel({ projectPath }: { projectPath: string }) {
+export function AgentPanel({ projectPath, panelActions }: { projectPath: string; panelActions?: ReactNode }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
   const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
@@ -217,8 +231,7 @@ export function AgentPanel({ projectPath }: { projectPath: string }) {
     } catch { return; }
   }
 
-  if (!state) return <p className="px-4 py-8 text-center text-sm text-muted-foreground">{error ? `PieceMaker Agent indisponible : ${error}` : 'Chargement de PieceMaker Agent…'}</p>;
-  const active = state.threads.filter((thread) => ACTIVE_THREAD_STATES.includes(thread.state)).length;
+  const active = state?.threads.filter((thread) => ACTIVE_THREAD_STATES.includes(thread.state)).length ?? 0;
   const onOpenArtifact = (url: string) => openAgentOutput(projectPath, { kind: 'artifact', ref: url });
 
   return <div className="pm-agent-panel flex h-full min-w-0 flex-col text-foreground" aria-label="Volet de l’agent">
@@ -231,9 +244,9 @@ export function AgentPanel({ projectPath }: { projectPath: string }) {
       </nav>
       <button type="button" aria-label="Ajouter" aria-haspopup="menu" aria-expanded={menu === 'plus'} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => setMenu(menu === 'plus' ? null : 'plus')}><Plus className="h-[18px] w-[18px]" /></button>
       {menu === 'plus' && <div role="menu" className="absolute right-12 top-11 z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
-        <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-accent" onClick={() => { setMenu(null); onTab('scheduled'); }}>Tâches planifiées</button>
         <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-accent" onClick={customView}>Vue personnalisée</button>
       </div>}
+      <button type="button" aria-label="Paramètres" title="Paramètres" aria-pressed={tab === 'settings'} className="shrink-0 rounded-lg p-2 hover:bg-accent" onClick={() => { setMenu(null); onTab('settings'); }}><SettingsIcon className="h-[18px] w-[18px]" /></button>
       <span className="flex-1" />
       <button type="button" aria-label="Rechercher" aria-pressed={searching} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => { setSearching(!searching); onTab('threads'); }}><Search className="h-[18px] w-[18px]" /></button>
       <button type="button" aria-label="Filtrer" aria-expanded={menu === 'filter'} className={`shrink-0 rounded-lg p-2 hover:bg-accent ${filter !== 'all' ? 'text-blue-500' : 'text-foreground/80'}`} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}><Filter className="h-[18px] w-[18px]" /></button>
@@ -241,14 +254,18 @@ export function AgentPanel({ projectPath }: { projectPath: string }) {
         {(['all', ...Object.keys(THREAD_STATE_LABELS)] as Array<AgentThreadState | 'all'>).map((value) => <button key={value} role="menuitemradio" aria-checked={filter === value} type="button"
           className="block w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { setFilter(value); setMenu(null); onTab('threads'); }}>{value === 'all' ? 'Tous les états' : THREAD_STATE_LABELS[value]}</button>)}
       </div>}
+      {panelActions && <div className="flex shrink-0 items-center gap-1 [&_button]:p-1 [&_svg]:size-4">{panelActions}</div>}
     </header>
-    {searching && tab === 'threads' && <div className="border-b border-border px-4 py-2"><input autoFocus aria-label="Rechercher un fil" className={inputClass} placeholder="Rechercher un fil" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} />}
-      {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
-      {tab === 'instructions' && <Instructions state={state} act={act} />}
-      {tab === 'settings' && <Settings state={state} act={act} />}
-      {tab === 'scheduled' && <Scheduled state={state} />}
-    </div>
+    {error && <p role="alert" className="px-4 py-2 text-sm">{error}</p>}
+    {!state && !error && <p className="px-4 py-8 text-center text-sm">Chargement de PieceMaker Agent…</p>}
+    {state && <>
+      {searching && tab === 'threads' && <div className="border-b border-border px-4 py-2"><input autoFocus aria-label="Rechercher un fil" className={inputClass} placeholder="Rechercher un fil" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} />}
+        {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
+        {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
+        {tab === 'scheduled' && <Scheduled state={state} act={act} />}
+      </div>
+    </>}
   </div>;
 }
