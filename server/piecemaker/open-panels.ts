@@ -12,7 +12,7 @@ type KnownProjects = () => string[];
 const defaultKnownProjects: KnownProjects = () => projectsDb.getProjectPaths().map((row) => row.project_path);
 
 const MAX_BODY_LENGTH = 20_000;
-const ALLOWED_TABS = ['files', 'plugin:piecemaker-dossier', 'plugin:piecemaker-tabular-review', 'plugin:piecemaker-tampon', 'plugin:piecemaker-echeances', 'plugin:piecemaker-catala', 'plugin:piecemaker-artifacts'];
+const ALLOWED_TABS = ['files', 'plugin:piecemaker-dossier', 'plugin:piecemaker-tabular-review', 'plugin:piecemaker-tampon', 'plugin:piecemaker-echeances', 'plugin:piecemaker-projets', 'plugin:piecemaker-catala', 'plugin:piecemaker-artifacts'];
 type PanelRequest = { id: string; tab: string; view?: string; review?: string; draft?: string; document?: string; expiresAt?: number };
 type Delivery = { project: string; receivedAt: number; completedAt?: number };
 

@@ -1,0 +1,11 @@
+{
+  "name": "piecemaker-projets",
+  "displayName": "Projet",
+  "version": "0.1.0",
+  "description": "Chat du projet, fils de travail et livrables du dossier.",
+  "type": "module",
+  "slot": "tab",
+  "entry": "dist/index.js",
+  "permissions": [],
+  "piecemakerSources": { "index": "src/client.ts" }
+}

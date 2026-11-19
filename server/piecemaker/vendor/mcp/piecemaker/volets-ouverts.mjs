@@ -13,6 +13,7 @@ const LABELS = {
   'plugin:piecemaker-tampon': 'Bordereau',
   'plugin:piecemaker-timesheet': 'Timesheet',
   'plugin:piecemaker-echeances': 'Suivi des dossiers',
+  'plugin:piecemaker-projets': 'Projet',
   'plugin:piecemaker-catala': 'Catala',
 };
 
