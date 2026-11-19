@@ -7,11 +7,14 @@ import type { Router } from 'express';
 
 import { getConnection, projectsDb, sessionsDb, userPreferencesDb } from '@/modules/database/index.js';
 import { desktopAuthRoutes } from '@/modules/desktop-auth/index.js';
-import { runDetachedChatTurn } from '@/modules/websocket/index.js';
+import { createNotificationEvent, notifyUserIfEnabled } from '@/modules/notifications/index.js';
+import { createOrchestratorLocalRouter, createOrchestratorRouter, createOrchestratorService, RUNNABLE_PROVIDERS, type RunnableProvider } from '@/modules/piecemaker-orchestrateur/index.js';
+import { chatRunRegistry, runDetachedChatTurn } from '@/modules/websocket/index.js';
 import { createBoardRouter, createBoardService, createEtapesRouter, createEtapesService, createSuiviLocalRouter, createSuiviRouter, createSuiviService, createTachesService } from '@/modules/piecemaker-suivi/index.js';
-import { providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
+import { providerModelsService, providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
+import { providerAuthService } from '@/modules/providers/services/provider-auth.service.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
-import { findApplicationRoot, getModuleDirectory } from '@/shared/utils.js';
+import { findApplicationRoot, getModuleDirectory, readObjectRecord } from '@/shared/utils.js';
 
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
@@ -46,6 +49,8 @@ import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createDocxReviewRouter } from './docx-review.js';
 import { createArtifactFrameRouter, createArtifactsRouter } from './artifacts.js';
+import { openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
+import { readJson } from './library/provider-connectors.js';
 import { createFeatureCommentsRouter } from './feature-comments.js';
 import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
@@ -104,6 +109,10 @@ const sourceConnectors = createSourceConnectors();
 const suivi = createSuiviService(getConnection, sourceConnectors);
 const board = createBoardService(getConnection, suivi);
 const pmScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')).href;
+async function lastSessionAnswer(sessionId: string) {
+  const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
+  return history.messages.filter(message => message.kind === 'text' && message.role === 'assistant' && !message.parentToolUseId).at(-1)?.content ?? '';
+}
 const taches = createTachesService(piecemakerHome(), {
   open: (tache) => sessionsService.createAppSession(tache.provider as never, tache.projectPath, tache.titre).sessionId,
   run: (tache, sessionId, content) => {
@@ -112,13 +121,71 @@ const taches = createTachesService(piecemakerHome(), {
     const turn = runDetachedChatTurn({ sessionId, userId: tache.userId, content, options: { model: tache.model, permissionMode: 'acceptEdits', toolsSettings, skipPermissions: toolsSettings.skipPermissions || false } }, { runtime: providerRuntimeService });
     return tache.type === 'redaction' ? turn.finally(() => library.refresh().catch(() => undefined)) : turn;
   },
-  lastAnswer: async (sessionId) => {
-    const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
-    return history.messages.filter((message) => message.kind === 'text' && message.role === 'assistant' && !message.parentToolUseId).at(-1)?.content ?? '';
-  },
+  lastAnswer: lastSessionAnswer,
   pending: (sessionId) => providerRuntimeService.getPendingApprovalsForSession(sessionId) as Array<{ requestId: string; toolName: string; input: unknown }>,
   resolve: (requestId, decision) => providerRuntimeService.resolveToolApproval(requestId, decision),
 });
+function toolPreferences(provider: RunnableProvider, userId: number | null) {
+  const preferences = userId === null ? {} : userPreferencesDb.getPreferences(userId);
+  return readObjectRecord(preferences[`${provider}Permissions`]) ?? {};
+}
+
+const orchestrator = createOrchestratorService({
+  now: () => new Date(),
+  providers: () => Promise.all(RUNNABLE_PROVIDERS.map(async provider => {
+    const { installed, authenticated } = await providerAuthService.getProviderAuthStatus(provider);
+    return { provider, installed, authenticated };
+  })),
+  permissions: async (provider, userId) => {
+    const { allowedTools, disallowedTools } = toolPreferences(provider, userId);
+    return {
+      allowedTools: Array.isArray(allowedTools) ? allowedTools.filter(tool => typeof tool === 'string') : [],
+      disallowedTools: Array.isArray(disallowedTools) ? disallowedTools.filter(tool => typeof tool === 'string') : [],
+    };
+  },
+  defaultModel: async (provider, purpose) => {
+    const catalog = await providerModelsService.getProviderModels(provider);
+    if (purpose === 'lookup') {
+      const cheap = { claude: /haiku/i, codex: /nano|mini|terra/i, mistral: /small/i }[provider];
+      return catalog.OPTIONS.find(model => cheap.test(model.value))?.value ?? catalog.DEFAULT;
+    }
+    return catalog.DEFAULT;
+  },
+  openSession: (provider, root, title) => sessionsService.createAppSession(provider, root, title).sessionId,
+  runTurn: (sessionId, userId, content, { provider, model, effort, permissionMode, allowedTools, disallowedTools }) => {
+    const preferences = toolPreferences(provider, userId);
+    const skipPermissions = permissionMode === 'acceptEdits' && preferences.skipPermissions === true;
+    const toolsSettings = { ...preferences, allowedTools, disallowedTools, permissionMode, skipPermissions };
+    return runDetachedChatTurn({ sessionId, userId, content, options: { model, effort, permissionMode, toolsSettings, skipPermissions } }, { runtime: providerRuntimeService });
+  },
+  lastAnswer: lastSessionAnswer,
+  history: async (sessionId, limit) => {
+    const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
+    return history.messages.flatMap(({ kind, role, content, parentToolUseId }) =>
+      kind === 'text' && role && typeof content === 'string' && !parentToolUseId ? [{ role, text: content }] : []
+    ).slice(-limit);
+  },
+  wasAborted: sessionId => chatRunRegistry.getRun(sessionId)?.events.some(event => event.kind === 'complete' && event.aborted === true) ?? false,
+  isProcessing: sessionId => chatRunRegistry.isProcessing(sessionId),
+  abort: async (provider, sessionId) => {
+    const run = chatRunRegistry.getRun(sessionId);
+    if (run?.status !== 'running') return false;
+    const aborted = await providerRuntimeService.abort(provider, sessionId);
+    if (aborted) chatRunRegistry.completeRunIfCurrent(run, { exitCode: 0, aborted });
+    return aborted;
+  },
+  pending: sessionId => providerRuntimeService.getPendingApprovalsForSession(sessionId) as Array<{ requestId: string; toolName: string; input: unknown }>,
+  resolve: (requestId, allow) => providerRuntimeService.resolveToolApproval(requestId, { allow }),
+  notify: (userId, sessionId, title, text) => {
+    const provider = sessionId && sessionsDb.getSessionById(sessionId)?.provider;
+    const event = createNotificationEvent({ provider: provider || 'system', code: 'agent.notification', meta: { sessionName: title, message: text } });
+    notifyUserIfEnabled({ userId, event: { ...event, sessionId } });
+  },
+  approvedFolders: () => projectsDb.getProjectPaths().map(row => row.project_path),
+  artifacts: root => openArtifacts(root).list({ scope: 'mine', limit: 200 }).map(({ url, title, updated_at }: { url: string; title: string; updated_at?: string }) => ({ url, title, updated_at })),
+  connectors: root => Object.keys(readObjectRecord(readJson(path.join(root, '.mcp.json')).mcpServers) ?? {}),
+});
+orchestrator.start();
 const lastSession = (projectPath: string) => {
   try { return (getConnection().prepare('SELECT session_id FROM sessions WHERE project_path=? AND (isArchived IS NULL OR isArchived = 0) ORDER BY updated_at DESC LIMIT 1').get(projectPath) as { session_id: string } | undefined)?.session_id ?? null; } catch { return null; }
 };
@@ -181,6 +248,7 @@ const localRouter = express.Router();
 localRouter.use(desktopAuthRoutes());
 localRouter.use(createMistralTabularBridge({ ensureProxy, runInProject: (id, run) => anonymizer.runInProject(id, run) }));
 localRouter.use(knowledge.localRouter);
+localRouter.use(createOrchestratorLocalRouter(orchestrator, isLoopback));
 localRouter.use(createSuiviLocalRouter(suivi, isLoopback, board));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
@@ -206,6 +274,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   }));
   router.use(timesheet);
   router.use('/catala', createCatalaRouter(catalaScriptPath(applicationRoot), {}, catalaCitations));
+  router.use('/orchestrateur', createOrchestratorRouter(orchestrator, projectsDb));
   router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));
