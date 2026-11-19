@@ -1,4 +1,4 @@
-import type { AgentThreadState } from '@/modules/piecemaker-agent/api';
+import type { AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 
 export const THREAD_STATE_LABELS: Record<AgentThreadState, string> = {
   queued: 'En file',
@@ -40,9 +40,4 @@ export function bytes(value: number): string {
   let unit = 0;
   while (size >= 1000 && unit < units.length - 1) { size /= 1000; unit += 1; }
   return `${size.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ${units[unit]}`;
-}
-
-export function openSession(sessionId: string) {
-  window.history.pushState({}, '', `/session/${sessionId}`);
-  window.dispatchEvent(new PopStateEvent('popstate'));
 }

@@ -5,7 +5,9 @@ import type { TFunction } from 'i18next';
 import { Button } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import type { LLMProvider, Project, ProjectSession, SessionWithProvider, SidebarSessionSelection } from '@/shared/types';
+import SidebarAgentButton from '@/modules/sidebar/SidebarAgentButton';
 import SidebarSessionItem from '@/modules/sidebar/SidebarSessionItem';
+import SidebarTabularReviewButton from '@/modules/sidebar/SidebarTabularReviewButton';
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
 import { LegalCodeButton } from '@/piecemaker/legal-code';
 import { buildProjectSessionTree } from '@/modules/sidebar/utils/projectSessionTree';
@@ -184,6 +186,7 @@ export default function SidebarProjectSessions({
 
   return (
     <div className="ml-1.5 space-y-1 border-l border-border/70 pl-1.5">
+      <div className={cn(isCompact && 'px-3 pt-1')}><SidebarAgentButton project={project} sessions={sessions} onSessionSelect={onSessionSelect} t={t} /></div>
       {isCompact ? (
         <div className="px-3 pb-1 pt-1">
           <button
@@ -208,6 +211,7 @@ export default function SidebarProjectSessions({
           {t('sessions.newSession')}
         </Button>
       )}
+      <SidebarTabularReviewButton className={cn(isCompact && 'px-3')} project={project} onNewSession={onNewSession} t={t} />
       <div className={cn(isCompact && 'px-3')}><LegalCodeButton project={project} onNewSession={onNewSession} /></div>
 
       {(isSelecting || (initialSessionsLoaded && selectableSessionIds.length > 0)) && (

@@ -42,6 +42,7 @@ export type AgentDecision = {
   chosen: number | null;
   closedBy: 'user' | 'orchestrator' | 'thread' | null;
   withdrawn: boolean;
+  owner: { threadId: string } | 'orchestrator';
 };
 export type AgentThread = {
   id: string;
@@ -91,6 +92,8 @@ export const ACTIVE_THREAD_STATES: AgentThreadState[] = ['queued', 'working', 'b
 
 export const agentApi = {
   state: (project: string) => requestJson<AgentState>(`${BASE}/state?project=${encodeURIComponent(project)}`),
+  sessionId: (project: string) => requestJson<{ sessionId: string | null }>(`${BASE}/session?project=${encodeURIComponent(project)}`),
+  openSession: (project: string) => requestJson<{ sessionId: string; provider: AgentProvider | null }>(`${BASE}/session`, { project }),
   post: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }),
   put: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }, 'PUT'),
 };

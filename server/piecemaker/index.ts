@@ -8,7 +8,7 @@ import type { Router } from 'express';
 import { getConnection, projectsDb, sessionsDb, userPreferencesDb } from '@/modules/database/index.js';
 import { desktopAuthRoutes } from '@/modules/desktop-auth/index.js';
 import { createNotificationEvent, notifyUserIfEnabled } from '@/modules/notifications/index.js';
-import { createOrchestratorLocalRouter, createOrchestratorRouter, createOrchestratorService, RUNNABLE_PROVIDERS, type RunnableProvider } from '@/modules/piecemaker-orchestrateur/index.js';
+import { createOrchestratorLocalRouter, createOrchestratorRouter, createOrchestratorService, RUNNABLE_PROVIDERS, wakeDisplay, type RunnableProvider } from '@/modules/piecemaker-orchestrateur/index.js';
 import { chatRunRegistry, runDetachedChatTurn } from '@/modules/websocket/index.js';
 import { createBoardRouter, createBoardService, createEtapesRouter, createEtapesService, createSuiviLocalRouter, createSuiviRouter, createSuiviService, createTachesService } from '@/modules/piecemaker-suivi/index.js';
 import { providerModelsService, providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
@@ -23,6 +23,7 @@ import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
 import { installCodexPlanRuntime } from './codex-plan.js';
+import { installOrchestratorRuntime } from './orchestrator-runtime.js';
 import { installCodexEventsRuntime } from './codex-events.js';
 import { createHermesRouter } from './hermes/routes.js';
 import { installHermesPieceMaker } from './hermes/runtime.js';
@@ -130,6 +131,12 @@ function toolPreferences(provider: RunnableProvider, userId: number | null) {
   return readObjectRecord(preferences[`${provider}Permissions`]) ?? {};
 }
 
+function orchestratorTurnOptions(userId: number | null, { provider, permissionMode, allowedTools, disallowedTools }: { provider: RunnableProvider; permissionMode: string; allowedTools: string[]; disallowedTools: string[] }) {
+  const preferences = toolPreferences(provider, userId);
+  const skipPermissions = permissionMode === 'bypassPermissions' || permissionMode === 'acceptEdits' && preferences.skipPermissions === true;
+  return { permissionMode, toolsSettings: { ...preferences, allowedTools, disallowedTools, permissionMode, skipPermissions }, skipPermissions };
+}
+
 let providerStatuses: { until: number; statuses: Promise<Array<{ provider: RunnableProvider; installed: boolean; authenticated: boolean }>> } | null = null;
 const orchestrator = createOrchestratorService({
   now: () => new Date(),
@@ -161,12 +168,10 @@ const orchestrator = createOrchestratorService({
     return catalog.DEFAULT;
   },
   openSession: (provider, root, title) => sessionsService.createAppSession(provider, root, title).sessionId,
-  runTurn: (sessionId, userId, content, { provider, model, effort, permissionMode, allowedTools, disallowedTools }) => {
-    const preferences = toolPreferences(provider, userId);
-    const skipPermissions = permissionMode === 'bypassPermissions' || permissionMode === 'acceptEdits' && preferences.skipPermissions === true;
-    const toolsSettings = { ...preferences, allowedTools, disallowedTools, permissionMode, skipPermissions };
-    return runDetachedChatTurn({ sessionId, userId, content, options: { model, effort, permissionMode, toolsSettings, skipPermissions } }, { runtime: providerRuntimeService });
-  },
+  runTurn: (sessionId, userId, content, options) => runDetachedChatTurn({
+    sessionId, userId, content, displayContent: wakeDisplay(content) ?? undefined,
+    options: { ...orchestratorTurnOptions(userId, options), model: options.model, effort: options.effort, piecemakerOrchestrator: true },
+  }, { runtime: providerRuntimeService }),
   lastAnswer: lastSessionAnswer,
   history: async (sessionId, limit) => {
     const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
@@ -223,6 +228,7 @@ installLegalCodeHarness({ runtime: providerRuntimeService, sessions: sessionsSer
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
 installLibrarySkillVisibility(providerSkillsService, library.store);
 installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
+installOrchestratorRuntime(providerRuntimeService, sessionsService, orchestrator, orchestratorTurnOptions);
 installSessionProxyRuntime(providerRuntimeService, anonymizer, () => [...projectsDb.getProjectPaths(), ...projectsDb.getArchivedProjectPaths()]);
 installModelDiscovery(providerRegistry, { discoverers: { codex: discoverCodexModels } });
 const timesheet = createTimesheetBackend(piecemakerHome());

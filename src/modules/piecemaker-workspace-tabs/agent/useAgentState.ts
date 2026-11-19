@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { agentApi } from '@/modules/piecemaker-agent/api';
-import type { AgentState } from '@/modules/piecemaker-agent/api';
+import { agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import type { AgentState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 
 const POLL_MS = 2_000;
 

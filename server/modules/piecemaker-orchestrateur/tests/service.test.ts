@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 
+import { wakeDisplay } from '../prompt.js';
 import { createOrchestratorService } from '../service.js';
 import type { OrchestratorDependencies, PermissionRequest, TurnOptions, TurnResult } from '../types.js';
 
@@ -348,4 +349,52 @@ test('Sans fournisseur connecté, l’orchestrateur prévient une fois, réessai
   state = await f.state();
   assert.equal(f.turns.length, 1);
   assert.equal(state.orchestrator.pending.length, 0);
+});
+
+test('La session de l’agent est une session CloudCLI : le message écrit dans son chat part en wake avec les règles', async ctx => {
+  const f = fixture(ctx);
+  const opened = await f.service.session(f.root, 1);
+  assert.deepEqual(opened, { sessionId: 'session-1', provider: 'claude' });
+  assert.deepEqual(await f.service.session(f.root), opened);
+  assert.equal(f.service.isOrchestratorSession('session-1'), true);
+  assert.equal(f.service.isOrchestratorSession('autre'), false);
+  assert.equal(await f.service.composerTurn(f.root, 'autre', 'Bonjour', null, async () => success), false);
+  const runs: { content: string; options: TurnOptions }[] = [];
+  let finish!: (result: TurnResult) => void;
+  const turn = f.service.composerTurn(f.root, 'session-1', 'Prépare les conclusions', null, (content, options) => {
+    runs.push({ content, options });
+    return new Promise(resolve => { finish = resolve; });
+  });
+  await flush();
+  assert.equal(runs.length, 1);
+  assert.match(runs[0].content, /# Your role[\s\S]*<wake reason="message"[^>]*>\n {2}<event type="message" trust="principal"[^>]*>Prépare les conclusions<\/event>/);
+  assert.ok(runs[0].options.allowedTools.includes('mcp__orchestrateur'));
+  assert.equal(wakeDisplay(runs[0].content), 'Prépare les conclusions');
+  const key = (await f.state()).orchestrator.key;
+  await f.service.call(f.root, key, 'no_reply_needed', { reason: 'nothing_to_add' });
+  finish(success);
+  assert.equal(await turn, true);
+  const s = await f.state();
+  assert.equal(s.orchestrator.running, false);
+  assert.equal(s.orchestrator.turns, 1);
+  assert.equal(s.messages[0].author, 'user');
+  assert.equal(f.turns.length, 0);
+  await f.service.composerTurn(f.root, 'session-1', 'Et ensuite ?', null, async (content) => {
+    assert.doesNotMatch(content, /# Your role/);
+    return success;
+  });
+});
+
+test('Un wake sans message de l’avocat s’affiche comme une ligne lisible', () => {
+  assert.equal(wakeDisplay('Bonjour'), null);
+  assert.equal(wakeDisplay('<wake reason="thread_reply" time="t" presence="p" session_key="k">\n  <event type="thread_reply" trust="relay" at="t" thread="thr_1" title="Rédiger l&quot;acte" state="review_ready">Fait.</event>\n</wake>'),
+    'Réponse du fil « Rédiger l"acte »');
+});
+
+test('Lire la session de l’agent d’un dossier sans agent ne crée rien', ctx => {
+  const f = fixture(ctx);
+  const other = mkdtempSync(path.join(os.tmpdir(), 'pm-orchestrateur-vide-'));
+  ctx.after(() => rmSync(other, { recursive: true, force: true }));
+  assert.equal(f.service.sessionId(other), null);
+  assert.equal(existsSync(path.join(other, '.piecemaker')), false);
 });

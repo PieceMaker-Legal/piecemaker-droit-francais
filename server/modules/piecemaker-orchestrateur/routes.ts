@@ -33,6 +33,8 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
   }
 
   router.get('/state', route(root => service.state(root)));
+  router.get('/session', route(root => ({ sessionId: service.sessionId(root) })));
+  router.post('/session', route((root, { user }) => service.session(root, user?.id ?? null)));
   router.post('/message', route((root, { body, user }) => service.postUserMessage(root, body.text, user?.id ?? null)));
   router.post('/decision', route((root, { body }) => service.chooseDecision(root, body.decisionId, body.option)));
   router.post('/widget', route((root, { body }) => service.widgetAction(root, body.messageId, body.actionId, body.text)));

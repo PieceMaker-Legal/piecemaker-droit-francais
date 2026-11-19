@@ -26,6 +26,10 @@
   "sessions": {
     "title": "Sessions",
     "newSession": "Nouvelle session",
+    "piecemakerAgent": "PieceMaker Agent",
+    "piecemakerAgentTitle": "Ouvrir PieceMaker Agent pour ce dossier",
+    "tabularReview": "Analyse Tabulaire",
+    "tabularReviewTitle": "Analyser les documents Markdown de ce dossier sous forme de tableau",
     "deleteSession": "Supprimer la session",
     "renameSession": "Renommer la session",
     "noSessions": "Aucune session pour l'instant",

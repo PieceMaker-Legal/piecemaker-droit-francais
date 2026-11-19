@@ -9,9 +9,10 @@ import { openProjectStore } from './store.js';
 import { RUNNABLE_PROVIDERS, THREAD_STATES } from './types.js';
 import type {
   ChatMessage, Decision, Deliverable, OrchestratorDependencies, ProviderChoice, Reaction,
-  Settings, Thread, ThreadReply, TurnOptions, WakeEvent,
+  Settings, Thread, ThreadReply, TurnOptions, TurnResult, WakeEvent,
 } from './types.js';
 
+const SESSION_TITLE = 'PieceMaker Agent';
 const ORCHESTRATOR_DENIED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'mcp__fil'];
 
 function refuse(code: 400 | 403 | 404, message: string): never {
@@ -131,9 +132,8 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   function pump() {
     if (!orch.running && orch.pending.length && deps.now().getTime() >= retryAt) void orchestrate();
   }
-  async function orchestrate() {
+  async function orchestrate(batch = orch.pending.splice(0), runner?: (content: string, options: TurnOptions) => Promise<TurnResult>) {
     const token = ++generation;
-    const batch = orch.pending.splice(0);
     const initialProvider = state.settings.orchestratorProvider;
     const userMessages = batch.filter(e => e.type === 'message').map(e => message(e.messageId));
     orch.running = true;
@@ -147,14 +147,15 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       const model = state.settings.orchestratorModel || await deps.defaultModel(p);
       const permissions = await deps.permissions(p, orch.userId);
       if (generation !== token) return;
-      const fresh = !orch.sessionId;
+      const fresh = !orch.sessionId || !orch.turns;
       orch.provider = p;
-      orch.sessionId ??= deps.openSession(p, root, 'Orchestrateur du projet');
+      orch.sessionId ??= deps.openSession(p, root, SESSION_TITLE);
       save();
+      const sessionId = orch.sessionId;
       const preamble = fresh ? formatPreamble({ state, projectPath: root, memory: store.memory(), sharedFolder: store.sharedFolder, recycled: orch.recaps > 0 }) + '\n' : '';
       const content = preamble + formatWake({ ...orch, events: batch, now: deps.now() });
       launched = true;
-      const result = await deps.runTurn(orch.sessionId, orch.userId, content, {
+      const result = await (runner ?? ((text, options) => deps.runTurn(sessionId, orch.userId, text, options)))(content, {
         provider: p, model, effort: null, permissionMode: 'default',
         allowedTools: [...new Set([...permissions.allowedTools.filter(tool => !ORCHESTRATOR_DENIED.includes(tool)), 'mcp__orchestrateur', 'Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Skill'])],
         disallowedTools: [...new Set([...permissions.disallowedTools.filter(tool => tool !== 'mcp__orchestrateur'), ...ORCHESTRATOR_DENIED])],
@@ -162,7 +163,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       if (generation !== token) return;
       if (result.error || !result.started) throw new Error(result.error ?? 'Tour non démarré.');
       if (!handled) {
-        const answer = await deps.lastAnswer(orch.sessionId);
+        const answer = await deps.lastAnswer(sessionId);
         if (generation === token && !handled && answer.trim()) add('orchestrator', answer);
       }
     } catch (error) {
@@ -185,6 +186,16 @@ function projectService(root: string, deps: OrchestratorDependencies) {
         if (launched) pump();
       }
     }
+  }
+  function userMessage(text: string, userId: number | null) {
+    const row = add('user', parse(string, text));
+    orch.userId = userId ?? orch.userId;
+    if (orch.lastUserAt && deps.now().getTime() - Date.parse(orch.lastUserAt) > 1800000) orch.pending.push({ type: 'catch_up', trust: 'system', text: 'The user is back after more than 30 minutes. Post the results you are holding.', at: now() });
+    orch.lastUserAt = row.at;
+    orch.postsSinceUser = 0;
+    retryAt = 0;
+    orch.quietAt = state.threads.some(active) ? later(60000) : null;
+    return row;
   }
   function threadWake(t: Thread, type: WakeEvent['type'], trust: WakeEvent['trust'], text: string) {
     wake(type, trust, text, { threadId: t.id, attrs: { title: t.title, state: t.state } });
@@ -628,15 +639,29 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       return structuredClone({ ...state, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files(), storage: store.storage() });
     },
     postUserMessage(text: string, userId: number | null) {
-      const row = add('user', parse(string, text));
-      orch.userId = userId;
-      if (orch.lastUserAt && deps.now().getTime() - Date.parse(orch.lastUserAt) > 1800000) wake('catch_up', 'system', 'The user is back after more than 30 minutes. Post the results you are holding.');
-      orch.lastUserAt = row.at;
-      orch.postsSinceUser = 0;
-      retryAt = 0;
-      orch.quietAt = state.threads.some(active) ? later(60000) : null;
+      const row = userMessage(text, userId);
       wake('message', 'principal', row.text, { messageId: row.id });
       return row;
+    },
+    async session(userId: number | null) {
+      orch.userId = userId ?? orch.userId;
+      if (!orch.sessionId) {
+        const p = await provider(state.settings.orchestratorProvider);
+        if (!orch.sessionId) {
+          Object.assign(orch, { provider: p, sessionId: deps.openSession(p, root, SESSION_TITLE), turns: 0 });
+          save();
+        }
+      }
+      return { sessionId: orch.sessionId, provider: orch.provider };
+    },
+    sessionId: () => orch.sessionId,
+    async composerTurn(sessionId: string, text: string, userId: number | null, runner: (content: string, options: TurnOptions) => Promise<TurnResult>) {
+      if (orch.running || !text.trim() || orch.sessionId !== sessionId) return false;
+      const row = userMessage(text, userId);
+      let ran = false;
+      await orchestrate([...orch.pending.splice(0), { type: 'message', trust: 'principal', text: row.text, at: row.at, messageId: row.id }],
+        async (content, options) => { ran = true; return runner(content, options); });
+      return ran;
     },
     async call(key: string, tool: string, input: unknown) {
       const threadOwner = state.threads.find(t => t.key === key);
@@ -773,6 +798,14 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
       return project(folder).call(sessionKey, tool, args);
     },
     postUserMessage: (root: string, text: string, userId: number | null = null) => project(root).postUserMessage(text, userId),
+    session: (root: string, userId: number | null = null) => project(root).session(userId),
+    sessionId(root: string) {
+      const folder = canonical(root);
+      return projects.has(folder) || existsSync(path.join(folder, '.piecemaker', 'orchestrateur', 'etat.json')) ? project(folder).sessionId() : null;
+    },
+    isOrchestratorSession: (sessionId: string) => [...projects.values()].some(current => current.sessionId() === sessionId),
+    composerTurn: (root: string, sessionId: string, text: string, userId: number | null, runner: (content: string, options: TurnOptions) => Promise<TurnResult>) =>
+      project(root).composerTurn(sessionId, text, userId, runner),
     chooseDecision: (root: string, decisionId: string, option: number) => project(root).chooseDecision(decisionId, option),
     widgetAction: (root: string, messageId: string, actionId: string, text?: string) => project(root).widgetAction(messageId, actionId, text),
     approval: (root: string, messageId: string, allow: boolean) => project(root).approval(messageId, allow),

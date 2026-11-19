@@ -1,4 +1,4 @@
-import type { AgentOutput } from '@/modules/piecemaker-agent/api';
+import type { AgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 
 export function openAgentOutput(projectPath: string, output: AgentOutput) {

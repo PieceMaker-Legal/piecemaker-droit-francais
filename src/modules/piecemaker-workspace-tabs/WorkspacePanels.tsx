@@ -5,14 +5,15 @@ import { useTranslation } from 'react-i18next';
 
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { GitPanel } from '@/modules/git-panel';
-import { AGENT_OPEN_EVENT, AgentWorkspace, useAgentSidebarButton } from '@/modules/piecemaker-agent';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
+import { AgentPanel } from '@/modules/piecemaker-workspace-tabs/agent/AgentPanel';
+import { useAgentSession } from '@/modules/piecemaker-workspace-tabs/agent/useAgentSession';
 import { PanelAnonymizationButton } from '@/modules/piecemaker-workspace-tabs/PanelAnonymizationButton';
 import { PanelPickButton } from '@/modules/piecemaker-workspace-tabs/PanelPickButton';
 import { WorkspaceColumnSeparator } from '@/modules/piecemaker-workspace-tabs/WorkspaceColumnSeparator';
 import { WorkspaceFilesPanel } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
 import type { WorkspaceFilesSlots } from '@/modules/piecemaker-workspace-tabs/WorkspaceFilesPanel';
-import { CloseWorkspacePanelContext, WorkspacePanelsContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import { AgentSessionContext, CloseWorkspacePanelContext, WorkspacePanelsContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import { WorkspaceViewerContext } from '@/modules/piecemaker-workspace-tabs/context/WorkspaceViewerContext';
 import { useAutoPanel } from '@/modules/piecemaker-workspace-tabs/useAutoPanel';
 import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
@@ -55,12 +56,13 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const [viewerTarget, setViewerTarget] = useState<HTMLElement | null>(null);
     const [viewerWidth, setViewerWidth] = useState<number | null>(null);
     const [filesSlots, setFilesSlots] = useState<WorkspaceFilesSlots | null>(null);
-    const [agentProject, setAgentProject] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLElement>(null);
     const dividerCoordinateRef = useRef(0);
     const columnRefs = useRef(new Map<AppTab | 'viewer', HTMLDivElement>());
+    const isAgentSession = useAgentSession(props.selectedProject?.fullPath ?? null, props.selectedSession?.id ?? null);
     const enabledColumns = columns.map((column) => ({ ...column, tabs: column.tabs.filter((tab) => tab === 'tasks' ? false
+      : tab === 'agent' ? isAgentSession
       : tab === 'browser' ? browserEnabled
         : tab.startsWith('plugin:') ? plugins.some((plugin) => plugin.enabled && tab === `plugin:${plugin.name}`) : true) })).filter((column) => column.tabs.length > 0);
     const enabledPanels = enabledColumns.flatMap((column) => column.tabs);
@@ -146,19 +148,6 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     }, [mainTab, props]);
 
     useAutoPanel(props.selectedSession?.id ?? null, props.selectedProject?.fullPath ?? null, open, close);
-    useAgentSidebarButton();
-    useEffect(() => {
-      const show = (event: Event) => {
-        const project = (event as CustomEvent<{ project?: unknown }>).detail?.project;
-        if (typeof project === 'string') setAgentProject(project);
-      };
-      window.addEventListener(AGENT_OPEN_EVENT, show);
-      return () => window.removeEventListener(AGENT_OPEN_EVENT, show);
-    }, []);
-    useEffect(() => {
-      if (props.selectedSession?.id) setAgentProject(null);
-    }, [props.selectedSession?.id]);
-    const agentOpen = Boolean(agentProject && props.selectedProject?.fullPath === agentProject && !props.selectedSession?.id);
 
     useEffect(() => {
       setColumns([]);
@@ -169,6 +158,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const openRef = useRef(open);
     openRef.current = open;
     useEffect(() => openRef.current(props.activeTab), [props.activeTab, props.selectedProject?.projectId]);
+    useEffect(() => {
+      if (isAgentSession && !props.isMobile) openRef.current('agent');
+    }, [isAgentSession, props.isMobile, props.selectedSession?.id]);
 
     const select: Dispatch<SetStateAction<AppTab>> = useCallback((action) => {
       const tab = typeof action === 'function' ? action(activeTab) : action;
@@ -226,11 +218,10 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
         : { target: viewerTarget, tabsTarget: null, register: registerViewer, expanded: expandedTab === 'viewer', toggleExpand: toggleViewerExpand }}>
       <WorkspacePanelsContext.Provider value={enabledPanels}>
       <CloseWorkspacePanelContext.Provider value={close}>
+      <AgentSessionContext.Provider value={isAgentSession}>
         <div ref={containerRef} className="piecemaker-workspace-panels">
           <div className="piecemaker-workspace-primary" hidden={Boolean(expandedTab)}>
-            {agentOpen && props.selectedProject
-              ? <AgentWorkspace key={props.selectedProject.fullPath} projectName={props.selectedProject.displayName} projectPath={props.selectedProject.fullPath} isMobile={props.isMobile} onMenu={props.onMenuClick} />
-              : <Workspace {...props} activeTab={mainTab} setActiveTab={select} />}
+            <Workspace {...props} activeTab={mainTab} setActiveTab={select} />
           </div>
           {!props.isLoading && props.selectedProject && layoutColumns.length > 0 && <>
             {!expandedTab && !props.isMobile && <div
@@ -268,6 +259,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                         </header>
                         <div className="piecemaker-workspace-panel-content">
                           {tab === 'git' && <GitPanel selectedProject={props.selectedProject} isMobile={props.isMobile} onFileOpen={(filePath) => openInEditor(filePath)} onProjectSelect={props.onProjectSelect} onProjectsRefresh={props.onProjectsRefresh} />}
+                          {tab === 'agent' && <AgentPanel projectPath={props.selectedProject!.fullPath} />}
                           {tab === 'browser' && <BrowserUsePanel isVisible={!expandedTab || expandedTab === tab} onShowSettings={props.onShowSettings} />}
                           {plugin && <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />}
                         </div>
@@ -279,6 +271,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
             </aside>
           </>}
         </div>
+      </AgentSessionContext.Provider>
       </CloseWorkspacePanelContext.Provider>
       </WorkspacePanelsContext.Provider>
       </WorkspaceViewerContext.Provider>
