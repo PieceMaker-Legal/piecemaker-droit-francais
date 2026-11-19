@@ -96,11 +96,13 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   const runs = new Map<string, { reply?: ThreadReply }>();
   let handled = false;
   let generation = 0;
+  let retryAt = 0;
   const id = (prefix: string) => prefix + '_' + randomUUID();
   function add(author: ChatMessage['author'], text: string, extra: Partial<ChatMessage> = {}) {
     const row: ChatMessage = { id: id('msg'), author, text, at: now(), attachments: [], decisionIds: [], reactions: [], ...extra };
     state.messages.push(row);
     if (author === 'orchestrator') {
+      handled = true;
       orch.postsSinceUser++;
       orch.holdingUntil = null;
     }
@@ -125,7 +127,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     Object.assign(orch, { key: randomUUID(), sessionId: null, turns: 0, provider: null, running: false, recaps: orch.recaps + 1 });
   }
   function pump() {
-    if (!orch.running && orch.pending.length) void orchestrate();
+    if (!orch.running && orch.pending.length && deps.now().getTime() >= retryAt) void orchestrate();
   }
   async function orchestrate() {
     const token = ++generation;
@@ -162,14 +164,20 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       }
     } catch (error) {
       if (generation !== token) return;
-      failed = true;
-      if (!launched) orch.pending.unshift(...batch);
-      else add('system', String(error));
+      failed = launched;
+      if (launched) add('system', String(error));
+      else {
+        orch.pending.unshift(...batch);
+        retryAt = deps.now().getTime() + 60000;
+        const notice = "L'orchestrateur ne peut pas démarrer : " + (error instanceof Error ? error.message : String(error));
+        if (state.messages.at(-1)?.text !== notice) add('system', notice, { connect: { target: state.settings.orchestratorProvider === 'auto' ? 'claude' : state.settings.orchestratorProvider, reconnect: false } });
+      }
     } finally {
       if (generation === token) {
         for (const row of userMessages) reaction(row, 'system', '👀', false);
         orch.running = false;
-        if (++orch.turns >= state.settings.recycleAfter || failed || initialProvider !== state.settings.orchestratorProvider) resetSession();
+        if (launched) orch.turns++;
+        if (orch.turns >= state.settings.recycleAfter || failed || initialProvider !== state.settings.orchestratorProvider) resetSession();
         save();
         if (launched) pump();
       }
@@ -622,6 +630,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       if (orch.lastUserAt && deps.now().getTime() - Date.parse(orch.lastUserAt) > 1800000) wake('catch_up', 'system', 'Poste les résultats retenus.');
       orch.lastUserAt = row.at;
       orch.postsSinceUser = 0;
+      retryAt = 0;
       orch.quietAt = state.threads.some(active) ? later(60000) : null;
       wake('message', 'principal', row.text, { messageId: row.id });
       return row;
