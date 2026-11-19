@@ -163,7 +163,7 @@ const orchestrator = createOrchestratorService({
   openSession: (provider, root, title) => sessionsService.createAppSession(provider, root, title).sessionId,
   runTurn: (sessionId, userId, content, { provider, model, effort, permissionMode, allowedTools, disallowedTools }) => {
     const preferences = toolPreferences(provider, userId);
-    const skipPermissions = permissionMode === 'acceptEdits' && preferences.skipPermissions === true;
+    const skipPermissions = permissionMode === 'bypassPermissions' || permissionMode === 'acceptEdits' && preferences.skipPermissions === true;
     const toolsSettings = { ...preferences, allowedTools, disallowedTools, permissionMode, skipPermissions };
     return runDetachedChatTurn({ sessionId, userId, content, options: { model, effort, permissionMode, toolsSettings, skipPermissions } }, { runtime: providerRuntimeService });
   },

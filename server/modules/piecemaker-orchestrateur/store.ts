@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, statfsSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import type { Memory, ProjectState } from './types.js';
@@ -65,7 +65,22 @@ export function openProjectStore(root: string) {
     return { ...JSON.parse(read('memoire.json')), text: read('memoire.md') };
   }
   return {
-    state, sharedFolder, save, memory, files: () => readdirSync(sharedFolder).sort(),
+    state, sharedFolder, save, memory,
+    files: () => readdirSync(sharedFolder).sort().flatMap(name => {
+      const info = statSync(path.join(sharedFolder, name));
+      return info.isFile() ? [{ name, size: info.size, updatedAt: info.mtime.toISOString() }] : [];
+    }),
+    storage() {
+      const disk = statfsSync(sharedFolder);
+      const used = readdirSync(sharedFolder).reduce((sum, name) => sum + statSync(path.join(sharedFolder, name)).size, 0);
+      return { used, total: disk.blocks * disk.bsize };
+    },
+    addFile(name: string, content: Buffer) {
+      const base = path.basename(name);
+      if (!base || base.startsWith('.') || base !== name) throw Object.assign(new Error('Nom de fichier invalide.'), { code: 400 });
+      writeFileSync(path.join(sharedFolder, base), content, { mode: 0o600 });
+      return path.join(sharedFolder, base);
+    },
     updateMemory(text: string, revision: number, updatedAt: string) {
       if (memory().revision !== revision) throw Object.assign(new Error('Révision de mémoire périmée.'), { code: 400 });
       const next = { text, revision: revision + 1, updatedAt };

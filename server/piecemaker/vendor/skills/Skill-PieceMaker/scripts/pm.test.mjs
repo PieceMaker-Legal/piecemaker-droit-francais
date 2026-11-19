@@ -89,7 +89,7 @@ test('tab liste, ouvre et ferme chaque cible', async () => {
   await assert.rejects(() => run(['tab', 'afficher', 'fichier', 'absent.docx'], { deps }), /introuvable/);
   assert.equal(await run(['tab', 'afficher', 'index'], { deps }), 'Volet affiché : index');
   assert.equal(opened[1].view, 'chronology');
-  const tabs = { bordereau: 'plugin:piecemaker-tampon', suivi_dossiers: 'plugin:piecemaker-echeances', projet: 'plugin:piecemaker-projets', catala: 'plugin:piecemaker-catala' };
+  const tabs = { bordereau: 'plugin:piecemaker-tampon', suivi_dossiers: 'plugin:piecemaker-echeances', catala: 'plugin:piecemaker-catala' };
   for (const [cible, tab] of Object.entries(tabs)) {
     assert.equal(await run(['tab', 'afficher', cible], { deps }), `Volet affiché : ${cible}`);
     assert.equal(opened.at(-1).tab, tab);

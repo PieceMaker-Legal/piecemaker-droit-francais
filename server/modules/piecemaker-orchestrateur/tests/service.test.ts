@@ -133,6 +133,8 @@ test('Une autorisation bloque le fil. Le choix libère la carte et la boîte par
   const active = f.turns.at(-1)!;
   assert.ok(active.options.allowedTools.includes('Read'));
   assert.ok(active.options.disallowedTools.includes('mcp__orchestrateur'));
+  assert.equal(active.options.permissionMode, 'bypassPermissions');
+  assert.ok(active.options.disallowedTools.includes('AskUserQuestion'));
   f.requests.set(a.sessionId!, [{ requestId: 'accord', toolName: 'Lire', input: {} }]);
   await f.tick(3000);
   await f.tick(3000);

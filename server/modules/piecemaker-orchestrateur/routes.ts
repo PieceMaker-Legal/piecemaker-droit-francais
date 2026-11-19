@@ -20,7 +20,7 @@ async function send(response: express.Response, run: () => unknown) {
 
 export function createOrchestratorRouter(service: Service, projects: Projects) {
   const router = express.Router();
-  router.use(express.json());
+  router.use(express.json({ limit: '30mb' }));
 
   function route(run: (root: string, request: Request) => unknown) {
     return (request: Request, response: express.Response) => send(response, () => {
@@ -40,6 +40,7 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
   router.post('/folder', route((root, { body }) => service.folder(root, body.messageId, body.allow)));
   router.post('/setup', route((root, { body }) => service.setup(root, body.messageId, body.accept)));
   router.post('/react', route((root, { body }) => service.react(root, body.messageId, body.emoji, body.on)));
+  router.post('/file', route((root, { body }) => service.addFile(root, body.name, body.content)));
   router.put('/settings', route((root, { body: { project, ...settings } }) => service.updateSettings(root, settings)));
   router.put('/memory', route((root, { body }) => service.updateMemory(root, body.text, body.revision)));
   router.put('/deliverable', route((root, { body }) => service.updateDeliverable(root, body.id, body.state)));

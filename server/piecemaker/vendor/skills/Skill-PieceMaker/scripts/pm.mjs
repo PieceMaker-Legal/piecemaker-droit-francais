@@ -10,7 +10,7 @@ import { CATALA_COMMANDS, listPrograms, premiseLinks, runCatala } from './catala
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
-const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'projet', 'catala', 'artifacts', 'fichier'];
+const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'artifacts', 'fichier'];
 const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
@@ -40,7 +40,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       volets ouverts à côté du chat
   tab afficher|fermer <cible>
       cibles : dossier | index | tabular_review [FICHIER.json] | bordereau
-               | suivi_dossiers | projet | catala | fichier PATH
+               | suivi_dossiers | catala | fichier PATH
 
   dossier sql "REQUÊTE"
       seul accès à la base du dossier ; données masquées par le serveur
@@ -392,7 +392,6 @@ async function confirmClose(api, request, target) {
 function voletTarget(cwd, volet, review) {
   if (volet === 'bordereau') return { cwd, tab: 'plugin:piecemaker-tampon' };
   if (volet === 'suivi_dossiers') return { cwd, tab: 'plugin:piecemaker-echeances' };
-  if (volet === 'projet') return { cwd, tab: 'plugin:piecemaker-projets' };
   if (volet === 'catala') return { cwd, tab: 'plugin:piecemaker-catala' };
   if (volet === 'artifacts') return { cwd, tab: 'plugin:piecemaker-artifacts', review: review || undefined };
   if (volet === 'tabular_review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
@@ -403,7 +402,6 @@ function panelNoticeLabel(target) {
   if (target.tab === 'files') return `Fichiers (${path.basename(target.document || '')})`;
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
   if (target.tab === 'plugin:piecemaker-echeances') return 'Suivi des dossiers';
-  if (target.tab === 'plugin:piecemaker-projets') return 'Projet';
   if (target.tab === 'plugin:piecemaker-catala') return 'Catala';
   if (target.tab === 'plugin:piecemaker-artifacts') return target.review ? `Artifacts (${target.review})` : 'Artifacts';
   if (target.tab === 'plugin:piecemaker-tabular-review') {

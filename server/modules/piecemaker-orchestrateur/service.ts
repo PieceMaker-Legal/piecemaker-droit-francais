@@ -12,6 +12,8 @@ import type {
   Settings, Thread, ThreadReply, TurnOptions, WakeEvent,
 } from './types.js';
 
+const ORCHESTRATOR_DENIED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'mcp__fil'];
+
 function refuse(code: 400 | 403 | 404, message: string): never {
   throw Object.assign(new Error(message), { code });
 }
@@ -143,6 +145,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     try {
       const p = orch.provider ?? await provider(state.settings.orchestratorProvider);
       const model = state.settings.orchestratorModel || await deps.defaultModel(p);
+      const permissions = await deps.permissions(p, orch.userId);
       if (generation !== token) return;
       const fresh = !orch.sessionId;
       orch.provider = p;
@@ -153,8 +156,8 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       launched = true;
       const result = await deps.runTurn(orch.sessionId, orch.userId, content, {
         provider: p, model, effort: null, permissionMode: 'default',
-        allowedTools: ['mcp__orchestrateur', 'Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch'],
-        disallowedTools: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'mcp__fil'],
+        allowedTools: [...new Set([...permissions.allowedTools.filter(tool => !ORCHESTRATOR_DENIED.includes(tool)), 'mcp__orchestrateur', 'Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Skill'])],
+        disallowedTools: [...new Set([...permissions.disallowedTools.filter(tool => tool !== 'mcp__orchestrateur'), ...ORCHESTRATOR_DENIED])],
       });
       if (generation !== token) return;
       if (result.error || !result.started) throw new Error(result.error ?? 'Tour non démarré.');
@@ -247,9 +250,9 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       const content = t.inbox.splice(0, count).join('\n\n');
       save();
       const options: TurnOptions = {
-        provider: t.provider, model: t.model, effort: t.effort, permissionMode: 'acceptEdits',
+        provider: t.provider, model: t.model, effort: t.effort, permissionMode: 'bypassPermissions',
         allowedTools: [...permissions.allowedTools.filter(v => v !== 'mcp__orchestrateur'), 'mcp__fil'],
-        disallowedTools: [...permissions.disallowedTools.filter(v => v !== 'mcp__fil'), 'mcp__orchestrateur'],
+        disallowedTools: [...permissions.disallowedTools.filter(v => v !== 'mcp__fil'), 'mcp__orchestrateur', 'AskUserQuestion', 'ExitPlanMode'],
       };
       const result = await deps.runTurn(t.sessionId, orch.userId, content, options);
       error = result.error || (!result.started ? 'Tour non démarré.' : null);
@@ -622,7 +625,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     tick,
     async state() {
       const providers = await deps.providers();
-      return structuredClone({ ...state, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files() });
+      return structuredClone({ ...state, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files(), storage: store.storage() });
     },
     postUserMessage(text: string, userId: number | null) {
       const row = add('user', parse(string, text));
@@ -699,6 +702,10 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       wake('reaction', 'principal', emoji, { messageId, attrs: { on: String(on) } });
       return row.reactions;
     },
+    addFile(name: unknown, content: unknown) {
+      const data = parse(z.object({ name: string, content: z.string().max(20_000_000) }), { name, content });
+      return { path: store.addFile(data.name, Buffer.from(data.content, 'base64')) };
+    },
     updateSettings: (patch: unknown) => applySettings(patch, true),
     updateMemory: (text: string, revision: number) => store.updateMemory(parse(z.string(), text), parse(index, revision), now()),
     updateDeliverable(deliverableId: string, status: Deliverable['state']) {
@@ -772,6 +779,7 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
     folder: (root: string, messageId: string, allow: boolean) => project(root).folder(messageId, allow),
     setup: (root: string, messageId: string, accept: boolean) => project(root).setup(messageId, accept),
     react: (root: string, messageId: string, emoji: string, on: boolean) => project(root).react(messageId, emoji, on),
+    addFile: (root: string, name: unknown, content: unknown) => project(root).addFile(name, content),
     updateSettings: (root: string, patch: unknown) => project(root).updateSettings(patch),
     updateMemory: (root: string, text: string, revision: number) => project(root).updateMemory(text, revision),
     updateDeliverable: (root: string, id: string, state: Deliverable['state']) => project(root).updateDeliverable(id, state),

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { GitPanel } from '@/modules/git-panel';
+import { AGENT_OPEN_EVENT, AgentWorkspace, useAgentSidebarButton } from '@/modules/piecemaker-agent';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
 import { PanelAnonymizationButton } from '@/modules/piecemaker-workspace-tabs/PanelAnonymizationButton';
 import { PanelPickButton } from '@/modules/piecemaker-workspace-tabs/PanelPickButton';
@@ -29,6 +30,7 @@ type WorkspaceProps = {
   onShowSettings: (tab?: SettingsMainTab) => void;
   onProjectSelect: (project: Project) => void;
   onProjectsRefresh: () => void;
+  onMenuClick?: () => void;
 };
 
 type WorkspaceColumn = {
@@ -53,6 +55,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const [viewerTarget, setViewerTarget] = useState<HTMLElement | null>(null);
     const [viewerWidth, setViewerWidth] = useState<number | null>(null);
     const [filesSlots, setFilesSlots] = useState<WorkspaceFilesSlots | null>(null);
+    const [agentProject, setAgentProject] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const dockRef = useRef<HTMLElement>(null);
     const dividerCoordinateRef = useRef(0);
@@ -143,6 +146,19 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     }, [mainTab, props]);
 
     useAutoPanel(props.selectedSession?.id ?? null, props.selectedProject?.fullPath ?? null, open, close);
+    useAgentSidebarButton();
+    useEffect(() => {
+      const show = (event: Event) => {
+        const project = (event as CustomEvent<{ project?: unknown }>).detail?.project;
+        if (typeof project === 'string') setAgentProject(project);
+      };
+      window.addEventListener(AGENT_OPEN_EVENT, show);
+      return () => window.removeEventListener(AGENT_OPEN_EVENT, show);
+    }, []);
+    useEffect(() => {
+      if (props.selectedSession?.id) setAgentProject(null);
+    }, [props.selectedSession?.id]);
+    const agentOpen = Boolean(agentProject && props.selectedProject?.fullPath === agentProject && !props.selectedSession?.id);
 
     useEffect(() => {
       setColumns([]);
@@ -212,7 +228,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       <CloseWorkspacePanelContext.Provider value={close}>
         <div ref={containerRef} className="piecemaker-workspace-panels">
           <div className="piecemaker-workspace-primary" hidden={Boolean(expandedTab)}>
-            <Workspace {...props} activeTab={mainTab} setActiveTab={select} />
+            {agentOpen && props.selectedProject
+              ? <AgentWorkspace key={props.selectedProject.fullPath} projectName={props.selectedProject.displayName} projectPath={props.selectedProject.fullPath} isMobile={props.isMobile} onMenu={props.onMenuClick} />
+              : <Workspace {...props} activeTab={mainTab} setActiveTab={select} />}
           </div>
           {!props.isLoading && props.selectedProject && layoutColumns.length > 0 && <>
             {!expandedTab && !props.isMobile && <div
