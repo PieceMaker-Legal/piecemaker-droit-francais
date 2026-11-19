@@ -234,13 +234,6 @@ button.pmd-fact-pill:hover{filter:brightness(.95)}
 .pmd-okf-legend a:hover{color:var(--pmd-accent)}
 .pmd-okf-key svg{width:15px;height:15px}
 .pmd-okf-key{display:inline-flex;align-items:center;gap:6px}
-.pmd-okf-report{margin-bottom:12px;padding:10px 12px;border:1px solid var(--pmd-border);border-radius:var(--pmd-radius);background:var(--pmd-surface);font-size:12px}
-.pmd-okf-report[data-okf-report=errors]{border-color:var(--pmd-danger)}
-.pmd-okf-report ul{margin:6px 0 0;padding-left:18px}
-.pmd-okf-report[data-okf-report=contradictions]{border-color:var(--pmd-date)}
-.pmd-okf-report li{margin-top:4px}
-.pmd-okf-premise{color:var(--pmd-ink);font-weight:600}
-.pmd-okf-report .pmd-badges{display:inline-flex;margin-top:0}
 .pmd-sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .pmd-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .pmd-badge{background:var(--pmd-soft);border:1px solid var(--pmd-border);border-radius:4px;padding:1px 6px;color:var(--pmd-text);font-size:11px}

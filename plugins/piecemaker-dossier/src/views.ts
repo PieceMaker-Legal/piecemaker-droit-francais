@@ -5,7 +5,7 @@ import { nodePosition } from './party-codes.js';
 import type { KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import type { CompanySearchResult, ScanJob } from './api.js';
 import { ficheLinks } from './okf.js';
-import type { OkfContradiction, OkfError, OkfIndex, OkfView, PendingProposals } from './okf.js';
+import type { OkfIndex, PendingProposals } from './okf.js';
 
 export type Tab = 'general' | 'chronology' | 'graph';
 export type BodaccScanState = {
@@ -299,21 +299,7 @@ export function linksMarkup(okf: OkfIndex | null, resource: string): string {
   return ficheLinks(okf, resource).map((link) => `<span class="pmd-badge" title="${escapeHtml(link.citation)}">${escapeHtml(`${link.label} ${link.title}`)}</span>`).join('');
 }
 
-function okfContradictions(contradictions: OkfContradiction[]): string {
-  if (!contradictions.length) return '';
-  return `<div class="pmd-okf-report" data-okf-report="contradictions"><strong>${contradictions.length} contradiction${contradictions.length > 1 ? 's' : ''} entre pièces</strong><ul>${contradictions.map((entry) => `<li><span class="pmd-okf-premise">${escapeHtml(entry.titre)}</span> <span class="pmd-badges">${entry.valeurs.map((value) => `<span class="pmd-badge">${escapeHtml(value.piece)} : ${escapeHtml(value.valeur)}</span>`).join('')}</span></li>`).join('')}</ul></div>`;
-}
-
-function okfErrors(errors: OkfError[] | null): string {
-  if (!errors?.length) return '';
-  return `<div class="pmd-okf-report" data-okf-report="errors"><strong>${errors.length} erreur${errors.length > 1 ? 's' : ''} dans l’index</strong><ul>${errors.map((entry) => `<li><code>${escapeHtml(entry.fiche)}</code> ${escapeHtml(entry.erreur)}</li>`).join('')}</ul></div>`;
-}
-
-export function okfReportMarkup(view: Pick<OkfView, 'errors' | 'contradictions'>): string {
-  return okfErrors(view.errors) + okfContradictions(view.contradictions || []);
-}
-
-export function graphView(okf: OkfIndex | null): string {
+export function graphView(okf: OkfIndex | null, showPremises = true): string {
   const hasDocuments = okf?.fiches.some((fiche) => okf.typesGraphe.includes(fiche.type));
   const emptyMessage = okf ? `Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.` : 'Index indisponible.';
   const key = (kind: string, label: string) => `<span class="pmd-okf-key">${iconSvg(kind)}${label}</span>`;
@@ -321,6 +307,7 @@ export function graphView(okf: OkfIndex | null): string {
     ${hasDocuments ? '<div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div>' : `<div class="pmd-empty">${emptyMessage}</div>`}
     <div class="pmd-okf-legend" role="group" aria-label="Légende du graphe">
       ${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}
+      <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${showPremises ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="okf-premises" aria-pressed="${showPremises}">Prémisses</button>
       <a href="#" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</a>
     </div>
   </div>`;
@@ -336,9 +323,9 @@ export function proposalBanner(proposals?: PendingProposals): string {
 }
 
 /** L'onglet Index : une seule vue, la revue tabulaire de l'Index (SQLite), montée dans `[data-index-analysis]` avec les liens OKF de chaque pièce. */
-export function chronologyView(view: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null }, chronology = false): string {
+export function chronologyView(proposals?: PendingProposals, chronology = false): string {
   return `
-    ${proposalBanner(view.proposals)}<div data-okf-reports>${okfReportMarkup(view)}</div>
+    ${proposalBanner(proposals)}
     <div class="pmd-index-analysis" data-index-analysis></div>
     <div class="pmd-okf-legend" role="group" aria-label="Légende de l’index">
       <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${chronology ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="index-chronology" aria-pressed="${chronology}" title="Afficher seulement les pièces, de la plus ancienne à la plus récente">Chronologie</button>

@@ -6,13 +6,13 @@ import { etapesApi, knowledgeApi } from './api.js';
 import { PARTY_TYPE, mountGraph, okfApi } from './okf.js';
 import type { OkfGraph } from './okf.js';
 import { ficheCardMarkup } from './okf-card.js';
-import type { OkfView } from './okf.js';
+import type { PendingProposals } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { removedAliasOperations } from './exclusions.js';
 import { partyCodeChange, partyRemovalOperations } from './party-codes.js';
 import { PLUGIN_STYLES } from './styles.js';
-import { chronologyView, graphView, proposalBanner, okfReportMarkup, documentResource, escapeHtml, linksMarkup, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanProgress, shell } from './views.js';
+import { chronologyView, graphView, proposalBanner, documentResource, escapeHtml, linksMarkup, generalView, mappingView, nodeVariants, parseAliases, scanPercentLabel, scanProgress, shell } from './views.js';
 import type { BodaccScanState, Tab, ViewData } from './views.js';
 import type { ScanJob } from './api.js';
 import type { KnowledgeUpdateOperation } from './types.js';
@@ -85,7 +85,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     indexHost = null;
     indexProject = '';
   };
-  let okfView: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null };
+  let proposals: PendingProposals | undefined;
+  let showPremises = (() => { try { return localStorage.getItem('pmd-okf-premises') !== '0'; } catch { return true; } })();
   const okfHandle = () => {
     const projectId = context.project?.name || '';
     return {
@@ -103,7 +104,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   let destroyGraph: (() => void) | null = null;
   let okfDetail: string | null = null;
   let loadSequence = 0;
-  let verificationSequence = -1;
   let scanJob: ScanJob | null = null;
   let mappingValidated: string | null = null;
   let mappingRequested = takeRequestedMapping();
@@ -249,9 +249,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         mappingValidated = etapes.mappingValide ?? null;
         paintScanStatus();
       }, () => undefined);
-      void pendingProposals(projectId, context.project.path).then((proposals) => {
+      void pendingProposals(projectId, context.project.path).then((pending) => {
         if (sequence !== loadSequence) return;
-        okfView = { ...okfView, proposals };
+        proposals = pending;
         const host = root.querySelector<HTMLElement>('[data-proposals]');
         if (host) host.outerHTML = proposalBanner(proposals);
       }, () => undefined);
@@ -457,21 +457,11 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     destroyGraph = null;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (active === 'chronology') {
-      content.innerHTML = chronologyView(okfView, indexChronology);
+      content.innerHTML = chronologyView(proposals, indexChronology);
       attachIndex(content.querySelector<HTMLElement>('[data-index-analysis]'));
-      if (data && verificationSequence !== loadSequence) {
-        const sequence = loadSequence;
-        verificationSequence = sequence;
-        void okfApi.verify(context.project.name).then(({ erreurs, contradictions }) => {
-          if (sequence !== loadSequence) return;
-          okfView = { ...okfView, errors: erreurs, contradictions };
-          const reports = content.querySelector<HTMLElement>('[data-okf-reports]');
-          if (reports) reports.innerHTML = okfReportMarkup(okfView);
-        }, () => undefined);
-      }
       return;
     } else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
-    else content.innerHTML = active === 'graph' ? graphView(data.okf ?? null) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
+    else content.innerHTML = active === 'graph' ? graphView(data.okf ?? null, showPremises) : generalView(data, tiersCollapsed, scanJob, bodaccStates);
     const graphHost = content.querySelector<HTMLElement>('[data-okf-graph]');
     const projectPath = context.project?.path || '';
     if (!graphHost || !data?.okf) return;
@@ -529,7 +519,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       });
     };
     wrap.addEventListener('keydown', (event) => { if (event.key === 'Escape' && wrap.querySelector('[data-okf-detail]')) closeDetail(); });
-    void mountGraph(graphHost, data.okf, true, (fiche) => showFiche(fiche.id)).then((mounted) => {
+    void mountGraph(graphHost, data.okf, showPremises, (fiche) => showFiche(fiche.id)).then((mounted) => {
       if (!graphHost.isConnected) return mounted.destroy();
       graph = mounted;
       destroyGraph = mounted.destroy;
@@ -559,6 +549,14 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       const control = target.closest<HTMLElement>('[data-action]');
       const action = control?.dataset.action;
       if (control?.matches('.pmd-okf-legend a')) event.preventDefault();
+      if (action === 'okf-premises') {
+        const focused = document.activeElement === control;
+        showPremises = !showPremises;
+        try { localStorage.setItem('pmd-okf-premises', showPremises ? '1' : '0'); } catch { }
+        paintContent();
+        if (focused) root.querySelector<HTMLButtonElement>('[data-action="okf-premises"]')?.focus({ preventScroll: true });
+        return;
+      }
       if (action === 'index-chronology') {
         indexChronology = !indexChronology;
         try { localStorage.setItem('pmd-index-chronologie', indexChronology ? '1' : '0'); } catch { /* préférence locale seulement */ }
@@ -567,7 +565,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         return;
       }
       if (action === 'edit-ontology' && context.project) {
-        void editOntology(root, context.project.name, () => { okfView = { ...okfView, errors: null, contradictions: [] }; void load(); }, context.project.path).catch(showError);
+        void editOntology(root, context.project.name, () => { void load(); }, context.project.path).catch(showError);
         return;
       }
       if ((action === 'edit-tree' || action === 'edit-document-types') && context.project) {
@@ -840,7 +838,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (changedProject) {
       closeIndex();
       data = null;
-      okfView = { errors: null };
+      proposals = undefined;
       scanJob = null;
       bodaccStates.clear();
       void load();
