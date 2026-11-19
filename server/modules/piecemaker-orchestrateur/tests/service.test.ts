@@ -398,3 +398,19 @@ test('Lire la session de l’agent d’un dossier sans agent ne crée rien', ctx
   assert.equal(f.service.sessionId(other), null);
   assert.equal(existsSync(path.join(other, '.piecemaker')), false);
 });
+
+test('Le démarrage survit à une base pas encore prête et reprend les dossiers au tick suivant', ctx => {
+  ctx.mock.timers.enable({ apis: ['setInterval'] });
+  ctx.mock.method(console, 'warn', () => {});
+  let ready = false;
+  let calls = 0;
+  const service = createOrchestratorService({
+    approvedFolders: () => { calls += 1; if (!ready) throw new Error('no such table: projects'); return []; },
+  } as unknown as OrchestratorDependencies);
+  assert.doesNotThrow(() => service.start());
+  ready = true;
+  ctx.mock.timers.tick(3000);
+  ctx.mock.timers.tick(3000);
+  assert.equal(calls, 2);
+  service.stop();
+});

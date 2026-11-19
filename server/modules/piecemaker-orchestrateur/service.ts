@@ -778,10 +778,20 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
   return {
     start() {
       if (timer) return;
-      for (const folder of deps.approvedFolders()) {
-        if (existsSync(path.join(folder, '.piecemaker', 'orchestrateur', 'etat.json'))) project(folder);
-      }
+      let loaded = false;
+      const load = () => {
+        try {
+          for (const folder of deps.approvedFolders()) {
+            if (existsSync(path.join(folder, '.piecemaker', 'orchestrateur', 'etat.json'))) project(folder);
+          }
+          loaded = true;
+        } catch (error) {
+          console.warn('[piecemaker] Orchestrateur : dossiers pas encore lisibles', error);
+        }
+      };
+      load();
       timer = setInterval(() => {
+        if (!loaded) load();
         for (const current of projects.values()) {
           try { current.tick(); } catch (error) { console.warn('[piecemaker] Orchestrateur :', error); }
         }
