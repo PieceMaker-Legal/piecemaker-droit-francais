@@ -158,6 +158,7 @@ const orchestrator = createOrchestratorService({
     }
     return catalog.DEFAULT;
   },
+  models: async provider => (await providerModelsService.getProviderModels(provider)).OPTIONS.map(({ value, label }) => ({ value, label: label ?? value })),
   openSession: (provider, root, title) => sessionsService.createAppSession(provider, root, title).sessionId,
   runTurn: (sessionId, userId, content, options) => runDetachedChatTurn({
     sessionId, userId, content, displayContent: wakeDisplay(content) ?? undefined,

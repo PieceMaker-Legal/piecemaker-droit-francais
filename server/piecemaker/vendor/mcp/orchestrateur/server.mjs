@@ -106,7 +106,7 @@ export function createServer() {
       folders: z.array(text).optional().describe('Dossiers supplémentaires autorisés pour les fils. Tout nouvel accès exige l’accord de l’avocat.'),
       recycle_after: positiveInteger.optional().describe('Nombre de tours avant le renouvellement de la session de l’orchestrateur.'),
     }],
-    list_providers: ['Indique quels fournisseurs sont installés et connectés.', {}],
+    list_providers: ['Indique quels fournisseurs sont installés et connectés, avec les modèles de chacun et le modèle par défaut.', {}],
     list_devices: ['Liste les dossiers connus et indique ceux auxquels les fils peuvent accéder.', {}],
     suggest_connectors: ['Propose à l’avocat de connecter un fournisseur ou un connecteur.', {
       target: text.describe('Nom du fournisseur ou du connecteur de la Bibliothèque à connecter.'),

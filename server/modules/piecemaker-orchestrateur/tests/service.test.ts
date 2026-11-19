@@ -32,6 +32,7 @@ function fixture(ctx: TestContext) {
     }),
     sessionModel: () => null,
     defaultModel: async (_p, purpose) => purpose === 'lookup' ? 'économique' : 'standard',
+    models: async () => [],
     permissions: async () => ({ allowedTools: ['Read'], disallowedTools: ['WebFetch'] }),
     lastAnswer: async session => 'Réponse de ' + session, history: async () => [], pending: session => requests.get(session) ?? [],
     resolve: (requestId) => {
@@ -439,4 +440,25 @@ test('Le démarrage survit à une base pas encore prête et reprend les dossiers
   ctx.mock.timers.tick(3000);
   assert.equal(calls, 2);
   service.stop();
+});
+
+test('Un modèle inconnu du fournisseur est refusé, list_providers donne les modèles et une erreur de modèle ne relance pas', async ctx => {
+  const f = fixture(ctx);
+  f.deps.models = async p => p === 'codex' ? [{ value: 'modele-codex', label: 'Modèle Codex' }] : [{ value: 'modele-claude', label: 'Modèle Claude' }];
+  f.user('Lance');
+  await flush();
+  await assert.rejects(f.start('Mauvais couple', { provider: 'claude', model: 'modele-codex' }), /Modèle « modele-codex » inconnu pour claude.*modele-claude/);
+  const providers = await f.call('list_providers') as Array<{ provider: string; models: string[]; defaultModel: string }>;
+  assert.deepEqual(providers.find(p => p.provider === 'codex')?.models, ['modele-codex']);
+  assert.equal(providers.find(p => p.provider === 'codex')?.defaultModel, 'standard');
+  const t = await f.start('Bon couple', { provider: 'codex', model: 'modèle codex' });
+  assert.equal(t.model, 'modele-codex');
+  f.turns.find(turn => turn.session === t.sessionId)!.end({ started: true, error: 'invalid model: modele-codex is not supported' });
+  await flush();
+  await f.tick(3000);
+  const s = await f.state();
+  assert.equal(s.threads.find(row => row.id === t.id)?.state, 'failed');
+  assert.equal(s.threads.find(row => row.id === t.id)?.retries, 0);
+  assert.equal(f.turns.filter(turn => turn.session === t.sessionId).length, 1);
+  assert.ok(s.orchestrator.pending.some(event => event.type === 'thread_failed'));
 });

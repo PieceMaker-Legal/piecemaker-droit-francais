@@ -96,3 +96,24 @@ test('un dossier inexistant est journalisé sans lever d’erreur', (context) =>
   declarePieceMakerServer(path.join(temporaryFolder(), 'absent'));
   assert.equal(warn.mock.callCount(), 1);
 });
+
+test('les serveurs MCP visent le port du serveur qui les déclare', () => {
+  const folder = temporaryFolder();
+  const previous = process.env.SERVER_PORT;
+  process.env.SERVER_PORT = '3999';
+  try {
+    declarePieceMakerServer(folder);
+    const mcpJson = JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8'));
+    const codex = TOML.parse(fs.readFileSync(path.join(folder, '.codex', 'config.toml'), 'utf8'));
+    for (const name of ['orchestrateur', 'fil']) {
+      assert.equal(mcpJson.mcpServers[name].env.PIECEMAKER_APP_PORT, '3999');
+      assert.equal(codex.mcp_servers[name].env.PIECEMAKER_APP_PORT, '3999');
+    }
+    process.env.SERVER_PORT = '3998';
+    declarePieceMakerServer(folder);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8')).mcpServers.orchestrateur.env.PIECEMAKER_APP_PORT, '3998');
+  } finally {
+    if (previous === undefined) delete process.env.SERVER_PORT;
+    else process.env.SERVER_PORT = previous;
+  }
+});

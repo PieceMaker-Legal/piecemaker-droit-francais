@@ -57,6 +57,9 @@ function canonical(folder: string): string {
   return path.join(canonical(path.dirname(absolute)), path.basename(absolute));
 }
 
+const INVALID_MODEL = /model.{0,80}(invalid|unknown|not found|not supported|not exist|unavailable|does not have access)|(invalid|unknown|unsupported) model|modèle.{0,40}(inconnu|invalide|introuvable)/i;
+const invalidModel = (error: string) => INVALID_MODEL.test(error);
+
 function parseCron(expression: string) {
   const fields = expression.trim().split(/\s+/);
   const ranges = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 7]];
@@ -143,6 +146,13 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     const available = await deps.providers(orch.userId);
     return RUNNABLE_PROVIDERS.find(p => (choice === 'auto' || choice === p) && available.some(s => s.provider === p && s.authenticated))
       ?? refuse(400, 'Fournisseur déconnecté. Utilisez suggest_connectors.');
+  }
+  async function knownModel(p: (typeof RUNNABLE_PROVIDERS)[number], model: string) {
+    const models = await deps.models(p);
+    if (!models.length) return model;
+    const wanted = model.trim().toLowerCase();
+    return models.find(m => m.value.toLowerCase() === wanted || m.label.toLowerCase() === wanted)?.value
+      ?? refuse(400, `Modèle « ${model} » inconnu pour ${p}. Modèles disponibles : ${models.map(m => m.value).join(', ')}.`);
   }
   function resetSession() {
     generation++;
@@ -252,7 +262,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     else if (error) {
       t.error = error;
       t.state = 'failed';
-      if (!t.retries) retry(t);
+      if (!t.retries && !invalidModel(error)) retry(t);
       else threadWake(t, 'thread_failed', 'system', error);
     } else {
       const reply = run.reply ?? { at: now(), text: answer, outputs: [] };
@@ -312,7 +322,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   async function prepareThread(input: z.input<typeof startInput>, projectInstructions = state.settings.instructions) {
     const args = parse(startInput, input);
     const p = await provider(args.provider === 'auto' || !args.provider ? state.settings.defaultProvider : args.provider);
-    const model = args.model ?? state.settings.defaultModels[p] ?? await deps.defaultModel(p);
+    const model = args.model ? await knownModel(p, args.model) : state.settings.defaultModels[p] ?? await deps.defaultModel(p);
     const t: Thread = {
       id: id('thr'), key: randomUUID(), sessionId: null, title: args.title, instructions: args.instructions,
       projectPath: canonical(path.resolve(root, args.folder ?? '.')), provider: p, model, effort: args.effort ?? null,
@@ -433,7 +443,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
         t.reminderAt = null;
         threadWake(t, 'reminder', 'system', t.title);
       }
-      if (t.state === 'failed' && !t.retries) retry(t);
+      if (t.state === 'failed' && !t.retries && !invalidModel(t.error ?? '')) retry(t);
       if (!t.sessionId) continue;
       const processing = deps.isProcessing(t.sessionId);
       if (!active(t) && processing && !runs.has(t.id)) {
@@ -587,6 +597,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       case 'switch_model': {
         const t = target();
         const patch = parse(z.object({ model: string.optional(), effort: string.optional() }), args);
+        if (patch.model) patch.model = await knownModel(t.provider, patch.model);
         Object.assign(t, patch);
         return summary(t);
       }
@@ -618,7 +629,9 @@ function projectService(root: string, deps: OrchestratorDependencies) {
         const names: Record<string, keyof Settings> = { orchestrator_provider: 'orchestratorProvider', orchestrator_model: 'orchestratorModel', default_provider: 'defaultProvider', default_models: 'defaultModels', recycle_after: 'recycleAfter' };
         return applySettings(Object.fromEntries(Object.entries(args).map(([key, value]) => [names[key] ?? key, value])), false);
       }
-      case 'list_providers': return deps.providers(orch.userId);
+      case 'list_providers': return Promise.all((await deps.providers(orch.userId)).map(async status => ({
+        ...status, models: (await deps.models(status.provider)).map(m => m.value), defaultModel: state.settings.defaultModels[status.provider] ?? await deps.defaultModel(status.provider),
+      })));
       case 'list_devices': return [...new Set([root, ...state.settings.folders, ...deps.approvedFolders()].map(canonical))].map(folder => ({ folder, allowed: allowed(folder) }));
       case 'suggest_connectors': {
         const connect = parse(z.object({ target: string, reconnect: z.boolean().default(false), reason: string.optional() }), args);
