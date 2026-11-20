@@ -84,7 +84,7 @@ export function delegateSubagents(toolbox: Toolbox, { cwd, userHome = os.homedir
           return checked?.hookSpecificOutput?.additionalContext ? `${report}\n\n${checked.hookSpecificOutput.additionalContext}` : report;
         }
         for (const call of calls) {
-          const tool = tools.get(call.function.name);
+          const tool = tools.get(call.function.name) ?? [...tools].find(([key]) => key.toLowerCase() === call.function.name.toLowerCase())?.[1];
           let result: string;
           try {
             if (!tool) throw new Error(`Outil indisponible pour ${agent.slug}.`);

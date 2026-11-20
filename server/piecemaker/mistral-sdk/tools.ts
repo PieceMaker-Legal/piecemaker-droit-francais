@@ -184,8 +184,16 @@ export async function createMistralTools(cwd: string, disabledSkills: unknown, s
               execute: async input => {
                 await guard(toolName, input);
                 const result = await client.callTool({ name: tool.name, arguments: input }, undefined, { timeout: 120000, signal });
-                if (result.isError) throw new Error(JSON.stringify(result));
-                return JSON.stringify(result);
+                const blocks = Array.isArray(result.content) ? result.content : [];
+                const content = blocks.map(block => {
+                  if (block.type === 'text') return block.text;
+                  if (block.type === 'image' || block.type === 'audio') return `[${block.type} : ${block.mimeType}]`;
+                  if (block.type === 'resource') return block.resource.text ?? block.resource.uri;
+                  if (block.type === 'resource_link') return block.uri;
+                  return JSON.stringify(block);
+                }).join('\n') || JSON.stringify(result.structuredContent ?? result.toolResult) || '';
+                if (result.isError) throw new Error(content);
+                return content;
               },
             });
           }
