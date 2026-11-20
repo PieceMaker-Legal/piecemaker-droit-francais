@@ -163,7 +163,7 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
   }
 });
 
-it('ouvre le document Word à gauche et la session de publication à droite depuis Contexte', async () => {
+it('ouvre le document Word à gauche et la session de publication à droite depuis la première rangée des fils', async () => {
   const id = 'rapport-fictif';
   const url = `piecemaker://artifact/${id}`;
   calls.state = {
@@ -180,8 +180,10 @@ it('ouvre le document Word à gauche et la session de publication à droite depu
     return new Response(null, { status: 404 });
   }));
   render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
-  fireEvent.click(await screen.findByRole('tab', { name: 'Contexte' }));
-  fireEvent.click(await screen.findByRole('button', { name: /Rapport fictif/ }));
+  const cards = await screen.findByRole('region', { name: 'Artéfacts' });
+  const threadGroup = screen.getByRole('button', { name: /À traiter/ });
+  expect(cards.compareDocumentPosition(threadGroup) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(within(cards).getByRole('button', { name: 'Rapport fictif' }));
   const workspace = screen.getByRole('dialog', { name: 'Rapport fictif' });
   await within(workspace).findByText('Éditeur Word de Artifacts/rapport-fictif.docx');
   await within(within(workspace).getByRole('complementary', { name: 'Session de création' })).findByText('Session fil-createur');

@@ -38,7 +38,6 @@ import { useSlashCommandPills } from '@/piecemaker/chat/useSlashCommandPills';
 import { useDocxCommentQuestions } from '@/piecemaker/chat/useDocxCommentQuestions';
 import { prepareCommandMenuCommands } from '@/piecemaker/chat/prepareCommandMenuCommands';
 import { useContextSuggestion } from '@/modules/piecemaker-context-suggestions';
-import { SessionArtifacts } from '@/modules/piecemaker-artifacts';
 import { CaseConversionCard } from '@/modules/piecemaker-case-conversion';
 
 type ChatInterfaceProps = {
@@ -557,9 +556,6 @@ function ChatInterface({
   return (
     <PermissionContext.Provider value={permissionContextValue}>
       <div className="flex h-full min-h-0 flex-col">
-        {isActive && selectedProject.fullPath && selectedSession && (
-          <SessionArtifacts key={JSON.stringify([selectedProject.fullPath, selectedSession.id])} project={selectedProject.fullPath} sessionId={selectedSession.id} subscribe={subscribe} />
-        )}
         <MarkdownWorkspaceContext.Provider value={markdownWorkspaceValue}>
           <TranscriptSessionContext.Provider value={transcriptSessionValue}>
             <ChatMessagesPane

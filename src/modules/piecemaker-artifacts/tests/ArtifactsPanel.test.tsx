@@ -1,11 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { SessionArtifacts } from '@/modules/piecemaker-artifacts';
 import { ProjectArtifact } from '@/modules/piecemaker-artifacts/ArtifactsPanel';
 import { ThemeProvider } from '@/shared/context/ThemeContext';
 import type { ArtifactThread } from '@/shared/types';
-
 import { mount, unmount } from '@/../plugins/piecemaker-artifacts/src/index';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -77,7 +75,7 @@ test('a review opened from Project saves annotations and decisions to its select
   expect(screen.queryByText(quote)).toBeNull();
 });
 
-test('the original gallery opens HTML and Word artifacts from the thread', async () => {
+test('the original gallery opens HTML and Word artifacts', async () => {
   const project = '/dossiers/projet-fictif';
   const id = 'note-fictive';
   const title = 'Note fictive';
@@ -88,7 +86,7 @@ test('the original gallery opens HTML and Word artifacts from the thread', async
   const versions = [{ version: 2, published_at: '2026-01-02' }, { version: 1, published_at: '2026-01-01' }];
   const request = vi.fn(async (input: string, options?: RequestInit) => {
     const { pathname, searchParams } = new URL(input, 'http://localhost');
-    if (pathname.endsWith('/session/fil-fictif') || pathname.endsWith('/artifacts')) return Response.json([artifact, word]);
+    if (pathname.endsWith('/artifacts')) return Response.json([artifact, word]);
     if (pathname.endsWith(`/artifacts/${id}`)) return Response.json({ ...artifact, versions });
     if (pathname.endsWith(`/artifacts/${wordId}`)) return Response.json(word);
     if (pathname.endsWith('/frame')) return Response.json({ src: `/apercu-fictif/${searchParams.get('ver') ?? 2}` });
@@ -113,9 +111,7 @@ test('the original gallery opens HTML and Word artifacts from the thread', async
     const tab = within(container);
     await tab.findByRole('heading', { name: title });
     expect(tab.getByRole('tab', { name: 'Tous' }).getAttribute('aria-selected')).toBe('true');
-    render(<SessionArtifacts project={project} sessionId="fil-fictif" subscribe={() => () => undefined} />);
-    const threadArtifacts = within(await screen.findByRole('group', { name: 'Artifacts de la session' }));
-    fireEvent.click(threadArtifacts.getByRole('button', { name: title }));
+    fireEvent.click(tab.getByRole('heading', { name: title }));
     const frame = await waitFor(() => {
       const preview = tab.getAllByTitle(title).find((node) => node instanceof HTMLIFrameElement);
       expect(preview).toBeDefined();
@@ -138,7 +134,7 @@ test('the original gallery opens HTML and Word artifacts from the thread', async
 
     fireEvent.click(tab.getByRole('button', { name: 'Retour à la galerie' }));
     await tab.findByRole('tab', { name: 'Épinglés' });
-    fireEvent.click(threadArtifacts.getByRole('button', { name: 'Rapport Word' }));
+    fireEvent.click(await tab.findByRole('heading', { name: 'Rapport Word' }));
     await waitFor(() => expect(openFileInEditor).toHaveBeenCalledWith(documentPath));
   } finally {
     unmount(container);

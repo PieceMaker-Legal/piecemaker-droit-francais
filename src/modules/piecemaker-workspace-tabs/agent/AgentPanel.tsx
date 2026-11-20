@@ -6,7 +6,7 @@ import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
-import { ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
+import { ProjectArtifactCards, ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 
@@ -286,8 +286,9 @@ export function AgentPanel({ projectPath, projectId, panelActions, onShowSetting
     {error && <p role="alert" className="px-4 py-2 text-sm">{error}</p>}
     {!state && !error && <p className="px-4 py-8 text-center text-sm">Chargement de PieceMaker Agent…</p>}
     {state && <>
-      {searching && tab === 'threads' && <div className="border-b border-border px-4 py-2"><input autoFocus aria-label="Rechercher un fil" className={inputClass} placeholder="Rechercher un fil" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}
       <div className="min-h-0 flex-1 overflow-y-auto">
+        {tab === 'threads' && <ProjectArtifactCards project={projectPath} projectId={projectId} artifacts={state.artifacts} onOpen={onOpenArtifact} />}
+        {searching && tab === 'threads' && <div className="border-b border-border px-4 py-2"><input autoFocus aria-label="Rechercher un fil" className={inputClass} placeholder="Rechercher un fil" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}
         {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} onOpen={setOpenThreadId} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
         {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
