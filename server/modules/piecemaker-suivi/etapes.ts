@@ -127,7 +127,7 @@ export function createEtapesService(deps: EtapesDependencies) {
     if (!found) throw new TypeError('Dossier non enregistré.');
     return { root: found.project_path, nom: found.custom_project_name || path.basename(found.project_path) };
   };
-  const calculer = async (root: string) => {
+  const verifier = async (root: string) => {
     perimes.delete(root);
     if ((await read(root)).nonJuridique) { etats.delete(root); return EN_COURS; }
     const value = await deps.etat(root).then((etat) => ({ ...etat, lignes: etat.lignes.map(abrege) }), () => null);
@@ -140,8 +140,16 @@ export function createEtapesService(deps: EtapesDependencies) {
     enregistrer(root, value);
     return value;
   };
+  const enCalcul = new Map<string, Promise<Etat>>();
+  const actualiser = (root: string) => {
+    const actif = enCalcul.get(root);
+    if (actif) return actif;
+    const calcul = verifier(root).finally(() => enCalcul.delete(root));
+    enCalcul.set(root, calcul);
+    return calcul;
+  };
   const recalculer = () => {
-    calculs ??= (async () => { for (let [root] = perimes; root; [root] = perimes) await calculer(root); })().finally(() => { calculs = null; });
+    calculs ??= (async () => { for (let [root] = perimes; root; [root] = perimes) await actualiser(root); })().finally(() => { calculs = null; });
   };
   const perimer = (root: string) => { perimes.add(root); recalculer(); };
   const invalider = (projectPath: string) => {
@@ -153,7 +161,7 @@ export function createEtapesService(deps: EtapesDependencies) {
   };
   const etat = async (root: string, fresh = false) => {
     const cached = etats.get(root);
-    if (fresh && (!cached || perimes.has(root))) return calculer(root);
+    if (fresh && (!cached || perimes.has(root))) return actualiser(root);
     if (!cached) { perimer(root); return (await enregistre())[root] ?? EN_COURS; }
     if (Date.now() - cached.at > ETAT_MAX_AGE_MS) perimer(root);
     return cached.value;
@@ -425,9 +433,22 @@ export function createEtapesService(deps: EtapesDependencies) {
     return created;
   };
 
+  const conversion = async (projectPath: unknown, frais: boolean) => {
+    const root = path.resolve(project(projectPath).root);
+    if ((await read(root)).nonJuridique) return null;
+    const state = frais ? await actualiser(root) : etats.get(root)?.value ?? (await enregistre())[root];
+    const ligne = state?.lignes.find((item) => item.nom === 'conversion');
+    if (!ligne) return null;
+    return {
+      aConvertir: !ligne.ok,
+      bilan: ligne.texte.split('\n')[0].split(' : pm dossier conversion')[0],
+      revoirMapping: !ligne.texte.startsWith('0 pièce(s)') && state?.lignes.find((item) => item.nom === 'mapping')?.ok === false,
+    };
+  };
+
   const lire = (projectPath: unknown) => read(project(projectPath).root);
 
-  return { tableau, invalider, lire, dossier, raisonnement, piece, modele, ajouterType, reprise, tache, types: typesOf };
+  return { tableau, conversion, invalider, lire, dossier, raisonnement, piece, modele, ajouterType, reprise, tache, types: typesOf };
 }
 
 export function createEtapesRouter(service: ReturnType<typeof createEtapesService>, taches: ReturnType<typeof createTachesService>) {
@@ -443,6 +464,7 @@ export function createEtapesRouter(service: ReturnType<typeof createEtapesServic
   };
   const upload = express.raw({ type: () => true, limit: '200mb' });
   router.get('/', handle((body) => service.tableau(body.frais === '1')));
+  router.get('/conversion', handle((body) => service.conversion(body.projectPath, body.frais === '1')));
   router.get('/dossier', handle((body) => service.lire(body.projectPath)));
   router.post('/dossier', express.json(), handle((body) => service.dossier(body)));
   router.post('/raisonnement', express.json(), handle((body) => service.raisonnement(body)));
