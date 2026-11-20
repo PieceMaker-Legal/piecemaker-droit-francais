@@ -36,6 +36,7 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
 
   context.mock.timers.tick(1000);
   const foreign = artifacts.publish({ page, title: 'Hors session' });
+  const customView = artifacts.publish({ page: page.replace('>v1<', '>Vue réservée<'), customView: true, pin: true });
   context.mock.timers.tick(1000);
   artifacts.publish({ url: plain.url, page });
   const toolName = 'mcp__artifacts__Artifact';
@@ -47,6 +48,7 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
     { ...row, id: 'c2', provider: 'codex', kind: 'tool_use', toolName, toolId: 'c2', toolInput: JSON.stringify({ file_path: 'page.html' }) },
     { ...row, id: 'r2', provider: 'codex', kind: 'tool_result', toolId: 'c2', content: JSON.stringify({ content: [{ type: 'text', text: receipt(withDb) }] }) },
     { ...row, id: 'c3', provider: 'mistral', kind: 'tool_use', toolName, toolId: 'c3', toolInput: { action: 'read', url: foreign.url }, toolResult: { content: receipt(foreign) } },
+    { ...row, id: 'c5', provider: 'codex', kind: 'tool_use', toolName, toolId: 'c5', toolInput: { file_path: 'page.html' }, toolResult: { content: receipt(customView) } },
   ];
   const app = express();
   app.use('/api/piecemaker/local', createArtifactFrameRouter());
@@ -90,7 +92,8 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   const post = (route: string, body: object = {}) => request(`/api/piecemaker/${route}?${query}`, body);
 
   const list = await (await request(`/api/piecemaker/artifacts?${query}`)).json() as Array<{ id: string }>;
-  assert.equal(list.length, 3);
+  assert.deepEqual(list.map(({ id }) => id).sort(), [plain.id, withDb.id, foreign.id].sort());
+  assert.deepEqual(await (await request(`/api/piecemaker/artifacts?${query}&scope=pinned`)).json(), []);
   const sessionItems = async (id: string) => request(`/api/piecemaker/artifacts/session/${id}?${query}`);
   const created = await (await sessionItems('fil-a')).json() as Array<{ id: string }>;
   assert.deepEqual(created.map(({ id }) => id), [withDb.id, plain.id]);
@@ -105,6 +108,8 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   assert.deepEqual(await creator(foreign.id), { sessionId: 'fil-b' });
 
   const { src } = await (await post(`artifacts/${plain.id}/frame`)).json() as { src: string };
+  const { src: customSrc } = await (await post(`artifacts/${customView.id}/frame`)).json() as { src: string };
+  assert.match(await (await request(customSrc)).text(), />Vue réservée</);
   const html = await request(src);
   assert.equal(html.status, 200);
   assert.match(html.headers.get('content-security-policy') ?? '', /connect-src 'none'/);

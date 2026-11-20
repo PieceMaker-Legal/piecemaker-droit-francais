@@ -63,6 +63,10 @@ export const contentTypeOf = (file) => TYPES[path.extname(file).toLowerCase()] ?
 export const isText = (type) => TEXT.test(String(type || ''));
 export const urlOf = (id) => `${URL_PREFIX}${id}`;
 
+export function isCustomView({ id, tag }) {
+  return tag === CUSTOM_VIEW_TAG || id === CUSTOM_VIEW_ID;
+}
+
 /** Un artifact s'adresse par son URL ou son identifiant seul. */
 export function idOf(url) {
   const raw = String(url ?? '').trim();
@@ -381,7 +385,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
         if (scope === 'assets') return (meta.assets ?? []).map(({ id, file, type: assetType, size }) => ({ id, url: `assets/${file}`, type: assetType, size }));
         return meta.versions.map(({ version, label, published_at: at, files: published, digest }) => ({ version, label, published_at: at, files: published.length + 1, digest })).reverse();
       }
-      let items = ids().map(load).filter((meta) => meta.tag !== CUSTOM_VIEW_TAG);
+      let items = ids().map(load).filter((meta) => !isCustomView(meta));
       if (scope === 'pinned') items = items.filter((meta) => meta.pinned);
       if (type) items = items.filter((meta) => meta.type === type);
       return items.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, max).map(summary);

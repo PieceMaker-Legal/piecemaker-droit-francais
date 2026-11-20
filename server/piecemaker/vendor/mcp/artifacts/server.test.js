@@ -46,13 +46,20 @@ test('the project view keeps one editable HTML history per project across MCP se
   assert.match((await first.call('Artifact', { action: 'open', url })).text, /Agent › Vue personnalisée/);
   assert.deepEqual(first.calls, []);
 
+  const metadata = path.join(first.root, '.piecemaker', 'artifacts', 'items', url.split('/').at(-1), 'artifact.json');
+  const legacyView = JSON.parse(fs.readFileSync(metadata, 'utf8'));
+  delete legacyView.tag;
+  fs.writeFileSync(metadata, JSON.stringify(legacyView));
+
   const reopened = await connect({ root: first.root });
+  assert.deepEqual(JSON.parse((await reopened.call('Artifact', { action: 'list' })).text), []);
   assert.match((await reopened.call('Artifact', { action: 'read', url })).text, /<h1>v1<\/h1>/);
   const edited = await reopened.call('Artifact', {
     action: 'save_view', file_path: 'page.html', edits: [{ old_str: '<h1>v1</h1>', new_str: '<h1>v2</h1>' }],
   });
   assert.equal(edited.error, false, edited.text);
   assert.equal(urlIn(edited.text), url);
+  assert.equal(JSON.parse(fs.readFileSync(metadata, 'utf8')).tag, 'agent-custom-view');
   assert.match((await first.call('Artifact', { action: 'read', url })).text, /<h1>v2<\/h1>/);
   assert.match((await first.call('Artifact', { action: 'read', url, path: 'widget.js' })).text, /window.widget = true/);
   assert.match((await first.call('Artifact', { action: 'read', url, ver: 1 })).text, /<h1>v1<\/h1>/);

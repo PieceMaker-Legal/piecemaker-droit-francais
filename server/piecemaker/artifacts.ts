@@ -7,7 +7,7 @@ import express from 'express';
 
 import type { NormalizedMessage } from '@/shared/types.js';
 
-import { artifactProjectFile, openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
+import { artifactProjectFile, isCustomView, openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
 import { openArtifactReviews } from './vendor/mcp/artifacts/reviews.mjs';
 import { openStore } from './vendor/mcp/features/store.mjs';
 
@@ -122,7 +122,9 @@ async function artifactsCreatedInSession(root: string, sessionId: string, sessio
   const artifacts = openArtifacts(root);
   const items = Array.from(ids).flatMap((id) => {
     try {
-      const item = artifacts.summary(artifacts.load(id));
+      const meta = artifacts.load(id);
+      if (isCustomView(meta)) return [];
+      const item = artifacts.summary(meta);
       if (session.forked_from_session_id && Date.parse(item.created_at) < Date.parse(session.created_at)) return [];
       return [item];
     } catch (error) {
