@@ -257,7 +257,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                       {rowIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="horizontal" label={`Hauteur fenêtres colonne ${columnIndex + 1}`} value={column.split} onMove={(delta) => resizeRows(column, delta)} />}
                       {tab === 'files' ? <WorkspaceFilesPanel label={label} selectedProject={props.selectedProject} documentOpen={viewerOpen} expanded={expandedTab === tab} hidden={hidden} style={style} onSlots={setFilesSlots} onToggleExpand={toggleFilesExpand} onClose={() => close(tab)} />
                       : <Card className="piecemaker-workspace-panel" hidden={hidden} style={style}>
-                        {tab === 'agent' ? <AgentPanel projectPath={props.selectedProject!.fullPath} projectId={props.selectedProject!.projectId} panelActions={panelActions} /> : <>
+                        {tab === 'agent' ? <AgentPanel key={props.selectedProject!.fullPath} projectId={props.selectedProject!.projectId} projectPath={props.selectedProject!.fullPath} panelActions={panelActions} onShowSettings={props.onShowSettings} /> : <>
                           <header className="piecemaker-workspace-panel-header">
                             <span className="truncate text-sm font-medium">{label}</span>
                             {panelActions}

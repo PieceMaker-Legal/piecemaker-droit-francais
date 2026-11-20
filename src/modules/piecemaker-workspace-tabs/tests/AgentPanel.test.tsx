@@ -27,6 +27,19 @@ vi.mock(import('@/piecemaker/docx'), async (importOriginal) => ({
   ...await importOriginal(),
   DocxDocumentViewer: ({ file }: { file: { path: string } }) => <p>Éditeur Word de {file.path}</p>,
 }));
+vi.mock(import('@/shared/api'), async (importOriginal) => ({
+  ...await importOriginal(),
+  api: { sessionDetails: async (id: string) => ({
+    ok: true,
+    json: async () => ({ data: { sessionId: id, provider: 'claude', project: { projectId: 'fil', fullPath: '/dossiers/exemple-fil' } } }),
+  }) },
+}));
+vi.mock('@/shared/context/UiPreferencesContext', () => ({ useUiPreferences: () => ({}) }));
+vi.mock('@/modules/chat', () => ({
+  ChatInterface: ({ selectedSession, selectedProject }: { selectedSession: ProjectSession; selectedProject: Project }) => (
+    <p>Session {selectedSession.id} dans {selectedProject.fullPath}</p>
+  ),
+}));
 vi.mock('@/piecemaker/editor-tabs/editorPanels', () => ({ openInEditor: vi.fn() }));
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
 vi.mock('@/shared/context/WebSocketContext', () => ({ useWebSocket: () => ({ subscribe: () => () => undefined }) }));
@@ -77,16 +90,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('liste les fils, les décisions à traiter et ouvre un fil comme une session CloudCLI', async () => {
-  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /><Location /></MemoryRouter>);
+it('liste les fils, les décisions à traiter et ouvre le chat du fil dans le volet sans quitter le coordinateur', async () => {
+  render(<MemoryRouter initialEntries={['/session/agent-1']}><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /><Location /></MemoryRouter>);
   expect((await screen.findAllByText('Rédiger la note de synthèse')).length).toBe(2);
   expect(screen.getByText('Fils de discussion')).toBeTruthy();
   expect(screen.getByText('À traiter')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Plan long/ }));
   await act(async () => undefined);
   expect(calls.list.some((call) => call.url.endsWith('/decision') && (call.body as { option: number }).option === 1)).toBe(true);
-  fireEvent.click(document.querySelector('[data-thread="f1"] button')!);
-  expect(screen.getByTestId('location').textContent).toBe('/session/s1');
+  fireEvent.click(screen.getByRole('button', { name: /Rédiger la note de synthèse.*En cours/i }));
+  const conversation = await screen.findByText('Session s1 dans /dossiers/exemple-fil');
+  expect(conversation.closest('[aria-label="Volet de l’agent"]')).toBeTruthy();
+  expect(screen.getByTestId('location').textContent).toBe('/session/agent-1');
+  fireEvent.click(screen.getByRole('button', { name: 'Retour aux fils de discussion' }));
+  expect(screen.queryByText('Session s1 dans /dossiers/exemple-fil')).toBeNull();
+  expect(screen.getByText('Fils de discussion')).toBeTruthy();
 });
 
 const Workspace = withWorkspacePanels((props) => <WorkspaceIconTabs activeTab={props.activeTab} setActiveTab={props.setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />);

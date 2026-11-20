@@ -1,7 +1,6 @@
-import { ChevronDown, ChevronRight, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, ChevronDown, ChevronRight, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
@@ -10,6 +9,9 @@ import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, T
 import { ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
+
+const ThreadConversation = lazy(() => import('@/modules/piecemaker-workspace-tabs/agent/ThreadConversation'));
+const threadLoading = <p role="status" className="p-4 text-sm">Chargement de la session…</p>;
 
 type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled';
 
@@ -51,8 +53,7 @@ function DeliverableState({ deliverable, act }: { deliverable: AgentDeliverable;
   </select>;
 }
 
-function Threads({ state, act, query, filter }: { state: AgentState; act: AgentActions; query: string; filter: AgentThreadState | 'all' }) {
-  const navigate = useNavigate();
+function Threads({ state, act, query, filter, onOpen }: { state: AgentState; act: AgentActions; query: string; filter: AgentThreadState | 'all'; onOpen: (threadId: string) => void }) {
   const pending = pendingCards(state).count;
   const threads = state.threads
     .filter((thread) => filter === 'all' || thread.state === filter)
@@ -65,7 +66,7 @@ function Threads({ state, act, query, filter }: { state: AgentState; act: AgentA
     const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
     const active = ACTIVE_THREAD_STATES.includes(thread.state);
     return <li key={thread.id} className="group rounded-xl px-2 py-2 hover:bg-accent" data-thread={thread.id}>
-      <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && navigate(`/session/${thread.sessionId}`)}>
+      <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => onOpen(thread.id)}>
         <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] text-foreground">{thread.title}</span>
@@ -212,7 +213,7 @@ function Scheduled({ state, act }: { state: AgentState; act: AgentActions }) {
   </li>)}</ul>;
 }
 
-export function AgentPanel({ projectPath, projectId, panelActions }: { projectPath: string; projectId: string; panelActions?: ReactNode }) {
+export function AgentPanel({ projectPath, projectId, panelActions, onShowSettings }: { projectPath: string; projectId: string; panelActions?: ReactNode; onShowSettings?: () => void }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
   const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
@@ -220,6 +221,8 @@ export function AgentPanel({ projectPath, projectId, panelActions }: { projectPa
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<AgentThreadState | 'all'>('all');
   const [artifact, setArtifact] = useState<{ id: string; title: string; sessionId: string | null } | null>(null);
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const openThread = state?.threads.find((thread) => thread.id === openThreadId);
   const onTab = setTab;
 
   function customView() {
@@ -243,7 +246,21 @@ export function AgentPanel({ projectPath, projectId, panelActions }: { projectPa
     setArtifact({ id, title: entry.title, sessionId });
   };
 
-  return <div className="pm-agent-panel flex h-full min-w-0 flex-col text-foreground" aria-label="Volet de l’agent">
+  const panelClass = 'pm-agent-panel flex h-full min-w-0 flex-col text-foreground';
+  if (openThread?.sessionId) return <div className={panelClass} aria-label="Volet de l’agent">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+        <button type="button" aria-label="Retour aux fils de discussion" title="Retour aux fils de discussion" className="shrink-0 rounded-lg p-2 hover:bg-accent" onClick={() => setOpenThreadId(null)}>
+          <ArrowLeft className="size-4" />
+        </button>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{openThread.title}</h2>
+        {panelActions && <div className="flex shrink-0 items-center gap-1 [&_button]:p-1 [&_svg]:size-4">{panelActions}</div>}
+      </header>
+      <Suspense fallback={threadLoading}>
+        <ThreadConversation key={openThread.sessionId} sessionId={openThread.sessionId} onShowSettings={onShowSettings} />
+      </Suspense>
+  </div>;
+
+  return <div className={panelClass} aria-label="Volet de l’agent">
     <header className="relative flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-1">
       <nav role="tablist" className="flex min-w-0 flex-wrap items-center gap-1">
         {TABS.map(([value, label]) => <button key={value} role="tab" type="button" aria-selected={tab === value} onClick={() => onTab(value)}
@@ -271,7 +288,7 @@ export function AgentPanel({ projectPath, projectId, panelActions }: { projectPa
     {state && <>
       {searching && tab === 'threads' && <div className="border-b border-border px-4 py-2"><input autoFocus aria-label="Rechercher un fil" className={inputClass} placeholder="Rechercher un fil" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} />}
+        {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} onOpen={setOpenThreadId} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
         {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
         {tab === 'scheduled' && <Scheduled state={state} act={act} />}
