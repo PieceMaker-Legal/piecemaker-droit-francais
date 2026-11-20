@@ -136,7 +136,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
       >
         {isAnswerRow ? (
           <div className={`${railClassName} rounded-b-lg pb-2 pt-1.5`}>
-            <div dir="auto" className="text-sm">
+            <div dir="auto" data-message-copy-target className="w-fit max-w-full text-sm">
               {isPendingAnswer ? (
                 <Shimmer>{t('sideQuestion.pending')}</Shimmer>
               ) : (
@@ -159,6 +159,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
             <div className="mt-1.5 flex justify-end">
               <div
                 dir="auto"
+                data-message-copy-target
                 className="max-w-[85%] break-words rounded-2xl rounded-br-md border border-border bg-muted px-3 py-2 font-serif text-sm text-foreground shadow-sm dark:bg-gray-800"
               >
                 <Markdown breaks className="prose prose-sm max-w-none font-serif dark:prose-invert">
@@ -197,7 +198,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
               <ChatMessageFiles files={message.files} />
             )}
             {userCopyContent.trim().length > 0 || (!message.images?.length && !message.files?.length) ? (
-              <div className="group max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/60 px-3 py-2 text-foreground shadow-sm dark:bg-gray-800/60 sm:px-4">
+              <div data-message-copy-target className="group max-w-full rounded-2xl rounded-br-md border border-border/60 bg-muted/60 px-3 py-2 text-foreground shadow-sm dark:bg-gray-800/60 sm:px-4">
                 <div dir="auto" className="break-words font-serif text-sm">
                   <Markdown
                     breaks
@@ -330,7 +331,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
             {message.isToolUse && message.toolName === 'Workflow' ? (
               /* A workflow launch owns its whole card too. The anchor is what
                  the background-tasks strip scrolls to. */
-              <div id={`tool-result-${message.toolId}`} className="scroll-mt-4">
+              <div id={`tool-result-${message.toolId}`} data-message-copy-target className="scroll-mt-4">
                 <WorkflowPanel
                   toolInput={message.toolInput}
                   toolResult={message.toolResult}
@@ -344,7 +345,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
             ) : message.isSubagentContainer ? (
               /* A spawned agent owns its whole card — header, timeline and
                  result — so it never goes through the tool input/result pair. */
-              <div id={`tool-result-${message.toolId}`} className="scroll-mt-4">
+              <div id={`tool-result-${message.toolId}`} data-message-copy-target className="scroll-mt-4">
                 <SubagentPanel
                   toolInput={message.toolInput}
                   toolResult={message.toolResult}
@@ -358,12 +359,10 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
               </div>
             ) : message.isToolUse ? (
               <>
-                <div className="flex flex-col">
-                  <div className="flex flex-col">
-                    <Markdown className="prose prose-sm max-w-none font-serif dark:prose-invert">
-                      {String(message.displayText || '')}
-                    </Markdown>
-                  </div>
+                <div data-message-copy-target className="w-fit max-w-full">
+                  <Markdown className="prose prose-sm max-w-none font-serif dark:prose-invert">
+                    {String(message.displayText || '')}
+                  </Markdown>
                 </div>
 
                 {message.toolInput && (
@@ -420,9 +419,11 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                 <ReasoningTrigger />
                 <ReasoningContent>
                   <MessageCopyControl content={isExporting ? undefined : String(message.content || '')}>
-                    <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-                      {message.content}
-                    </Markdown>
+                    <div data-message-copy-target className="w-fit max-w-full">
+                      <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+                        {message.content}
+                      </Markdown>
+                    </div>
                   </MessageCopyControl>
                 </ReasoningContent>
               </Reasoning>
@@ -452,7 +453,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                       const formatted = JSON.stringify(parsed, null, 2);
 
                       return (
-                        <div className="my-2">
+                        <div data-message-copy-target className="my-2">
                           <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -477,11 +478,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   // One component for both states on purpose: swapping element
                   // types here remounted the whole reply the instant it finished.
                   return message.type === 'assistant' ? (
-                    <StreamingMarkdown
-                      content={content}
-                      isStreaming={Boolean(message.isStreaming)}
-                      className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert"
-                    />
+                    <div data-message-copy-target className={copyContent ? 'w-fit max-w-full' : undefined}>
+                      <StreamingMarkdown
+                        content={content}
+                        isStreaming={Boolean(message.isStreaming)}
+                        className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert"
+                      />
+                    </div>
                   ) : (
                     <div className="whitespace-pre-wrap">
                       {content}

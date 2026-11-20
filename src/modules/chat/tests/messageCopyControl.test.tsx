@@ -22,13 +22,16 @@ it('opens copy formats from the message without intercepting selection, links or
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
   const selection = window.getSelection()!;
   try {
-    render(
+    const { container } = render(
       <MessageComponent message={prompt} prevMessage={null} createDiff={() => []} provider="claude" onEditMessage={onEditMessage} />,
     );
     expect(screen.queryByText(new Date(timestamp).toLocaleTimeString())).toBeNull();
     expect(screen.queryByText('U')).toBeNull();
     expect(screen.queryByText('TXT')).toBeNull();
     expect(screen.queryByText('MD')).toBeNull();
+
+    fireEvent.click(container.firstElementChild!, { button: 0 });
+    expect(screen.queryByRole('group', { name: 'Copy message' })).toBeNull();
 
     const edit = screen.getByRole('button', { name: /edit/i });
     fireEvent.click(edit);
@@ -62,8 +65,8 @@ it('opens copy formats from the message without intercepting selection, links or
   }
 });
 
-it('moves focus to the copy formats and restores it on Escape', () => {
-  render(
+it('opens copy from the reply body and restores keyboard focus on Escape', () => {
+  const { container } = render(
     <UiPreferencesProvider>
       <MessageComponent
         message={{ type: 'assistant', content: 'Here is the answer.', timestamp }}
@@ -73,6 +76,12 @@ it('moves focus to the copy formats and restores it on Escape', () => {
       />
     </UiPreferencesProvider>,
   );
+  fireEvent.click(container.firstElementChild!, { button: 0 });
+  expect(screen.queryByRole('group', { name: 'Copy message' })).toBeNull();
+  fireEvent.click(screen.getByText('Here is the answer.'), { button: 0 });
+  expect(screen.getByRole('group', { name: 'Copy message' })).toBeTruthy();
+  fireEvent.keyDown(document.body, { key: 'Escape' });
+
   const trigger = screen.getByRole('button', { name: 'Copy message' });
   trigger.focus();
   fireEvent.click(trigger, { detail: 0 });
