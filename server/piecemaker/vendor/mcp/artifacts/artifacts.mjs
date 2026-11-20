@@ -31,6 +31,7 @@ export const LIMITS = {
 
 export const URL_PREFIX = 'piecemaker://artifact/';
 export const ID_PATTERN = /^[a-z][a-z0-9-]{2,63}$/;
+export const CUSTOM_VIEW_ID = 'vue-personnalisee';
 const PUBLISHED_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[A-Za-z0-9 _\-.~@+()/]{1,512}$/;
 const ASSET_ID = /^[0-9a-f]{32}$/;
 const RESERVED = new Set(['preflight.js']);
@@ -304,12 +305,13 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
      * déjà lu, `edits` appliqués compris ; `files` reprend la carte de l'outil Artifact.
      */
     /** @param {Record<string, any>} options */
-    publish({ url, page, files, title, description, icon, label, capabilities, pin, type, force, sourcePath }) {
+    publish({ url, customView, page, files, title, description, icon, label, capabilities, pin, type, force, sourcePath }) {
       checkText('description', description, LIMITS.description);
       checkText('label', label, LIMITS.label);
       checkText('icon', icon, LIMITS.icon);
       if (page !== undefined && Buffer.byteLength(page) > LIMITS.pageBytes) fail('resource_exhausted', `the page is over ${LIMITS.pageBytes / 1024 / 1024} MB.`);
       const at = now();
+      if (customView && fs.existsSync(metaFile(CUSTOM_VIEW_ID))) url = CUSTOM_VIEW_ID;
       let meta;
       if (url) {
         const id = idOf(url);
@@ -326,7 +328,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
         }
       } else {
         const resolvedTitle = titleOf(page) || title || (sourcePath ? path.basename(sourcePath, path.extname(sourcePath)) : '') || 'Artifact';
-        meta = { id: newId(resolvedTitle), title: resolvedTitle, description: '', icon: icon ?? null, type: type ?? null, pinned: false, created_at: at, updated_at: at, capabilities: {}, versions: [] };
+        meta = { id: customView ? CUSTOM_VIEW_ID : newId(resolvedTitle), title: resolvedTitle, description: '', icon: icon ?? null, type: type ?? null, pinned: false, created_at: at, updated_at: at, capabilities: {}, versions: [] };
       }
       if (page === undefined) {
         if (meta.versions.length) page = fs.readFileSync(path.join(versionFolder(meta.id, meta.versions.at(-1).version), 'index.html'), 'utf8');

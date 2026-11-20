@@ -6,18 +6,17 @@ import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
-import { ProjectArtifactCards, ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
+import { ProjectArtifactCards, ProjectArtifactDialog, ProjectCustomView } from '@/modules/piecemaker-artifacts';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 
 const ThreadConversation = lazy(() => import('@/modules/piecemaker-workspace-tabs/agent/ThreadConversation'));
 const threadLoading = <p role="status" className="p-4 text-sm">Chargement de la session…</p>;
 
-type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled';
+type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled' | 'custom';
 
-const TABS: Array<[AgentPanelTab, string]> = [['threads', 'Fils de discussion'], ['context', 'Contexte'], ['scheduled', 'Tâches planifiées']];
+const TABS: Array<[AgentPanelTab, string]> = [['threads', 'Fils de discussion'], ['context', 'Contexte'], ['scheduled', 'Tâches planifiées'], ['custom', 'Vue personnalisée']];
 const PROVIDERS: AgentProvider[] = ['claude', 'codex', 'mistral'];
-const VIEW_KEY = 'pm-agent-view';
 const inputClass = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring';
 const buttonClass = 'rounded-lg bg-muted px-3 py-1.5 text-sm text-foreground hover:bg-accent disabled:opacity-40';
 
@@ -216,7 +215,7 @@ function Scheduled({ state, act }: { state: AgentState; act: AgentActions }) {
 export function AgentPanel({ projectPath, projectId, panelActions, onShowSettings }: { projectPath: string; projectId: string; panelActions?: ReactNode; onShowSettings?: () => void }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
-  const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
+  const [menu, setMenu] = useState<'filter' | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<AgentThreadState | 'all'>('all');
@@ -224,16 +223,6 @@ export function AgentPanel({ projectPath, projectId, panelActions, onShowSetting
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const openThread = state?.threads.find((thread) => thread.id === openThreadId);
   const onTab = setTab;
-
-  function customView() {
-    setMenu(null);
-    onTab('threads');
-    try {
-      const saved = window.localStorage.getItem(VIEW_KEY);
-      if (saved) { setFilter(saved as AgentThreadState | 'all'); return; }
-      window.localStorage.setItem(VIEW_KEY, filter);
-    } catch { return; }
-  }
 
   const active = state?.threads.filter((thread) => ACTIVE_THREAD_STATES.includes(thread.state)).length ?? 0;
   const onOpenArtifact = (url: string) => {
@@ -268,10 +257,6 @@ export function AgentPanel({ projectPath, projectId, panelActions, onShowSetting
           <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
         </button>)}
       </nav>
-      <button type="button" aria-label="Ajouter" aria-haspopup="menu" aria-expanded={menu === 'plus'} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => setMenu(menu === 'plus' ? null : 'plus')}><Plus className="h-[18px] w-[18px]" /></button>
-      {menu === 'plus' && <div role="menu" className="absolute right-12 top-full z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
-        <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-accent" onClick={customView}>Vue personnalisée</button>
-      </div>}
       <button type="button" aria-label="Paramètres" title="Paramètres" aria-pressed={tab === 'settings'} className="shrink-0 rounded-lg p-2 hover:bg-accent" onClick={() => { setMenu(null); onTab('settings'); }}><SettingsIcon className="h-[18px] w-[18px]" /></button>
       <span className="flex-1" />
       <button type="button" aria-label="Rechercher" aria-pressed={searching} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => { setSearching(!searching); onTab('threads'); }}><Search className="h-[18px] w-[18px]" /></button>
@@ -284,8 +269,9 @@ export function AgentPanel({ projectPath, projectId, panelActions, onShowSetting
     </header>
     {artifact && <ProjectArtifactDialog project={projectPath} projectId={projectId} artifact={artifact} associatedSessionId={artifact.sessionId} onClose={() => setArtifact(null)} />}
     {error && <p role="alert" className="px-4 py-2 text-sm">{error}</p>}
-    {!state && !error && <p className="px-4 py-8 text-center text-sm">Chargement de PieceMaker Agent…</p>}
-    {state && <>
+    {tab === 'custom' && <ProjectCustomView key={projectPath} project={projectPath} />}
+    {tab !== 'custom' && !state && !error && <p className="px-4 py-8 text-center text-sm">Chargement de PieceMaker Agent…</p>}
+    {tab !== 'custom' && state && <>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'threads' && <ProjectArtifactCards project={projectPath} projectId={projectId} artifacts={state.artifacts} onOpen={onOpenArtifact} />}
         {searching && tab === 'threads' && <div className="border-b border-border px-4 py-2"><input autoFocus aria-label="Rechercher un fil" className={inputClass} placeholder="Rechercher un fil" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}

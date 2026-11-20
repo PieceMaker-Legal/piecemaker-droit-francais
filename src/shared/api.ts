@@ -11,13 +11,17 @@ async function artifactRequest<T>(projectPath: string, route = '', body?: unknow
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.error || `Artifacts indisponibles (HTTP ${response.status}).`);
+  if (!response.ok) throw Object.assign(new Error(result.error || `Artifacts indisponibles (HTTP ${response.status}).`), { code: result.code });
   return result as T;
 }
 
 export const artifactsApi = {
   forSession: (project: string, sessionId: string) => artifactRequest<ArtifactSummary[]>(project, `/session/${encodeURIComponent(sessionId)}`),
   detail: (project: string, id: string) => artifactRequest<ArtifactDetail>(project, `/${encodeURIComponent(id)}`),
+  customView: (project: string) => artifactRequest<ArtifactDetail & { created_at: string }>(project, '/vue-personnalisee').catch((error: Error & { code?: string }) => {
+    if (error.code === 'not_found') return null;
+    throw error;
+  }),
   creator: (project: string, id: string) => artifactRequest<{ sessionId: string | null }>(project, `/${encodeURIComponent(id)}/creator`),
   editableSource: (project: string, id: string, version: number) => artifactRequest<{ path: string }>(project, `/${encodeURIComponent(id)}/source`, { version, update: false }),
   updateFromSource: (project: string, id: string, version: number) => artifactRequest<ArtifactSummary>(project, `/${encodeURIComponent(id)}/source`, { version, update: true }),

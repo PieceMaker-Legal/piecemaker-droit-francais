@@ -7,9 +7,8 @@ const { execFileSync } = require('node:child_process');
 
 const PAGE = '<!doctype html><html><head><title>Chronologie du litige</title></head><body><h1>v1</h1></body></html>';
 
-async function connect({ home } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'artifacts-server-'));
-  fs.mkdirSync(path.join(root, '.piecemaker'));
+async function connect({ home, root = fs.mkdtempSync(path.join(os.tmpdir(), 'artifacts-server-')) } = {}) {
+  fs.mkdirSync(path.join(root, '.piecemaker'), { recursive: true });
   const calls = [];
   const pm = async (args) => { calls.push(args); return { code: 0, stdout: `Volet affiché : ${args[2]}`, stderr: '' }; };
   const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
@@ -30,6 +29,31 @@ async function connect({ home } = {}) {
 }
 
 const urlIn = (text) => /piecemaker:\/\/artifact\/[a-z0-9-]+/.exec(text)[0];
+
+test('the project view keeps one editable HTML history per project across MCP sessions', async () => {
+  const first = await connect();
+  const second = await connect();
+  const url = 'piecemaker://artifact/vue-personnalisee';
+  first.write('page.html', PAGE);
+  first.write('widget.js', 'window.widget = true;');
+  const saved = await first.call('Artifact', {
+    action: 'save_view', file_path: 'page.html', files: { 'widget.js': 'widget.js' }, capabilities: { db: {} },
+  });
+  assert.equal(saved.error, false, saved.text);
+  assert.equal(urlIn(saved.text), url);
+  assert.match((await second.call('Artifact', { action: 'read', url })).text, /not_found/);
+
+  const reopened = await connect({ root: first.root });
+  assert.match((await reopened.call('Artifact', { action: 'read', url })).text, /<h1>v1<\/h1>/);
+  const edited = await reopened.call('Artifact', {
+    action: 'save_view', file_path: 'page.html', edits: [{ old_str: '<h1>v1</h1>', new_str: '<h1>v2</h1>' }],
+  });
+  assert.equal(edited.error, false, edited.text);
+  assert.equal(urlIn(edited.text), url);
+  assert.match((await first.call('Artifact', { action: 'read', url })).text, /<h1>v2<\/h1>/);
+  assert.match((await first.call('Artifact', { action: 'read', url, path: 'widget.js' })).text, /window.widget = true/);
+  assert.match((await first.call('Artifact', { action: 'read', url, ver: 1 })).text, /<h1>v1<\/h1>/);
+});
 
 test('the server exposes the four artifact tools', async () => {
   const { client } = await connect();

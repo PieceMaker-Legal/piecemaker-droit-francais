@@ -24,6 +24,8 @@ Pour un document Word, appelle `Artifact publish file_path=<document.docx>` avec
 
 ## Modifier
 
+Pour **Agent › Vue personnalisée**, lis `Artifact read url=piecemaker://artifact/vue-personnalisee`. Si le résultat est `not_found`, crée une page HTML dans le dossier. Écris ou modifie la page avec `Artifact save_view file_path=Artifacts/vue.html`. Le volet ouvert actualise l’aperçu. Les fichiers annexes, les remplacements exacts et la base interactive suivent le contrat des artéfacts HTML.
+
 - Petite modification : `Artifact publish url=<artifact> file_path=<page> edits=[{old_str, new_str}]` modifie le fichier et publie en un appel. Chaque `old_str` est copié exactement et n'apparaît qu'une fois.
 - Réécriture : modifie le fichier (Edit), puis republie avec le même `file_path` et la même `url`.
 - Un artifact d'une session précédente : `Artifact list` pour retrouver l'URL, `Artifact read url=…` pour partir de la version en ligne. Un publish sans lecture préalable est refusé : il te rend la version en ligne, fusionne tes changements dessus, publie à nouveau. Ne passe `force` que si l'avocat a dit d'écraser cette version.

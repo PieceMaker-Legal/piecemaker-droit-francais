@@ -66,6 +66,17 @@ function ReviewedPage({ project, detail, version, reviewing }: {
   );
 }
 
+export function ProjectCustomView({ project }: { project: string }) {
+  const load = useCallback(() => artifactsApi.customView(project), [project]);
+  const { value, error, refresh } = useArtifactResource(load, true);
+  return <div className="flex h-full min-h-0 flex-col" role="tabpanel" aria-label="Vue personnalisée">
+    {error && <ArtifactState error={error} retry={() => void refresh()} />}
+    {!error && value === undefined && <ArtifactState />}
+    {!error && value === null && <ArtifactState empty="Demandez à l’agent de créer la vue personnalisée avec Artifact save_view." />}
+    {value && <ReviewedPage key={`${value.created_at}:${value.version}`} project={project} detail={value} version={value.version} reviewing={false} />}
+  </div>;
+}
+
 function Viewer({ project, projectId, target, change, back, onDirty }: {
   projectId: string;
   onDirty?: (dirty: boolean) => void;

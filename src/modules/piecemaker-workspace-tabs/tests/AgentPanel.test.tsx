@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react';
 import type { ComponentProps } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { withWorkspacePanels, WorkspaceIconTabs } from '@/modules/piecemaker-workspace-tabs';
 import { AgentPanel } from '@/modules/piecemaker-workspace-tabs/agent/AgentPanel';
 import type { AgentState, AgentThread } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import { ThemeProvider } from '@/shared/context/ThemeContext';
 import type { AppTab, Project, ProjectSession } from '@/shared/types';
 
 const calls = vi.hoisted(() => ({ list: [] as Array<{ url: string; body?: unknown; method?: string }>, state: null as unknown, agentSession: null as string | null }));
@@ -152,7 +153,6 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
   render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
   fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
   expect(await screen.findByRole('textbox', { name: /Instructions du projet/ })).toBeTruthy();
-  expect(screen.getAllByRole('tab')).toHaveLength(3);
   fireEvent.click(screen.getByRole('tab', { name: 'Tâches planifiées' }));
   for (const [title, kind, id] of [[thread.title, 'reminder', 'f1'], ['Message fictif', 'once', 's1'], ['Routine fictive', 'cron', 's2']]) {
     const cancel = screen.getByRole('button', { name: `Annuler : ${title}` });
@@ -161,6 +161,37 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
     await act(async () => undefined);
     expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/cancel', body: { project: PROJECT, kind, id }, method: undefined });
   }
+});
+
+it('affiche une vue créée après l’ouverture du panneau et suit ses versions sans rechargement', { timeout: 12000 }, async () => {
+  const id = 'vue-personnalisee';
+  const project = '/dossiers/projet-fictif';
+  let version = 0;
+  vi.stubGlobal('fetch', async (input: string) => {
+    const { pathname, searchParams } = new URL(input, 'http://localhost');
+    if (searchParams.get('projectPath') !== project) return Response.json({}, { status: 404 });
+    if (pathname.endsWith('/frame')) return Response.json({ src: `/apercu-fictif/${searchParams.get('ver')}` });
+    if (pathname.endsWith('/comments')) return Response.json([]);
+    if (pathname.endsWith(`/artifacts/${id}`) && version > 0) {
+      return Response.json({ id, title: 'Vue fictive', created_at: '2026-01-01', version, data_stamp: 0 });
+    }
+    return Response.json({ code: 'not_found' }, { status: 404 });
+  });
+  render(<ThemeProvider><MemoryRouter><AgentPanel projectPath={project} projectId="projet-fictif" /></MemoryRouter></ThemeProvider>);
+  fireEvent.click(screen.getByRole('tab', { name: 'Vue personnalisée' }));
+  await screen.findByText(/Demandez à l’agent de créer la vue/);
+
+  version = 1;
+  const panel = screen.getByRole('tabpanel', { name: 'Vue personnalisée' });
+  const frame = await within(panel).findByTitle('Vue fictive', {}, { timeout: 4500 });
+  expect(frame.getAttribute('src')).toBe('/apercu-fictif/1');
+  expect(frame.getAttribute('sandbox')?.split(' ')).not.toContain('allow-same-origin');
+
+  version = 2;
+  await waitFor(() => expect(within(panel).getByTitle('Vue fictive').getAttribute('src')).toBe('/apercu-fictif/2'), { timeout: 4500 });
+  fireEvent.click(screen.getByRole('tab', { name: /^Fils de discussion/ }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Vue personnalisée' }));
+  expect((await screen.findByTitle('Vue fictive')).getAttribute('src')).toBe('/apercu-fictif/2');
 });
 
 it('ouvre le document Word à gauche et la session de publication à droite depuis la première rangée des fils', async () => {

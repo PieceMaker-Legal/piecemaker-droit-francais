@@ -8,7 +8,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { openStore } from '../features/store.mjs';
 import { runPmScript } from '../features/server.mjs';
-import { applyEdits, idOf, isText, ID_PATTERN, openArtifacts, required, sourceFile, urlOf } from './artifacts.mjs';
+import { applyEdits, CUSTOM_VIEW_ID, idOf, isText, ID_PATTERN, openArtifacts, required, sourceFile, urlOf } from './artifacts.mjs';
 import { INTENTS, openTemplates } from './templates.mjs';
 import { openArtifactReviews } from './reviews.mjs';
 import { runPython } from './python.mjs';
@@ -74,12 +74,13 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
       'Artifacts of the case: HTML pages and Word documents you publish for the lawyer (a report, a dashboard, a tracker, an explainer, slides), shown in the Artifacts tab with their versions. Same contract as the Artifact tool of Claude; a link is piecemaker://artifact/<id>.',
       `For a new artifact, call quickstart first with its intent: it names the template to start from and the skill ${SKILL} to follow.`,
       'publish (default) takes file_path (an .html page or a .docx document in the case folder) plus an optional one-sentence description and icon; with url it adds a version to that artifact. edits (old_str/new_str copied exactly, each once) change the file and publish it in one call. files maps published paths to source files ({"data.json": "out/data.json"}), null removes one; files left out are kept. type_url (piecemaker://template/<name>) creates the artifact from a template, with no file_path needed. asset=true with url uploads file_path (or file_paths) to the asset store and returns the url to reference.',
+      `save_view creates or updates the project's single interactive HTML view in Agent › Vue personnalisée. First call read url=${urlOf(CUSTOM_VIEW_ID)} to get its source (not_found means it is empty). Then call save_view with file_path, optional edits, files and capabilities as for HTML publish. The open panel updates automatically. Use ArtifactData with the same URL for interactive data.`,
       'A publish to an artifact this session has not read or published is refused: read it first and build on what comes back. If it changed since your read, merge onto the newer version and publish again (force only when the lawyer said to discard that version).',
       'read returns the page (path for one file, ver for an older version). list returns the artifacts (scope mine, pinned, types, files, versions, assets). delete removes an artifact (path = an asset id removes that asset) only when the lawyer asks. open shows it to the lawyer: right after another tool changed it, or when asked; a publish needs no open. pin and unpin only when the lawyer asks.',
     ].join(' '),
     inputSchema: {
-      action: z.enum(['publish', 'read', 'list', 'delete', 'open', 'pin', 'unpin', 'quickstart']).optional(),
-      file_path: z.string().optional().describe('publish: an .html page or a .docx document in the case folder. With asset=true: the file to upload.'),
+      action: z.enum(['publish', 'save_view', 'read', 'list', 'delete', 'open', 'pin', 'unpin', 'quickstart']).optional(),
+      file_path: z.string().optional().describe('publish: an .html page or a .docx document in the case folder. save_view: an .html page. With asset=true: the file to upload.'),
       file_paths: z.array(z.string()).max(25).optional().describe('publish with asset=true: several files to upload.'),
       url: z.string().optional().describe('An artifact link piecemaker://artifact/<id> (or the id alone).'),
       title: z.string().max(200).optional().describe('publish: fallback title when the page has no <title>.'),
@@ -133,6 +134,10 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
         const result = await pm(caseArgs(['tab', 'afficher', 'artifacts', id]), root);
         return text([result.stdout, result.stderr].map((part) => String(part || '').trim()).filter(Boolean).join('\n') || `exit code ${result.code}`, result.code !== 0);
       }
+      const customView = action === 'save_view';
+      if (customView && (input.url || input.asset || input.file_paths || input.type_url || /\.docx$/i.test(input.file_path ?? ''))) {
+        throw Object.assign(new Error('save_view takes an HTML page for this project and uses its fixed URL. Use files to attach supporting files.'), { code: 'invalid_argument' });
+      }
       // publish
       if (input.asset) {
         const url = required(input.url, 'url', 'publish with asset');
@@ -156,8 +161,9 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
       } else if (input.edits) {
         throw Object.assign(new Error('edits need file_path.'), { code: 'invalid_argument' });
       }
-      const result = artifacts.publish({ url: input.url, page, files: input.files, title: input.title, description: input.description, icon: input.icon, label: input.label, capabilities: input.capabilities, pin: input.pin, force: input.force, sourcePath: input.file_path });
+      const result = artifacts.publish({ url: input.url, customView, page, files: input.files, title: input.title, description: input.description, icon: input.icon, label: input.label, capabilities: input.capabilities, pin: input.pin, force: input.force, sourcePath: input.file_path });
       if (source && input.edits?.length) fs.writeFileSync(source, page);
+      if (customView) return text(header(result, ['Preview: Agent › Vue personnalisée']));
       return text([header(result, [`published: ${result.published_files.join(', ')}`]), result.created ? `\nShown in the Artifacts tab. Give the lawyer the link ${result.url}.` : '\nThe Artifacts tab shows the new version.'].join('\n'));
     } catch (error) {
       return failure(error);
