@@ -91,6 +91,7 @@ export default defineConfig(({ mode }) => {
       host,
       port: parseInt(env.VITE_PORT) || 5173,
       proxy: {
+        '/api/piecemaker/local/artifact-frame/': { target: `http://${proxyHost}:${serverPort}`, changeOrigin: false },
         '/api': `http://${proxyHost}:${serverPort}`,
         '/ws': {
           target: `ws://${proxyHost}:${serverPort}`,
