@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
-import { ArtifactsPanel } from '@/modules/piecemaker-artifacts';
 import { AgentPanel } from '@/modules/piecemaker-workspace-tabs/agent/AgentPanel';
 import { useAgentSession } from '@/modules/piecemaker-workspace-tabs/agent/useAgentSession';
 import { PanelAnonymizationButton } from '@/modules/piecemaker-workspace-tabs/PanelAnonymizationButton';
@@ -265,9 +264,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                           <div className="piecemaker-workspace-panel-content">
                             {tab === 'git' && <GitPanel selectedProject={props.selectedProject} isMobile={props.isMobile} onFileOpen={(filePath) => openInEditor(filePath)} onProjectSelect={props.onProjectSelect} onProjectsRefresh={props.onProjectsRefresh} />}
                             {tab === 'browser' && <BrowserUsePanel isVisible={!expandedTab || expandedTab === tab} onShowSettings={props.onShowSettings} />}
-                            {plugin && (plugin.name === 'piecemaker-artifacts'
-                              ? <ArtifactsPanel project={props.selectedProject?.fullPath || props.selectedProject?.path || null} projectId={props.selectedProject?.projectId} />
-                              : <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />)}
+                            {plugin && <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />}
                           </div>
                         </>}
                       </Card>}

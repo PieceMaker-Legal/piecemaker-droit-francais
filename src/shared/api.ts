@@ -16,7 +16,6 @@ async function artifactRequest<T>(projectPath: string, route = '', body?: unknow
 }
 
 export const artifactsApi = {
-  list: (project: string) => artifactRequest<ArtifactSummary[]>(project),
   forSession: (project: string, sessionId: string) => artifactRequest<ArtifactSummary[]>(project, `/session/${encodeURIComponent(sessionId)}`),
   detail: (project: string, id: string) => artifactRequest<ArtifactDetail>(project, `/${encodeURIComponent(id)}`),
   creator: (project: string, id: string) => artifactRequest<{ sessionId: string | null }>(project, `/${encodeURIComponent(id)}/creator`),
@@ -24,7 +23,6 @@ export const artifactsApi = {
   updateFromSource: (project: string, id: string, version: number) => artifactRequest<ArtifactSummary>(project, `/${encodeURIComponent(id)}/source`, { version, update: true }),
   frame: (project: string, id: string, version: number) => artifactRequest<{ src: string }>(project, `/${encodeURIComponent(id)}/frame`, {}, undefined, version),
   pin: (project: string, id: string, pinned: boolean) => artifactRequest<ArtifactSummary>(project, `/${encodeURIComponent(id)}/pin`, { pinned }),
-  remove: (project: string, id: string) => artifactRequest(project, `/${encodeURIComponent(id)}`, undefined, 'DELETE'),
   threads: (project: string, id: string) => artifactRequest<ArtifactThread[]>(project, `/${encodeURIComponent(id)}/comments`),
   comment: (project: string, id: string, body: { text: string; anchor: { version: number; passage?: ArtifactPassage } } | { text: string; thread_id: string }) =>
     artifactRequest<ArtifactThread>(project, `/${encodeURIComponent(id)}/comments`, body),

@@ -1,6 +1,6 @@
 # Artifacts (MCP `artifacts` et onglet Artifacts)
 
-Reprise, dans PieceMaker, de la fonction Artifacts de Claude : l'agent publie des pages HTML et des documents Word pour le dossier, l'avocat les voit dans l'onglet **Artifacts**, en garde les versions, les commente et les annote. Les quatre outils reprennent les paramètres de ceux de Claude ; un lien s'écrit `piecemaker://artifact/<id>`, un template `piecemaker://template/<nom>`.
+Reprise, dans PieceMaker, de la fonction Artifacts de Claude : l'agent publie des pages HTML et des documents Word pour le dossier, l'avocat les voit dans l'onglet **Artifacts**, en garde les versions et les commente. Les quatre outils reprennent les paramètres de ceux de Claude ; un lien s'écrit `piecemaker://artifact/<id>`, un template `piecemaker://template/<nom>`.
 
 ```mermaid
 flowchart LR
@@ -8,7 +8,7 @@ flowchart LR
   A -->|ArtifactData| D[".piecemaker/artifacts/data/<id>/"]
   A -->|ArtifactComments| C[".piecemaker/artifacts/comments/<id>.json"]
   A -->|ArtifactComments annotate| O[Volet Artifacts]
-  O -->|Annotations et décisions| C
+  O -->|Commentaires| C
   A -->|ArtifactTemplates sync / save / push| T["~/.piecemaker/artifacts-templates (dépôt Git)"]
   O -->|/api/piecemaker/artifacts/*| S
   O -->|iframe sandbox + jeton| F["/api/piecemaker/local/artifact-frame/<jeton>/…"]
@@ -21,7 +21,7 @@ flowchart LR
 |---|---|---|
 | `Artifact` | `publish` (défaut), `read`, `list`, `delete`, `open`, `pin`, `unpin`, `quickstart` | pages, versions, fichiers annexes, assets, templates |
 | `ArtifactData` | `get`, `list`, `query`, `set`, `update`, `str_replace`, `delete`, `batch` | base partagée d'un artifact, même moteur que `FeatureData` (`store.mjs`) |
-| `ArtifactComments` | `read`, `reply`, `resolve`, `annotate` | ouverture de la revue, annotations et décisions de l’avocat |
+| `ArtifactComments` | `read`, `reply`, `resolve`, `annotate` | ouverture des commentaires, lecture des annotations et décisions |
 | `ArtifactTemplates` | `list`, `read`, `run`, `status`, `sync`, `save`, `push` | bibliothèque de templates, dépôt séparé, scripts Python des templates |
 
 Repris d'Artifact : `file_path`, `url`, `title` (repli quand la page n'a pas de `<title>`), `description`, `icon`, `label`, `edits` (tout ou rien, puis écrits sur disque), `files` (carte chemin publié → source, `null` retire, les absents restent), `type_url`, `capabilities`, `pin`, `force`, `asset` / `file_paths`, `path`, `ver`, `scope` (`mine`, `pinned`, `types`, `files`, `versions`, `assets`), `limit`, `type`, `intent` (`document`, `slides`, `design`, `other`).
@@ -49,11 +49,11 @@ Une version est écrite dans un dossier temporaire puis renommée : jamais de ve
 
 ## Affichage
 
-- Le manifeste `plugins/piecemaker-artifacts` déclare le volet. Le volet natif (`src/modules/piecemaker-artifacts`) demande un jeton d'affichage (`POST /api/piecemaker/artifacts/:id/frame`, authentifié), valable une heure, puis charge `/api/piecemaker/local/artifact-frame/<jeton>/index.html` dans une iframe `sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"`, sans `allow-same-origin` : la page n'a ni le jeton de session ni le stockage de PieceMaker.
+- Le manifeste `plugins/piecemaker-artifacts` déclare le volet. Le plugin demande un jeton d'affichage (`POST /api/piecemaker/artifacts/:id/frame`, authentifié), valable une heure, puis charge `/api/piecemaker/local/artifact-frame/<jeton>/index.html` dans une iframe `sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"`, sans `allow-same-origin` : la page n'a ni le jeton de session ni le stockage de PieceMaker.
 - CSP de la page : `connect-src 'none'` (aucune requête réseau), images et médias de l'application ou `data:`/`blob:`, scripts des CDN admis par Claude (cdnjs, jsdelivr, unpkg, tailwind, jquery), styles Google Fonts.
 - Le serveur injecte `__piecemaker/runtime.js` en tête de la page : `window.artifact.db` (capability `db`), `window.artifact.theme`, `window.artifact.download`, événements `artifact:data` et `artifact:theme`. Les appels passent par `postMessage` vers l'onglet, qui vérifie la source et appelle `POST /api/piecemaker/artifacts/:id/data`, refusé sans la capability.
 - L'onglet interroge l'artifact affiché toutes les 3 s : nouvelle version → rechargement (si l'avocat regarde la dernière), base modifiée → `artifact:data`.
-- Galerie : tous / épinglés, épingler, supprimer (deux clics), copier le lien, changer de version et ouvrir la revue.
+- Galerie : tous / épinglés, épingler, supprimer (deux clics), copier le lien, changer de version et ouvrir les commentaires. Un artéfact Word s’ouvre dans l’éditeur de fichiers.
 
 ## Ouverture depuis Projet
 
@@ -62,12 +62,13 @@ Dans **Projet › Contexte › Artéfacts**, le contenu s’ouvre à gauche. La 
 - HTML : **Modifier le HTML** ouvre l’éditeur de fichiers. Enregistre le fichier, ferme l’éditeur puis choisis **Actualiser depuis le fichier** pour créer une version de l’artifact. Si la source n’est plus disponible dans le dossier, PieceMaker crée une copie de travail depuis la version affichée.
 - Word : `Artifact publish file_path=<document.docx>` référence le document du dossier. Eigenpal ouvre ce document et l’enregistre par le parcours Word habituel. Le fichier porte la mention **Artéfact** dans le volet Word, même si tu le rouvres par son chemin. La suppression de l’artifact retire la mention et conserve le document.
 
-## Revue dans PieceMaker
+## Commentaires et revue
 
-- Le bouton **Revue** ouvre les commentaires de la version affichée. L’avocat peut surligner un passage, y ajouter une remarque ou commenter la version entière.
+- Dans l’onglet **Artifacts**, le bouton **Commentaires** affiche les fils. Un nouveau commentaire est lié à la version affichée.
+- Dans **Projet**, le bouton **Revue** ouvre les commentaires de la version affichée. L’avocat peut surligner un passage, y ajouter une remarque ou commenter la version entière.
 - L’avocat peut approuver la version ou demander des modifications. Une demande contient un motif. Chaque décision est liée à la version affichée.
 - PieceMaker enregistre les fils et les décisions dans `.piecemaker/artifacts/comments/<id>.json`. Les annotations incluent le texte sélectionné, sa position et son contexte immédiat.
-- `ArtifactComments annotate url=… ver=…` ouvre la revue à cette version via la commande de volet existante. Sans `ver`, l’outil choisit la dernière version.
+- `ArtifactComments annotate url=… ver=…` ouvre le volet des commentaires à cette version via la commande de volet existante. Sans `ver`, l’outil choisit la dernière version.
 - `ArtifactComments read` renvoie les fils. Les décisions portent la valeur `approved` ou `changes_requested` dans `anchor.decision`. L’assistant peut répondre, puis résoudre chaque fil traité.
 - PieceMaker récupère les anciennes décisions terminées lors de la lecture des fils. Les fils déjà importés restent consultables.
 

@@ -1,13 +1,16 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { ArtifactsPanel, SessionArtifacts } from '@/modules/piecemaker-artifacts';
+import { SessionArtifacts } from '@/modules/piecemaker-artifacts';
+import { ProjectArtifact } from '@/modules/piecemaker-artifacts/ArtifactsPanel';
 import { ThemeProvider } from '@/shared/context/ThemeContext';
 import type { ArtifactThread } from '@/shared/types';
 
+import { mount, unmount } from '@/../plugins/piecemaker-artifacts/src/index';
+
 afterEach(() => vi.unstubAllGlobals());
 
-test('a review opened by the agent saves annotations and decisions to its selected version', { timeout: 10000 }, async () => {
+test('a review opened from Project saves annotations and decisions to its selected version', { timeout: 10000 }, async () => {
   const project = '/dossiers/exemple';
   const id = 'contrat-exemple';
   const title = 'Revue du contrat';
@@ -34,8 +37,11 @@ test('a review opened by the agent saves annotations and decisions to its select
     });
   });
   vi.stubGlobal('fetch', request);
-  Object.assign(window, { __piecemakerArtifactsShow: { project, artifact: `${id}@v1` } });
-  render(<ThemeProvider><ArtifactsPanel project={project} /></ThemeProvider>);
+  render(<ThemeProvider>
+    <ProjectArtifact project={project} projectId="projet-fictif" id={id} onClose={() => undefined} onDirty={() => undefined} />
+  </ThemeProvider>);
+  fireEvent.change(await screen.findByRole('combobox', { name: 'Version' }), { target: { value: '1' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Revue' }));
 
   const frame = await waitFor(() => {
     const element = screen.getAllByTitle(title).find((item): item is HTMLIFrameElement => item instanceof HTMLIFrameElement);
@@ -71,31 +77,67 @@ test('a review opened by the agent saves annotations and decisions to its select
   expect(screen.queryByText(quote)).toBeNull();
 });
 
-test('opens an artifact created in the current thread in the existing panel', async () => {
+test('the original gallery opens HTML and Word artifacts from the thread', async () => {
   const project = '/dossiers/projet-fictif';
   const id = 'note-fictive';
   const title = 'Note fictive';
-  const artifact = { id, title, url: `piecemaker://artifact/${id}`, version: 1, updated_at: '2026-01-01' };
-  vi.stubGlobal('fetch', vi.fn(async (input: string) => {
-    const { pathname } = new URL(input, 'http://localhost');
-    if (pathname.endsWith('/session/fil-fictif')) return Response.json([artifact]);
-    if (pathname.endsWith('/artifacts')) return Response.json([]);
-    if (pathname.endsWith(`/artifacts/${id}`)) {
-      return Response.json({ ...artifact, versions: [{ version: 1, published_at: '2026-01-01' }] });
+  const wordId = 'rapport-fictif';
+  const documentPath = `${project}/rapport.docx`;
+  const artifact = { id, title, url: `piecemaker://artifact/${id}`, version: 2, updated_at: '2026-01-02' };
+  const word = { ...artifact, id: wordId, title: 'Rapport Word', format: 'docx', document_path: documentPath };
+  const versions = [{ version: 2, published_at: '2026-01-02' }, { version: 1, published_at: '2026-01-01' }];
+  const request = vi.fn(async (input: string, options?: RequestInit) => {
+    const { pathname, searchParams } = new URL(input, 'http://localhost');
+    if (pathname.endsWith('/session/fil-fictif') || pathname.endsWith('/artifacts')) return Response.json([artifact, word]);
+    if (pathname.endsWith(`/artifacts/${id}`)) return Response.json({ ...artifact, versions });
+    if (pathname.endsWith(`/artifacts/${wordId}`)) return Response.json(word);
+    if (pathname.endsWith('/frame')) return Response.json({ src: `/apercu-fictif/${searchParams.get('ver') ?? 2}` });
+    if (pathname.endsWith('/comments')) {
+      if (options?.method === 'POST') return Response.json({}, { status: 201 });
+      return Response.json([]);
     }
-    if (pathname.endsWith('/frame')) return Response.json({ src: '/apercu-fictif' });
-    if (pathname.endsWith('/comments')) return Response.json([]);
     return new Response(null, { status: 404 });
-  }));
-
-  render(<ThemeProvider>
-    <SessionArtifacts project={project} sessionId="fil-fictif" subscribe={() => () => undefined} />
-    <ArtifactsPanel project={project} />
-  </ThemeProvider>);
-  const threadArtifacts = await screen.findByRole('group', { name: 'Artifacts de la session' });
-  fireEvent.click(within(threadArtifacts).getByRole('button', { name: title }));
-  await waitFor(() => {
-    const frame = screen.getAllByTitle(title).find((node) => node instanceof HTMLIFrameElement);
-    expect(frame?.getAttribute('src')).toBe('/apercu-fictif');
   });
+  vi.stubGlobal('fetch', request);
+
+  const openFileInEditor = vi.fn();
+  const container = document.createElement('div');
+  document.body.append(container);
+  mount(container, {
+    context: { theme: 'light', project: { name: 'projet-fictif', path: project } },
+    onContextChange: () => () => undefined,
+    openFileInEditor,
+  });
+
+  try {
+    const tab = within(container);
+    await tab.findByRole('heading', { name: title });
+    expect(tab.getByRole('tab', { name: 'Tous' }).getAttribute('aria-selected')).toBe('true');
+    render(<SessionArtifacts project={project} sessionId="fil-fictif" subscribe={() => () => undefined} />);
+    const threadArtifacts = within(await screen.findByRole('group', { name: 'Artifacts de la session' }));
+    fireEvent.click(threadArtifacts.getByRole('button', { name: title }));
+    const frame = await tab.findByTitle(title, { selector: 'iframe' });
+    await waitFor(() => expect(frame.getAttribute('src')).toBe('/apercu-fictif/2'));
+    expect(tab.queryByRole('button', { name: 'Annoter' })).toBeNull();
+    expect(tab.getByRole('button', { name: 'Lien' })).toBeTruthy();
+
+    Object.assign(window, { __piecemakerArtifactsShow: { project, artifact: `${id}@v1` } });
+    window.dispatchEvent(new Event('piecemaker:artifacts-show'));
+    const comment = await tab.findByRole('textbox', { name: 'Commentaire' });
+    await waitFor(() => expect(frame.getAttribute('src')).toBe('/apercu-fictif/1'));
+    fireEvent.change(comment, { target: { value: 'Préciser la date.' } });
+    fireEvent.click(tab.getByRole('button', { name: 'Envoyer' }));
+    await waitFor(() => {
+      const post = request.mock.calls.find(([url, options]) => url.includes('/comments?') && options?.method === 'POST');
+      expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ text: 'Préciser la date.', anchor: { version: 1 } });
+    });
+
+    fireEvent.click(tab.getByRole('button', { name: 'Retour à la galerie' }));
+    await tab.findByRole('tab', { name: 'Épinglés' });
+    fireEvent.click(threadArtifacts.getByRole('button', { name: 'Rapport Word' }));
+    await waitFor(() => expect(openFileInEditor).toHaveBeenCalledWith(documentPath));
+  } finally {
+    unmount(container);
+    container.remove();
+  }
 });
