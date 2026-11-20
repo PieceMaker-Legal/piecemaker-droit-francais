@@ -1,8 +1,8 @@
 {
   "name": "piecemaker-artifacts",
   "displayName": "Artifacts",
-  "version": "0.1.0",
-  "description": "Pages publiées par l'assistant pour le dossier : galerie, versions, affichage isolé, base partagée et commentaires, revue Plannotator.",
+  "version": "0.2.0",
+  "description": "Pages publiées par l'assistant pour le dossier : galerie, versions, affichage isolé, base partagée et commentaires, revue dans PieceMaker.",
   "icon": "icon.svg",
   "type": "module",
   "slot": "tab",

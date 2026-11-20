@@ -1,43 +1,97 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { z } from 'zod';
 
-/**
- * Revues Plannotator d'un artifact : `.piecemaker/artifacts/reviews/<id>/<revue>.review.json` (la
- * demande) et `<revue>.result.json` (la décision écrite par Plannotator). Une revue terminée devient
- * un fil de commentaires de l'avocat, de même identifiant que la revue.
- */
-const OWNER = /^[a-z][a-z0-9-]{2,63}$/;
-const reviewsFolder = (root) => path.join(root, '.piecemaker', 'artifacts', 'reviews');
+import { openComments } from '../features/store.mjs';
+import { ID_PATTERN, openArtifacts } from './artifacts.mjs';
 
-export function startReview(root, plannotator, page) {
-  const review = `pn-${randomBytes(4).toString('hex')}`;
-  const folder = path.join(reviewsFolder(root), page.meta.id);
-  const resultFile = path.join(folder, `${review}.result.json`);
-  const started = plannotator.start(page.file, resultFile, { cwd: root });
-  fs.mkdirSync(folder, { recursive: true });
-  fs.writeFileSync(path.join(folder, `${review}.review.json`), `${JSON.stringify({ id: review, version: page.version, path: page.path, result_file: resultFile, started_at: new Date().toISOString(), pid: started.pid }, null, 2)}\n`);
-  return { review, version: page.version };
+const passage = z.object({
+  quote: z.string().min(1).max(4000).refine((value) => value.trim().length > 0),
+  start: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  before: z.string().max(48),
+  after: z.string().max(48),
+});
+
+const commentInput = z.object({
+  text: z.string().trim().min(1).max(16000),
+  thread_id: z.string().optional(),
+  anchor: z.object({
+    version: z.number().int().positive(),
+    passage: passage.optional(),
+  }).nullish(),
+});
+
+const decisionInput = z.object({
+  version: z.number().int().positive(),
+  decision: z.enum(['approved', 'changes_requested']),
+  text: z.string().trim().max(16000).default(''),
+}).refine((value) => value.decision === 'approved' || value.text.length > 0, {
+  message: 'Ajoutez un motif à la demande de modifications.',
+});
+
+function parse(schema, input) {
+  const result = schema.safeParse(input);
+  if (!result.success) throw Object.assign(new Error(result.error.issues[0].message), { code: 'invalid_argument' });
+  return result.data;
 }
 
-export async function collectReviews(root, comments) {
-  const base = reviewsFolder(root);
-  if (!fs.existsSync(base)) return [];
-  const created = [];
-  for (const id of fs.readdirSync(base).filter((name) => OWNER.test(name))) {
-    for (const name of fs.readdirSync(path.join(base, id)).filter((file) => file.endsWith('.review.json'))) {
-      const metaFile = path.join(base, id, name);
-      const review = JSON.parse(fs.readFileSync(metaFile, 'utf8'));
-      if (review.collected || !fs.existsSync(review.result_file)) continue;
+export function openArtifactReviews(root) {
+  const artifacts = openArtifacts(root);
+  const comments = openComments(root, { base: ['.piecemaker', 'artifacts'], namePattern: ID_PATTERN });
+
+  async function importCompletedReviews(id) {
+    const folder = path.join(root, '.piecemaker', 'artifacts', 'reviews', id);
+    if (!fs.existsSync(folder)) return;
+    const existing = new Set(comments.read(id).map((thread) => thread.id));
+    for (const name of fs.readdirSync(folder)) {
+      const match = /^([a-z0-9-]{1,40})\.review\.json$/.exec(name);
+      if (!match || existing.has(match[1])) continue;
+      let review;
       let result;
-      try { result = JSON.parse(fs.readFileSync(review.result_file, 'utf8')); } catch { continue; }
-      review.collected = new Date().toISOString();
-      review.decision = result.decision ?? null;
-      fs.writeFileSync(metaFile, `${JSON.stringify(review, null, 2)}\n`);
-      if (result.decision === 'dismissed') continue;
-      const body = result.decision === 'approved' ? `Approved in Plannotator.${result.feedback ? `\n\n${result.feedback}` : ''}` : String(result.feedback || '(no feedback)');
-      created.push(comments.open(id, { source: 'plannotator', version: review.version, path: review.path, decision: result.decision }, body, 'lawyer', review.id).catch(() => null));
+      try {
+        review = JSON.parse(fs.readFileSync(path.join(folder, name), 'utf8'));
+        result = JSON.parse(fs.readFileSync(path.join(folder, `${match[1]}.result.json`), 'utf8'));
+      } catch {
+        continue;
+      }
+      if (!Number.isSafeInteger(review?.version) || !['approved', 'annotated'].includes(result?.decision)) continue;
+      const decision = result.decision === 'approved' ? 'approved' : 'changes_requested';
+      const feedback = typeof result.feedback === 'string' ? result.feedback.trim() : '';
+      try {
+        await comments.open(id, { kind: 'review', version: review.version, decision }, feedback || decisionLabel(decision), 'lawyer', match[1]);
+      } catch (error) {
+        if (error.code !== 'conflict') throw error;
+      }
     }
   }
-  return Promise.all(created);
+
+  return {
+    async read(id, threadId) {
+      const { id: owner } = artifacts.load(id);
+      await importCompletedReviews(owner);
+      return comments.read(owner, threadId).map((thread) => {
+        if (!['annotated', 'approved'].includes(thread.anchor?.decision) || thread.anchor.kind === 'review') return thread;
+        const { version, decision } = thread.anchor;
+        return { ...thread, anchor: { kind: 'review', version, decision: decision === 'annotated' ? 'changes_requested' : decision } };
+      });
+    },
+    async comment(id, input) {
+      const { text, anchor, thread_id: threadId } = parse(commentInput, input);
+      const { id: owner, version } = artifacts.summary(artifacts.load(id));
+      if (threadId !== undefined) return comments.reply(owner, threadId, text, 'lawyer');
+      if (anchor) artifacts.read({ url: owner, ver: anchor.version });
+      return comments.open(owner, { ...anchor, version: anchor?.version ?? version }, text, 'lawyer');
+    },
+    async decide(id, input) {
+      const { version, decision, text } = parse(decisionInput, input);
+      const { meta } = artifacts.read({ url: id, ver: version });
+      return comments.open(meta.id, { kind: 'review', version, decision }, text || decisionLabel(decision), 'lawyer');
+    },
+    reply: comments.reply,
+    resolve: comments.resolve,
+  };
+}
+
+function decisionLabel(decision) {
+  return decision === 'approved' ? 'Version approuvée.' : 'Modifications demandées.';
 }

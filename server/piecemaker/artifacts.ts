@@ -6,9 +6,8 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 
 import { openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
-import { openPlannotator } from './vendor/mcp/artifacts/plannotator.mjs';
-import { collectReviews, startReview } from './vendor/mcp/artifacts/reviews.mjs';
-import { openComments, openStore } from './vendor/mcp/features/store.mjs';
+import { openArtifactReviews } from './vendor/mcp/artifacts/reviews.mjs';
+import { openStore } from './vendor/mcp/features/store.mjs';
 
 type Projects = { getProjectPathById(id: string): string | null; getProjectPaths(): Array<{ project_path: string }> };
 type Failure = { code?: string; message: string };
@@ -71,7 +70,7 @@ function send(response: express.Response, promise: Promise<unknown> | unknown, s
     .catch((error: Failure) => response.status(STATUS[error.code ?? ''] ?? 500).json({ error: error.message, code: error.code ?? null }));
 }
 
-export function createArtifactsRouter(projects: Projects, { plannotator = openPlannotator() } = {}) {
+export function createArtifactsRouter(projects: Projects) {
   const router = express.Router();
   const rootOf = (request: express.Request, response: express.Response): string | null => {
     const wanted = typeof request.query.projectPath === 'string' ? path.resolve(request.query.projectPath) : '';
@@ -148,37 +147,17 @@ export function createArtifactsRouter(projects: Projects, { plannotator = openPl
 
   router.get('/artifacts/:id/comments', (request, response) => {
     const root = rootOf(request, response);
-    if (!root) return;
-    send(response, (async () => {
-      const comments = openComments(root, { base: STORE_OPTIONS.base, namePattern: OWNER });
-      await collectReviews(root, comments);
-      return comments.read(openArtifacts(root).load(artifactId(request)).id);
-    })());
+    if (root) send(response, openArtifactReviews(root).read(artifactId(request)));
   });
 
   router.post('/artifacts/:id/comments', express.json({ limit: '256kb' }), (request, response) => {
     const root = rootOf(request, response);
-    if (!root) return;
-    const { text, anchor, thread_id: threadId } = request.body ?? {};
-    if (typeof text !== 'string' || (anchor !== undefined && (typeof anchor !== 'object' || Array.isArray(anchor)))) return void response.status(400).json({ error: 'Commentaire invalide.' });
-    send(response, (async () => {
-      const id = openArtifacts(root).load(artifactId(request)).id;
-      const comments = openComments(root, { base: STORE_OPTIONS.base, namePattern: OWNER });
-      return typeof threadId === 'string' ? comments.reply(id, threadId, text, 'lawyer') : comments.open(id, anchor ?? null, text, 'lawyer');
-    })(), 201);
+    if (root) send(response, openArtifactReviews(root).comment(artifactId(request), request.body), 201);
   });
 
-  router.get('/artifacts-plannotator', (_request, response) => send(response, plannotator.status()));
-  router.post('/artifacts-plannotator/install', (_request, response) => send(response, plannotator.install()));
-
-  /** Revue Plannotator lancée depuis l'onglet : même dossier de résultats que l'outil MCP. */
-  router.post('/artifacts/:id/annotate', (request, response) => {
+  router.post('/artifacts/:id/reviews', express.json({ limit: '256kb' }), (request, response) => {
     const root = rootOf(request, response);
-    if (!root) return;
-    send(response, (async () => {
-      const page = openArtifacts(root).read({ url: artifactId(request), ver: typeof request.query.ver === 'string' ? request.query.ver : undefined });
-      return startReview(root, plannotator, page);
-    })(), 201);
+    if (root) send(response, openArtifactReviews(root).decide(artifactId(request), request.body), 201);
   });
 
   return router;
