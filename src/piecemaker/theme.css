@@ -589,6 +589,10 @@ div[data-slot="prompt-input-footer"] > div:last-child {
   flex-shrink: 0;
 }
 
+.chat-composer-shell [data-slot="prompt-input-footer"] > .order-last.basis-full {
+  display: none;
+}
+
 .md\:hidden [data-piecemaker-anonymization-slot] > button {
   width: 2rem;
   height: 2rem;
