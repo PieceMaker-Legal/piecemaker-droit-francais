@@ -131,6 +131,7 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
       if (action === 'pin' || action === 'unpin') return text(artifacts.pin(required(input.url, 'url', action), action === 'pin'));
       if (action === 'open') {
         const id = existing(required(input.url, 'url', action));
+        if (id === CUSTOM_VIEW_ID) return text('Preview: Agent › Vue personnalisée');
         const result = await pm(caseArgs(['tab', 'afficher', 'artifacts', id]), root);
         return text([result.stdout, result.stderr].map((part) => String(part || '').trim()).filter(Boolean).join('\n') || `exit code ${result.code}`, result.code !== 0);
       }
@@ -152,6 +153,9 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
         return text(header(result, [`Word document: ${result.published_files[0]}`]));
       }
       if (input.type_url && !input.url) return text(await createFromTemplate(input));
+      if (input.url && idOf(input.url) === CUSTOM_VIEW_ID) {
+        throw Object.assign(new Error('Use Artifact save_view to edit the project view.'), { code: 'invalid_argument' });
+      }
       let page;
       let source;
       if (input.file_path) {
@@ -241,6 +245,7 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
       const id = existing(url);
       if (action === 'read') return text(await comments.read(id, threadId));
       if (action === 'annotate') {
+        if (id === CUSTOM_VIEW_ID) return text('Preview: Agent › Vue personnalisée');
         const page = artifacts.read({ url: id, ver });
         const result = await pm(caseArgs(['tab', 'afficher', 'artifacts', `${id}@v${page.version}`]), root);
         const output = [result.stdout, result.stderr].map((part) => String(part || '').trim()).filter(Boolean).join('\n');

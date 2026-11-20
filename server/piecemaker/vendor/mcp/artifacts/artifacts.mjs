@@ -32,6 +32,7 @@ export const LIMITS = {
 export const URL_PREFIX = 'piecemaker://artifact/';
 export const ID_PATTERN = /^[a-z][a-z0-9-]{2,63}$/;
 export const CUSTOM_VIEW_ID = 'vue-personnalisee';
+const CUSTOM_VIEW_TAG = 'agent-custom-view';
 const PUBLISHED_PATH = /^(?!\/)(?!.*(?:^|\/)\.\.?(?:\/|$))[A-Za-z0-9 _\-.~@+()/]{1,512}$/;
 const ASSET_ID = /^[0-9a-f]{32}$/;
 const RESERVED = new Set(['preflight.js']);
@@ -162,6 +163,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
       url: urlOf(meta.id), id: meta.id, title: meta.title, description: meta.description ?? '', icon: meta.icon ?? null,
       type: meta.type ?? null, pinned: Boolean(meta.pinned), version: current?.version ?? 0, versions: meta.versions.length,
       created_at: meta.created_at, updated_at: meta.updated_at, capabilities: meta.capabilities ?? {},
+      ...(meta.tag && { tag: meta.tag }),
       ...(meta.document && { format: 'docx' }),
     };
   }
@@ -344,6 +346,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
       if (icon !== undefined && (!url || icon)) meta.icon = icon;
       if (capabilities !== undefined) meta.capabilities = capabilities;
       if (pin) meta.pinned = true;
+      if (customView) meta.tag = CUSTOM_VIEW_TAG;
       meta.updated_at = at;
       save(meta);
       seen.set(meta.id, version);
@@ -378,7 +381,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
         if (scope === 'assets') return (meta.assets ?? []).map(({ id, file, type: assetType, size }) => ({ id, url: `assets/${file}`, type: assetType, size }));
         return meta.versions.map(({ version, label, published_at: at, files: published, digest }) => ({ version, label, published_at: at, files: published.length + 1, digest })).reverse();
       }
-      let items = ids().map(load);
+      let items = ids().map(load).filter((meta) => meta.tag !== CUSTOM_VIEW_TAG);
       if (scope === 'pinned') items = items.filter((meta) => meta.pinned);
       if (type) items = items.filter((meta) => meta.type === type);
       return items.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, max).map(summary);

@@ -42,6 +42,9 @@ test('the project view keeps one editable HTML history per project across MCP se
   assert.equal(saved.error, false, saved.text);
   assert.equal(urlIn(saved.text), url);
   assert.match((await second.call('Artifact', { action: 'read', url })).text, /not_found/);
+  assert.deepEqual(JSON.parse((await first.call('Artifact', { action: 'list' })).text), []);
+  assert.match((await first.call('Artifact', { action: 'open', url })).text, /Agent › Vue personnalisée/);
+  assert.deepEqual(first.calls, []);
 
   const reopened = await connect({ root: first.root });
   assert.match((await reopened.call('Artifact', { action: 'read', url })).text, /<h1>v1<\/h1>/);

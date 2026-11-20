@@ -68,7 +68,7 @@ Dans **Projet › Contexte › Artéfacts**, le contenu s’ouvre à gauche. La 
 2. Dans la session de l’agent, appelle `Artifact read url=piecemaker://artifact/vue-personnalisee`. Le résultat `not_found` indique que ce projet n’a pas encore de vue.
 3. Écris ou modifie une page HTML dans le dossier. Appelle `Artifact save_view file_path=Artifacts/vue.html`. Utilise `files` pour joindre des scripts, des styles ou des médias. Tu peux aussi passer `edits` pour appliquer des remplacements exacts dans la source.
 
-Le panneau ouvert affiche la nouvelle version dans les trois secondes environ. À la réouverture, il retrouve la dernière version du projet. La vue et son historique restent aussi accessibles dans la galerie des artéfacts. Lis une version antérieure avec `Artifact read` et `ver`.
+Le panneau ouvert affiche la nouvelle version dans les trois secondes environ. À la réouverture, il retrouve la dernière version du projet. Le tag `agent-custom-view` réserve l’affichage au volet Agent. L’agent lit une version antérieure avec `Artifact read` et `ver`.
 
 La vue utilise le bac à sable des artéfacts. Pour conserver les données saisies dans la page, déclare `capabilities={"db": {}}` et utilise `window.artifact.db`. L’agent peut lire et modifier ces données via `ArtifactData` avec la même URL.
 
