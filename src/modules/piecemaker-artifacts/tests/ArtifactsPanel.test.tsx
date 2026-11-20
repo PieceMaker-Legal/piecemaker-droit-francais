@@ -116,8 +116,12 @@ test('the original gallery opens HTML and Word artifacts from the thread', async
     render(<SessionArtifacts project={project} sessionId="fil-fictif" subscribe={() => () => undefined} />);
     const threadArtifacts = within(await screen.findByRole('group', { name: 'Artifacts de la session' }));
     fireEvent.click(threadArtifacts.getByRole('button', { name: title }));
-    const frame = await tab.findByTitle(title, { selector: 'iframe' });
-    await waitFor(() => expect(frame.getAttribute('src')).toBe('/apercu-fictif/2'));
+    const frame = await waitFor(() => {
+      const preview = tab.getAllByTitle(title).find((node) => node instanceof HTMLIFrameElement);
+      expect(preview).toBeDefined();
+      expect(preview?.getAttribute('src')).toBe('/apercu-fictif/2');
+      return preview!;
+    });
     expect(tab.queryByRole('button', { name: 'Annoter' })).toBeNull();
     expect(tab.getByRole('button', { name: 'Lien' })).toBeTruthy();
 
