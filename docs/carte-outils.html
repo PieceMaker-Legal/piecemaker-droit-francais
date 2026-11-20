@@ -206,6 +206,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><th>Élément</th><th>Claude</th><th>Codex</th><th>Mistral</th></tr>
         <tr><td class="c-mcp">MCP legifrance</td><td><code>.mcp.json</code></td><td><code>.codex/config.toml</code></td><td><code>.vibe/config.toml</code></td></tr>
         <tr><td class="c-mcp">MCP features</td><td><code>.mcp.json</code></td><td><code>.codex/config.toml</code></td><td><code>.vibe/config.toml</code></td></tr>
+        <tr><td class="c-mcp">MCP artifacts</td><td><code>.mcp.json</code></td><td><code>.codex/config.toml</code></td><td><code>.vibe/config.toml</code></td></tr>
         <tr><td class="c-skill">Skills du dossier</td><td><code>.claude/skills</code></td><td><code>.agents/skills</code></td><td><code>.agents/skills</code>, outil <code>skill</code></td></tr>
         <tr><td class="c-skill">Skills globaux</td><td><code>~/.claude</code></td><td><code>~/.codex/skills</code></td><td><code>~/.vibe/skills</code>, <code>~/.agents/skills</code> : lus, mais l'installateur n'y écrit rien</td></tr>
         <tr><td class="c-agent">Sous-agents</td><td><code>~/.claude</code></td><td><code>.codex/agents</code>, depuis la Bibliothèque seulement</td><td><code>.vibe/agents</code>, depuis la Bibliothèque seulement</td></tr>
@@ -228,6 +229,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td>Instruction, gabarit ou skill personnels</td><td class="c-skill">ajout-de-fonctionnalites</td></tr>
         <tr><td>Textes, jurisprudence, BODACC</td><td class="c-mcp">MCP legifrance, sans skill</td></tr>
         <tr><td>Fonction d'un onglet : commandes <code>pm</code> en anglais, données et commentaires de l'avocat</td><td class="c-mcp">MCP features : <code>Feature quickstart</code>, puis <code>Feature run</code>, <code>FeatureData</code>, <code>FeatureComments</code></td></tr>
+        <tr><td>Pages HTML du dossier et revue de leurs versions</td><td class="c-mcp">MCP artifacts et skill <code>creation-artifacts</code>. <code>ArtifactComments annotate</code> ouvre la revue. <code>ArtifactComments read</code> renvoie les annotations et décisions.</td></tr>
         <tr><td>Syntaxe d'une commande</td><td><code>pm --help</code></td></tr>
       </table></div>
       <p><code>legal-code</code> n'y figure pas : il s'ouvre par <code>/legal-code</code>.</p>
@@ -245,6 +247,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td><code>verify-subagent</code></td><td>après</td><td><code>Agent|Task</code> (Claude), <code>SubagentStop</code> (Codex), bilan ajouté au compte rendu (Mistral) : décisions citées par research-maker et jamais lues, relance du sous-agent</td></tr>
       </table></div>
       <p style="margin-top:12px">Codex reçoit la protection des pièces, le garde de recherche et la vérification des sous-agents. Mistral exécute <code>protect-originals</code> et <code>guard-secrets</code> avant ses outils intégrés ; il délègue les recherches <code>Search_*</code> à l'outil <code>research_maker</code>. Chaque sous-agent de <code>.vibe/agents</code> devient un outil de délégation du SDK Mistral (<code>research_maker</code>) ; ses outils d'écriture demandent la même autorisation que ceux de l'agent principal.</p>
+      <p>Hermes utilise le plugin PieceMaker et les fonctions Python <code>commande</code>, <code>sql</code>, <code>catala</code> et <code>suivi</code>. Ses hooks s'exécutent avant et après les outils concernés. <a href="hermes-piecemaker.md">Détail du raccordement Hermes</a></p>
     </section>
 
     <section class="card wide">

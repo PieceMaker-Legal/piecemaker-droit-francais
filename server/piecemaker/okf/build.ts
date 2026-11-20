@@ -2,17 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { sentenceContaining } from '../../../plugins/piecemaker-dossier/src/excerpt.js';
+import { REVIEW_FOLDER, documentTitle, isCellFilled } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+import type { Review } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
 
-import type { Concept, Frontmatter, Relation, Relations } from './bundle.js';
+import type { Frontmatter, Relation, Relations } from './bundle.js';
 import {
   AGENT_ACTOR,
-  DERIVED_ACTORS,
   PREMISE_TYPE,
   MENTIONS,
   OKF_VERSION,
   PARTY_TYPE,
-  REVIEW_ACTOR,
   SCAN_ACTOR,
   STATES,
   UNCLASSIFIED,
@@ -33,13 +33,13 @@ import {
   writeIfChanged,
 } from './bundle.js';
 import { isSystemRelation, readOntology, ruleOf } from './ontology.js';
-import { documentMetadataFromReviews } from './reviews.js';
-import type { ReviewPremise } from './reviews.js';
-import { quoted } from './verify.js';
+import { EXAMINED, REVIEWS } from './premises.js';
+import { documentMetadataFromReviews, reviewRowPieces } from './reviews.js';
+import type { OkfRecords, StoredReviewLink } from './store.js';
 
 export type PartyMention = { code: string; citation: string };
-export type SourceDocument = { resource: string; title: string; nature: string; date: string; parties: PartyMention[] };
-export type SourceParty = { code: string; side: string };
+export type SourceDocument = { resource: string; title: string; nature: string; date: string; parties: PartyMention[]; updatedAt?: string };
+export type SourceParty = { code: string; side: string; updatedAt?: string };
 export type MarkdownOf = (resource: string) => string | null;
 export type Renamed = { previous: string; current: string };
 
@@ -59,7 +59,7 @@ export function datesIn(line: string): Array<{ literal: string; date: string }> 
 export function partiesFromSnapshot(snapshot: KnowledgeSnapshot): SourceParty[] {
   return snapshot.nodes
     .filter((node) => node.id.startsWith('entity:') && (node.data.partySide === 'client' || node.data.partySide === 'adversaire'))
-    .map((node) => ({ code: node.id.slice('entity:'.length), side: String(node.data.partySide) }))
+    .map((node) => ({ code: node.id.slice('entity:'.length), side: String(node.data.partySide), updatedAt: node.updatedAt }))
     .sort((left, right) => left.code.localeCompare(right.code));
 }
 
@@ -78,9 +78,57 @@ export function documentsFromSnapshot(projectPath: string, snapshot: KnowledgeSn
       if (citation.fromNodeId !== node.id || !citation.toNodeId.startsWith('entity:') || !citation.texte || !partyCodes.has(code) || parties.has(code)) continue;
       parties.set(code, { code, citation: squash(citation.texte) });
     }
-    documents.set(resource, { resource, title: metadata.get(resource)?.title || node.label, nature: text(node.data.nature) || metadata.get(resource)?.nature || '', date: text(node.date), parties: [...parties.values()] });
+    documents.set(resource, { resource, title: metadata.get(resource)?.title || node.label, nature: text(node.data.nature) || metadata.get(resource)?.nature || '', date: text(node.date), parties: [...parties.values()], updatedAt: node.updatedAt });
   }
   return [...documents.values()].sort((left, right) => left.resource.localeCompare(right.resource));
+}
+
+/** Date ISO d'une cellule Date de l'Index : « 2021-03-12 », « 12/03/2021 » ou « 12 mars 2021 ». */
+export function indexDate(value: string): string {
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  return datesIn(trimmed)[0]?.date ?? '';
+}
+
+const NATURE_COLUMNS = ['nature', 'type de document', 'type de pièce', 'type'];
+const columnNamed = (review: Review, names: string[]) => review.columns.find((column) => names.includes(String(column?.name ?? '').trim().toLocaleLowerCase('fr').normalize('NFC')));
+
+/** Les pièces de l'Index (SQLite) : une ligne, une pièce, avec le titre, la nature et la date que l'analyse y a portés. */
+export function documentsFromIndex(projectPath: string, review: Review | null | undefined): SourceDocument[] {
+  if (!review) return [];
+  const dateColumn = columnNamed(review, ['date']) ?? review.columns.find((column) => column.format === 'date');
+  const natureColumn = columnNamed(review, NATURE_COLUMNS);
+  const documents = new Map<string, SourceDocument>();
+  for (const row of review.rows) {
+    const source = row.piece || row.documents?.[0]?.source || '';
+    if (!source || /^https?:/i.test(source)) continue;
+    const absolute = path.resolve(projectPath, source);
+    if (!fs.existsSync(absolute)) continue;
+    const resource = resourceOf(projectPath, absolute);
+    if (resource.startsWith('..') || documents.has(resource)) continue;
+    const cell = (column: typeof dateColumn) => column ? review.cells?.[row.id]?.[String(column.index)] : undefined;
+    const date = cell(dateColumn);
+    const nature = cell(natureColumn);
+    documents.set(resource, {
+      resource,
+      title: documentTitle(review, row),
+      nature: isCellFilled(nature) ? text(nature.summary) : '',
+      date: isCellFilled(date) ? indexDate(date.summary) : '',
+      parties: [],
+      updatedAt: row.finishedAt || review.updatedAt,
+    });
+  }
+  return [...documents.values()];
+}
+
+/** L'Index fait la liste des pièces ; le scan n'y ajoute que ce qu'il sait de plus (parties citées, pièces pas encore indexées). */
+export function mergeDocuments(fromIndex: SourceDocument[], fromScan: SourceDocument[]): SourceDocument[] {
+  const merged = new Map(fromScan.map((document) => [document.resource, document]));
+  for (const document of fromIndex) {
+    const scanned = merged.get(document.resource);
+    merged.set(document.resource, scanned ? { ...document, title: document.title || scanned.title, nature: document.nature || scanned.nature, date: document.date || scanned.date, parties: scanned.parties } : document);
+  }
+  return [...merged.values()].sort((left, right) => left.resource.localeCompare(right.resource));
 }
 
 const SCAN_RELATION = 'refers-to';
@@ -108,27 +156,23 @@ function scanRelations(source: SourceDocument, targets: SourceDocument[], markdo
   return [...found.values()];
 }
 
-function renamedConcepts(concepts: Concept[], renamed?: Renamed): Map<string, Concept> {
-  const from = renamed ? conceptId(renamed.previous) : '';
-  const to = renamed ? conceptId(renamed.current) : '';
-  const move = (id: string): string => id === from ? to : migratedId(id);
-  return new Map(concepts.filter((concept) => !concept.error).map((concept) => {
-    const relations = relationsOf(concept.frontmatter);
-    for (const entries of Object.values(relations)) for (const entry of entries) entry.target = move(entry.target);
-    return [move(concept.id), { ...concept, id: move(concept.id), frontmatter: { ...concept.frontmatter, relations } }];
-  }));
+function storedRelations(records: OkfRecords, source: string): Relations {
+  const relations: Relations = {};
+  for (const entry of records.relations) {
+    if (entry.source !== source) continue;
+    (relations[entry.relation] ||= []).push({ target: entry.target, citation: entry.citation, origin: entry.origin, ...(entry.value ? { value: entry.value } : {}), ...(entry.at ? { at: entry.at } : {}), ...(entry.dismissed ? { dismissed: true } : {}) });
+  }
+  return relations;
 }
 
-function mergedRelations(existing: Relations, derived: Relations, livePremises: Set<string>): Relations {
+function mergedRelations(stored: Relations, derived: Relations): Relations {
   const relations: Relations = {};
-  for (const [name, entries] of Object.entries(existing)) {
-    const kept = entries.filter((entry) => name !== MENTIONS && (!DERIVED_ACTORS.includes(entry.origin) || entry.dismissed) && (name !== STATES || livePremises.has(entry.target)));
-    if (kept.length) relations[name] = kept;
-  }
-  const linkedDocuments = new Set(Object.entries(relations).filter(([name]) => !isSystemRelation(name)).flatMap(([, entries]) => entries).map((entry) => entry.target));
+  for (const [name, entries] of Object.entries(stored)) if (entries.length) relations[name] = [...entries];
+  const dismissed = new Set(Object.entries(stored).flatMap(([name, entries]) => entries.filter((entry) => entry.dismissed).map((entry) => `${name}\u0000${entry.target}`)));
+  const linkedDocuments = new Set(Object.entries(relations).filter(([name]) => !isSystemRelation(name)).flatMap(([, entries]) => entries.filter((entry) => !entry.dismissed)).map((entry) => entry.target));
   for (const [name, entries] of Object.entries(derived)) {
     const known = name === SCAN_RELATION ? linkedDocuments : new Set((relations[name] || []).map((entry) => entry.target));
-    const added = entries.filter((entry) => !known.has(entry.target));
+    const added = entries.filter((entry) => !known.has(entry.target) && !dismissed.has(`${name}\u0000${entry.target}`));
     if (added.length) relations[name] = [...(relations[name] || []), ...added];
   }
   for (const entries of Object.values(relations)) entries.sort((left, right) => left.target.localeCompare(right.target));
@@ -152,6 +196,17 @@ function backlinksBody(id: string, relation: string, documents: Array<{ id: stri
   return sections.length ? ['# Pièces', ...sections].join('\n\n') : '';
 }
 
+export const AUTHOR_LABELS: Record<string, string> = { human: 'vérifiée par l’avocat', agent: 'agent, non vérifiée' };
+
+function reviewsBody(projectPath: string, links: StoredReviewLink[]): string {
+  const sections = links.map((link) => {
+    const { titre, question, lignes, erreur } = reviewRowPieces(projectPath, link.file, link.column);
+    const rows = lignes.map((row) => [`* [${row.label}](${encodeURI(conceptId(row.resource))}) : ${row.value} (${AUTHOR_LABELS[row.author]})`, ...(row.citation ? [`  > ${row.citation}`] : [])].join('\n'));
+    return [`## ${titre} › ${question || `colonne ${link.column}`}`, `Revue : ${REVIEW_FOLDER}/${link.file}`, ...(erreur ? [`⚠ ${erreur}`] : rows.length ? [rows.join('\n')] : ['Aucune ligne positive.'])].join('\n\n');
+  });
+  return sections.length ? ['# Revues tabulaires', ...sections].join('\n\n') : '';
+}
+
 function pruneEmptyDirectories(directory: string, root: string): void {
   for (let current = directory; current.startsWith(root) && current !== root; current = path.dirname(current)) {
     if (fs.readdirSync(current).length) return;
@@ -159,14 +214,35 @@ function pruneEmptyDirectories(directory: string, root: string): void {
   }
 }
 
-export function buildBundle(input: { projectPath: string; documents: SourceDocument[]; markdownOf: MarkdownOf; parties?: SourceParty[]; reviewPremises?: ReviewPremise[]; renamed?: Renamed; now?: string }): { written: number; removed: number } {
+/** Authoritative parts of fiches written before SQLite held them, for a one-time import. Mentions and scan links are derived: they are not imported. */
+export function legacyRecords(projectPath: string): OkfRecords {
+  const records: OkfRecords = { premises: [], relations: [], exams: [], reviews: [] };
+  for (const concept of readBundle(projectPath)) {
+    if (concept.error) continue;
+    const id = migratedId(concept.id);
+    const generated = (concept.frontmatter.generated || {}) as Record<string, unknown>;
+    if (concept.frontmatter.type === PREMISE_TYPE) records.premises.push({ id, title: text(concept.frontmatter.title), description: text(concept.frontmatter.description), single: concept.frontmatter.single_value === true, by: text(generated.by) || AGENT_ACTOR, at: text(generated.at) });
+    for (const [relation, entries] of Object.entries(relationsOf(concept.frontmatter))) {
+      if (relation === MENTIONS) continue;
+      for (const entry of entries) {
+        if (entry.origin === SCAN_ACTOR && !entry.dismissed) continue;
+        records.relations.push({ source: id, relation, target: migratedId(entry.target), citation: entry.citation, value: entry.value || '', origin: entry.origin || AGENT_ACTOR, at: entry.at || text(generated.at), dismissed: entry.dismissed === true });
+      }
+    }
+    const exam = concept.frontmatter[EXAMINED] as Record<string, unknown> | undefined;
+    if (exam && text(exam.motif)) records.exams.push({ source: id, motif: text(exam.motif), by: text(exam.by) || AGENT_ACTOR, at: text(exam.at), empreinte: text(exam.empreinte) });
+  }
+  return records;
+}
+
+/** Writes the fiches of the case from SQLite: documents, parties and mentions from the knowledge base, premises, links and examinations from the OKF tables. Every fiche is a view: files not produced here are removed. */
+export function buildBundle(input: { projectPath: string; documents: SourceDocument[]; markdownOf: MarkdownOf; parties?: SourceParty[]; records?: OkfRecords; now?: string }): { written: number; removed: number } {
   const { projectPath, documents } = input;
   const parties = input.parties || [];
-  const reviewPremises = input.reviewPremises || [];
+  const records: OkfRecords = input.records || { premises: [], relations: [], exams: [] };
   const now = input.now || new Date().toISOString();
   const types = readTypes(projectPath);
   const stored = readBundle(projectPath);
-  const existing = renamedConcepts(stored, input.renamed);
   const scanRule = ruleOf(readOntology(projectPath), SCAN_RELATION);
   const ofTypes = (allowed: string[] = []) => documents.filter((document) => allowed.includes(typeOf(document.resource, types, projectPath)));
   const scanSources = ofTypes(scanRule?.source);
@@ -179,84 +255,56 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
     if (!markdownCache.has(resource)) markdownCache.set(resource, input.markdownOf(resource));
     return markdownCache.get(resource) as string | null;
   };
-  const write = (id: string, frontmatter: Frontmatter, body: string, by: string): void => {
-    const generated = existing.get(id)?.frontmatter.generated as { by?: unknown; at?: unknown } | undefined;
-    frontmatter.generated = generated?.by && generated.at ? generated : { by, at: now };
-    const filePath = conceptFile(projectPath, id);
-    if (!fs.existsSync(filePath) || fs.readFileSync(filePath, 'utf8') !== serializeConcept(frontmatter, body)) {
-      frontmatter.generated = { by: text(generated?.by) || by, at: now };
-      writeIfChanged(filePath, serializeConcept(frontmatter, body));
-      written += 1;
-    }
+  const previousAt = new Map(stored.map((concept) => [concept.id, text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.at)]));
+  const write = (id: string, frontmatter: Frontmatter, body: string, by: string, at: string): void => {
+    frontmatter.generated = { by, at: at || previousAt.get(id) || now };
+    if (writeIfChanged(conceptFile(projectPath, id), serializeConcept(frontmatter, body))) written += 1;
     entries.push({ id, frontmatter });
   };
-
-  const byResource = new Map(documents.map((document) => [document.resource, document]));
-  const statements = new Map<string, Map<string, Relation>>();
-  for (const premise of reviewPremises) {
-    for (const statement of premise.statements) {
-      const named = statement.candidates.map((candidate) => byResource.get(candidate)).find(Boolean);
-      const quoting = named ? [] : documents.filter((document) => quoted(markdown(document.resource), statement.quote));
-      const document = named || (quoting.length === 1 ? quoting[0] : undefined);
-      if (!document || !quoted(markdown(document.resource), statement.quote)) continue;
-      const links = statements.get(document.resource) || new Map<string, Relation>();
-      links.set(premise.id, { target: premise.id, citation: statement.quote, origin: REVIEW_ACTOR, ...(statement.value ? { value: statement.value } : {}) });
-      statements.set(document.resource, links);
-    }
-  }
-
-  const documentIds = new Set(documents.map((document) => conceptId(document.resource)));
-  const livePremises = new Set(reviewPremises.map((premise) => premise.id));
-  for (const [id, concept] of existing) {
-    if (!documentIds.has(id)) continue;
-    for (const entry of relationsOf(concept.frontmatter)[STATES] || []) {
-      if (!entry.dismissed && !DERIVED_ACTORS.includes(entry.origin) && existing.has(entry.target)) livePremises.add(entry.target);
-    }
-  }
+  const latest = (...values: string[]): string => values.filter(Boolean).sort().at(-1) || '';
   const partyCodes = new Set(parties.map((party) => party.code));
+  const exams = new Map(records.exams.map((exam) => [exam.source, exam]));
 
   for (const document of documents) {
     const id = conceptId(document.resource);
-    const previous = existing.get(id);
+    const own = storedRelations(records, id);
     const derived: Relations = {
       [SCAN_RELATION]: scanSources.includes(document) && markdown(document.resource) ? scanRelations(document, scanTargets, markdown(document.resource) as string) : [],
       [MENTIONS]: document.parties.filter((party) => partyCodes.has(party.code)).map((party) => ({ target: partyId(party.code), citation: party.citation, origin: SCAN_ACTOR })),
-      [STATES]: [...(statements.get(document.resource)?.values() || [])],
     };
-    const relations = mergedRelations(previous ? relationsOf(previous.frontmatter) : {}, derived, livePremises);
+    const relations = mergedRelations(own, derived);
+    const exam = exams.get(id);
     const frontmatter: Frontmatter = {
-      ...previous?.frontmatter,
       type: typeOf(document.resource, types, projectPath),
       title: document.title,
       nature: document.nature,
       description: [document.nature, document.date].filter(Boolean).join(' du ') || document.title,
       resource: document.resource,
-      date: document.date,
-      relations,
+      ...(document.date ? { date: document.date } : {}),
+      ...(Object.keys(relations).length ? { relations } : {}),
+      ...(exam ? { [EXAMINED]: { motif: exam.motif, by: exam.by, at: exam.at, empreinte: exam.empreinte } } : {}),
     };
-    if (!document.date) delete frontmatter.date;
-    if (!Object.keys(relations).length) delete frontmatter.relations;
-    write(id, frontmatter, '', SCAN_ACTOR);
+    write(id, frontmatter, '', SCAN_ACTOR, latest(document.updatedAt || '', ...Object.values(own).flat().map((entry) => entry.at || ''), exam?.at || ''));
   }
   const documentEntries = [...entries];
 
-  const reviewed = new Map(reviewPremises.map((premise) => [premise.id, premise]));
-  for (const id of [...livePremises].sort()) {
-    const previous = existing.get(id);
-    const premise = reviewed.get(id);
+  for (const premise of records.premises) {
+    const relations = mergedRelations(storedRelations(records, premise.id), {});
+    const reviews = (records.reviews || []).filter((link) => link.premise === premise.id);
     const frontmatter: Frontmatter = {
-      ...previous?.frontmatter,
       type: PREMISE_TYPE,
-      title: premise?.title || text(previous?.frontmatter.title),
-      description: premise?.description || text(previous?.frontmatter.description) || text(previous?.frontmatter.title),
-      ...(premise ? { single_value: premise.single } : {}),
+      title: premise.title,
+      description: premise.description || premise.title,
+      ...(premise.single ? { single_value: true } : {}),
+      ...(Object.keys(relations).length ? { relations } : {}),
+      ...(reviews.length ? { [REVIEWS]: reviews.map((link) => ({ fichier: link.file, colonne: link.column, by: link.by, at: link.at })) } : {}),
     };
-    if (!frontmatter.single_value) delete frontmatter.single_value;
-    write(id, frontmatter, backlinksBody(id, STATES, documentEntries), premise ? REVIEW_ACTOR : AGENT_ACTOR);
+    const body = [backlinksBody(premise.id, STATES, documentEntries), reviewsBody(projectPath, reviews)].filter(Boolean).join('\n\n');
+    write(premise.id, frontmatter, body, premise.by, latest(premise.at, ...reviews.map((link) => link.at)));
   }
   for (const party of parties) {
     const id = partyId(party.code);
-    write(id, { type: PARTY_TYPE, title: party.code, description: party.side === 'client' ? 'Partie cliente' : 'Partie adverse', side: party.side }, backlinksBody(id, MENTIONS, documentEntries), SCAN_ACTOR);
+    write(id, { type: PARTY_TYPE, title: party.code, description: party.side === 'client' ? 'Partie cliente' : 'Partie adverse', side: party.side }, backlinksBody(id, MENTIONS, documentEntries), SCAN_ACTOR, party.updatedAt || '');
   }
 
   const kept = new Set(entries.map((entry) => entry.id));

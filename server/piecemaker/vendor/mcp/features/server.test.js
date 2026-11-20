@@ -114,19 +114,22 @@ test('OkfWrite enforces the ontology and the required fields', async () => {
     { action: 'link', source: 'Pièces/avenant.pdf', relation: 'amends', target: 'Pièces/contrat.pdf', citation: 'Le présent avenant modifie le contrat.' },
     { action: 'link', source: 'Loyer mensuel', relation: 'involves', target: 'JEAN_DUPONT' },
     { action: 'mark_examined', source: 'Pièces/note.pdf', reason: 'Aucun lien' },
+    { action: 'link_review', source: 'Résiliation du contrat', file: 'revue.json', column: 0 },
   );
   assert.equal(result.error, false);
-  assert.match(result.text, /^1\. .*\n2\. .*\n3\. /);
+  assert.match(result.text, /^1\. .*\n2\. .*\n3\. .*\n4\. /);
   assert.deepEqual(calls, [
     ['okf', 'link', 'Pièces/avenant.pdf', 'amends', 'Pièces/contrat.pdf', '--citation', 'Le présent avenant modifie le contrat.', '--dossier', root],
     ['okf', 'link', 'Loyer mensuel', 'involves', 'JEAN_DUPONT', '--dossier', root],
     ['okf', 'examinee', 'Pièces/note.pdf', '--motif', 'Aucun lien', '--dossier', root],
+    ['okf', 'revue', 'Résiliation du contrat', '--fichier', 'revue.json', '--colonne', '0', '--dossier', root],
   ]);
   assert.equal((await okf({ action: 'link', source: 'a', relation: 'contests', target: 'b', citation: 'x' })).error, true);
   assert.match((await okf({ action: 'unlink', source: 'a', relation: 'amends', target: 'b' }, { action: 'link', source: 'a', relation: 'amends', target: 'b' })).text, /^invalid_argument: link needs "citation"/);
   assert.match((await okf({ action: 'mark_examined', source: 'a' })).text, /^invalid_argument/);
+  assert.match((await okf({ action: 'link_review', source: 'a', file: 'revue.json' })).text, /^invalid_argument/);
   assert.equal((await call('OkfWrite', { writes: [] })).error, true);
-  assert.equal(calls.length, 3);
+  assert.equal(calls.length, 4);
 });
 
 test('OkfWrite stops at the first failure', async () => {
@@ -139,10 +142,12 @@ test('OkfWrite stops at the first failure', async () => {
   assert.equal(seen.length, 2);
 });
 
-test('okfRelations reads the ontology and adds the system relations', async () => {
+test('okfRelations takes the sealed ontology from the server and adds the system relations', async () => {
   const { okfRelations } = await import('./server.mjs');
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'features-ontology-'));
-  assert.deepEqual(okfRelations(home), ['amends', 'responds-to', 'refers-to', 'supersedes', 'states', 'involves']);
-  fs.writeFileSync(path.join(home, 'ontologie.json'), JSON.stringify({ relations: [{ name: 'contests' }] }));
-  assert.deepEqual(okfRelations(home), ['contests', 'states', 'involves']);
+  const seen = [];
+  const pm = async (args) => { seen.push(args); return { code: 0, stdout: JSON.stringify(['contests', 'states', 'involves']), stderr: '' }; };
+  assert.deepEqual(await okfRelations('/dossier', pm), ['contests', 'states', 'involves']);
+  assert.deepEqual(seen, [['okf', 'ontologie', '--noms', '--dossier', '/dossier']]);
+  const down = async () => ({ code: 1, stdout: '', stderr: 'serveur indisponible' });
+  assert.deepEqual(await okfRelations('/dossier', down), ['amends', 'responds-to', 'refers-to', 'supersedes', 'states', 'involves']);
 });

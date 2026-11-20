@@ -10,6 +10,11 @@
       "empty": "Tidak ada perintah untuk perkara ini."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Urutan Perkara",
@@ -40,6 +45,11 @@
       "steps": {
         "initCommand": "Gunakan task-master init di direktori perkara"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "Disertakan bersama PieceMaker dan diperbarui bersamanya."
     }
   },
   "permissions": {

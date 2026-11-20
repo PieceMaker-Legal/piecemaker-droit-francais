@@ -24,6 +24,7 @@
     "git": "Contrôle de source",
     "tasks": "Tâches",
     "browser": "Navigateur",
+    "agent": "PieceMaker Agent",
     "computer": "Ordinateur"
   },
   "status": {

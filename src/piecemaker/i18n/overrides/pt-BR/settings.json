@@ -10,6 +10,11 @@
       "empty": "Nenhum comando disponível para este processo."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "Ordenação de processos",
@@ -40,6 +45,11 @@
       "steps": {
         "initCommand": "Use task-master init no diretório do seu processo"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "Vem com o PieceMaker e é atualizada junto com ele."
     }
   },
   "permissions": {

@@ -196,6 +196,7 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
       calls.push(input);
       if (input.action === 'index') return found;
       if (input.action === 'lister') return { analyses: [{ fichier: 'index.json', index: true }] };
+      if (input.action === 'arborescence' && !input.dossiers) return { dossiers: [{ nom: 'Pièces', explication: '' }] };
       return { ok: true };
     },
   };
@@ -220,8 +221,6 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier, dossiers: [{ nom: 'Contrats' }], motif: 'Regrouper les baux' });
   await run(['dossier', 'arborescence', '--dossier', dossier], { deps });
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier });
-  fs.mkdirSync(path.join(dossier, '.piecemaker'), { recursive: true });
-  fs.writeFileSync(path.join(dossier, '.piecemaker', 'arborescence.json'), '[{"name":"Pièces"}]');
   const moves = [];
   deps.moveFn = async (input) => { moves.push(input); return { previous: 'Note.docx', current: 'Pièces/Note.docx' }; };
   assert.match(await run(['dossier', 'classer', 'Note.docx', 'Pièces', '--dossier', dossier], { deps }), /^Classé : Note\.docx → Pièces\/Note\.docx/);
@@ -311,7 +310,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '  règle calcul.loyer_impayé rempli',
     '  règle calcul.caution_versée non rempli',
   ].join('\n'));
-  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 2 condition\(s\) sans prémisse : congé_donné, loyer_impayé → skill okf\n/);
+  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 3 entrée\(s\) sans prémisse : loyer, congé_donné, loyer_impayé → pm catala verifier --programme bail\n/);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
   await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });
@@ -482,6 +481,13 @@ test('okf types propose la liste complète à l’avocat', async () => {
   assert.deepEqual(calls, [{ action: 'proposer', folder: path.resolve(dossier), ontologie: { documentTypes } }]);
   assert.match(result, /Proposition enregistrée \(1 type\(s\) de documents\)/);
   assert.equal(await run(['okf', 'types', '--json', '[]'], { cwd: dossier, deps: { okfFn: async () => ({ motif: '', date: '' }) } }), 'Aucun changement par rapport à l’ontologie actuelle : aucune proposition en attente.');
+  fs.rmSync(dossier, { recursive: true, force: true });
+});
+
+test('okf ontologie --noms donne les relations de l’ontologie scellée lue par le serveur', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-noms-'));
+  const okfFn = async () => ({ relations: [{ name: 'contests', label: 'conteste', source: ['Pièces'], target: ['Pièces'] }], systeme: [{ name: 'states' }, { name: 'mentions' }, { name: 'involves' }] });
+  assert.deepEqual(JSON.parse(await run(['okf', 'ontologie', '--noms'], { cwd: dossier, deps: { okfFn } })), ['contests', 'states', 'involves']);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 

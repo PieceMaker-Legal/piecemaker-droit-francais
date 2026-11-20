@@ -1,15 +1,18 @@
-import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import { DEFAULT_DOCUMENT_TYPES, DOCUMENT_ICONS } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 import type { DocumentType } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 
-import { INVOLVES, MENTIONS, PARTY_TYPE, PREMISE_TYPE, STATES, readGraphTypes, readTypes, text } from './bundle.js';
+import type { ClassificationFolder } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+
+import { INVOLVES, MENTIONS, PARTY_TYPE, PREMISE_TYPE, STATES, DEFAULT_GRAPH_TYPES, readTypes, text } from './bundle.js';
+import { normalizeArborescence, ontologyFile, readSealed, sealKey, sealOf, sealedContent } from './sealed.js';
+
+export { normalizeArborescence, ontologyFile };
 
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
-export type Ontology = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string; documentTypes?: DocumentType[] };
+export type Ontology = { relations: OntologyRelation[]; personnalisee: boolean; erreur?: string; documentTypes?: DocumentType[]; arborescence?: ClassificationFolder[] };
 export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
 
 export const SYSTEM_RELATIONS: SystemRelation[] = [
@@ -28,31 +31,10 @@ const DEFAULT_RELATIONS: Array<Omit<OntologyRelation, 'source' | 'target'>> = [
   { name: 'supersedes', label: 'remplace', inverse: 'remplacé par', description: 'Un document remplace un autre document (nouvelle version).' },
 ];
 
-const home = (): string => process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
-export const ontologyFile = (): string => path.join(home(), 'ontologie.json');
-const keyFile = (): string => path.join(home(), 'ontologie.cle');
 const TAMPERED = 'ontologie modifiée hors de l’onglet Index, ontologie par défaut appliquée : enregistrez-la de nouveau dans l’onglet Index › Ontologie.';
 
-function sealKey(create: boolean): Buffer | null {
-  const filePath = keyFile();
-  if (fs.existsSync(filePath)) return fs.readFileSync(filePath);
-  if (!create) return null;
-  fs.writeFileSync(filePath, randomBytes(32), { mode: 0o600, flag: 'wx' });
-  return fs.readFileSync(filePath);
-}
-
-const sealOf = (key: Buffer, relations: unknown): string => createHmac('sha256', key).update(JSON.stringify(relations)).digest('hex');
-
-function sealed(key: Buffer | null, relations: unknown, seal: unknown): boolean {
-  if (!key || typeof seal !== 'string') return false;
-  const expected = Buffer.from(sealOf(key, relations));
-  const actual = Buffer.from(seal);
-  return expected.length === actual.length && timingSafeEqual(expected, actual);
-}
-
-export function defaultOntology(projectPath: string): OntologyRelation[] {
-  const graphTypes = readGraphTypes(projectPath);
-  return DEFAULT_RELATIONS.map((relation) => ({ ...relation, source: [...graphTypes], target: [...graphTypes] }));
+export function defaultOntology(): OntologyRelation[] {
+  return DEFAULT_RELATIONS.map((relation) => ({ ...relation, source: [...DEFAULT_GRAPH_TYPES], target: [...DEFAULT_GRAPH_TYPES] }));
 }
 
 function typeList(value: unknown, where: string): string[] {
@@ -101,7 +83,8 @@ export function normalizeDocumentTypes(value: unknown): DocumentType[] {
 
 const RELATION_KEYS = ['name', 'label', 'inverse', 'description', 'source', 'target'];
 const TYPE_KEYS = ['name', 'icon'];
-const TOP_KEYS = ['relations', 'documentTypes', 'motif', 'sceau', 'date'];
+const TOP_KEYS = ['relations', 'documentTypes', 'arborescence', 'motif', 'sceau', 'date'];
+const FOLDER_KEYS = ['name', 'explanation', 'type'];
 const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const failure = (check: () => unknown): string[] => { try { check(); return []; } catch (error) { return [error instanceof Error ? error.message : String(error)]; } };
 
@@ -122,41 +105,78 @@ function listErrors(list: unknown, keys: string[], label: string, normalize: (en
   return errors.length ? errors : failure(() => normalize(list));
 }
 
+function arborescenceErrors(list: unknown): string[] {
+  if (!Array.isArray(list)) return ['arborescence : donner la liste des dossiers.'];
+  const errors = list.flatMap((entry, index) => {
+    const where = `dossier ${text(isObject(entry) ? entry.name : '') || index + 1}`;
+    if (!isObject(entry)) return [`${where} : donner un objet { ${FOLDER_KEYS.join(', ')} }.`];
+    return [
+      ...(Object.hasOwn(entry, 'name') ? [] : [`${where} : clé « name » absente.`]),
+      ...Object.keys(entry).filter((key) => !FOLDER_KEYS.includes(key)).map((key) => `${where} : clé « ${key} » inconnue (clés admises : ${FOLDER_KEYS.join(', ')}).`),
+    ];
+  });
+  return errors.length ? errors : failure(() => normalizeArborescence(list));
+}
+
 export function ontologyErrors(value: unknown): string[] {
   if (!isObject(value)) return ['ontologie : donner un objet { "relations": [...], "documentTypes": [...] }.'];
   const errors = Object.keys(value).filter((key) => !TOP_KEYS.includes(key)).map((key) => `ontologie : clé « ${key} » inconnue (clés admises : ${TOP_KEYS.join(', ')}).`);
-  if (value.relations === undefined && value.documentTypes === undefined) errors.push('ontologie : clé « relations » ou « documentTypes » absente.');
+  if (value.relations === undefined && value.documentTypes === undefined && value.arborescence === undefined) errors.push('ontologie : clé « relations », « documentTypes » ou « arborescence » absente.');
   if (value.relations !== undefined) errors.push(...listErrors(value.relations, RELATION_KEYS, 'relation', (relations) => normalizeOntology({ relations })));
   if (value.documentTypes !== undefined) errors.push(...listErrors(value.documentTypes, TYPE_KEYS, 'type', normalizeDocumentTypes));
+  if (value.arborescence !== undefined) errors.push(...arborescenceErrors(value.arborescence));
   if (value.motif !== undefined && (typeof value.motif !== 'string' || value.motif.length > 1000)) errors.push('motif : texte de 1000 caractères au plus.');
   return [...new Set(errors)];
 }
 
 export function readOntology(projectPath: string): Ontology {
-  const filePath = ontologyFile();
-  if (!fs.existsSync(filePath)) return { relations: defaultOntology(projectPath), personnalisee: false };
   try {
-    const stored = JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^﻿/, ''));
+    const { stored, tampered } = readSealed();
+    if (!stored) return { relations: defaultOntology(), personnalisee: false };
     const relations = normalizeOntology(stored);
     const documentTypes = stored.documentTypes === undefined ? undefined : normalizeDocumentTypes(stored.documentTypes);
-    if (!sealed(sealKey(false), documentTypes === undefined ? relations : { relations, documentTypes }, stored?.sceau)) return { relations: defaultOntology(projectPath), personnalisee: true, erreur: TAMPERED };
-    return { relations, personnalisee: true, ...(documentTypes === undefined ? {} : { documentTypes }) };
+    const arborescence = stored.arborescence === undefined ? undefined : normalizeArborescence(stored.arborescence);
+    if (tampered) return { relations: defaultOntology(), personnalisee: true, erreur: TAMPERED };
+    return { relations, personnalisee: true, ...(documentTypes === undefined ? {} : { documentTypes }), ...(arborescence === undefined ? {} : { arborescence }) };
   } catch (error) {
-    return { relations: defaultOntology(projectPath), personnalisee: true, erreur: `ontologie illisible, ontologie par défaut appliquée : ${error instanceof Error ? error.message : String(error)}` };
+    return { relations: defaultOntology(), personnalisee: true, erreur: `ontologie illisible, ontologie par défaut appliquée : ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
+/** Enregistre et scelle l'ontologie commune. Une partie absente de `value` (natures, arborescence) est conservée. */
 export function saveOntology(projectPath: string, value: unknown): Ontology {
-  const relations = normalizeOntology(value);
-  const supplied = (value as { documentTypes?: unknown }).documentTypes;
-  const documentTypes = normalizeDocumentTypes(supplied === undefined ? readOntology(projectPath).documentTypes || DEFAULT_DOCUMENT_TYPES : supplied);
-  const content = { relations, documentTypes };
+  const current = readOntology(projectPath);
+  const supplied = value as { relations?: unknown; documentTypes?: unknown; arborescence?: unknown };
+  const relations = supplied.relations === undefined ? current.relations : normalizeOntology(value);
+  const documentTypes = normalizeDocumentTypes(supplied.documentTypes === undefined ? current.documentTypes || DEFAULT_DOCUMENT_TYPES : supplied.documentTypes);
+  const arborescence = supplied.arborescence === undefined ? current.arborescence : normalizeArborescence(supplied.arborescence);
+  const content = { relations, documentTypes, ...(arborescence === undefined ? {} : { arborescence }) };
   const filePath = ontologyFile();
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporary, `${JSON.stringify({ ...content, sceau: sealOf(sealKey(true)!, content) }, null, 2)}\n`);
+  fs.writeFileSync(temporary, `${JSON.stringify({ ...content, sceau: sealOf(sealKey(true)!, sealedContent(content)) }, null, 2)}\n`);
   fs.renameSync(temporary, filePath);
   return readOntology(projectPath);
+}
+
+/**
+ * Reprend une seule fois l'arborescence que chaque dossier gardait dans .piecemaker/arborescence.json :
+ * la plus récente devient l'arborescence commune. Les anciens fichiers ne sont plus lus.
+ */
+export function migrateArborescence(projectPaths: string[]): string | null {
+  const current = readOntology('');
+  if (current.arborescence || current.erreur) return null;
+  const legacy = projectPaths
+    .map((projectPath) => path.join(projectPath, '.piecemaker', 'arborescence.json'))
+    .filter((filePath) => fs.existsSync(filePath))
+    .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
+  for (const filePath of legacy) {
+    try {
+      saveOntology('', { arborescence: JSON.parse(fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '')) });
+      return filePath;
+    } catch {}
+  }
+  return null;
 }
 
 export const relationNames = (ontology: Ontology): string[] => ontology.relations.map((relation) => relation.name);
@@ -164,6 +184,6 @@ export const ruleOf = (ontology: Ontology, name: string): OntologyRelation | und
 export function graphTypesOf(projectPath: string, ontology = readOntology(projectPath)): string[] {
   const present = readTypes(projectPath);
   const types = [...new Set(ontology.relations.flatMap((relation) => [...relation.source, ...relation.target]))].filter((type) => present.includes(type));
-  return types.length ? types : readGraphTypes(projectPath);
+  return types.length ? types : DEFAULT_GRAPH_TYPES;
 }
 export const isSystemRelation = (name: string): boolean => SYSTEM_NAMES.includes(name);

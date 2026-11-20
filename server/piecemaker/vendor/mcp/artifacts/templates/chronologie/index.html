@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronologie du dossier</title>
+<script src="data.js"></script>
+<style>
+:root { --bg: #fbfaf7; --fg: #1d1c1a; --muted: #6b675f; --line: #e4e0d8; --card: #ffffff; --fait: #2f6f8f; --procedure: #8a4b2a; --echeance: #a3261b; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #171614; --fg: #ece9e3; --muted: #a29d93; --line: #2e2c28; --card: #1f1e1b; --fait: #7fb6d3; --procedure: #e09a6f; --echeance: #f08a80; color-scheme: dark; } }
+:root[data-theme="dark"] { --bg: #171614; --fg: #ece9e3; --muted: #a29d93; --line: #2e2c28; --card: #1f1e1b; --fait: #7fb6d3; --procedure: #e09a6f; --echeance: #f08a80; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 ui-sans-serif, system-ui, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: 1.4rem; margin: 0 0 4px; }
+.lead { color: var(--muted); margin: 0 0 24px; }
+ol { list-style: none; margin: 0; padding: 0 0 0 20px; border-left: 2px solid var(--line); }
+li { position: relative; margin: 0 0 16px; padding: 10px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+li::before { content: ""; position: absolute; left: -28px; top: 16px; width: 12px; height: 12px; border-radius: 50%; background: var(--dot); }
+li.fait { --dot: var(--fait); } li.procedure { --dot: var(--procedure); } li.echeance { --dot: var(--echeance); }
+time { font-weight: 600; }
+.piece, .detail { color: var(--muted); font-size: .9rem; display: block; }
+.legend { display: flex; gap: 16px; color: var(--muted); font-size: .85rem; margin-bottom: 16px; flex-wrap: wrap; }
+.legend span::before { content: "● "; color: var(--c); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Chronologie du dossier</h1>
+  <p class="lead" id="lead"></p>
+  <div class="legend"><span style="--c: var(--fait)">Fait</span><span style="--c: var(--procedure)">Procédure</span><span style="--c: var(--echeance)">Échéance</span></div>
+  <ol id="events"></ol>
+</main>
+<script>
+const events = Array.isArray(window.CHRONOLOGIE) ? window.CHRONOLOGIE : [];
+const list = document.getElementById('events');
+const format = (date) => {
+  const [y, m, d] = date.split('-');
+  if (d) return new Date(`${date}T12:00:00`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+  if (m) return new Date(`${y}-${m}-01T12:00:00`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  return y;
+};
+document.getElementById('lead').textContent = events.length ? `${events.length} événement(s), du ${format(events[0].date)} au ${format(events.at(-1).date)}.` : 'Aucun événement.';
+for (const event of events) {
+  const item = document.createElement('li');
+  item.className = event.type || 'fait';
+  const time = Object.assign(document.createElement('time'), { dateTime: event.date, textContent: format(event.date) });
+  const title = Object.assign(document.createElement('div'), { textContent: event.titre });
+  const piece = Object.assign(document.createElement('span'), { className: 'piece', textContent: event.piece ? event.piece : 'Non sourcé' });
+  item.append(time, title, piece);
+  if (event.detail) item.append(Object.assign(document.createElement('span'), { className: 'detail', textContent: event.detail }));
+  list.append(item);
+}
+</script>
+</body>
+</html>

@@ -1,11 +1,33 @@
-import {
-  expireAuthSession,
-  getStoredAuthToken,
-  storeAuthToken,
-} from '@/shared/authToken';
+import { authenticatedFetch as sharedAuthenticatedFetch, getStoredAuthToken, type ApiRequestOptions } from '@/shared/authToken';
 import { IS_PLATFORM } from '@/shared/utils';
 import { readVoiceConfig, voiceConfigHeaders } from '@/shared/voiceConfig';
-import type { DocxReview, MistralSdkAuthStatus } from '@/shared/types';
+import type { ArtifactDecision, ArtifactDetail, ArtifactPassage, ArtifactSummary, ArtifactThread, DocxReview, MistralSdkAuthStatus } from '@/shared/types';
+
+async function artifactRequest<T>(projectPath: string, route = '', body?: unknown, method?: string, version?: number): Promise<T> {
+  const query = new URLSearchParams({ projectPath });
+  if (version !== undefined) query.set('ver', String(version));
+  const response = await authenticatedFetch(`/api/piecemaker/artifacts${route}?${query}`, {
+    method: method ?? (body === undefined ? 'GET' : 'POST'),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || `Artifacts indisponibles (HTTP ${response.status}).`);
+  return result as T;
+}
+
+export const artifactsApi = {
+  list: (project: string) => artifactRequest<ArtifactSummary[]>(project),
+  detail: (project: string, id: string) => artifactRequest<ArtifactDetail>(project, `/${encodeURIComponent(id)}`),
+  frame: (project: string, id: string, version: number) => artifactRequest<{ src: string }>(project, `/${encodeURIComponent(id)}/frame`, {}, undefined, version),
+  pin: (project: string, id: string, pinned: boolean) => artifactRequest<ArtifactSummary>(project, `/${encodeURIComponent(id)}/pin`, { pinned }),
+  remove: (project: string, id: string) => artifactRequest(project, `/${encodeURIComponent(id)}`, undefined, 'DELETE'),
+  threads: (project: string, id: string) => artifactRequest<ArtifactThread[]>(project, `/${encodeURIComponent(id)}/comments`),
+  comment: (project: string, id: string, body: { text: string; anchor: { version: number; passage?: ArtifactPassage } } | { text: string; thread_id: string }) =>
+    artifactRequest<ArtifactThread>(project, `/${encodeURIComponent(id)}/comments`, body),
+  decide: (project: string, id: string, body: { version: number; decision: ArtifactDecision; text: string }) =>
+    artifactRequest<ArtifactThread>(project, `/${encodeURIComponent(id)}/reviews`, body),
+  data: (project: string, id: string, op: string, args: unknown) => artifactRequest(project, `/${encodeURIComponent(id)}/data`, { op, args }),
+};
 
 export async function docxReviewRequest(projectId: string, path: string, body?: Record<string, unknown>): Promise<DocxReview> {
   const response = await authenticatedFetch(`/api/piecemaker/docx-review?${new URLSearchParams({ projectId, path })}`, body ? {
@@ -35,57 +57,11 @@ export const mistralSdkApi = {
   check: () => authenticatedFetch('/api/piecemaker/mistral-sdk/auth/check', { method: 'POST' }).then(mistralSdkResponse<{ ok: boolean; response: string }>),
 };
 
-// Headers are a plain record rather than the full `HeadersInit` union so the
-// defaults below can be merged with a caller's headers by spreading.
-export type ApiRequestOptions = Omit<RequestInit, 'headers'> & {
-  headers?: Record<string, string>;
-};
+export type { ApiRequestOptions };
 
-// Utility function for authenticated API calls
-export const authenticatedFetch = (
-  url: string,
-  options: ApiRequestOptions = {},
-): Promise<Response> => {
-  const token = getStoredAuthToken();
-
-  const defaultHeaders: Record<string, string> = {};
-
-  // Only set Content-Type for non-FormData requests
-  if (!(options.body instanceof FormData)) {
-    defaultHeaders['Content-Type'] = 'application/json';
-  }
-
-  if (!IS_PLATFORM && token) {
-    defaultHeaders['Authorization'] = `Bearer ${token}`;
-  }
-
-  return fetch(url, {
-    ...options,
-    // Every response here can carry X-Refreshed-Token or X-Auth-Error, and a
-    // served-from-cache response replays the headers it was stored with. Those
-    // headers describe one moment in one session, so they must never be reused:
-    // a stale X-Refreshed-Token overwrote the current token with an expired one
-    // on every start, which then got discarded as expired.
-    cache: 'no-store',
-    headers: {
-      ...defaultHeaders,
-      ...options.headers,
-    },
-  }).then((response) => {
-    const refreshedToken = response.headers.get('X-Refreshed-Token');
-    if (refreshedToken) {
-      storeAuthToken(refreshedToken);
-    }
-    // Belt and braces for any path that still reaches a cached response: only a
-    // real rejection ends the session. Note that a revalidated response surfaces
-    // its stored status (typically 200), not the 304 from the wire, so the
-    // header alone says nothing about the current request.
-    if (response.status === 401 && response.headers.get('X-Auth-Error')) {
-      expireAuthSession();
-    }
-    return response;
-  });
-};
+// The app's calls: the token is sent except on the hosted platform.
+export const authenticatedFetch = (url: string, options: ApiRequestOptions = {}): Promise<Response> =>
+  sharedAuthenticatedFetch(url, options, { withToken: !IS_PLATFORM });
 
 export async function pollWorkspacePanel(project: string) {
   const query = new URLSearchParams({ project });
@@ -197,8 +173,9 @@ export async function readApiJson<T>(response: Response): Promise<T> {
  *
  * The non-throwing counterpart of readApiJson, used by the auth and onboarding
  * screens because they show their own localized message when the server gives
- * none, and by the plugins context for failed plugin list, install, update,
- * uninstall and toggle calls, which all answer with the structured envelope.
+ * none, by the plugins context for failed plugin list, install, update,
+ * uninstall and toggle calls, which all answer with the structured envelope,
+ * and by the chat drafts store to say why the server refused a queued message.
  */
 export function readApiErrorMessage(body: unknown): string | null {
   if (!body || typeof body !== 'object') {
@@ -352,6 +329,10 @@ export const api = {
   // `upToAnchorId` (all of it when omitted). The source is left untouched.
   forkSession: (sessionId: string, body: { upToAnchorId?: string; title?: string } = {}) =>
     post(`/api/providers/sessions/${encodeURIComponent(sessionId)}/fork`, body),
+  // Starts the session's next message on a fresh context. Its history stays
+  // visible; `cleared` is false when there was no context to clear.
+  clearSessionContext: (sessionId: string) =>
+    post(`/api/providers/sessions/${encodeURIComponent(sessionId)}/clear-context`),
   renameSession: (sessionId: string, summary: string) =>
     put(`/api/providers/sessions/${sessionId}`, { summary }),
   // What one agent of a workflow run did, read from its transcript on demand
@@ -485,6 +466,10 @@ export const api = {
     capabilities: () => get('/api/providers/capabilities'),
     authStatus: (provider: string) =>
       get(provider === 'mistral' ? '/api/piecemaker/mistral-sdk/provider-status' : `/api/providers/${encodeURIComponent(provider)}/auth/status`),
+    cliStatus: (provider: string) =>
+      get(`/api/providers/${encodeURIComponent(provider)}/cli`),
+    updateCli: (provider: string) =>
+      post(`/api/providers/${encodeURIComponent(provider)}/cli/update`),
     claudeSettingsPermissions: () => get('/api/providers/claude/settings-permissions'),
 
     models: (provider: string) => get(`/api/providers/${provider}/models`),
@@ -496,6 +481,10 @@ export const api = {
       del(`/api/providers/${provider}/models/${recordId}`),
     setCustomModelsOnly: (provider: string, enabled: boolean) =>
       put(`/api/providers/${provider}/models/custom-only`, { enabled }),
+    dismissSideQuestion: (sessionId: string, sideQuestionId: string) =>
+      del(
+        `/api/providers/sessions/${encodeURIComponent(sessionId)}/side-questions/${encodeURIComponent(sideQuestionId)}`,
+      ),
 
     createSession: (payload: {
       provider: string;
@@ -595,9 +584,15 @@ export const api = {
     savePreferences: (updates: Record<string, unknown>) =>
       patch('/api/user/preferences', updates),
     drafts: () => get('/api/user/drafts'),
+    // Without `queuedMessage` only the text is written; the stored queued
+    // message is left as it is.
     saveDraft: (scope: string, draft: { text: string; queuedMessage?: unknown }) =>
       put('/api/user/drafts', { scope, ...draft }),
-    deleteDraft: (scope: string) => del('/api/user/drafts', { scope }),
+    // Appends to the scope's queued message on the server and returns the
+    // message that is now queued.
+    appendQueuedMessage: (scope: string, queuedMessage: unknown) =>
+      post('/api/user/drafts/queued-message', { scope, queuedMessage }),
+    clearQueuedMessage: (scope: string) => del('/api/user/drafts/queued-message', { scope }),
   },
 
   // Server-side settings: API keys, stored credentials, notifications, web push
@@ -628,6 +623,18 @@ export const api = {
       subscribe: (subscription: { endpoint?: string; keys?: unknown }) =>
         post('/api/settings/push/subscribe', subscription),
       unsubscribe: (endpoint: string) => post('/api/settings/push/unsubscribe', { endpoint }),
+    },
+
+    // Outbound webhook for run lifecycle events. `createSecret` is the only
+    // response that ever carries the signing secret.
+    notificationWebhook: {
+      get: () => get('/api/notifications/webhook'),
+      save: (config: { url: string; allowHttp: boolean; enabled: boolean }) =>
+        put('/api/notifications/webhook', config),
+      remove: () => del('/api/notifications/webhook'),
+      createSecret: () => post('/api/notifications/webhook/secret'),
+      removeSecret: () => del('/api/notifications/webhook/secret'),
+      sendTest: () => post('/api/notifications/webhook/test'),
     },
   },
 
@@ -660,6 +667,7 @@ export const api = {
     sessions: () => get('/api/browser-use/sessions'),
     stopSession: (sessionId: string) => post(`/api/browser-use/sessions/${sessionId}/stop`),
     deleteSession: (sessionId: string) => del(`/api/browser-use/sessions/${sessionId}`),
+    sendInput: (sessionId: string, input: unknown) => post(`/api/browser-use/sessions/${sessionId}/input`, input),
     installRuntime: () => post('/api/browser-use/runtime/install'),
   },
 

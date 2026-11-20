@@ -26,6 +26,8 @@ import {
 } from './bundle.js';
 import { readOntology, relationNames, ruleOf } from './ontology.js';
 import { storedOntologyErrors } from './ontology-proposal.js';
+import { linkedReviews, reviewPieces } from './premises.js';
+import { reviewRowPieces } from './reviews.js';
 
 export type OkfError = { fiche: string; erreur: string };
 export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
@@ -93,6 +95,10 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
       }
     }
     const allowed = ALLOWED[reserved] || documentRelations;
+    if (reserved === PREMISE_TYPE) for (const link of linkedReviews(concept)) {
+      const { erreur } = reviewRowPieces(projectPath, link.fichier, link.colonne);
+      if (erreur) report(`revue liée ${link.fichier} › colonne ${link.colonne} : ${erreur} ; la délier : pm okf revue "${text(concept.frontmatter.title)}" --fichier "${link.fichier}" --colonne ${link.colonne} --retirer`);
+    }
     const markdown = resource ? markdownOf(resource) : null;
     for (const [name, entries] of Object.entries(relationsOf(concept.frontmatter))) {
       if (!allowed.includes(name) && entries.some((entry) => !entry.dismissed)) report(`relation hors ontologie : ${name} (relations admises : ${allowed.join(', ') || 'aucune'})`);
@@ -125,7 +131,8 @@ export function contradictions(projectPath: string): OkfContradiction[] {
   return concepts.filter((concept) => concept.frontmatter.type === PREMISE_TYPE && concept.frontmatter.single_value === true).flatMap((premise) => {
     const valeurs = concepts.flatMap((concept) => (relationsOf(concept.frontmatter)[STATES] || [])
       .filter((entry) => entry.target === premise.id && !entry.dismissed && entry.value)
-      .map((entry) => ({ piece: concept.id, valeur: entry.value as string })));
+      .map((entry) => ({ piece: concept.id, valeur: entry.value as string })))
+      .concat(reviewPieces(projectPath, premise, concepts).filter((piece) => piece.value).map((piece) => ({ piece: conceptId(piece.resource), valeur: piece.value })));
     return new Set(valeurs.map((entry) => isoDateOf(entry.valeur) ?? fold(squash(entry.valeur)))).size > 1 ? [{ premise: premise.id, titre: text(premise.frontmatter.title), valeurs }] : [];
   });
 }

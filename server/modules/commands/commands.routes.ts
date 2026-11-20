@@ -45,7 +45,7 @@ const providerModelsService = dependencies.models;
 const process = dependencies.runtime;
 const router = express.Router();
 
-const MODEL_PROVIDERS = ["claude", "cursor", "codex", "mistral", "opencode"];
+const MODEL_PROVIDERS = ["claude", "cursor", "codex", "mistral", "opencode", "hermes"];
 
 const MODEL_PROVIDER_LABELS = {
   claude: "Claude",
@@ -53,6 +53,7 @@ const MODEL_PROVIDER_LABELS = {
   codex: "Codex",
   mistral: "Mistral",
   opencode: "OpenCode",
+  hermes: "Hermes",
 };
 
 const readModelProvider = (value) => {
@@ -82,7 +83,14 @@ const resolveCommandModel = async (modelsService, provider, context) => {
 const executeModelsCommand = async (args, context, modelsService) => {
   const currentProvider = readModelProvider(context?.provider);
   const catalog = await modelsService.getProviderModels(currentProvider);
-  const currentModel = await resolveCommandModel(modelsService, currentProvider, context);
+  const resolved = await modelsService.resolveSessionModel(currentProvider, {
+    sessionId: context?.sessionId,
+    requestedModel: context?.model,
+  });
+  const currentModel = resolved.model;
+  // An alias such as `default` or `opus` says nothing about the release that
+  // answered; the transcript's model id does.
+  const servedModel = resolved.servedModel && resolved.servedModel !== currentModel ? resolved.servedModel : null;
   const availableModels = catalog.OPTIONS.map((option) => option.value);
   const availableOptions = catalog.OPTIONS.map((option) => ({
     value: option.value,
@@ -100,6 +108,7 @@ const executeModelsCommand = async (args, context, modelsService) => {
         provider: currentProvider,
         providerLabel: MODEL_PROVIDER_LABELS[currentProvider],
         model: currentModel,
+        ...(servedModel ? { servedModel } : {}),
       },
       available: {
         [currentProvider]: availableModels,
@@ -107,7 +116,7 @@ const executeModelsCommand = async (args, context, modelsService) => {
       availableModels,
       availableOptions,
       defaultModel: catalog.DEFAULT,
-      message: `Current model: ${currentModel}`,
+      message: servedModel ? `Current model: ${currentModel} (${servedModel})` : `Current model: ${currentModel}`,
     },
   };
 };
@@ -195,6 +204,12 @@ const builtInCommands = [
   {
     name: "/models",
     description: "View available models for the current provider",
+    namespace: "builtin",
+    metadata: { type: "builtin" },
+  },
+  {
+    name: "/clear",
+    description: "Clear this session's context and keep its history",
     namespace: "builtin",
     metadata: { type: "builtin" },
   },
@@ -443,6 +458,17 @@ Custom commands can be created in:
           ? `Opening CLAUDE.md at ${claudeMdPath}`
           : `CLAUDE.md not found at ${claudeMdPath}. Create it to store project-specific instructions.`,
       },
+    };
+  },
+
+  // The session itself is cleared by the client through the providers
+  // module's clear-context route, which owns sessions; this only names the
+  // action, like "/config" does for the settings screen.
+  "/clear": async () => {
+    return {
+      type: "builtin",
+      action: "clear",
+      data: {},
     };
   },
 

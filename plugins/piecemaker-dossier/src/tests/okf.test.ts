@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { spreadBoxes, premiseReviewDraft, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
+import { spreadBoxes, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
-import { chronologyView, graphView, shell } from '../views.js';
+import { documentTitle, linksMarkup, shell } from '../views.js';
+import { indexRowResource, isPieceRow } from '../index-analysis.js';
 
 const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', relations });
 const index: OkfIndex = {
@@ -26,12 +27,11 @@ describe('index OKF', () => {
   it('utilise le titre descriptif dans la première colonne et la fiche, sans renommer la source', () => {
     const node = { id: 'document:1', kind: 'document' as const, label: 'Contrat.pdf', aliases: [], data: { path: '/dossier/Pièces/Contrat.pdf' }, date: null };
     const named = { ...index, fiches: index.fiches.map((entry) => entry.resource === 'Pièces/Contrat.pdf' ? { ...entry, title: 'Convention de prestation', titleCitation: 'La présente convention' } : entry) };
-    const html = chronologyView({ graph: { nodes: [node], links: [] } as never, okf: named }, '/dossier');
-    expect(html).toContain('class="pmd-card-title">Convention de prestation</span>');
+    expect(documentTitle(node as never, named, '/dossier')).toBe('Convention de prestation');
     expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('class="pmd-fact-title">Convention de prestation</h2>');
     expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('La présente convention');
     expect(ficheCardMarkup(named, '/Pièces/Contrat.pdf.md')).toContain('data-open-file="Pièces/Contrat.pdf"');
-    expect(chronologyView({ graph: { nodes: [node], links: [] } as never }, '/dossier')).toContain('class="pmd-card-title">Contrat.pdf</span>');
+    expect(documentTitle(node as never, null, '/dossier')).toBe('Contrat.pdf');
   });
 
   it('les liens se lisent dans les deux sens', () => {
@@ -47,20 +47,23 @@ describe('index OKF', () => {
     expect(graphElements(custom)[2].data.label).toBe('invoque');
   });
 
-  it('le tableau affiche la colonne Liens et le rapport de vérification', () => {
-    const node = { id: 'document:1', kind: 'document' as const, label: 'Courrier.pdf', aliases: [], data: { path: '/dossier/Pièces/Courrier.pdf' }, date: null };
-    const html = chronologyView({ graph: { nodes: [node], links: [] } as never, okf: index }, '/dossier', undefined, { errors: [{ fiche: '/Pièces/Courrier.pdf.md', erreur: 'type absent' }] });
-    expect(html).toContain('se réfère à → Contrat');
-    expect(html).toContain('title="Nous faisons suite au contrat."');
-    expect(html).toContain('1 erreur dans l’index');
-    expect(html).not.toContain('data-okf-graph');
+  it('le mode chronologie ne garde que les lignes dont la fiche est une pièce', () => {
+    const okf = { fiches: [{ resource: 'Pièces/Contrat.pdf', type: 'Pièces' }, { resource: 'Projets/Conclusions.docx', type: 'Projets' }] };
+    expect(isPieceRow(okf, { id: 'a', piece: 'Pièces/Contrat.pdf', documents: [] })).toBe(true);
+    expect(isPieceRow(okf, { id: 'b', piece: 'Projets/Conclusions.docx', documents: [] })).toBe(false);
+    expect(isPieceRow(okf, { id: 'c', documents: [{ source: 'Inconnu.md' }] })).toBe(false);
+    expect(isPieceRow(null, { id: 'd', documents: [] })).toBe(true);
+  });
+
+  it('l’Index affiche les liens et citations de chaque pièce', () => {
+    const links = linksMarkup(index, indexRowResource({ id: 'r1', piece: 'Pièces/Courrier.pdf', documents: [{ source: 'Fichiers convertis PieceMaker/Courrier.md' }] }));
+    expect(links).toContain('se réfère à → Contrat');
+    expect(links).toContain('title="Nous faisons suite au contrat."');
+    expect(indexRowResource({ id: 'r2', documents: [{ source: 'Pièces/Note.md' }] })).toBe('Pièces/Note.md');
   });
 
   it('le graphe a son propre onglet, à côté de l’Index', () => {
     expect(shell('graph')).toMatch(/data-tab="chronology"[\s\S]*data-tab="graph" aria-selected="true"/);
-    expect(graphView(index)).toContain('data-okf-graph');
-    expect(graphView(index)).not.toMatch(/data-okf-premises checked/);
-    expect(graphView(index, true)).toContain('data-okf-premises checked');
   });
 });
 
@@ -204,11 +207,8 @@ describe('fiches du graphe', () => {
     expect(html).toContain('data-open-fiche="/Parties/Jean Dupont.md"');
   });
 
-  it('premiseReviewDraft prépare une revue à une colonne qui porte la prémisse', () => {
-    expect(ficheCardMarkup(premiseIndex, '/_premises/Prix.md')).toContain('data-premise-review');
-    expect(premiseReviewDraft(premiseIndex, '/_premises/Prix.md', '/dossier-fictif')).toEqual({ project: '/dossier-fictif', title: 'Prix', templateName: '', columns: [{ name: 'Prix', prompt: 'Prix', format: 'text', premise: 'checkpoint' }], rows: [] });
-    expect(premiseReviewDraft({ ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, single: true })) }, '/_premises/Prix.md', '/dossier-fictif')?.columns[0].premise).toBe('single');
-    expect(premiseReviewDraft(premiseIndex, '/_premises/Inconnue.md', '/dossier-fictif')).toBeNull();
+  it('la carte d’une prémisse ne propose plus de revue tabulaire', () => {
+    expect(ficheCardMarkup(premiseIndex, '/_premises/Prix.md')).not.toContain('data-premise-review');
   });
 });
 

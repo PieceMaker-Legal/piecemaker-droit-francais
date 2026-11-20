@@ -15,7 +15,9 @@ it('ouvre le QR Telegram avec la session PieceMaker et permet de fermer puis rou
   button.click();
   expect(root.querySelectorAll('[role="dialog"]')).toHaveLength(1);
   await vi.waitFor(() => expect(root.querySelector('a')?.href).toBe('https://t.me/exemple_bot?start=suivi'));
-  expect(request).toHaveBeenCalledExactlyOnceWith('/api/piecemaker/telegram', { headers: { Authorization: 'Bearer session-exemple' } });
+  expect(request).toHaveBeenCalledOnce();
+  expect(request.mock.calls[0][0]).toBe('/api/piecemaker/telegram');
+  expect(request.mock.calls[0][1].headers.Authorization).toBe('Bearer session-exemple');
   expect(root.querySelector('.pme-telegram-qr')?.getAttribute('src')).toBe('data:image/png;base64,ZXhlbXBsZQ==');
   expect(root.textContent).toContain('Skill PieceMaker disponible');
   root.querySelector<HTMLButtonElement>('[data-modal-action="close"]')!.click();

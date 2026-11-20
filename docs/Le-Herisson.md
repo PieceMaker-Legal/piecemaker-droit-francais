@@ -65,7 +65,6 @@ flowchart LR
 | Feature | Fichiers (sous `.piecemaker/`) | Écriture | Avant (PreToolUse) | Après (PostToolUse) | Skill | Délai |
 |---|---|---|---|---|---|---|
 | `ontologie` | `ontologie.json` (dans `~/.piecemaker`), `ontologie.proposition.json` | proposition | devient une proposition (onglet Index › Ontologie) | — | `okf` | — |
-| `arborescence` | `arborescence.json`, `arborescence.proposition.json` | proposition | devient une proposition (onglet Index › Classement) | — | `piecemaker` | — |
 | `okf` | `okf/**` | agent | libre ; outil MCP `OkfWrite` conseillé | après une écriture d'une fiche, `OkfWrite` ou `pm okf link`, `unlink` ou `examinee` : `pm okf verify` (erreurs, contradictions entre valeurs d'une prémisse, manques) | `okf` | 30 s |
 | `etapes` | `etapes.json` | serveur | refusée : l'avocat règle les étapes sur le tableau | — | `piecemaker` | — |
 | `protection` | `protection.json` | serveur | refusée : l'avocat lève la protection par le bouclier | — | `piecemaker` | — |
@@ -85,14 +84,12 @@ vérificateurs `pm`, reprise telle quelle, reste en français.
 | Feature | Moment | Cas | Texte exact |
 |---|---|---|---|
 | `ontologie` | PreToolUse | Edit, Write ou apply_patch accepté | `Edit saved as a proposal in ontologie.proposition.json. ontologie.json does not change, this is normal: the lawyer accepts, refuses or modifies each change in the Index › Ontologie tab.⏎Compared with the current ontology: relations — <changes>; document types — <changes>.⏎To add to it, edit ontologie.json again: each edit is added to the pending proposal.` |
-| `arborescence` | PreToolUse | Edit, Write ou apply_patch accepté | `Edit saved as a proposal in arborescence.proposition.json. arborescence.json does not change, this is normal: the lawyer accepts, refuses or modifies each change in the Index › Classement tab.⏎Compared with the current folder tree: <changes>.⏎To add to it, edit arborescence.json again: each edit is added to the pending proposal.` |
-| `ontologie`, `arborescence` | PreToolUse | proposition partie du fichier actuel (3e ligne remplacée) | `The pending proposal did not contain the replaced text: the new proposal starts from the current file and replaces the old proposal.` |
-| `ontologie`, `arborescence` | PreToolUse | proposition invalide | `Proposal not saved, nothing changed: <reason>. Correct the cause, then edit <file> again.` |
-| `ontologie`, `arborescence` | PreToolUse | serveur arrêté (raison) | `PieceMaker is not running, the proposal cannot be checked; ask the lawyer to start PieceMaker` |
+| `ontologie` | PreToolUse | proposition partie du fichier actuel (3e ligne remplacée) | `The pending proposal did not contain the replaced text: the new proposal starts from the current file and replaces the old proposal.` |
+| `ontologie` | PreToolUse | proposition invalide | `Proposal not saved, nothing changed: <reason>. Correct the cause, then edit <file> again.` |
+| `ontologie` | PreToolUse | serveur arrêté (raison) | `PieceMaker is not running, the proposal cannot be checked; ask the lawyer to start PieceMaker` |
 | `ontologie` | PreToolUse | écriture par le shell | `Only the lawyer sets the link ontology (~/.piecemaker/ontologie.json, common to all cases), in the Index › Ontologie tab. Read it with pm okf ontologie. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides.` |
-| `arborescence` | PreToolUse | écriture par le shell | `Only the lawyer sets the folder tree (.piecemaker/arborescence.json), in the Index › Classement tab. To propose a change, edit arborescence.json with the Edit or Write tool (or apply_patch), never with the shell, or run pm dossier arborescence --dossiers: the edit becomes a proposal and the lawyer decides.` |
 | `ontologie` | PreToolUse | accès à la clé de sceau `ontologie.cle` | `Only the PieceMaker server can access the seal key of the ontology (~/.piecemaker/ontologie.cle).` |
-| `ontologie`, `arborescence` | PreToolUse | écriture d'une proposition en attente (`*.proposition.json`) | le texte « écriture par le shell » de la feature |
+| `ontologie` | PreToolUse | écriture d'une proposition en attente (`*.proposition.json`) | le texte « écriture par le shell » de la feature |
 | `etapes` | PreToolUse | toute écriture | `Only the lawyer sets the case steps (.piecemaker/etapes.json), on the board of the Suivi des dossiers tab. Read the current step and the document to produce with pm check. Never write this file. To change a step, ask the lawyer.` |
 | `protection` | PreToolUse | toute écriture | `Only the PieceMaker server writes the document protection file (.piecemaker/protection.json). Only the lawyer removes the protection, with the shield of the case in the sidebar. Never write this file. Read the converted Markdown of a protected document, not the PDF or the image.` |
 | `suivi` | PreToolUse | faute de forme nouvelle | `Write refused by Le Hérisson: the tracking file does not have the expected structure. Nothing was written.⏎<file>:<line>: <error>⏎    line <line> is: <texte de la ligne>⏎…⏎Correct these lines, then write the file again. Full model: Feature read deadlines path=piecemaker/references/suivi.md.` |

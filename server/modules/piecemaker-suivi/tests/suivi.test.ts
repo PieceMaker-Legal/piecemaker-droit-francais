@@ -227,7 +227,9 @@ test('syntaxe et clés : le suivi signale les fautes de frappe et de structure',
   assert.ok(texts(loop, 'erreur').some((line) => line.includes('en boucle')));
 });
 
-test('le service garde le suivi par dossier, le relit s’il change et enregistre ce que l’avocat marque fait', async () => {
+test('le service garde le suivi par dossier, le relit s’il change et enregistre ce que l’avocat marque fait', async (context) => {
+  // Les échéances du dossier fictif tombent en novembre 2026 : le test se place avant.
+  context.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-26T12:00:00Z') });
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'suivi-'));
   const other = fs.mkdtempSync(path.join(os.tmpdir(), 'suivi-'));
   const db = new Database(':memory:');
@@ -325,7 +327,9 @@ test('la base existante garde les suivis et les échéances faites, et le tablea
   assert.deepEqual((await board.current()).docs['projects/cabinet'], { _id: 'cabinet', name: 'Dossiers', people: ['p'] });
 });
 
-test('le board affiche les dates calculées, sans les recopier dans le fichier', async () => {
+test('le board affiche les dates calculées, sans les recopier dans le fichier', async (context) => {
+  // Les échéances du dossier fictif tombent en novembre 2026 : le test se place avant.
+  context.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-26T12:00:00Z') });
   const { file, matter, raw, board, matterPath } = boardFixture();
   fs.writeFileSync(file, toJson(CONTENTIEUX));
   const first = await matter();

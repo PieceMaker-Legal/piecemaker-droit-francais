@@ -1,13 +1,80 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { REVIEW_FOLDER, documentTitleCell } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
-import type { Review } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+import { REVIEW_FOLDER, cellAuthor, documentTitleCell, isPositiveCell, sameDocument } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
+import type { Review, ReviewRow } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
-import { premiseId, squash, text } from './bundle.js';
+import { squash, text } from './bundle.js';
 
-export type ReviewStatement = { candidates: string[]; quote: string; value: string };
-export type ReviewPremise = { id: string; title: string; description: string; single: boolean; statements: ReviewStatement[] };
+export type ReviewAuthor = 'human' | 'agent';
+/** Une ligne positive d'une revue liée : une pièce qui établit la prémisse, signée de son auteur. */
+export type ReviewRowPiece = { row: string; label: string; resource: string; value: string; citation: string; author: ReviewAuthor; checkedAt?: string };
+export type ReviewLinkView = { fichier: string; titre: string; colonne: number; question: string; by: string; at: string; lignes: ReviewRowPiece[]; erreur?: string };
+export type ReviewCatalogEntry = { fichier: string; titre: string; colonnes: Array<{ index: number; nom: string; format: string }> };
+
+const isReview = (value: unknown): value is Review => Boolean(value) && Array.isArray((value as Review).columns) && Array.isArray((value as Review).rows);
+
+/** Le nom d'un fichier de revue : un .json posé à la racine du dossier des revues. */
+export function reviewFileName(value: unknown): string {
+  const name = text(value).replace(/^.*[\\/]/, '');
+  if (!name || !name.endsWith('.json') || name.startsWith('.')) throw new TypeError(`revue : donner le nom du fichier .json de la revue tabulaire (dossier « ${REVIEW_FOLDER} »).`);
+  return name;
+}
+
+function readReviewFile(projectPath: string, file: string): Review | null {
+  const filePath = path.join(projectPath, REVIEW_FOLDER, file);
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    const review = JSON.parse(fs.readFileSync(filePath, 'utf8')) as unknown;
+    return isReview(review) ? review : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Les revues qu'on peut lier à une prémisse : celles qui portent sur les pièces du dossier. */
+export function reviewCatalog(projectPath: string): ReviewCatalogEntry[] {
+  const directory = path.join(projectPath, REVIEW_FOLDER);
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory).filter((name) => name.endsWith('.json') && !name.startsWith('.')).sort().flatMap((fichier) => {
+    const review = readReviewFile(projectPath, fichier);
+    if (!review || review.category === 'recherche-juridique') return [];
+    return [{ fichier, titre: text(review.title) || fichier, colonnes: review.columns.map((column) => ({ index: column.index, nom: text(column.name), format: column.format })) }];
+  });
+}
+
+/** La colonne visée par son index ou par son nom. */
+export function reviewColumn(projectPath: string, file: string, column: unknown): { review: Review; index: number } {
+  const review = readReviewFile(projectPath, file);
+  if (!review) throw new TypeError(`revue : aucune revue tabulaire ${file} dans « ${REVIEW_FOLDER} ».`);
+  if (review.category === 'recherche-juridique') throw new TypeError('revue : une recherche juridique cite des décisions, pas des pièces du dossier ; lier une revue des pièces.');
+  const given = typeof column === 'number' ? String(column) : text(column);
+  const fold = (value: string) => value.toLocaleLowerCase('fr').normalize('NFC');
+  const found = review.columns.find((entry) => String(entry.index) === given) || review.columns.find((entry) => fold(text(entry.name)) === fold(given));
+  if (!found) throw new TypeError(`colonne : aucune colonne « ${given} » dans ${file}. Colonnes : ${review.columns.map((entry) => `${entry.index} « ${entry.name} »`).join(', ')}.`);
+  return { review, index: found.index };
+}
+
+const rowResource = (projectPath: string, row: ReviewRow, cited: string): string => {
+  const source = row.documents.find((document) => cited && sameDocument(document.source, cited))?.source || row.piece || row.documents[0]?.source || '';
+  return source ? path.relative(projectPath, path.resolve(projectPath, source)).split(path.sep).join('/').normalize('NFC') : '';
+};
+
+/** Les lignes positives de la colonne liée, lues dans la revue à chaque lecture : une revue relancée ou vérifiée remonte aussitôt. */
+export function reviewRowPieces(projectPath: string, file: string, column: number): { titre: string; question: string; lignes: ReviewRowPiece[]; erreur?: string } {
+  const review = readReviewFile(projectPath, file);
+  const target = review?.columns.find((entry) => entry.index === column);
+  if (!review || !target) return { titre: file, question: '', lignes: [], erreur: review ? `colonne ${column} absente de la revue` : 'revue tabulaire introuvable' };
+  const lignes = review.rows.flatMap((row) => {
+    const cell = review.cells?.[row.id]?.[String(column)];
+    if (row.status !== 'done' || !isPositiveCell(target, cell)) return [];
+    const cited = cell.citations?.find((citation) => citation.verified) || cell.citations?.[0];
+    const resource = rowResource(projectPath, row, cited?.document || '');
+    if (!resource || /^https?:/i.test(resource) || resource.startsWith('..')) return [];
+    return [{ row: row.id, label: text(row.label) || resource, resource, value: squash(cell.summary), citation: squash(cited?.quote || ''), author: cellAuthor(cell), ...(cell.checked?.at ? { checkedAt: cell.checked.at } : {}) }];
+  });
+  return { titre: text(review.title) || file, question: text(target.name), lignes };
+}
 
 function readReviews(projectPath: string): Review[] {
   const directory = path.join(projectPath, REVIEW_FOLDER);
@@ -44,24 +111,4 @@ export function documentMetadataFromReviews(projectPath: string): Map<string, { 
     }
   }
   return metadata;
-}
-
-export function premisesFromReviews(projectPath: string): ReviewPremise[] {
-  const premises = new Map<string, ReviewPremise>();
-  for (const review of readReviews(projectPath)) {
-    for (const column of review.columns) {
-      if (!column.premise || !text(column.name)) continue;
-      const id = premiseId(column.name);
-      const premise: ReviewPremise = { id, title: text(column.name), description: squash(text(column.prompt)), single: column.premise === 'single', statements: premises.get(id)?.statements || [] };
-      premises.set(id, premise);
-      for (const row of review.rows) {
-        const cell = review.cells?.[row.id]?.[column.index];
-        const citation = cell?.citations?.find((entry) => entry.verified && text(entry.quote));
-        if (!cell || !citation) continue;
-        const candidates = [row.piece, ...(row.documents || []).map((document) => document.source)].filter((value): value is string => Boolean(value)).map((value) => value.normalize('NFC'));
-        premise.statements.push({ candidates, quote: squash(citation.quote), value: squash(text(cell.summary)) });
-      }
-    }
-  }
-  return [...premises.values()];
 }

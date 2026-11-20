@@ -5,14 +5,7 @@
       "cible": "^ontologie(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "okf",
-      "motif": "Only the lawyer sets the link ontology (~/.piecemaker/ontologie.json, common to all cases), in the Index › Ontologie tab. Read it with pm okf ontologie. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
-    },
-    {
-      "nom": "arborescence",
-      "cible": "^arborescence(\\.proposition)?\\.json$",
-      "ecriture": "proposition",
-      "skill": "piecemaker",
-      "motif": "Only the lawyer sets the folder tree (.piecemaker/arborescence.json), in the Index › Classement tab. To propose a change, edit arborescence.json with the Edit or Write tool (or apply_patch), never with the shell, or run pm dossier arborescence --dossiers: the edit becomes a proposal and the lawyer decides."
+      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: relations, document types and the folder tree under the key arborescence), in the Index › Ontologie and Index › Classement tabs. Read it with pm okf ontologie and pm dossier arborescence. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
     },
     {
       "nom": "okf",
@@ -20,7 +13,7 @@
       "ecriture": "agent",
       "skill": "okf",
       "verifier": ["okf", "verify"],
-      "commande": "\\bpm okf (link|unlink|examinee)\\b",
+      "commande": "\\bpm okf (link|unlink|examinee|revue)\\b",
       "erreur": "Index OKF : \\d+ erreur|Contradictions : \\d|Graphe : \\d+ élément",
       "delai": 30
     },
@@ -30,6 +23,13 @@
       "ecriture": "serveur",
       "skill": "piecemaker",
       "motif": "Only the features MCP writes the feature data and comments (.piecemaker/features/). Use FeatureData to write a document and FeatureComments to answer a comment of the lawyer. Never write these files with Edit, Write or the shell."
+    },
+    {
+      "nom": "artifacts",
+      "cible": "^artifacts(/|$)",
+      "ecriture": "serveur",
+      "skill": "creation-artifacts",
+      "motif": "Only the artifacts MCP writes the artifacts of the case (.piecemaker/artifacts/): their versions, data, comments and reviews. Publish a page with Artifact publish, write its data with ArtifactData and answer a comment with ArtifactComments. Never write these files with Edit, Write or the shell."
     },
     {
       "nom": "etapes",
@@ -147,7 +147,7 @@
             "dossier",
             "arborescence"
           ],
-          "role": "Propose a folder tree to the lawyer: folders = [{\"nom\",\"explication\"}].",
+          "role": "Propose a folder tree to the lawyer, common to all cases: folders = [{\"nom\",\"explication\",\"type\"}].",
           "parametres": {
             "folders": "--dossiers",
             "reason": "--motif"
@@ -296,6 +296,29 @@
           "parametres": {
             "document": "#",
             "reason": "--motif",
+            "remove": "--retirer"
+          }
+        },
+        {
+          "nom": "list_linkable_reviews",
+          "pm": [
+            "okf",
+            "revues"
+          ],
+          "role": "Tabular reviews of the case documents and their columns, to link to a premise.",
+          "parametres": {}
+        },
+        {
+          "nom": "link_review",
+          "pm": [
+            "okf",
+            "revue"
+          ],
+          "role": "Link a tabular review column to \"premise\" (created if missing): its positive rows are pieces stating it, author agent until the lawyer checks them in the review (remove = unlink).",
+          "parametres": {
+            "premise": "#",
+            "file": "--fichier",
+            "column": "--colonne",
             "remove": "--retirer"
           }
         }

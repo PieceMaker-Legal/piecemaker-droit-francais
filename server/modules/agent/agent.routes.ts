@@ -8,7 +8,7 @@ import type { ProviderRunFunction } from '@/shared/types.js';
 import { normalizeProjectPath } from '../../shared/utils.js';
 
 /** The providers an Agent API run can start: the ones with a runtime and a model catalog. */
-const AGENT_RUN_PROVIDERS = ['claude', 'cursor', 'codex', 'opencode'];
+const AGENT_RUN_PROVIDERS = ['claude', 'cursor', 'codex', 'opencode', 'hermes'];
 
 /** What the route reads off a session row it continues: the row, not the request, says which provider and project a session belongs to. */
 type AgentSessionRow = {
@@ -41,6 +41,7 @@ type AgentRouterDependencies = {
   queryCursor: ProviderRunFunction;
   queryCodex: ProviderRunFunction;
   queryOpenCode: ProviderRunFunction;
+  queryHermes: ProviderRunFunction;
   GithubClient: typeof import('@octokit/rest').Octokit;
 };
 
@@ -65,6 +66,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
   const spawnCursor = dependencies.queryCursor;
   const queryCodex = dependencies.queryCodex;
   const spawnOpenCode = dependencies.queryOpenCode;
+  const spawnHermes = dependencies.queryHermes;
   const Octokit = dependencies.GithubClient;
   const router = express.Router();
 
@@ -631,7 +633,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
    *                          - Source for auto-generated branch names (if createBranch=true and no branchName)
    *                          - Fallback for PR title if no commits are made
    *
-   * @param {string} provider - (Optional) AI provider to use. Options: 'claude' | 'cursor' | 'codex' | 'opencode'
+   * @param {string} provider - (Optional) AI provider to use. Options: 'claude' | 'cursor' | 'codex' | 'opencode' | 'hermes'
    *                           Default: 'claude'
    *
    * @param {boolean} stream - (Optional) Enable Server-Sent Events (SSE) streaming for real-time updates.
@@ -649,17 +651,27 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
    *                        which is the first custom model while "Use only my models" is on. Cursor
    *                        without that setting leaves the choice to its CLI.
    *
-   *                        Claude models: 'default', 'sonnet', 'opus', 'haiku', 'sonnet[1m]', 'opus[1m]', 'fable'
+   *                        Claude models: 'default', 'sonnet', 'opus', 'haiku', 'sonnet[1m]', 'opus[1m]', 'fable',
+   *                                       or a pinned version such as 'claude-opus-5-5', 'claude-sonnet-5-5',
+   *                                       'claude-fable-5-2', 'claude-haiku-5-5' (full list in the catalog)
    *                        Cursor models: 'gpt-5' (default), 'gpt-5.2', 'gpt-5.2-high', 'sonnet-4.5', 'opus-4.5',
    *                                       'composer-1', 'auto', 'gpt-5.1', 'gpt-5.1-high',
    *                                       'gpt-5.1-codex', 'gpt-5.1-codex-high', 'gpt-5.1-codex-max',
    *                                       'gpt-5.1-codex-max-high', 'opus-4.1', 'grok', and thinking variants
-   *                        Codex models: 'gpt-5.4' (default), 'gpt-5.5', 'gpt-5.4-mini'
+   *                        Codex models: whatever the bundled Codex CLI lists (GET /api/providers/codex/models),
+   *                                      e.g. 'gpt-6.2-sol' (its default), 'gpt-6.2-astra', 'gpt-6.1-sol', 'gpt-6-astra'
    *
    * @param {string} effort - (Optional) Reasoning effort for providers/models that support it.
    *                          Claude supports: 'low', 'medium', 'high', 'xhigh', 'max' depending on model.
-   *                          Codex supports: 'low', 'medium', 'high', 'xhigh'.
+   *                          Codex supports: 'low', 'medium', 'high', 'xhigh', 'max', 'ultra' depending on model.
    *                          'default' or omission lets the provider decide.
+   *
+   * @param {boolean} unattended - (Optional) Whether nobody will answer the run's MCP elicitation forms.
+   *                              Claude only. Default: true
+   *                              - true: a form an MCP server sends mid-call is declined at once
+   *                              - false: the form is shown in any tab that opens the session and
+   *                                waits for an answer there, as in a chat turn. Pass it when a person
+   *                                will watch the run in the UI.
    *
    * @param {boolean} cleanup - (Optional) Auto-cleanup project directory after completion.
    *                           Default: true
@@ -762,7 +774,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
    * Input Validations (400 Bad Request):
    *   - Either githubUrl OR projectPath must be provided (not neither)
    *   - message must be non-empty string
-   *   - provider must be 'claude', 'cursor', 'codex', or 'opencode'
+   *   - provider must be 'claude', 'cursor', 'codex', 'opencode', or 'hermes'
    *   - createBranch/createPR requires githubUrl OR projectPath (not neither)
    *   - branchName must pass Git naming rules (if provided)
    *
@@ -878,6 +890,10 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
     // Parse stream and cleanup as booleans (handle string "true"/"false" from curl)
     const stream = req.body.stream === undefined ? true : (req.body.stream === true || req.body.stream === 'true');
     const cleanup = req.body.cleanup === undefined ? true : (req.body.cleanup === true || req.body.cleanup === 'true');
+    // Only an explicit false switches it off. A run that waits on a form
+    // nobody sees holds until the MCP server gives up, so a value that is
+    // neither true nor false keeps the declining default.
+    const unattended = !(req.body.unattended === false || req.body.unattended === 'false');
 
     // If branchName is provided, automatically enable createBranch
     const createBranch = branchName ? true : (req.body.createBranch === true || req.body.createBranch === 'true');
@@ -893,7 +909,7 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
     }
 
     if (requestedProvider !== null && !AGENT_RUN_PROVIDERS.includes(requestedProvider)) {
-      return res.status(400).json({ error: 'provider must be "claude", "cursor", "codex", or "opencode"' });
+      return res.status(400).json({ error: 'provider must be "claude", "cursor", "codex", "opencode", or "hermes"' });
     }
 
     // Validate GitHub branch/PR creation requirements
@@ -1047,7 +1063,10 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           sessionId: appSessionId,
           model: model || providerModels?.DEFAULT,
           effort,
-          permissionMode: 'bypassPermissions' // Bypass all permissions for API calls
+          permissionMode: 'bypassPermissions', // Bypass all permissions for API calls
+          // A caller that only reads this response cannot answer an MCP form;
+          // one whose run a person watches in the UI says so with `false`.
+          unattended
         }, run.writer);
 
       } else if (provider === 'cursor') {
@@ -1081,6 +1100,15 @@ export function createAgentRouter(dependencies: AgentRouterDependencies): expres
           model: model || providerModels?.DEFAULT,
           effort,
           permissionMode: 'bypassPermissions' // Agent runs are non-interactive, like the other providers above
+        }, run.writer);
+      } else if (provider === 'hermes') {
+        console.log('Starting Hermes ACP session');
+
+        await spawnHermes(message.trim(), {
+          projectPath: finalProjectPath,
+          cwd: finalProjectPath,
+          sessionId: appSessionId,
+          model: model || providerModels?.DEFAULT,
         }, run.writer);
       }
 

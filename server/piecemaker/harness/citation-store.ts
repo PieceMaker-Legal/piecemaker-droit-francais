@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { access, appendFile, lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { access, lstat, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { locateSourcePassages } from './source-passages.js';
@@ -31,19 +31,23 @@ export function createCitationStore(homeDir: string) {
   const directory = path.join(homeDir, 'citation-sources');
   const turnSourcesFile = (sessionId: string, block: string) =>
     path.join(directory, 'turns', `${createHash('sha256').update(`${sessionId}\0${block}`).digest('hex')}.md`);
+  const validatedFile = (id: string, quote: string) =>
+    path.join(directory, 'validees', `${createHash('sha256').update(`${id}\0${quote}`).digest('hex')}.json`);
   return {
-    async recordVerification(sessionId: string, citations: Array<{ ref: number; kind: string; doc_id?: string; decision_id?: string; article_id?: string; verified?: boolean }>) {
+    /** Citation d'un texte officiel déjà retrouvée : la même source et le même extrait ne sont pas revérifiés. */
+    async validated<T>(id: string, quote: string): Promise<T | null> {
+      try { return JSON.parse(await readFile(validatedFile(id, quote), 'utf8')) as T; } catch { return null; }
+    },
+    async remember(id: string, quote: string, entry: unknown) {
+      const file = validatedFile(id, quote);
+      await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+      const temporary = `${file}.${randomUUID()}.tmp`;
       try {
-        await mkdir(homeDir, { recursive: true, mode: 0o700 });
-        await appendFile(path.join(homeDir, 'citations-verifiees.jsonl'), `${JSON.stringify({
-          session_id: sessionId, at: new Date().toISOString(), citations: citations.length,
-          non_verifiees: citations.filter((citation) => citation.verified === false).length,
-          details: citations.map((citation) => ({
-            id: `${citation.kind === 'case' ? 'decision' : citation.kind}:${citation.decision_id ?? citation.article_id ?? citation.doc_id}#${citation.ref}`,
-            verified: citation.verified === true,
-          })),
-        })}\n`, { mode: 0o600 });
-      } catch {}
+        await writeFile(temporary, JSON.stringify(entry), { mode: 0o600 });
+        await rename(temporary, file);
+      } finally {
+        await unlink(temporary).catch(() => {});
+      }
     },
     async saveTurnSources(sessionId: string, block: string, sources: string) {
       const file = turnSourcesFile(sessionId, block);

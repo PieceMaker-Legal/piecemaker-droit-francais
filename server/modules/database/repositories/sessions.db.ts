@@ -1,6 +1,7 @@
 import { getConnection } from '@/modules/database/connection.js';
 import { projectsDb } from '@/modules/database/repositories/projects.db.js';
 import { normalizeProjectPath } from '@/shared/utils.js';
+import type { ClearedContextSegment, SessionForkAncestor } from '@/shared/types.js';
 
 type SessionRow = {
   session_id: string;
@@ -24,6 +25,8 @@ type RecentSessionsPage = {
   sessions: SessionRow[];
   total: number;
 };
+
+const HIDDEN_SESSION = 2;
 
 const SESSION_ROW_COLUMNS =
   'session_id, provider, provider_session_id, project_path, jsonl_path, custom_name, model, effort, forked_from_session_id, isArchived, created_at, updated_at';
@@ -113,7 +116,7 @@ export const sessionsDb = {
            updated_at = COALESCE(?, CURRENT_TIMESTAMP),
            project_path = ?,
            jsonl_path = ?,
-           isArchived = CASE WHEN ? IS NULL OR julianday(?) > julianday(updated_at) THEN 0 ELSE isArchived END,
+           isArchived = CASE WHEN isArchived = ${HIDDEN_SESSION} THEN ${HIDDEN_SESSION} WHEN ? IS NULL OR julianday(?) > julianday(updated_at) THEN 0 ELSE isArchived END,
            custom_name = CASE
              WHEN session_id <> provider_session_id AND custom_name IS NOT NULL THEN custom_name
              ELSE COALESCE(?, custom_name)
@@ -145,7 +148,7 @@ export const sessionsDb = {
          updated_at = excluded.updated_at,
          project_path = excluded.project_path,
          jsonl_path = excluded.jsonl_path,
-         isArchived = CASE WHEN ? IS NULL OR julianday(excluded.updated_at) > julianday(sessions.updated_at) THEN 0 ELSE sessions.isArchived END,
+         isArchived = CASE WHEN isArchived = ${HIDDEN_SESSION} THEN ${HIDDEN_SESSION} WHEN ? IS NULL OR julianday(excluded.updated_at) > julianday(sessions.updated_at) THEN 0 ELSE sessions.isArchived END,
          custom_name = CASE
            WHEN sessions.session_id <> sessions.provider_session_id AND sessions.custom_name IS NOT NULL
              THEN sessions.custom_name
@@ -180,6 +183,7 @@ export const sessionsDb = {
     provider: string,
     projectPath: string,
     customName?: string,
+    hidden = false,
   ): string {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPathForProvider(provider, projectPath);
@@ -188,8 +192,8 @@ export const sessionsDb = {
 
     db.prepare(
       `INSERT INTO sessions (session_id, provider, provider_session_id, custom_name, project_path, jsonl_path, isArchived, created_at, updated_at)
-       VALUES (?, ?, NULL, ?, ?, NULL, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-    ).run(sessionId, provider, customName ?? null, normalizedProjectPath);
+       VALUES (?, ?, NULL, ?, ?, NULL, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+    ).run(sessionId, provider, customName ?? null, normalizedProjectPath, hidden ? HIDDEN_SESSION : 0);
 
     return sessionId;
   },
@@ -340,6 +344,61 @@ export const sessionsDb = {
   },
 
   /**
+   * Clears a session's context: retires its provider session as an earlier
+   * part of the conversation and detaches the session, so the next run starts
+   * a new provider session that knows nothing of what came before.
+   *
+   * One transaction, so the session is never seen detached from a transcript
+   * that is not yet recorded as its history — a reader in between would show
+   * an empty conversation, and the indexer would take the transcript for a
+   * session of its own. Returns false, changing nothing, when the session has
+   * no provider session to retire.
+   */
+  clearProviderSessionContext(sessionId: string): boolean {
+    const db = getConnection();
+
+    return db.transaction(() => {
+      const session = db
+        .prepare('SELECT provider, provider_session_id, jsonl_path FROM sessions WHERE session_id = ?')
+        .get(sessionId) as Pick<SessionRow, 'provider' | 'provider_session_id' | 'jsonl_path'> | undefined;
+      if (!session?.provider_session_id) {
+        return false;
+      }
+
+      sessionsDb.markProviderSessionSuperseded({
+        providerSessionId: session.provider_session_id,
+        provider: session.provider,
+        sessionId,
+        jsonlPath: session.jsonl_path,
+        reason: 'context_cleared',
+      });
+      sessionsDb.detachProviderSession(sessionId);
+      return true;
+    })();
+  },
+
+  /**
+   * The provider sessions a session's context was cleared off, oldest first:
+   * the earlier parts of its conversation, in the order they happened.
+   */
+  getClearedContextSegments(sessionId: string): ClearedContextSegment[] {
+    const db = getConnection();
+    const rows = db
+      .prepare(
+        `SELECT provider_session_id, jsonl_path, created_at FROM superseded_provider_sessions
+         WHERE session_id = ? AND reason = 'context_cleared'
+         ORDER BY created_at ASC, rowid ASC`
+      )
+      .all(sessionId) as Array<{ provider_session_id: string; jsonl_path: string | null; created_at: string }>;
+
+    return rows.map((row) => ({
+      providerSessionId: row.provider_session_id,
+      jsonlPath: row.jsonl_path,
+      clearedAt: normalizeTimestamp(row.created_at) ?? row.created_at,
+    }));
+  },
+
+  /**
    * Records that a session has left a provider session behind for good.
    *
    * The transcript stays on disk, which is deliberate — the abandoned attempt
@@ -352,16 +411,36 @@ export const sessionsDb = {
     provider: string;
     sessionId: string;
     jsonlPath: string | null;
+    /** Defaults to 'edit': a discarded version, never read back as history. */
+    reason?: 'edit' | 'context_cleared';
   }): void {
     const db = getConnection();
     db.prepare(
-      `INSERT INTO superseded_provider_sessions (provider_session_id, provider, session_id, jsonl_path)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO superseded_provider_sessions (provider_session_id, provider, session_id, jsonl_path, reason)
+       VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(provider_session_id, provider) DO UPDATE SET
          session_id = excluded.session_id,
          jsonl_path = excluded.jsonl_path,
+         reason = excluded.reason,
          created_at = CURRENT_TIMESTAMP`
-    ).run(input.providerSessionId, input.provider, input.sessionId, input.jsonlPath);
+    ).run(input.providerSessionId, input.provider, input.sessionId, input.jsonlPath, input.reason ?? 'edit');
+  },
+
+  /**
+   * Fills in the transcript path of a provider session a session has left,
+   * when it was left before the indexer had seen its file.
+   *
+   * A session can be cleared seconds after its first turn, while its row
+   * still has no \`jsonl_path\`; the record of what it left behind then has
+   * none either, and that path is the only way the earlier conversation is
+   * read back and, later, deleted from disk. A path already recorded is kept.
+   */
+  recordSupersededTranscriptPath(providerSessionId: string, provider: string, jsonlPath: string): void {
+    const db = getConnection();
+    db.prepare(
+      `UPDATE superseded_provider_sessions SET jsonl_path = ?
+       WHERE provider_session_id = ? AND provider = ? AND jsonl_path IS NULL`
+    ).run(jsonlPath, providerSessionId, provider);
   },
 
   isProviderSessionSuperseded(providerSessionId: string, provider: string): boolean {
@@ -461,6 +540,36 @@ export const sessionsDb = {
       .get(sessionId) as SessionRow | undefined;
 
     return normalizeSessionRow(row) ?? null;
+  },
+
+  /**
+   * Projects and WebSocket summaries use this context to connect a paginated
+   * fork to its parents without adding those parents to the page itself.
+   * UNION deduplicates rows even if damaged metadata contains a cycle. Stop
+   * at archived, missing, cross-project or cross-provider parents.
+   */
+  getForkAncestors(sessionId: string): SessionForkAncestor[] {
+    const rows = getConnection().prepare(
+      `WITH RECURSIVE fork_ancestors AS (
+         SELECT * FROM sessions WHERE session_id = ? AND isArchived = 0
+         UNION
+         SELECT parent.* FROM sessions AS parent
+         JOIN fork_ancestors AS child
+           ON parent.session_id = child.forked_from_session_id
+          AND parent.project_path = child.project_path
+          AND parent.provider = child.provider
+         WHERE parent.isArchived = 0
+       )
+       SELECT ${SESSION_ROW_COLUMNS} FROM fork_ancestors WHERE session_id <> ?`
+    ).all(sessionId, sessionId) as SessionRow[];
+
+    return normalizeSessionRows(rows).map((row) => ({
+      id: row.session_id,
+      provider: row.provider as SessionForkAncestor['provider'],
+      summary: row.custom_name || '',
+      lastActivity: row.updated_at ?? row.created_at,
+      forkedFromSessionId: row.forked_from_session_id,
+    }));
   },
 
   /**
@@ -612,16 +721,16 @@ export const sessionsDb = {
    * Permanent project deletion must see every session row for the path,
    * including archived ones, so their transcript files can be cleaned up.
    */
-  getSessionsByProjectPathIncludingArchived(projectPath: string): SessionRow[] {
+  getSessionsByProjectPathIncludingArchived(projectPath: string, includeHidden = true): SessionRow[] {
     const db = getConnection();
     const normalizedProjectPath = normalizeProjectPath(projectPath);
     const rows = db
       .prepare(
         `SELECT ${SESSION_ROW_COLUMNS}
          FROM sessions
-         WHERE project_path = ?`
+         WHERE project_path = ? AND (? OR isArchived <> ${HIDDEN_SESSION})`
       )
-      .all(normalizedProjectPath) as SessionRow[];
+      .all(normalizedProjectPath, Number(includeHidden)) as SessionRow[];
 
     return normalizeSessionRows(rows);
   },

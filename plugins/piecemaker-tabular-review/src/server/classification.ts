@@ -1,62 +1,48 @@
 import fs from 'node:fs';
-import path from 'node:path';
 
 import type { ClassificationFolder, Review } from '../shared.js';
-import { classificationColumn, classifyColumn, DEFAULT_CLASSIFICATION, REVIEW_FOLDER } from '../shared.js';
+import { saveOntology } from '../../../../server/piecemaker/okf/ontology.js';
+import { dropProposal, proposeOntology, readProposal } from '../../../../server/piecemaker/okf/ontology-proposal.js';
+import { normalizeArborescence, ontologyFile, readArborescence } from '../../../../server/piecemaker/okf/sealed.js';
+import { isTechnicalPath } from '../../../../server/piecemaker/vendor/piecemaker-plugin/scripts/lib/technical-paths.cjs';
+import { classificationColumn, classifyColumn } from '../shared.js';
 import { listDrafts, upsertDraft } from './drafts.js';
-import { UserError, writeFileAtomic } from './paths.js';
+import { registeredProjects, UserError } from './paths.js';
 import { listReviews, readReview, updateReview } from './reviews.js';
 import { MAX_COLUMNS } from './templates.js';
 
-const MAX_FOLDERS = 30;
-const MAX_NAME = 200;
-const MAX_EXPLANATION = 500;
-
-const treeFile = (project: string) => path.join(project, '.piecemaker', 'arborescence.json');
-const proposalFile = (project: string) => path.join(project, '.piecemaker', 'arborescence.proposition.json');
-
-function folderName(value: unknown): string {
-  const name = typeof value === 'string' ? value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '') : '';
-  const segments = name.split('/').map((segment) => segment.trim());
-  const invalid = !name || name.length > MAX_NAME || segments[0] === REVIEW_FOLDER
-    || segments.some((segment) => !segment || segment.startsWith('.') || /[:*?"<>|\u0000-\u001f]/.test(segment));
-  if (invalid) throw new UserError(`Nom de dossier invalide : ${String(value)}`);
-  return segments.join('/');
-}
-
+// L'arborescence est commune à tous les dossiers : elle vit dans l'ontologie scellée (~/.piecemaker/ontologie.json).
+// Aucun dossier de l'arborescence ne désigne un dossier technique (`.piecemaker`, pièces converties, exports…).
 function normalizeFolders(value: unknown): ClassificationFolder[] {
-  if (!Array.isArray(value) || !value.length) throw new UserError('L’arborescence contient au moins un dossier.');
-  if (value.length > MAX_FOLDERS) throw new UserError(`L’arborescence contient au plus ${MAX_FOLDERS} dossiers.`);
-  const folders = value.map((entry) => {
-    const input = (entry ?? {}) as Record<string, unknown>;
-    const type = typeof input.type === 'string' ? input.type.trim().normalize('NFC') : '';
-    if (type && (type.length > 60 || ['Premise', 'Partie', 'Non classé'].includes(type) || /[\/\\\u0000-\u001f]/.test(type))) throw new UserError('Type principal invalide.');
-    return { ...(type ? { type } : {}), name: folderName(input.name), explanation: typeof input.explanation === 'string' ? input.explanation.trim().slice(0, MAX_EXPLANATION) : '' };
-  });
-  if (new Set(folders.map((folder) => folder.name.toLowerCase())).size !== folders.length) throw new UserError('Deux dossiers portent le même nom.');
+  let folders: ClassificationFolder[];
+  try {
+    folders = normalizeArborescence(value);
+  } catch (error) {
+    throw new UserError(error instanceof Error ? error.message : String(error));
+  }
+  const technical = folders.find((folder) => isTechnicalPath(folder.name));
+  if (technical) throw new UserError(`Nom de dossier réservé à PieceMaker : ${technical.name}`);
   return folders;
 }
 
-export function readClassification(project: string): ClassificationFolder[] {
-  try {
-    return normalizeFolders(JSON.parse(fs.readFileSync(treeFile(project), 'utf8')));
-  } catch {
-    return DEFAULT_CLASSIFICATION;
-  }
+export function readClassification(_project?: string): ClassificationFolder[] {
+  return readArborescence();
 }
 
 export async function saveClassification(project: string, value: unknown): Promise<ClassificationFolder[]> {
   const folders = normalizeFolders(value);
-  writeFileAtomic(treeFile(project), `${JSON.stringify(folders, null, 2)}\n`);
-  dropClassificationProposal(project);
-  for (const { file } of listReviews([project], () => false)) {
-    if (!classifyColumn(readReview(project, file).columns)) continue;
-    await updateReview(project, file, (review) => {
+  saveOntology(project, { arborescence: folders });
+  dropClassificationProposal();
+  // L'arborescence est commune : les colonnes Classement de tous les dossiers suivent.
+  const projects = [...new Set([project, ...registeredProjects()])];
+  for (const { project: owner, file } of await listReviews(projects, () => false)) {
+    if (!classifyColumn((await readReview(owner, file)).columns)) continue;
+    await updateReview(owner, file, (review) => {
       const column = classifyColumn(review.columns);
       if (column) Object.assign(column, classificationColumn(folders, column.name));
     });
   }
-  for (const draft of listDrafts([project])) {
+  for (const draft of listDrafts(projects)) {
     if (!classifyColumn(draft.columns)) continue;
     upsertDraft({ ...draft, columns: draft.columns.map((column) => (column.action === 'classify' ? classificationColumn(folders, column.name) : column)) });
   }
@@ -77,33 +63,33 @@ export function addClassification(project: string, file: string): Promise<Review
 export type ClassificationProposal = { dossiers: ClassificationFolder[]; motif: string; date: string };
 export type ClassificationLines = { fichier?: string; lignes: Record<string, { debut: number; fin: number }>; total: number };
 
-export function readClassificationProposal(project: string): ClassificationProposal | null {
-  try {
-    const stored = JSON.parse(fs.readFileSync(proposalFile(project), 'utf8'));
-    return { dossiers: normalizeFolders(stored.dossiers), motif: typeof stored.motif === 'string' ? stored.motif : '', date: typeof stored.date === 'string' ? stored.date : '' };
-  } catch {
-    return null;
-  }
+export function readClassificationProposal(_project?: string): ClassificationProposal | null {
+  const pending = readProposal();
+  return pending?.arborescence ? { dossiers: pending.arborescence, motif: pending.motif, date: pending.date } : null;
 }
 
 export function proposeClassification(project: string, value: unknown, motif: unknown): ClassificationProposal {
   const reason = typeof motif === 'string' ? motif.trim() : '';
   if (reason.length > 1000) throw new UserError('motif : 1000 caractères au plus.');
-  const proposal = { dossiers: normalizeFolders(value), motif: reason, date: new Date().toISOString() };
-  writeFileAtomic(proposalFile(project), `${JSON.stringify(proposal, null, 2)}\n`);
-  return proposal;
+  const dossiers = normalizeFolders(value);
+  const proposal = proposeOntology(project, { arborescence: dossiers, ...(reason ? { motif: reason } : {}) });
+  return { dossiers, motif: proposal.motif, date: proposal.date };
 }
 
-export function dropClassificationProposal(project: string): void {
-  fs.rmSync(proposalFile(project), { force: true });
+export function dropClassificationProposal(_project?: string): void {
+  dropProposal('arborescence');
 }
 
-export function classificationLines(project: string, folders: ClassificationFolder[]): ClassificationLines {
-  if (!fs.existsSync(treeFile(project))) return { lignes: {}, total: 0 };
-  const lines = fs.readFileSync(treeFile(project), 'utf8').replace(/\n$/, '').split('\n');
+/** Lignes de chaque dossier dans ontologie.json, pour que l'assistant les cite. */
+export function classificationLines(_project: string, folders: ClassificationFolder[]): ClassificationLines {
+  const file = ontologyFile();
+  if (!fs.existsSync(file)) return { lignes: {}, total: 0 };
+  const lines = fs.readFileSync(file, 'utf8').replace(/\n$/, '').split('\n');
+  const from = lines.findIndex((line) => line.trim().startsWith('"arborescence"'));
+  if (from < 0) return { fichier: file, lignes: {}, total: lines.length };
   const found: ClassificationLines['lignes'] = {};
   for (const { name } of folders) {
-    const index = lines.findIndex((line) => line.trim().replace(/,$/, '') === `"name": ${JSON.stringify(name)}`);
+    const index = lines.findIndex((line, at) => at > from && line.trim().replace(/,$/, '') === `"name": ${JSON.stringify(name)}`);
     if (index < 0) continue;
     let start = index;
     while (start > 0 && lines[start].trim() !== '{') start -= 1;
@@ -111,5 +97,5 @@ export function classificationLines(project: string, folders: ClassificationFold
     while (end < lines.length - 1 && !lines[end].trim().startsWith('}')) end += 1;
     found[name] = { debut: start + 1, fin: end + 1 };
   }
-  return { fichier: treeFile(project), lignes: found, total: lines.length };
+  return { fichier: file, lignes: found, total: lines.length };
 }

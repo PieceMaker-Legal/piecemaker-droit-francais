@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '../../../src/shared/authToken.js';
 import {
   DEFAULT_STAMP_CONFIG,
   renderStampDataUrl,
@@ -38,11 +39,9 @@ type StampingResponse = {
   results: StampingPieceResult[];
 };
 
-const AUTH_TOKEN_KEY = 'auth-token';
 const PIECEMAKER_BASE = '/api/piecemaker';
 const SHOW_EVENT = 'piecemaker:tampon-show';
 const PENDING_SHOW_KEY = '__piecemakerTamponShow';
-const TOKEN_EXPIRY_SKEW_MS = 60_000;
 const SHAPE_OPTIONS: Array<{ id: StampShape; label: string }> = [
   { id: 'circle', label: 'Rond' },
   { id: 'oval', label: 'Ovale' },
@@ -113,48 +112,12 @@ let cachedTampon: string | null | undefined;
 const caseCache = new Map<string, DossierCase>();
 const originalsCache = new Map<string, CaseOriginalPiece[]>();
 
-const tokenExpiry = (token: string): number | null => {
-  try {
-    const payloadPart = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-    const paddedPayload = payloadPart.padEnd(payloadPart.length + ((4 - (payloadPart.length % 4)) % 4), '=');
-    const payload = JSON.parse(atob(paddedPayload)) as { exp?: unknown };
-    return typeof payload.exp === 'number' && Number.isFinite(payload.exp) ? payload.exp * 1000 : null;
-  } catch {
-    return null;
-  }
-};
-
-const isExpiredToken = (token: string): boolean => {
-  const expiresAt = tokenExpiry(token);
-  return expiresAt !== null && Date.now() >= expiresAt - TOKEN_EXPIRY_SKEW_MS;
-};
-
-const readToken = (): string | null => {
-  try {
-    const token = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (token && isExpiredToken(token)) {
-      localStorage.removeItem(AUTH_TOKEN_KEY);
-      return null;
-    }
-    return token;
-  } catch {
-    return null;
-  }
-};
-
 const request = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
-  const headers: Record<string, string> = { Accept: 'application/json' };
-  const token = readToken();
-  if (token) headers.Authorization = `Bearer ${token}`;
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const response = await fetch(`${PIECEMAKER_BASE}${path}`, {
+  const response = await authenticatedFetch(`${PIECEMAKER_BASE}${path}`, {
     method,
-    headers,
+    headers: { Accept: 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: 'same-origin',
   });
-  const refreshed = response.headers.get('X-Refreshed-Token');
-  if (refreshed) localStorage.setItem(AUTH_TOKEN_KEY, refreshed);
   const payload = await response.json().catch(() => null);
   if (!response.ok) {
     const message = isRecord(payload) && typeof payload.error === 'string' ? payload.error : `Erreur ${response.status}`;

@@ -186,7 +186,7 @@ export function pythonExecutable(explicit: string | undefined): string {
   return process.platform === 'win32' ? 'python' : 'python3';
 }
 
-function mappingSeed(projectId: string, store: KnowledgeStore): GlinerMappingDocument {
+function mappingSeed(projectId: string, store: KnowledgeStore) {
   const snapshot = store.snapshot(projectId);
   const mapping: Record<string, string> = {};
   const reverseMapping: Record<string, string[]> = {};
@@ -268,7 +268,7 @@ export function createKnowledgePipeline(options: PipelineOptions) {
         ocrMissing,
       ];
       if (!explicitFiles) args.push('--skip-existing');
-      if (!explicitFiles && !Object.keys(seed.mapping).length && !Object.keys(seed.extracted_data).length) args.push('--rescan');
+      if (!explicitFiles && !Object.keys(seed.mapping ?? {}).length && !Object.keys(seed.extracted_data ?? {}).length) args.push('--rescan');
       let received: GlinerMappingDocument | null = null;
       let ocrRequired: string[] | null = null;
       const failedDocuments: FailedDocument[] = [];

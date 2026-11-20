@@ -4,15 +4,18 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import Database from 'better-sqlite3';
+
 import { REVIEW_FOLDER } from '../../../../plugins/piecemaker-tabular-review/src/shared.js';
-import type { SourceDocument, SourceParty } from '../build.js';
-import { buildBundle, datesIn, documentsFromSnapshot } from '../build.js';
+
+import type { MarkdownOf, Renamed, SourceDocument, SourceParty } from '../build.js';
+import { buildBundle as writeBundle, datesIn, documentsFromSnapshot, legacyRecords } from '../build.js';
 import { bundleRoot, conceptFile, parseConcept, readBundle, readTypes, relationsOf } from '../bundle.js';
 import { graphGaps, graphReport, premiseEvidence } from '../premises.js';
-import { premisesFromReviews } from '../reviews.js';
-import type { ReviewPremise } from '../reviews.js';
-import { addLink, markExamined, removeLink, unmarkExamined } from '../links.js';
-import { graphTypesOf, ontologyFile, readOntology, saveOntology } from '../ontology.js';
+import type { ExamInput, LinkInput, OkfTarget } from '../links.js';
+import { addLink as addLinkTo, linkReview, markExamined as markExaminedOf, removeLink as removeLinkOf, unlinkReview, unmarkExamined as unmarkExaminedOf } from '../links.js';
+import { createOkfStore } from '../store.js';
+import { graphTypesOf, ontologyFile, readOntology, migrateArborescence, saveOntology } from '../ontology.js';
 import { createOkfBackend } from '../index.js';
 import { proposalFile, proposeOntology, readProposal, storedOntologyErrors } from '../ontology-proposal.js';
 import { contradictions, quoted, verifyBundle } from '../verify.js';
@@ -30,6 +33,35 @@ const MARKDOWN: Record<string, string> = {
 const NOW = '2026-01-01T00:00:00.000Z';
 process.env.PIECEMAKER_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-home-'));
 
+// Each case has its SQLite base, the source of the OKF; fiches are rebuilt after each write, as createOkfBackend does.
+type BuildInput = { projectPath: string; documents: SourceDocument[]; markdownOf: MarkdownOf; parties?: SourceParty[]; renamed?: Renamed; now?: string };
+const targets = new Map<string, OkfTarget>();
+const builds = new Map<string, BuildInput>();
+function okf(projectPath: string): OkfTarget {
+  if (!targets.has(projectPath)) {
+    const database = new Database(':memory:');
+    database.exec("CREATE TABLE projects(project_id TEXT PRIMARY KEY); INSERT INTO projects VALUES('p');");
+    targets.set(projectPath, { projectPath, projectId: 'p', store: createOkfStore(database) });
+  }
+  return targets.get(projectPath) as OkfTarget;
+}
+function buildBundle(input: BuildInput) {
+  const { store, projectId } = okf(input.projectPath);
+  builds.set(input.projectPath, { ...input, renamed: undefined });
+  store.importOnce(projectId, legacyRecords(input.projectPath), NOW);
+  if (input.renamed) store.rename(projectId, `/${input.renamed.previous}.md`, `/${input.renamed.current}.md`);
+  return writeBundle({ ...input, records: store.records(projectId) });
+}
+const rebuilt = <T>(projectPath: string, result: T): T => {
+  const input = builds.get(projectPath);
+  if (input) buildBundle(input);
+  return result;
+};
+const addLink = (projectPath: string, input: LinkInput, markdownOf: MarkdownOf, origin?: string, now?: string) => rebuilt(projectPath, addLinkTo(okf(projectPath), input, markdownOf, origin, now));
+const removeLink = (projectPath: string, input: LinkInput) => rebuilt(projectPath, removeLinkOf(okf(projectPath), input));
+const markExamined = (projectPath: string, input: ExamInput, origin?: string, now?: string) => rebuilt(projectPath, markExaminedOf(okf(projectPath), input, origin, now));
+const unmarkExamined = (projectPath: string, input: ExamInput) => rebuilt(projectPath, unmarkExaminedOf(okf(projectPath), input));
+
 function dossier(): { projectPath: string; documents: SourceDocument[]; markdownOf: (resource: string) => string | null } {
   fs.rmSync(ontologyFile(), { force: true });
   const projectPath = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-'));
@@ -38,7 +70,7 @@ function dossier(): { projectPath: string; documents: SourceDocument[]; markdown
     fs.writeFileSync(path.join(projectPath, resource), '');
   }
   fs.mkdirSync(path.join(projectPath, '.piecemaker'));
-  fs.writeFileSync(path.join(projectPath, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }]));
+  saveOntology(projectPath, { arborescence: [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }] });
   const documents: SourceDocument[] = [
     { resource: CONTRACT, title: 'Contrat.pdf', nature: 'Contrat de prestation', date: '2021-03-12', parties: [{ code: PERSON, citation: MARKDOWN[CONTRACT] }, { code: COMPANY, citation: MARKDOWN[CONTRACT] }] },
     { resource: LETTER, title: 'Courrier.pdf', nature: 'Courrier', date: '2021-06-01', parties: [] },
@@ -207,31 +239,6 @@ test('supersedes relie deux pièces comme amends', () => {
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
-test('une colonne de revue devient une prémisse liée à la pièce citée, un lien écarté ne revient pas', () => {
-  const { projectPath, documents, markdownOf } = dossier();
-  const reviewPremises: ReviewPremise[] = [
-    { id: '/_premises/statut-du-contrat.md', title: 'Statut du contrat', description: 'Le contrat est-il résilié ?', single: true, statements: [{ candidates: [LETTER], quote: 'Il est résilié.', value: 'résilié' }] },
-    { id: '/_premises/validite-du-contrat.md', title: 'Validité du contrat', description: 'Le contrat est-il valable ?', single: false, statements: [{ candidates: ['Projets/Absent.docx'], quote: 'Le contrat de prestation du 12 mars 2021 est nul.', value: 'nul' }] },
-  ];
-  buildBundle({ projectPath, documents, markdownOf, reviewPremises, now: NOW });
-
-  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: '/_premises/statut-du-contrat.md', citation: 'Il est résilié.', origin: 'piecemaker/tabular-review', value: 'résilié' }]);
-  assert.deepEqual(relationsOf(concept(projectPath, DRAFT).frontmatter).states, [{ target: '/_premises/validite-du-contrat.md', citation: 'Le contrat de prestation du 12 mars 2021 est nul.', origin: 'piecemaker/tabular-review', value: 'nul' }]);
-  const premise = parseConcept(fs.readFileSync(conceptFile(projectPath, '/_premises/statut-du-contrat.md'), 'utf8'));
-  assert.equal(premise.frontmatter.single_value, true);
-  assert.deepEqual(premise.frontmatter.generated, { by: 'piecemaker/tabular-review', at: NOW });
-  assert.equal(parseConcept(fs.readFileSync(conceptFile(projectPath, '/_premises/validite-du-contrat.md'), 'utf8')).frontmatter.single_value, undefined);
-  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
-
-  removeLink(projectPath, { source: LETTER, relation: 'states', target: '/_premises/statut-du-contrat.md' });
-  buildBundle({ projectPath, documents, markdownOf, reviewPremises });
-  const states = relationsOf(concept(projectPath, LETTER).frontmatter).states;
-  assert.equal(states.length, 1);
-  assert.equal(states[0].dismissed, true);
-  assert.equal(fs.existsSync(conceptFile(projectPath, '/_premises/statut-du-contrat.md')), true);
-  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
-});
-
 test('contradictions signale une prémisse à valeur unique écrite avec deux valeurs distinctes', () => {
   const { projectPath, documents, markdownOf } = dossier();
   buildBundle({ projectPath, documents, markdownOf });
@@ -250,50 +257,6 @@ test('contradictions signale une prémisse à valeur unique écrite avec deux va
       { piece: `/${LETTER}.md`, valeur: '4 000 euros' },
     ],
   }]);
-});
-
-test('premisesFromReviews lit les colonnes de prémisse des revues JSON du dossier', () => {
-  const { projectPath, documents, markdownOf } = dossier();
-  const folder = path.join(projectPath, REVIEW_FOLDER);
-  fs.mkdirSync(folder, { recursive: true });
-  fs.writeFileSync(path.join(folder, 'revue.json'), JSON.stringify({
-    version: 1,
-    title: 'Revue de test',
-    templateName: 'Modèle de test',
-    projectPath,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-02T00:00:00.000Z',
-    provider: 'mistral',
-    model: 'modele-test',
-    concurrency: 1,
-    columns: [
-      { index: 0, name: 'Statut du contrat', prompt: 'Le contrat est-il résilié ?', format: 'text', premise: 'single' },
-      { index: 1, name: 'Ton du courrier', prompt: 'Quel ton ?', format: 'text', premise: 'checkpoint' },
-      { index: 2, name: 'Note libre', prompt: 'Note', format: 'text' },
-    ],
-    rows: [{ id: 'row-1', label: 'Courrier', documents: [], status: 'done', piece: LETTER }],
-    cells: {
-      'row-1': {
-        '0': { summary: 'résilié', flag: 'ok', reasoning: '', citations: [{ document: LETTER, quote: 'Il est résilié.', verified: true }] },
-        '1': { summary: 'ferme', flag: 'ok', reasoning: '', citations: [{ document: LETTER, quote: 'Nous contestons la facture.', verified: false }] },
-        '2': { summary: 'sans objet', flag: 'ok', reasoning: '', citations: [{ document: LETTER, quote: 'Monsieur,', verified: true }] },
-      },
-    },
-  }));
-  fs.writeFileSync(path.join(folder, 'bruit.json'), '{}');
-  fs.writeFileSync(path.join(folder, 'notes.txt'), 'texte');
-
-  const premises = premisesFromReviews(projectPath);
-  assert.deepEqual(premises.map((premise) => [premise.id, premise.single, premise.statements.length]), [
-    ['/_premises/statut-du-contrat.md', true, 1],
-    ['/_premises/ton-du-courrier.md', false, 0],
-  ]);
-  assert.deepEqual(premises[0].statements, [{ candidates: [LETTER], quote: 'Il est résilié.', value: 'résilié' }]);
-
-  buildBundle({ projectPath, documents, markdownOf, reviewPremises: premises, now: NOW });
-  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: '/_premises/statut-du-contrat.md', citation: 'Il est résilié.', origin: 'piecemaker/tabular-review', value: 'résilié' }]);
-  assert.equal(fs.existsSync(conceptFile(projectPath, '/_premises/ton-du-courrier.md')), true);
-  assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
 
 test('un index antérieur sous /_faits/ est migré vers /_premises/', () => {
@@ -384,6 +347,7 @@ function backendOf(projectPath: string, markdownOf: (resource: string) => string
   return createOkfBackend({
     projects: { getProjectById: () => ({ project_path: projectPath }), getProjectPath: () => ({ project_id: 'p', project_path: projectPath }) },
     snapshot: (projectId) => ({ projectId, nodes: [], links: [], mappings: [], citations: [] }),
+    store: okf(projectPath).store,
     convertedMarkdown: (_projectPath, filePath) => markdownOf(path.relative(projectPath, filePath)),
     listDocuments: async () => resources.map((resource) => path.join(projectPath, resource)),
     isLoopback: () => true,
@@ -438,6 +402,7 @@ test('contradictions normalise les dates avant de comparer', () => {
 
 test('l\'ontologie par défaut reprend les quatre relations entre pièces', () => {
   const { projectPath } = dossier();
+  fs.rmSync(ontologyFile(), { force: true });
   const ontology = readOntology(projectPath);
   assert.equal(ontology.personnalisee, false);
   assert.deepEqual(ontology.relations.map((relation) => [relation.name, relation.source, relation.target]), [
@@ -487,11 +452,10 @@ test('l\'ontologie globale est commune aux dossiers et ne s\'applique qu\'aux ty
   assert.match(verifyBundle({ projectPath, resources, markdownOf })[0].erreur, /ontologie illisible, ontologie par défaut appliquée/);
   assert.ok(verifyBundle({ projectPath, resources, markdownOf }).some((entry) => entry.erreur === 'relation Conteste : clé « label » absente.'));
   const other = dossier().projectPath;
-  saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', source: ['Courriers', 'Projets'], target: ['Pièces'] }] });
-  fs.writeFileSync(path.join(other, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Courriers', explanation: '' }, { name: 'Pièces', explanation: '' }]));
+  saveOntology(projectPath, { relations: [{ name: 'conteste', label: 'conteste', source: ['Courriers', 'Projets'], target: ['Pièces'] }], arborescence: [{ name: 'Pièces', explanation: '' }, { name: 'Projets', explanation: '' }] });
   assert.deepEqual(readOntology(other).relations.map((relation) => relation.name), ['conteste']);
   assert.deepEqual(graphTypesOf(projectPath), ['Projets', 'Pièces']);
-  assert.deepEqual(graphTypesOf(other), ['Courriers', 'Pièces']);
+  assert.deepEqual(graphTypesOf(other), ['Projets', 'Pièces']);
   buildBundle({ projectPath, documents, markdownOf });
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
 });
@@ -599,15 +563,116 @@ test('le catalogue conserve ses icônes à une sauvegarde des relations et déte
 
 test('le type principal suit le dossier choisi et ses sous-dossiers sans déplacer les pièces', () => {
   const { projectPath, documents, markdownOf } = dossier();
-  fs.writeFileSync(path.join(projectPath, '.piecemaker', 'arborescence.json'), JSON.stringify([
+  saveOntology(projectPath, { arborescence: [
     { name: 'Pièces', type: 'Archives', explanation: '' },
     { name: 'Pièces/Contrats', explanation: '' },
     { name: 'Projets', type: 'Pièces', explanation: '' },
-  ]));
+  ] });
   buildBundle({ projectPath, documents, markdownOf });
   assert.deepEqual(readTypes(projectPath), ['Archives', 'Pièces']);
   assert.equal(concept(projectPath, CONTRACT).frontmatter.type, 'Archives');
   assert.equal(concept(projectPath, DRAFT).frontmatter.type, 'Pièces');
   assert.ok(fs.existsSync(path.join(projectPath, CONTRACT)));
   assert.deepEqual(verifyBundle({ projectPath, resources, markdownOf }), []);
+});
+
+test('SQLite fait foi : une fiche effacée ou modifiée à la main est régénérée avec ses liens', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Montant de la facture', citation: 'Nous contestons la facture.', value: '1 200 euros' }, markdownOf, undefined, AT);
+  markExamined(projectPath, { source: DRAFT, motif: 'Projet sans lien.' }, undefined, AT);
+  fs.rmSync(bundleRoot(projectPath), { recursive: true, force: true });
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+  assert.deepEqual(relationsOf(concept(projectPath, LETTER).frontmatter).states, [{ target: RESILIATION_ID, citation: 'Nous contestons la facture.', origin: 'piecemaker/agent', at: AT, value: '1 200 euros' }]);
+  assert.equal((concept(projectPath, DRAFT).frontmatter.examen_sans_lien as { motif: string }).motif, 'Projet sans lien.');
+  const letterFile = conceptFile(projectPath, `/${LETTER}.md`);
+  fs.writeFileSync(letterFile, fs.readFileSync(letterFile, 'utf8').replace('relations:', 'relations:\n  amends:\n    - target: /Pièces/Contrat.pdf.md\n      citation: Il est résilié.\n      origin: piecemaker/agent'));
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+  assert.equal(relationsOf(concept(projectPath, LETTER).frontmatter).amends, undefined);
+  assert.equal(okf(projectPath).store.records('p').relations.filter((entry) => entry.relation === 'amends').length, 0);
+});
+
+test('une revue tabulaire ne crée ni ne supprime de prémisse', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  const folder = path.join(projectPath, REVIEW_FOLDER);
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'revue.json'), JSON.stringify({ columns: [{ index: 0, name: 'Statut du contrat', prompt: 'Résilié ?', format: 'text', premise: 'single' }], rows: [{ id: 'r', label: 'Courrier', documents: [], status: 'done', piece: LETTER }], cells: { r: { 0: { summary: 'résilié', citations: [{ document: LETTER, quote: 'Il est résilié.', verified: true }] } } } }));
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+  assert.equal(fs.existsSync(conceptFile(projectPath, '/_premises/statut-du-contrat.md')), false);
+  addLink(projectPath, { source: LETTER, relation: 'states', target: 'Statut du contrat', citation: 'Il est résilié.' }, markdownOf, undefined, AT);
+  fs.rmSync(folder, { recursive: true });
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+  assert.equal(fs.existsSync(conceptFile(projectPath, '/_premises/statut-du-contrat.md')), true);
+});
+
+test('l\'arborescence est commune, scellée avec l\'ontologie, et reprise une fois des anciens dossiers', () => {
+  const { projectPath } = dossier();
+  fs.rmSync(ontologyFile(), { force: true });
+  const older = dossier().projectPath;
+  fs.rmSync(ontologyFile(), { force: true });
+  fs.writeFileSync(path.join(older, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Anciens', explanation: '' }]));
+  fs.utimesSync(path.join(older, '.piecemaker', 'arborescence.json'), new Date('2020-01-01'), new Date('2020-01-01'));
+  fs.writeFileSync(path.join(projectPath, '.piecemaker', 'arborescence.json'), JSON.stringify([{ name: 'Pièces', type: 'Archives', explanation: '' }]));
+  assert.equal(migrateArborescence([older, projectPath]), path.join(projectPath, '.piecemaker', 'arborescence.json'));
+  assert.deepEqual(readTypes(older), ['Archives']);
+  assert.equal(migrateArborescence([older]), null);
+  const stored = JSON.parse(fs.readFileSync(ontologyFile(), 'utf8'));
+  stored.arborescence[0].type = 'Pièces';
+  fs.writeFileSync(ontologyFile(), JSON.stringify(stored));
+  assert.match(readOntology(projectPath).erreur || '', /modifiée hors/);
+  assert.deepEqual(readTypes(projectPath), ['Projets', 'Pièces', 'Archives', 'Notes et recherches']);
+});
+
+test('une revue liée à une prémisse l\'établit par ses lignes positives, d\'auteur agent puis humain une fois vérifiées', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  const folder = path.join(projectPath, REVIEW_FOLDER);
+  fs.mkdirSync(folder, { recursive: true });
+  const reviewPath = path.join(folder, 'resiliation.json');
+  const cells = {
+    r1: { 0: { summary: 'Oui, le contrat est résilié', flag: 'red', reasoning: '', citations: [{ document: 'Courrier.pdf', quote: 'Il est résilié.', verified: true }] } },
+    r2: { 0: { summary: 'Non', flag: 'grey', reasoning: '', citations: [{ document: 'Contrat.pdf', quote: 'Contrat de prestation', verified: true }] } },
+    r3: { 0: { summary: 'Non trouvé', flag: 'grey', reasoning: '', citations: [] } },
+  };
+  const review = { version: 1, title: 'Résiliations', category: 'documents', columns: [{ index: 0, name: 'Résilié', prompt: 'Le contrat est-il résilié ?', format: 'yes_no' }], rows: [
+    { id: 'r1', label: 'Courrier', documents: [{ source: LETTER, copy: 'x', chars: 1 }], status: 'done' },
+    { id: 'r2', label: 'Contrat', documents: [{ source: CONTRACT, copy: 'y', chars: 1 }], status: 'done' },
+    { id: 'r3', label: 'Conclusions', documents: [{ source: DRAFT, copy: 'z', chars: 1 }], status: 'done' },
+  ], cells };
+  fs.writeFileSync(reviewPath, JSON.stringify(review));
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+
+  assert.throws(() => linkReview(okf(projectPath), { premise: 'Résiliation du contrat', fichier: 'resiliation.json', colonne: 'Inconnue' }), /aucune colonne « Inconnue »/);
+  const link = rebuilt(projectPath, linkReview(okf(projectPath), { premise: 'Résiliation du contrat', fichier: 'resiliation.json', colonne: 'résilié' }, 'piecemaker/agent', AT));
+  assert.deepEqual(link, { premise: '/_premises/resiliation-du-contrat.md', fichier: 'resiliation.json', colonne: 0 });
+  const premise = parseConcept(fs.readFileSync(conceptFile(projectPath, link.premise), 'utf8'));
+  assert.deepEqual(premise.frontmatter.revues, [{ fichier: 'resiliation.json', colonne: 0, by: 'piecemaker/agent', at: AT }]);
+  assert.match(premise.body, /# Revues tabulaires/);
+  assert.match(premise.body, /Oui, le contrat est résilié \(agent, non vérifiée\)\n  > Il est résilié\./);
+  assert.doesNotMatch(premise.body, /Contrat de prestation/);
+
+  const piece = { resource: LETTER, title: 'Courrier.pdf', citation: 'Il est résilié.', value: 'Oui, le contrat est résilié', origin: 'piecemaker/tabular-review', author: 'agent', review: 'resiliation.json' };
+  assert.deepEqual(premiseEvidence(projectPath, `okf:${link.premise}`)?.pieces, [piece]);
+  assert.ok(!graphGaps(projectPath).some((gap) => gap.element === link.premise && /sans pièce citée/.test(gap.manque)));
+
+  // La vérification de l'avocat, écrite dans la revue, remonte sans reconstruction.
+  cells.r1[0] = { ...cells.r1[0], checked: { at: AT } } as typeof cells.r1[0];
+  fs.writeFileSync(reviewPath, JSON.stringify(review));
+  assert.equal(premiseEvidence(projectPath, `okf:${link.premise}`)?.pieces[0].author, 'human');
+  const view = backendOf(projectPath, markdownOf).read('p').fiches.find((fiche) => fiche.id === link.premise);
+  assert.equal(view?.revues?.[0].lignes[0].author, 'human');
+
+  fs.rmSync(reviewPath);
+  assert.ok(verifyBundle({ projectPath, resources, markdownOf }).some((entry) => entry.fiche === link.premise && /revue tabulaire introuvable/.test(entry.erreur)));
+  rebuilt(projectPath, unlinkReview(okf(projectPath), { premise: 'Résiliation du contrat', fichier: 'resiliation.json', colonne: 0 }));
+  assert.equal(fs.existsSync(conceptFile(projectPath, link.premise)), false);
+});
+
+test('une recherche juridique ne se lie pas à une prémisse', () => {
+  const { projectPath, documents, markdownOf } = dossier();
+  const folder = path.join(projectPath, REVIEW_FOLDER);
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, 'recherche.json'), JSON.stringify({ category: 'recherche-juridique', columns: [{ index: 0, name: 'Solution', format: 'text' }], rows: [], cells: {} }));
+  buildBundle({ projectPath, documents, markdownOf, now: NOW });
+  assert.throws(() => linkReview(okf(projectPath), { premise: 'Solution', fichier: 'recherche.json', colonne: 0 }), /recherche juridique/);
+  assert.deepEqual(backendOf(projectPath, markdownOf).read('p').fiches.filter((fiche) => fiche.type === 'Premise'), []);
 });

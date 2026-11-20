@@ -1,13 +1,18 @@
 import { readFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
 import Database from 'better-sqlite3';
-import spawn from 'cross-spawn';
 
+import {
+  getOpenCodeDataDir,
+  hasFileCredential,
+  listConfiguredProviders,
+  readOpenCodeConfigs,
+  type OpenCodeCredential,
+} from '@/modules/providers/list/opencode/opencode-config.js';
 import type { IProviderAuth } from '@/shared/interfaces.js';
-import type { ProviderAuthStatus } from '@/shared/types.js';
-import { getOpenCodeDatabasePath, readObjectRecord, readOptionalString } from '@/shared/utils.js';
+import type { CliVersionProbe, ProviderAuthStatus } from '@/shared/types.js';
+import { getOpenCodeDatabasePath, probeCliVersion, readObjectRecord, readOptionalString } from '@/shared/utils.js';
 
 type OpenCodeCredentialsStatus = {
   authenticated: boolean;
@@ -24,29 +29,45 @@ const OPENCODE_ENV_CREDENTIAL_KEYS = [
   'OPENROUTER_API_KEY',
 ];
 
+/**
+ * Whether a configured `apiKey` resolves to a key. Only presence is checked:
+ * no key value is read into, logged or returned by this process.
+ */
+const isCredentialPresent = async (credential: OpenCodeCredential): Promise<boolean> => {
+  switch (credential.kind) {
+    case 'literal':
+      return true;
+    case 'env':
+      return Boolean(process.env[credential.name]?.trim());
+    case 'file':
+      return hasFileCredential(credential);
+    default:
+      return false;
+  }
+};
+
 export class OpenCodeProviderAuth implements IProviderAuth {
   /**
-   * Checks whether the OpenCode CLI is available to the server process.
+   * Checks whether the OpenCode CLI is available to the server process, and
+   * which version it is. Unlike the other CLIs it has always needed a clean
+   * `--version` exit to count as installed.
    */
-  private checkInstalled(): boolean {
-    try {
-      const result = spawn.sync('opencode', ['--version'], { stdio: 'ignore', timeout: 5000 });
-      return !result.error && result.status === 0;
-    } catch {
-      return false;
-    }
+  checkInstalled(): CliVersionProbe {
+    const probe = probeCliVersion('opencode');
+    return { ...probe, installed: probe.exitCode === 0 };
   }
 
   /**
    * Returns OpenCode CLI installation and credential status.
    */
   async getStatus(): Promise<ProviderAuthStatus> {
-    const installed = this.checkInstalled();
+    const { installed, version: installedVersion } = this.checkInstalled();
     const credentials = await this.checkCredentials();
 
     return {
       installed,
       provider: 'opencode',
+      installedVersion,
       authenticated: credentials.authenticated,
       email: credentials.email,
       method: credentials.method,
@@ -55,7 +76,8 @@ export class OpenCodeProviderAuth implements IProviderAuth {
   }
 
   /**
-   * Reads OpenCode's auth store or falls back to provider API key environment variables.
+   * Reads OpenCode's auth store, then provider API key environment variables,
+   * then provider keys in OpenCode's config (v1 `provider` or v2 `providers`).
    */
   private async checkCredentials(): Promise<OpenCodeCredentialsStatus> {
     try {
@@ -77,7 +99,7 @@ export class OpenCodeProviderAuth implements IProviderAuth {
     } catch {}
 
     try {
-      const authPath = path.join(os.homedir(), '.local', 'share', 'opencode', 'auth.json');
+      const authPath = path.join(getOpenCodeDataDir(), 'auth.json');
       const content = await readFile(authPath, 'utf8');
       const auth = readObjectRecord(JSON.parse(content)) ?? {};
 
@@ -117,6 +139,16 @@ export class OpenCodeProviderAuth implements IProviderAuth {
         email: envCredential,
         method: 'environment',
       };
+    }
+
+    for (const { id, credential } of listConfiguredProviders(await readOpenCodeConfigs())) {
+      if (await isCredentialPresent(credential)) {
+        return {
+          authenticated: true,
+          email: `${id} credentials`,
+          method: 'config_file',
+        };
+      }
     }
 
     return {

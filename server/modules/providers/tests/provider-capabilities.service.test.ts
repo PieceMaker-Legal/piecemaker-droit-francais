@@ -4,6 +4,7 @@ import test from 'node:test';
 import { CLAUDE_PREDEFINED_MODELS } from '@/modules/providers/list/claude/claude-models.provider.js';
 import { CODEX_PREDEFINED_MODELS } from '@/modules/providers/list/codex/codex-models.provider.js';
 import { CURSOR_PREDEFINED_MODELS } from '@/modules/providers/list/cursor/cursor-models.provider.js';
+import { HERMES_FALLBACK_MODELS } from '@/modules/providers/list/hermes/hermes-models.provider.js';
 import { MISTRAL_PREDEFINED_MODELS } from '@/modules/providers/list/mistral/mistral-models.provider.js';
 import { OPENCODE_PREDEFINED_MODELS } from '@/modules/providers/list/opencode/opencode-models.provider.js';
 import { providerCapabilitiesService } from '@/modules/providers/services/provider-capabilities.service.js';
@@ -19,6 +20,7 @@ const CURATED_CATALOGS: Record<LLMProvider, ProviderModelsDefinition> = {
   cursor: CURSOR_PREDEFINED_MODELS,
   opencode: OPENCODE_PREDEFINED_MODELS,
   mistral: MISTRAL_PREDEFINED_MODELS,
+  hermes: HERMES_FALLBACK_MODELS,
 };
 
 test('capability effort levels cover every level a curated model declares', () => {
@@ -35,5 +37,23 @@ test('capability effort levels cover every level a curated model declares', () =
     );
     const missingLevels = [...declaredLevels].filter((level) => !effortLevels.includes(level));
     assert.deepEqual(missingLevels, [], `${provider}: effortLevels misses curated levels`);
+  }
+});
+
+
+test('side questions are supported by claude, codex and opencode, not by cursor', () => {
+  // Cursor has no headless way to ask on the side; its menu then offers only
+  // Queue · Stop / Send anyway.
+  const expected: Record<LLMProvider, boolean> = {
+    claude: true,
+    codex: true,
+    cursor: false,
+    opencode: true,
+    mistral: false,
+    hermes: false,
+  };
+  for (const [provider, supported] of Object.entries(expected) as Array<[LLMProvider, boolean]>) {
+    const capabilities = providerCapabilitiesService.getProviderCapabilities(provider) as unknown as Record<string, unknown>;
+    assert.equal(capabilities.supportsSideQuestions, supported, `${provider}: supportsSideQuestions`);
   }
 });

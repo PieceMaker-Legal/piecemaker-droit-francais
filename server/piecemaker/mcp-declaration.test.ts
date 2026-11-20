@@ -40,12 +40,18 @@ test('déclare Légifrance, retire piecemaker, conserve les entrées tierces', (
   assert.equal(codex.mcp_servers.legifrance.default_tools_approval_mode, 'approve');
   assert.equal(codex.mcp_servers.exemple.default_tools_approval_mode, undefined);
   const vibe = TOML.parse(fs.readFileSync(path.join(folder, '.vibe', 'config.toml'), 'utf8'));
-  assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['exemple', 'features', 'legifrance']);
+  assert.deepEqual(vibe.mcp_servers.map((server: { name: string }) => server.name).sort(), ['artifacts', 'exemple', 'features', 'fil', 'legifrance', 'orchestrateur']);
   const mcpJson = JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8'));
   assert.equal(mcpJson.mcpServers.piecemaker, undefined);
   assert.match(mcpJson.mcpServers.legifrance.args[0], /vendor[\\/]mcp[\\/]legifrance[\\/]server\.mjs$/);
   assert.equal(fs.existsSync(mcpJson.mcpServers.features.args[0]), true);
   assert.equal(codex.mcp_servers.features.default_tools_approval_mode, 'approve');
+  for (const name of ['artifacts', 'orchestrateur', 'fil']) {
+    const entry = mcpJson.mcpServers[name].args[0];
+    assert.equal(path.basename(path.dirname(entry)), name);
+    assert.equal(fs.existsSync(entry), true);
+  }
+  assert.equal(codex.mcp_servers.artifacts.default_tools_approval_mode, 'approve');
 });
 
 test('un second passage ne réécrit aucun fichier', () => {
@@ -89,4 +95,25 @@ test('un dossier inexistant est journalisé sans lever d’erreur', (context) =>
   const warn = context.mock.method(console, 'warn', () => undefined);
   declarePieceMakerServer(path.join(temporaryFolder(), 'absent'));
   assert.equal(warn.mock.callCount(), 1);
+});
+
+test('les serveurs MCP visent le port du serveur qui les déclare', () => {
+  const folder = temporaryFolder();
+  const previous = process.env.SERVER_PORT;
+  process.env.SERVER_PORT = '3999';
+  try {
+    declarePieceMakerServer(folder);
+    const mcpJson = JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8'));
+    const codex = TOML.parse(fs.readFileSync(path.join(folder, '.codex', 'config.toml'), 'utf8'));
+    for (const name of ['orchestrateur', 'fil']) {
+      assert.equal(mcpJson.mcpServers[name].env.PIECEMAKER_APP_PORT, '3999');
+      assert.equal(codex.mcp_servers[name].env.PIECEMAKER_APP_PORT, '3999');
+    }
+    process.env.SERVER_PORT = '3998';
+    declarePieceMakerServer(folder);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(folder, '.mcp.json'), 'utf8')).mcpServers.orchestrateur.env.PIECEMAKER_APP_PORT, '3998');
+  } finally {
+    if (previous === undefined) delete process.env.SERVER_PORT;
+    else process.env.SERVER_PORT = previous;
+  }
 });

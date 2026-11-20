@@ -13,7 +13,12 @@ function vendorMcpServer(name: string): LibraryConnectorConfig {
     transport: 'stdio',
     command: 'node',
     args: [path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'mcp', name, 'server.mjs')],
+    ...(serverPort() ? { env: { PIECEMAKER_APP_PORT: serverPort() } } : {}),
   };
+}
+
+function serverPort(): string {
+  return process.env.SERVER_PORT || process.env.PORT || '';
 }
 
 const TOML = createRequire(import.meta.url)('@iarna/toml') as { stringify(value: Record<string, unknown>): string };
@@ -23,6 +28,9 @@ const CODEX_TOOLS_APPROVAL = 'approve';
 const BUNDLED_SERVERS = [
   { name: 'legifrance', skipClaude: false },
   { name: 'features', skipClaude: false },
+  { name: 'artifacts', skipClaude: false },
+  { name: 'orchestrateur', skipClaude: false },
+  { name: 'fil', skipClaude: false },
 ] as const;
 
 const RETIRED_SERVERS = ['piecemaker'] as const;
@@ -35,7 +43,8 @@ function matches(raw: unknown, expected: LibraryConnectorConfig): boolean {
   const found = normalizeProviderConnector(raw);
   return found?.transport === 'stdio'
     && found.command === expected.command
-    && JSON.stringify(found.args) === JSON.stringify(expected.args);
+    && JSON.stringify(found.args) === JSON.stringify(expected.args)
+    && JSON.stringify(found.env ?? {}) === JSON.stringify(expected.env ?? {});
 }
 
 function isDeclared(workspace: string, name: string, expected: LibraryConnectorConfig, skipClaude: boolean): boolean {

@@ -27,7 +27,12 @@ import {StdioServerTransport} from ${moduleUrl('server/stdio.js')};
 import {ListToolsRequestSchema,CallToolRequestSchema} from ${moduleUrl('types.js')};
 const server=new Server({name:'fixture',version:'1.0.0'},{capabilities:{tools:{}}});
 server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{name:'echo',description:'Preuve fictive',inputSchema:{type:'object',properties:{value:{type:'string'}},required:['value']},annotations:{readOnlyHint:true}}]}));
-server.setRequestHandler(CallToolRequestSchema,async request=>({content:[{type:'text',text:'MCP-'+request.params.arguments.value}]}));
+server.setRequestHandler(CallToolRequestSchema,async request=>{
+  const value=request.params.arguments.value;
+  if(value==='structure') return {content:[],structuredContent:{total:2}};
+  if(value==='image') return {content:[{type:'image',mimeType:'image/png',data:'AA=='}]};
+  return {isError:value==='erreur',content:[{type:'text',text:'MCP-'+value},{type:'text',text:'Fin.'}]};
+});
 await server.connect(new StdioServerTransport());
 `);
   await fs.writeFile(path.join(home, '.mcp.json'), JSON.stringify({ mcpServers: {
@@ -37,7 +42,11 @@ await server.connect(new StdioServerTransport());
   close = toolbox.close;
   assert.ok(toolbox.tools.has('mcp__fixture__echo'));
   assert.equal(toolbox.tools.get('mcp__fixture__echo')?.readOnly, true);
-  assert.ok((await toolbox.tools.get('mcp__fixture__echo')!.execute({ value: 'ZETABIO' })).includes('MCP-ZETABIO'));
+  const echo = toolbox.tools.get('mcp__fixture__echo')!;
+  assert.equal(await echo.execute({ value: 'ZETABIO' }), 'MCP-ZETABIO\nFin.');
+  assert.deepEqual(JSON.parse(await echo.execute({ value: 'structure' })), { total: 2 });
+  assert.equal(await echo.execute({ value: 'image' }), '[image : image/png]');
+  await assert.rejects(echo.execute({ value: 'erreur' }), { message: 'MCP-erreur\nFin.' });
   assert.ok(toolbox.instructions.includes('enabled-skill'));
   assert.ok(!toolbox.instructions.includes('disabled-skill'));
   assert.ok(!toolbox.instructions.includes('Serveurs MCP indisponibles'));
@@ -77,7 +86,7 @@ test('green-shield original and mapping guards apply to SDK reads, edits and she
   await assert.rejects(toolbox.tools.get('Read')!.execute({ file_path: 'mapping_default.json' }), /mapping/);
   await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cat contrat-fictif.pdf' }), /protégée/);
   assert.equal(await toolbox.tools.get('Read')!.execute({ file_path: 'notes.md' }), 'Notes fictives.');
-  await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cp notes.md .piecemaker/arborescence.json' }), /pm dossier arborescence/);
+  await assert.rejects(toolbox.tools.get('Bash')!.execute({ command: 'cp notes.md ~/.piecemaker/ontologie.json' }), /pm dossier arborescence/);
   await toolbox.tools.get('Bash')!.execute({ command: "printf 'PDF fictif' > note-ia.pdf" });
   assert.equal(await toolbox.tools.get('Read')!.execute({ file_path: 'note-ia.pdf' }), 'PDF fictif');
   await assert.rejects(toolbox.tools.get('Read')!.execute({ file_path: path.join(home, '.piecemaker', 'ontologie.cle') }), /seal key/);

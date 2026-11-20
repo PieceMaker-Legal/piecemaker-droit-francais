@@ -1,3 +1,4 @@
+import { authenticatedFetch, type ApiRequestOptions } from '../../../src/shared/authToken.js';
 import type { KnowledgeSnapshot, KnowledgeUpdateOperation } from './types.js';
 
 export type KnowledgeDocumentPreview = { path: string; content: string };
@@ -63,21 +64,8 @@ type RegisteredCase = { folder: RepositoryCase };
 const BASE = '/api/piecemaker/knowledge';
 const PIECEMAKER_BASE = '/api/piecemaker';
 
-async function request<T>(base: string, path: string, init: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('auth-token');
-  const response = await fetch(`${base}${path}`, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.headers || {}),
-    },
-  });
-  const refreshed = response.headers.get('X-Refreshed-Token');
-  if (refreshed) {
-    localStorage.setItem('auth-token', refreshed);
-    window.dispatchEvent(new CustomEvent('auth-token-refreshed', { detail: refreshed }));
-  }
+async function request<T>(base: string, path: string, init: ApiRequestOptions = {}): Promise<T> {
+  const response = await authenticatedFetch(`${base}${path}`, init);
   const data = await response.json() as T & { error?: string };
   if (!response.ok) throw new Error(data.error || `Erreur ${response.status}`);
   return data;

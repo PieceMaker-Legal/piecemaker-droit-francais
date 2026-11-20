@@ -8,24 +8,17 @@ const PM = path.resolve(HERE, '..', '..', '..', 'skills', 'Skill-PieceMaker', 's
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
 const PANEL_NOTICE = /^(Visible|Déjà visible|Le volet)/;
 
+// ~/.piecemaker/ontologie.json porte les relations, les natures et l'arborescence, communes à tous les dossiers.
+const PARTS = ['relations', 'documentTypes', 'arborescence'];
+
 const KINDS = {
-  arborescence: {
-    pattern: /(^|[\\/])\.piecemaker[\\/]arborescence\.json$/,
-    label: 'folder tree',
-    place: 'Index › Classement',
-    list: (value) => (Array.isArray(value) ? value : value?.dossiers),
-    stored: (proposal) => (Array.isArray(proposal?.dossiers) ? proposal.dossiers : undefined),
-    key: (entry) => String(entry?.name ?? entry?.nom ?? ''),
-    comparable: (entry) => JSON.stringify([String(entry?.name ?? entry?.nom ?? '').trim(), String(entry?.explanation ?? entry?.explication ?? '').trim()]),
-  },
   ontologie: {
     pattern: /(^|[\\/])\.piecemaker[\\/]ontologie\.json$/,
     label: 'ontology',
     place: 'Index › Ontologie',
-    list: (value) => (Array.isArray(value) ? value : value?.relations),
-    stored: (proposal, current) => (proposal?.relations || proposal?.documentTypes ? {
-      relations: proposal.relations ?? current?.relations,
-      ...(proposal.documentTypes ?? current?.documentTypes ? { documentTypes: proposal.documentTypes ?? current.documentTypes } : {}),
+    list: (value) => (Array.isArray(value) ? value : value?.relations ?? value?.arborescence),
+    stored: (proposal, current) => (PARTS.some((part) => proposal?.[part]) ? {
+      ...Object.fromEntries(PARTS.map((part) => [part, proposal[part] ?? current?.[part]]).filter(([, entries]) => entries)),
       ...(current?.sceau ? { sceau: current.sceau } : {}),
     } : undefined),
     key: (entry) => String(entry?.name ?? ''),
@@ -155,12 +148,7 @@ export function runPm(args, cwd) {
   });
 }
 
-function pmArguments(kind, value, file, cwd) {
-  if (kind === 'arborescence') {
-    const dossiers = KINDS.arborescence.list(value).map((entry) => ({ nom: entry?.name ?? entry?.nom, explication: entry?.explanation ?? entry?.explication ?? '' }));
-    const project = path.dirname(path.dirname(file));
-    return { cwd: project, args: ['dossier', 'arborescence', '--dossier', project, '--dossiers', JSON.stringify(dossiers), ...(typeof value?.motif === 'string' ? ['--motif', value.motif] : [])] };
-  }
+function pmArguments(value, cwd) {
   const { sceau, ...proposed } = Array.isArray(value) ? { relations: value } : value;
   return { cwd, args: ['okf', 'ontologie', 'proposer', '--dossier', cwd, '--json', JSON.stringify(proposed)] };
 }
@@ -177,13 +165,15 @@ export async function proposalMessage(payload, run = runPm) {
   try { result = edited(edit); } catch (error) { return refused(error.message); }
   let value;
   try { value = JSON.parse(result.text); } catch (error) { return refused(`invalid JSON after the edit (${error.message})`); }
-  if (!Array.isArray(list(value))) return refused(kind === 'arborescence' ? 'the file must contain the list of folders' : 'the file must contain "relations", the list of relations');
-  const { cwd, args } = pmArguments(kind, value, file, payload?.cwd || process.cwd());
+  if (!Array.isArray(list(value))) return refused('the file must contain "relations", the list of relations, or "arborescence", the list of folders');
+  const { cwd, args } = pmArguments(value, payload?.cwd || process.cwd());
   const answer = await run(args, cwd);
   if (!answer.ok) return refused(/ECONNREFUSED/.test(answer.output) ? 'PieceMaker is not running, the proposal cannot be checked; ask the lawyer to start PieceMaker' : answer.output.split('\n').filter(Boolean).pop() || 'pm failed');
   const notice = answer.output.split('\n').filter((line) => PANEL_NOTICE.test(line)).pop();
   const current = readJson(file);
-  const summary = kind === 'arborescence' ? changes(kind, list(current), list(value)) : `relations — ${changes(kind, current?.relations, list(value))}; document types — ${changes(kind, current?.documentTypes, value.documentTypes ?? current?.documentTypes)}`;
+  const proposed = Array.isArray(value) ? { relations: value } : value;
+  const summary = [['relations', 'relations'], ['document types', 'documentTypes'], ['folder tree', 'arborescence']]
+    .map(([title, part]) => `${title} — ${changes(kind, current?.[part], proposed[part] ?? current?.[part])}`).join('; ');
   return [
     `Edit saved as a proposal in ${name.replace(/\.json$/, '.proposition.json')}. ${name} does not change, this is normal: the lawyer accepts, refuses or modifies each change in the ${place} tab.`,
     `Compared with the current ${label}: ${summary}.`,

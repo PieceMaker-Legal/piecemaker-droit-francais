@@ -10,6 +10,11 @@
       "empty": "אין פקודות זמינות לתיק הזה."
     }
   },
+  "notifications": {
+    "webhook": {
+      "urlPlaceholder": "https://example.com/hooks/piecemaker"
+    }
+  },
   "appearanceSettings": {
     "projectSorting": {
       "label": "מיון תיקים",
@@ -40,6 +45,11 @@
       "steps": {
         "initCommand": "הרצת task-master init בתיקיית התיק"
       }
+    }
+  },
+  "agents": {
+    "cli": {
+      "bundled": "מגיעה עם PieceMaker ומתעדכנת יחד איתו."
     }
   },
   "permissions": {

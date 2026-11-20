@@ -81,13 +81,14 @@ pm okf unlink "Pièces/Courrier.pdf" states "Date de résiliation"
 - `involves` relie une prémisse à une partie, sans citation. La cible est le code de la partie.
 - Sans partie qualifiée dans le dossier, `verify` marque le manque `involves` « attend l'avocat » (champ `avocat: true`) et `pm check` le compte à part. L'avocat désigne une partie cliente ou adverse dans l'onglet Dossier, vue générale. Ne la qualifie pas toi-même ; signale-lui ce manque.
 
-Les colonnes de revue tabulaire marquées « Index du dossier » posent aussi des liens `states`. L'avocat en pose dans la visionneuse.
+L'avocat pose aussi des liens `states` dans la visionneuse. La revue tabulaire n'en pose pas.
 
 ## Prémisse et raisonnement Catala
 
-1. Une condition Catala se justifie par une prémisse : `source: okf:/_premises/<titre normalisé>.md` dans son `#[doc]`, sans `quote`.
+1. Une condition Catala se justifie par une prémisse : `## okf:/_premises/<titre normalisé>.md` juste au-dessus du fait qui la fixe dans le scénario du dossier.
 2. Une prémisse se justifie par des pièces citées (`states`).
 3. Une condition ne cite jamais une pièce directement.
+4. Une prémisse utile alimente une entrée du programme : son fait calcule la condition qu'elle établit. La citer dans une liste ne suffit pas ; `pm catala verifier` signale chaque prémisse qui ne fixe aucune entrée.
 
 Pour un contrat, chaque clause utile est une prémisse : titre = objet de la clause, citation = texte de la clause, valeur = ce qu'elle stipule.
 
@@ -118,3 +119,13 @@ pm okf examinee "Pièces/Courrier.pdf" --retirer
 ```
 
 La marque est écrite dans la fiche (`examen_sans_lien` : motif, auteur, date, empreinte du document). `verify` liste alors la pièce sous « Examinées sans lien », en information, plus en manque. Le manque revient si le document change ou si la marque est retirée. Ne marque jamais une pièce que tu n'as pas lue.
+
+Une revue tabulaire des pièces peut établir une prémisse : lie la colonne qui répond à sa question.
+
+```bash
+pm okf revues
+pm okf revue "Résiliation du contrat" --fichier "resiliations.json" --colonne "Résilié"
+pm okf revue "Résiliation du contrat" --fichier "resiliations.json" --colonne 0 --retirer
+```
+
+Chaque ligne positive (réponse trouvée, « Oui » pour une question Oui / Non) devient une pièce de la prémisse, avec sa valeur et sa citation. Son auteur est `agent` tant que l'avocat ne l'a pas vérifiée dans la revue, `human` ensuite. Les lignes sont relues dans la revue à chaque lecture : une revue relancée remonte aussitôt. `pm catala verifier` les contrôle comme les autres pièces et avertit des lignes d'auteur agent. Une recherche juridique ne se lie pas.

@@ -14,6 +14,7 @@ const AGENT_NAMES: Record<AgentProvider, string> = {
   codex: 'Codex',
   opencode: 'OpenCode',
   mistral: 'Mistral',
+  hermes: 'Hermes',
 };
 
 /** Rendered by AgentsSettingsTab to pick which agent provider the tab is configuring. */
@@ -31,7 +32,8 @@ export default function AgentSelectorSection({
             agent === 'claude' ? 'bg-blue-500' :
             agent === 'cursor' ? 'bg-purple-500' :
             agent === 'mistral' ? 'bg-violet-500' :
-            agent === 'opencode' ? 'bg-zinc-500' : 'bg-foreground/60';
+            agent === 'opencode' ? 'bg-zinc-500' :
+            agent === 'hermes' ? 'bg-emerald-600' : 'bg-foreground/60';
 
           if (agent === 'mistral') {
             return (
@@ -63,7 +65,7 @@ export default function AgentSelectorSection({
             >
               <LLMProviderLogo provider={agent} className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">{AGENT_NAMES[agent]}</span>
-              {agentContextById[agent].authStatus.authenticated && (
+              {agent !== 'hermes' && agentContextById[agent].authStatus.authenticated && (
                 <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${dotColor}`} />
               )}
             </Pill>

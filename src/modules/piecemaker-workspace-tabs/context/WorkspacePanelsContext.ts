@@ -13,3 +13,9 @@ export const CloseWorkspacePanelContext = createContext<((tab: AppTab) => void) 
 export function useCloseWorkspacePanel() {
   return useContext(CloseWorkspacePanelContext);
 }
+
+export const AgentSessionContext = createContext(false);
+
+export function useIsAgentSession() {
+  return useContext(AgentSessionContext);
+}

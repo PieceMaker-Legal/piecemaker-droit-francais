@@ -4,6 +4,8 @@ import { ProviderSkills } from '@/modules/skills';
 import AccountContent from '@/modules/settings/tabs/agents-settings/sections/content/AccountContent';
 import PermissionsContent from '@/modules/settings/tabs/agents-settings/sections/content/PermissionsContent';
 
+import GatewayContent from '@/modules/settings/tabs/agents-settings/sections/content/GatewayContent';
+
 type AgentCategoryContentSectionProps = {
   selectedAgent: AgentProvider;
   selectedCategory: AgentCategory;
@@ -37,6 +39,12 @@ export default function AgentCategoryContentSection({
           agent={selectedAgent}
           authStatus={agentContextById[selectedAgent].authStatus}
           onLogin={agentContextById[selectedAgent].onLogin}
+        />
+      )}
+
+      {selectedCategory === 'gateway' && selectedAgent === 'hermes' && (
+        <GatewayContent
+          onOpenSetup={agentContextById.hermes.onLogin}
         />
       )}
 

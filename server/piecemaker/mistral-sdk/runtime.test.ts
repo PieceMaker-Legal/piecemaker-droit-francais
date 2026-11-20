@@ -153,7 +153,8 @@ test('plan mode hides writes and rejects an unsolicited write call', async t => 
   ], requests), fixtureTools(async () => { executions++; return ''; }, false));
   await runtime.run('planifier', { sessionId: 'mistral-sdk-plan', permissionMode: 'plan' }, { userId: 1, send() {} }, context);
   assert.equal(executions, 0);
-  assert.equal((requests[0] as { tools?: unknown }).tools, undefined);
+  const advertised = (requests[0] as { tools?: Array<{ function: { name: string } }> }).tools ?? [];
+  assert.ok(!advertised.some(tool => tool.function.name === 'probe'));
 });
 
 test('abort during a tool call emits one completion and leaves a resumable transcript', async t => {
@@ -185,4 +186,95 @@ test('reasoning fragments retain their signature in the resumed SDK message', as
   assert.ok(Array.isArray(answer));
   const thought = answer.find(chunk => chunk.type === 'thinking');
   assert.equal(thought && 'signature' in thought ? thought.signature : null, 'fictitious-signature');
+});
+
+test('a tool name in another case runs the tool and the answer ends with a final text like Claude', async t => {
+  const { home, history } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  let executions = 0;
+  await createMistralSdkRuntime(history, async () => [], home, fixtureClient([
+    [{ toolCalls: [{ id: 'abcdef123', function: { name: 'PROBE', arguments: '{}' } }] }], [{ content: 'Fait.' }],
+  ]), fixtureTools(async () => { executions++; return 'ok'; })).run('tester', { sessionId: 'mistral-sdk-casse' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context);
+  assert.equal(executions, 1);
+  const end = events.find(event => event.kind === 'stream_end');
+  const text = events.find(event => event.kind === 'text' && event.role === 'assistant');
+  assert.equal(text?.content, 'Fait.');
+  assert.equal(text?.id, end?.id);
+  assert.ok(events.indexOf(end!) < events.indexOf(text!));
+});
+
+test('stopping an executing tool delivers its result before abort returns and resumes all tool calls', async t => {
+  const { history, home } = await setup(t);
+  const sessionId = 'mistral-sdk-interruption';
+  const events: NormalizedMessage[] = [];
+  let start!: () => void;
+  const started = new Promise<void>(resolve => { start = resolve; });
+  let executions = 0;
+  const tools: typeof createMistralTools = async (_cwd, _skills, signal) => fixtureTools(async () => {
+    executions++;
+    start();
+    return new Promise<string>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+  })();
+  const requests: Array<{ messages: Array<{ role: string; toolCallId?: string; content: string }> }> = [];
+  const runtime = createMistralSdkRuntime(history, async () => [], home, fixtureClient([
+    [{ toolCalls: ['abcdef123', 'abcdef124'].map((id, index) => ({ id, index, function: { name: 'probe', arguments: '{}' } })) }],
+    [{ content: 'Repris.' }],
+  ], requests), tools);
+  const writer = { userId: 1, send(event: unknown) { events.push(event as NormalizedMessage); } };
+  const run = runtime.run('Vérifier', { sessionId }, writer, context);
+  await started;
+  assert.equal(await runtime.abort(sessionId), true);
+  assert.equal(events.at(-1)?.kind, 'complete');
+  await run;
+  assert.equal(executions, 1);
+  assert.deepEqual(events.filter(event => event.kind === 'complete').map(event => [event.aborted, event.exitCode]), [[true, 0]]);
+  const results = events.filter(event => event.toolResult);
+  assert.equal(results.length, 2);
+  assert.deepEqual((await history.load(sessionId))?.transcript.at(-1), events.at(-1));
+  assert.ok(results.every(event => event.toolResult?.isError && /interrompu/i.test(String(event.toolResult.content))));
+  await runtime.run('Continuer', { sessionId }, writer, context);
+  assert.deepEqual(requests[1].messages.filter(message => message.role === 'tool').map(message => [message.toolCallId, message.content]),
+    results.map(event => [event.toolId, event.toolResult?.content]));
+});
+
+test('a subscription rejection shows the same readable error live and after reload', async t => {
+  const { history, home } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  const body = JSON.stringify({ message: 'This model is not available in your subscription tier', code: 'forbidden' });
+  const auth = () => ({ client: { chat: { stream: async () => { throw Object.assign(new Error('Status 403. Body: ' + body), { statusCode: 403, body }); } } }, close: async () => {} }) as unknown as ReturnType<typeof mistralSdkAuth.createClient>;
+  const runtime = createMistralSdkRuntime(history, async () => [], home, auth, fixtureTools(async () => ''));
+  const sessionId = 'mistral-sdk-abonnement';
+  await assert.rejects(runtime.run('Bonjour', { sessionId }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context),
+    (error: Error) => /abonnement/.test(error.message) && !error.message.includes('{'));
+  const content = events.find(event => event.kind === 'error')?.content;
+  assert.match(content ?? '', /abonnement/);
+  assert.equal((await history.load(sessionId))?.transcript.at(-1)?.content, content);
+});
+
+test('an interrupted stream closes and retains the partial assistant text for the next turn', async t => {
+  const { history, home } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  const sessionId = 'mistral-sdk-partiel';
+  const runtime = createMistralSdkRuntime(history, async () => [], home, fixtureClient([[{ content: 'Début.' }, { content: 'Suite.' }]]), fixtureTools(async () => ''));
+  await runtime.run('Commencer', { sessionId }, { userId: 1, send(event) {
+    const message = event as NormalizedMessage;
+    events.push(message);
+    if (message.kind === 'stream_delta') void runtime.abort(sessionId);
+  } }, context);
+  assert.deepEqual(events.map(event => event.kind), ['stream_delta', 'stream_end', 'text', 'complete']);
+  assert.equal(events.at(-2)?.content, 'Début.');
+  const record = await history.load(sessionId);
+  assert.deepEqual(record?.messages.at(-1), { role: 'assistant', content: 'Début.' });
+  assert.equal(record?.transcript.find(event => event.kind === 'text' && event.role === 'assistant')?.content, 'Début.');
+});
+
+test('an invalid model name shows a readable error instead of the raw API body', async t => {
+  const { history, home } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  const body = JSON.stringify({ object: 'error', message: 'Invalid model: modele-fictif', type: 'invalid_model' });
+  const auth = () => ({ client: { chat: { stream: async () => { throw Object.assign(new Error('Status 400. Body: ' + body), { statusCode: 400, body }); } } }, close: async () => {} }) as unknown as ReturnType<typeof mistralSdkAuth.createClient>;
+  const runtime = createMistralSdkRuntime(history, async () => [], home, auth, fixtureTools(async () => ''));
+  await assert.rejects(runtime.run('Bonjour', { sessionId: 'mistral-sdk-modele' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context),
+    (error: Error) => /ne connaît pas ce modèle/.test(error.message) && !error.message.includes('{'));
+  assert.match(events.find(event => event.kind === 'error')?.content ?? '', /Choisissez un modèle Mistral/);
 });

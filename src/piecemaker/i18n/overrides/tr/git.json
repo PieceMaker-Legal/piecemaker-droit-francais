@@ -1,0 +1,11 @@
+{
+  "panel": {
+    "selectProject": "Sürüm kontrolünü görmek için bir dava seçin"
+  },
+  "errorState": {
+    "noRepoDescription": "Bu dava henüz bir git deposu değil. Değişiklikleri izlemek ve sürüm kontrolünü kullanmak için bir depo başlatın."
+  },
+  "remove": {
+    "description": "{{branch}} için çalışma ağacı kaldırılsın mı? Klasörü silinir ve bağlı dava arşivlenir — sohbet oturumları geri getirilebilir kalır."
+  }
+}

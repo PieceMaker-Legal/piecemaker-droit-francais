@@ -1,0 +1,11 @@
+{
+  "panel": {
+    "selectProject": "选择一个案件以查看源代码管理"
+  },
+  "errorState": {
+    "noRepoDescription": "此案件还不是 git 仓库。初始化一个仓库即可开始跟踪更改并使用源代码管理功能。"
+  },
+  "remove": {
+    "description": "要移除 {{branch}} 的工作树吗？其文件夹将被删除，关联的案件会被归档 — 聊天会话仍可恢复。"
+  }
+}

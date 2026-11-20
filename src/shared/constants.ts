@@ -139,6 +139,7 @@ export const MCP_PROVIDER_NAMES: Record<McpProvider, string> = {
   codex: 'Codex',
   mistral: 'Mistral',
   opencode: 'OpenCode',
+  hermes: 'Hermes',
 };
 
 /** Scopes each provider can install an MCP server into; drives the scope selector and validation. */
@@ -148,6 +149,7 @@ export const MCP_SUPPORTED_SCOPES: Record<McpProvider, McpScope[]> = {
   codex: ['user', 'project'],
   mistral: ['user', 'project'],
   opencode: ['user', 'project'],
+  hermes: ['user', 'project'],
 };
 
 /** Transports each provider can talk to an MCP server over; drives the transport selector and validation. */
@@ -157,10 +159,18 @@ export const MCP_SUPPORTED_TRANSPORTS: Record<McpProvider, McpTransport[]> = {
   codex: ['stdio', 'http'],
   mistral: ['stdio', 'http'],
   opencode: ['stdio', 'http'],
+  hermes: ['stdio', 'http'],
 };
 
 /** Transports offered when configuring a global (provider-agnostic) MCP server. */
 export const MCP_GLOBAL_SUPPORTED_TRANSPORTS: McpTransport[] = ['stdio', 'http'];
+
+/**
+ * Tool name the backend gives an MCP server's request for input ("elicitation") when it
+ * forwards it as a permission request. The permission banner draws it with the elicitation
+ * panel, and the composer steps aside while one is open, as it does for a question.
+ */
+export const MCP_ELICITATION_TOOL_NAME = 'McpElicitation';
 
 /** Whether a provider honours an MCP server's working-directory setting; the form hides the field when it does not. */
 export const MCP_SUPPORTS_WORKING_DIRECTORY: Record<McpProvider, boolean> = {
@@ -169,6 +179,7 @@ export const MCP_SUPPORTS_WORKING_DIRECTORY: Record<McpProvider, boolean> = {
   codex: true,
   mistral: false,
   opencode: false,
+  hermes: false,
 };
 
 // ---------------------------
@@ -240,4 +251,18 @@ export const PROVIDER_PERMISSION_PREFERENCE_KEYS: Record<LLMProvider, UserPrefer
   codex: 'codexPermissions',
   mistral: 'mistralPermissions',
   opencode: 'opencodePermissions',
+  hermes: 'hermesPermissions',
 };
+
+// ---------------------------
+
+//----------------- KEYBOARD ESCAPE LAYERS ------------
+
+/**
+ * Matches an open layer that dismisses itself on Escape: a menu, a modal
+ * dialog, or any overlay marked with `data-escape-layer`. Page-wide Escape
+ * handlers (closing the code editor, stopping a running chat turn) check for it
+ * with `document.querySelector` and step aside while one is open, so dismissing
+ * the layer is all that Escape does.
+ */
+export const ESCAPE_LAYER_SELECTOR = '[data-escape-layer], [aria-modal="true"], [role="menu"]';

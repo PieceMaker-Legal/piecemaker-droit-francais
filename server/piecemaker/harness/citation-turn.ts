@@ -155,7 +155,8 @@ export function createCitationTurn(options: {
   sessionId: string;
   store: ReturnType<typeof createCitationStore>;
   codeRoot?: string;
-  recordVerification?: boolean;
+  /** Relecture de l'historique : réutilise les sources du tour enregistrées. */
+  replay?: boolean;
   pieceTitle?: (cwd: string, docId: string) => string;
 }) {
   const calls = new Map<string, string>();
@@ -367,7 +368,7 @@ export function createCitationTurn(options: {
       finished = (async () => {
         const citationText = closeCitationBlockAtEnd(fullText);
         const block = overflow || !citationText.includes(OPEN) ? '' : citationText.slice(citationText.indexOf(OPEN));
-        const replay = options.recordVerification === false;
+        const replay = options.replay === true;
         if (replay && block) {
           const saved = await options.store.readTurnSources(options.sessionId, block);
           if (saved !== null) return saved;
@@ -413,7 +414,6 @@ export function createCitationTurn(options: {
             lines.push(`- [${citation.ref}] ${linkLabel(title)} — [source indisponible](${MISS})`);
           }
         }
-        if (citations.length && options.recordVerification !== false) await options.store.recordVerification(options.sessionId, citations);
         const sources = lines.length ? `\n\n**Sources**\n\n${lines.join('\n')}\n\n${links.join('\n')}` : '';
         if (!replay && block) await options.store.saveTurnSources(options.sessionId, block, sources).catch(() => {});
         return sources;

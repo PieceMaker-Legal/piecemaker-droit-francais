@@ -13,17 +13,8 @@ const { normalizeColumn, readTemplates, upsertTemplate } = await import('../serv
 describe('normalizeColumn', () => {
   const question = { name: 'Montant', prompt: 'Quel est le montant ?' };
 
-  it('keeps the premise kind of a question', () => {
-    expect(normalizeColumn({ ...question, premise: 'single' }).premise).toBe('single');
-    expect(normalizeColumn({ ...question, premise: 'checkpoint' }).premise).toBe('checkpoint');
-  });
-
-  it('drops an unknown premise kind', () => {
-    expect(normalizeColumn({ ...question, premise: 'autre' })).not.toHaveProperty('premise');
-  });
-
-  it('omits the premise key without a premise kind', () => {
-    expect('premise' in normalizeColumn(question)).toBe(false);
+  it('ignores the premise kind that older templates carried', () => {
+    expect('premise' in normalizeColumn({ ...question, premise: 'single' } as never)).toBe(false);
   });
   it('aligne les anciens modèles de nature sur les familles livrées sans modifier les autres questions', () => {
     upsertTemplate({ id: 'inventaire-fictif', name: 'Inventaire fictif', columns: [{ name: 'Nature', prompt: 'Identifier le document.', format: 'tags', tags: ['Autre', 'Jugement'] }, { name: 'Importance', prompt: 'Importance ?', format: 'tags', tags: ['Haute', 'Basse'] }] });

@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { cachedArticle, cachedDecision, keepArticle } from './article-cache.mjs';
-import { catalaDocumentation, testsWithoutAssertion } from './catala-documentation.mjs';
+import { catalaDocumentation, premiseCoverage, testsWithoutAssertion } from './catala-documentation.mjs';
 
 export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'section', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
@@ -147,6 +147,42 @@ export function sourcesDigest(directory, files) {
   const hash = crypto.createHash('sha256');
   for (const file of files) hash.update(`${file.split(path.sep).join('/')}\0`).update(fs.readFileSync(path.join(directory, file))).update('\0');
   return hash.digest('hex');
+}
+
+// Inputs of the program not derived from an OKF premise (errors), and premises of the case index
+// whose fact sets no input of any Catala program of the case (warnings).
+export function premiseLinks(root, name) {
+  const read = (program) => {
+    const directory = path.join(programsRoot(root), program);
+    return sourceFiles(directory).map((file) => ({ name: file, content: fs.readFileSync(path.join(directory, file), 'utf8') }));
+  };
+  const exists = (source) => fs.existsSync(path.join(root, '.piecemaker', 'okf', source.replace(/^okf:\/+/, '')));
+  const own = premiseCoverage(read(name), { exists });
+  const used = new Set(own.used);
+  for (const other of listPrograms(root)) if (other !== name) for (const source of premiseCoverage(read(other), { exists }).used) used.add(source);
+  let premises = [];
+  try { premises = fs.readdirSync(path.join(root, '.piecemaker', 'okf', '_premises')).filter((file) => file.endsWith('.md')).sort(); } catch {}
+  const unlinked = premises.filter((file) => !used.has(`okf:/_premises/${file}`));
+  const located = own.warnings.map((entry) => ({ ...entry, message: `[WARNING] ${entry.message}` }));
+  const elsewhere = [];
+  for (const file of unlinked) {
+    const source = `okf:/_premises/${file}`;
+    const cited = own.mentions.filter((mention) => mention.source === source);
+    if (cited.length) for (const mention of cited) located.push({ ...mention, message: `[WARNING] premise ${source} is cited here, but its fact sets no input of a Catala program. Use it to compute the input it establishes.` });
+    else elsewhere.push(`.piecemaker/okf/_premises/${file}:1: [WARNING] premise ${source} is not used by any Catala program.`);
+  }
+  located.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+  const warnings = [...located.map((entry) => `${entry.file}:${entry.line}: ${entry.message}`), ...elsewhere];
+  return {
+    errors: own.errors.map((entry) => `${entry.file}:${entry.line}: [ERROR] ${entry.message}`),
+    warnings,
+    inputs: own.inputs.length,
+    mentions: own.mentions.length,
+    underived: new Set(own.errors.map((entry) => entry.input)).size,
+    premises: premises.length,
+    used: premises.length - unlinked.length,
+    unlinked,
+  };
 }
 
 function isTestFile(directory, file) {
@@ -326,10 +362,17 @@ async function verifier(context, program, flags = {}) {
     return entry;
   };
   const contents = files.map((file) => ({ name: file, content: fs.readFileSync(path.join(program.directory, file), 'utf8') }));
+  const contract = readJson(path.join(program.directory, 'tache.json'))?.type === 'transactional';
   await record('documentation', 'Titres, sources juridiques des règles, faits justifiés, ouverture des blocs', async () => {
-    const errors = contents.flatMap(({ name, content }) => catalaDocumentation(content, { test: /^test_/.test(path.basename(name)) }).errors.map((error) => `${name}:${error.line}: ${error.message}`));
+    const errors = contents.flatMap(({ name, content }) => catalaDocumentation(content, { test: /^test_/.test(path.basename(name)), contract }).errors.map((error) => `${name}:${error.line}: ${error.message}`));
     errors.push(...taskErrors(program.directory, files).map((message) => `tache.json:1: ${message}`));
     return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
+  });
+  await record('premisses', 'Inputs derived from OKF premises', async () => {
+    if (contract) return { passed: true, exit_code: 0, message: 'Contrat : les cas de figure posent des hypothèses ; aucune prémisse n’est exigée.' };
+    const links = premiseLinks(program.root, program.name);
+    const message = `${links.inputs - links.underived}/${links.inputs} input(s) derived from OKF premises; ${links.used}/${links.premises} premise(s) of the case index set an input.`;
+    return { passed: !links.errors.length, exit_code: links.errors.length ? 1 : 0, message, errors: links.errors, warnings: links.warnings };
   });
   const missing = (message) => ({ exit_code: null, passed: false, status: 'missing', message });
   const blocked = (message) => ({ exit_code: null, passed: false, status: 'blocked', message });
@@ -417,24 +460,24 @@ async function verifier(context, program, flags = {}) {
       if (!context.python || !context.credentials) return missing(!context.python ? 'Python partagé absent.' : 'Identifiants PISTE absents.');
       await catleg(context, program, { au: flags.au });
       const report = readJson(path.join(program.directory, 'resultats', 'catleg.json'));
-      return { passed: report.passed, message: report.fichiers.filter((file) => !file.passed && !file.skipped).flatMap((file) => file.messages).join(' · ') };
+      return { passed: report.passed, message: report.message ?? report.fichiers.filter((file) => !file.passed && !file.skipped).flatMap((file) => file.messages).join(' · ') };
     }),
     record('citations', 'Contrôle des citations PieceMaker', async () => {
       if (!context.citations) return missing('Contrôle de citations indisponible : serveur PieceMaker requis.');
       if (cited.error) throw cited.error;
-      const report = cited;
+      const report = contract && !cited.results?.length ? { ...cited, passed: true, status: 'passed', message: 'Aucun texte externe cité : les clauses figurent dans le programme.' } : cited;
       writeResult(program.directory, 'citations.json', { ...report, sources_sha256: digest, started_utc: started, finished_utc: context.now() });
       return { passed: report.passed, status: report.status, message: [report.message, ...(report.warnings ?? []), ...(report.results ?? []).flatMap((result) => result.mention ? [`${result.label || result.target} : ${result.mention}`] : [])].join(' · ') };
     }),
   ]);
   const changed = digest !== sourcesDigest(program.directory, sourceFiles(program.directory));
   if (changed) { checks.push({ name: 'sources', command: '', exit_code: 1, seconds: 0, passed: false, status: 'blocked', message: 'Code modifié pendant la vérification : relancez verifier.' }); writeResult(program.directory, 'explication.dot', ''); }
-  const order = ['documentation', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
+  const order = ['documentation', 'premisses', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
   checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed), sources_sha256: digest, checks };
   writeResult(program.directory, 'verification.json', report);
   const labels = { passed: 'ok', failed: 'échec', blocked: 'bloqué', missing: 'non effectué' };
-  return [`Programme ${program.name} : ${report.passed ? 'vérifié' : 'à corriger'}.`, ...checks.map((entry) => `- ${entry.name} : ${labels[entry.status]}${entry.message ? ` — ${entry.message}` : ''}${entry.files?.length ? ` (${entry.files.join(', ')})` : ''}${entry.errors?.length ? `\n  ${entry.errors.join('\n  ')}` : ''}`), `Détail : .piecemaker/catala/${program.name}/resultats/`].join('\n');
+  return [`Programme ${program.name} : ${report.passed ? 'vérifié' : 'à corriger'}.`, ...checks.map((entry) => `- ${entry.name} : ${labels[entry.status]}${entry.message ? ` — ${entry.message}` : ''}${entry.files?.length ? ` (${entry.files.join(', ')})` : ''}${entry.errors?.length ? `\n  ${entry.errors.join('\n  ')}` : ''}${entry.warnings?.length ? `\n  ${entry.warnings.join('\n  ')}` : ''}`), `Détail : .piecemaker/catala/${program.name}/resultats/`].join('\n');
 }
 
 async function formatSources(context, program, files) {
@@ -775,9 +818,12 @@ async function catleg(context, program, flags) {
     const skipped = Boolean(marker) && !cited.length && !articles.length;
     results.push({ fichier: file, exit_code: result.code, passed: Boolean(marker) && checked.length > 0 && versions.every((version) => version.valide === true) && !differences.length && !/Could not retrieve article/.test(output), skipped, articles: checked, versions, messages });
   }
-  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), dates_reference: dates, origine_date: origine, passed: results.some((entry) => entry.articles.length) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), fichiers: results };
+  // Un contrat peut ne citer aucun article de loi : ses clauses ne relèvent pas de Légifrance.
+  const contract = readJson(path.join(program.directory, 'tache.json'))?.type === 'transactional';
+  const statuteFree = contract && results.length > 0 && results.every((entry) => entry.skipped);
+  const report = { started_utc: started, finished_utc: context.now(), programme: program.name, date_controle: started.slice(0, 10), dates_reference: dates, origine_date: origine, passed: (statuteFree || results.some((entry) => entry.articles.length)) && results.filter((entry) => !entry.skipped).every((entry) => entry.passed), ...(statuteFree ? { message: 'Contrat sans article de loi cité : les clauses ne relèvent pas de Légifrance.' } : {}), fichiers: results };
   writeResult(program.directory, 'catleg.json', report);
-  const lines = results.map((entry) => `- ${entry.fichier} : ${entry.skipped ? 'sans article cité, non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s), en vigueur au ${dates.join(', ')}` : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
+  const lines = results.map((entry) => `- ${entry.fichier} : ${entry.skipped ? contract ? 'aucun article de loi cité (clauses du contrat), non contrôlé' : 'sans article cité, non contrôlé' : entry.passed ? `${entry.articles.length} article(s) contrôlé(s), en vigueur au ${dates.join(', ')}` : 'à revoir'}${entry.passed ? '' : `\n  ${entry.messages.join('\n  ')}`}`);
   return [`catleg (vigueur au ${dates.join(', ')}, ${origineLibelle}) :`, ...lines, `Détail : .piecemaker/catala/${program.name}/resultats/catleg.json`].join('\n');
 }
 

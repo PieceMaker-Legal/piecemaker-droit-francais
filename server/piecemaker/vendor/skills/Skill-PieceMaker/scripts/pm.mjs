@@ -5,22 +5,21 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { CATALA_COMMANDS, listPrograms, runCatala, sourceFiles } from './catala.mjs';
-import { scenarioFacts } from './catala-documentation.mjs';
+import { CATALA_COMMANDS, listPrograms, premiseLinks, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
-const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'fichier'];
+const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'artifacts', 'fichier'];
 const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee'];
+const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee', 'revue', 'revues'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer']);
+const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer', 'noms']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
@@ -107,6 +106,12 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       en information, plus en manque ; le manque revient si le document change
   okf examinee <pièce> --retirer
       retire cette marque : la pièce redevient à examiner
+  okf revues
+      revues tabulaires des pièces du dossier et leurs colonnes, à lier à une prémisse
+  okf revue "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index> [--retirer]
+      les lignes positives de la colonne (réponse trouvée, « Oui » pour une question Oui / Non) établissent
+      la prémisse, créée si elle manque ; chaque ligne est une pièce d'auteur agent, humain une fois vérifiée
+      par l'avocat dans la revue ; lues dans la revue à chaque lecture : une revue relancée remonte aussitôt
 
   catala verifier [--au today|AAAA-MM-JJ] [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
@@ -388,6 +393,7 @@ function voletTarget(cwd, volet, review) {
   if (volet === 'bordereau') return { cwd, tab: 'plugin:piecemaker-tampon' };
   if (volet === 'suivi_dossiers') return { cwd, tab: 'plugin:piecemaker-echeances' };
   if (volet === 'catala') return { cwd, tab: 'plugin:piecemaker-catala' };
+  if (volet === 'artifacts') return { cwd, tab: 'plugin:piecemaker-artifacts', review: review || undefined };
   if (volet === 'tabular_review') return { cwd, tab: 'plugin:piecemaker-tabular-review', review: review || undefined };
   return { cwd, tab: 'plugin:piecemaker-dossier', view: volet === 'index' ? 'chronology' : 'general' };
 }
@@ -397,6 +403,7 @@ function panelNoticeLabel(target) {
   if (target.tab === 'plugin:piecemaker-tampon') return 'Bordereau';
   if (target.tab === 'plugin:piecemaker-echeances') return 'Suivi des dossiers';
   if (target.tab === 'plugin:piecemaker-catala') return 'Catala';
+  if (target.tab === 'plugin:piecemaker-artifacts') return target.review ? `Artifacts (${target.review})` : 'Artifacts';
   if (target.tab === 'plugin:piecemaker-tabular-review') {
     if (target.draft) return `Analyse tabulaire (projet ${target.draft})`;
     if (target.review) return `Analyse tabulaire (${target.review})`;
@@ -482,7 +489,7 @@ async function tab(api, positional, cwd, resolved) {
     if (!opened) fail('L’ouverture du fichier n’a pas été confirmée dans PieceMaker.');
     return alreadyOpen ? `Déjà affiché dans le volet de lecture : ${argument}` : `Affiché dans le volet de lecture : ${argument}`;
   }
-  const review = cible === 'tabular_review' && argument ? path.basename(argument) : '';
+  const review = (cible === 'tabular_review' || cible === 'artifacts') && argument ? path.basename(argument) : '';
   const target = voletTarget(resolved, cible, review);
   const request = panelRequest(resolved, target);
   const label = `${cible}${review ? ` (${review})` : ''}`;
@@ -624,21 +631,6 @@ function catalaState(folder, name) {
   return `${(report.checks ?? []).filter((entry) => !entry.passed).length || 1} contrôle(s) en échec`;
 }
 
-function programPremises(folder, name) {
-  const directory = path.join(folder, '.piecemaker', 'catala', name);
-  const exists = (source) => fs.existsSync(path.join(folder, '.piecemaker', 'okf', source.replace(/^okf:\/+/, '')));
-  const conditions = new Set();
-  const settled = new Set();
-  let cited = 0;
-  for (const file of sourceFiles(directory)) {
-    const content = fs.readFileSync(path.join(directory, file), 'utf8');
-    cited += [...content.matchAll(/okf:\/_premises\/\S+\.md/g)].filter((match) => exists(match[0])).length;
-    for (const match of content.matchAll(/^\s*(?:contexte|context)\s+([\p{L}\p{N}_]+)\s+condition\s*$/gmu)) conditions.add(match[1]);
-    for (const match of content.matchAll(/^\s*(?:règle|rule)\s+[\p{L}\p{N}_.]+\.([\p{L}\p{N}_]+)\s+(?:non rempli|not fulfilled)\s*$/gmu)) settled.add(match[1]);
-    for (const fact of scenarioFacts(content, { test: /^test_/.test(path.basename(file)) })) if (fact.source && exists(fact.source)) settled.add(fact.variable.split('.').pop());
-  }
-  return { cited, missing: [...conditions].filter((condition) => !settled.has(condition)) };
-}
 
 async function suiviState(api, folder, suivi) {
   let text;
@@ -679,10 +671,13 @@ async function reasoningPoints(api, folder, manques) {
     if (programs.includes(nom)) {
       add(`Programme Catala (.piecemaker/catala/${nom}/)`, catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
       const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
-      const { cited, missing } = programPremises(folder, nom);
-      const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} condition(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
-      if (defauts || cited) add('Prémisses OKF du programme', defauts, gaps ? 'pm okf verify' : 'skill okf');
-      else add('Prémisses OKF du programme', 'aucune', 'skill okf');
+      const links = premiseLinks(folder, nom);
+      const missing = [...new Set(links.errors.map((error) => error.match(/\[ERROR\] input "([^"]+)"/)?.[1]).filter(Boolean))];
+      const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} entrée(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
+      const detail = gaps ? 'pm okf verify' : missing.length ? `pm catala verifier --programme ${nom}` : 'skill okf';
+      if (defauts) add('Prémisses OKF du programme', defauts, detail);
+      else if (!links.inputs && !links.mentions) add('Prémisses OKF du programme', 'aucune', 'skill okf');
+      else children.push({ ...point(`${numero}.${children.length + 1}`, 'Prémisses OKF du programme', '', '', 2), ...(links.unlinked.length ? { texte: `Prémisses OKF du programme : valide, ${links.unlinked.length} prémisse(s) de l’index sans entrée (alerte) → pm catala verifier --programme ${nom}` } : {}) });
     } else add('Programme Catala', 'à écrire', 'skill catala');
     for (const document of suite?.documents ?? []) {
       const state = documentState(folder, document);
@@ -750,8 +745,8 @@ async function dossier(api, positional, flags, resolved) {
   if (commande === 'classer') {
     const [document, directory] = positional.slice(2);
     if (!document || !directory) usage('dossier classer attend <document> <dossier>.');
-    const stored = fs.existsSync(path.join(project, '.piecemaker', 'arborescence.json')) ? JSON.parse(fs.readFileSync(path.join(project, '.piecemaker', 'arborescence.json'), 'utf8')) : [];
-    const names = stored.map((entry) => String(entry.name));
+    const { dossiers = [] } = await api.tabularIndex(api.tabularFn, { action: 'arborescence', project });
+    const names = dossiers.map((entry) => String(entry.nom));
     if (names.length && !names.some((name) => directory === name || directory.startsWith(`${name}/`))) usage(`dossier classer attend un dossier de l’arborescence : ${names.join(', ')}.`);
     const moved = await api.moveFn({ folder: project, path: document, directory });
     return withNotice(`Classé : ${moved.previous} → ${moved.current}`, await followPanel(api, panelRequest(project, target), target));
@@ -812,6 +807,8 @@ async function okf(api, positional, flags, resolved) {
   }
   if (action === 'ontologie') {
     const { relations, systeme, erreur, proposition, documentTypes = [], types = [], icones = [] } = await api.okfFn({ action, folder });
+    // Noms des relations de l'ontologie scellée, plus les relations système : le schéma de l'outil OkfWrite.
+    if (flags.noms) return JSON.stringify([...new Set([...relations, ...systeme].map((entry) => entry.name).filter((name) => name !== 'mentions'))]);
     return [
       ...(erreur ? [`Attention : ${erreur}`] : []),
       ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}) : ${[...(proposition.relations || []), ...(proposition.documentTypes || [])].map((entry) => entry.name).join(', ')}.`] : []),
@@ -831,6 +828,17 @@ async function okf(api, positional, flags, resolved) {
     if (!flags.retirer && !value(flags.motif)) usage('okf examinee attend --motif "raison", ou --retirer.');
     const examen = await api.okfFn({ action, folder, source: piece, ...(flags.retirer ? { retirer: true } : { motif: String(flags.motif) }) });
     return flags.retirer ? `Examen retiré : ${examen.source} redevient à examiner.` : `Examinée sans lien : ${examen.source} — ${examen.motif}\nLe manque revient si le document change. Annuler : pm okf examinee ${piece} --retirer`;
+  }
+  if (action === 'revues') {
+    const revues = await api.okfFn({ action, folder });
+    if (!revues.length) return 'Aucune revue tabulaire des pièces dans ce dossier.';
+    return revues.map((entry) => [`${entry.fichier} — ${entry.titre}`, ...entry.colonnes.map((column) => `  ${column.index} « ${column.nom} » (${column.format})`)].join('\n')).join('\n');
+  }
+  if (action === 'revue') {
+    const premise = positional[2];
+    if (!premise || !value(flags.fichier) || flags.colonne === undefined || flags.colonne === true) usage('okf revue attend "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index>.');
+    const lien = await api.okfFn({ action, folder, premise, fichier: String(flags.fichier), colonne: String(flags.colonne), ...(flags.retirer ? { retirer: true } : {}) });
+    return flags.retirer ? `Revue déliée : ${lien.fichier} › colonne ${lien.colonne} de ${lien.premise}.` : `Revue liée : ${lien.fichier} › colonne ${lien.colonne} établit ${lien.premise}. Ses lignes positives sont des pièces de la prémisse ; l’avocat les vérifie dans la revue.`;
   }
   const [source, relation, target] = positional.slice(2);
   if (!source || !relation || !target) usage(`okf ${action} attend <source> <relation> <target>.`);

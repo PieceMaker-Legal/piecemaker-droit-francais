@@ -2,10 +2,10 @@ import { DEFAULT_DOCUMENT_TYPES, documentTypeNames, iconSvg } from './document-t
 import type { DocumentType } from './document-types.js';
 import { NODE_KINDS } from './types.js';
 import { nodePosition } from './party-codes.js';
-import type { KnowledgeLink, KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
+import type { KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import type { CompanySearchResult, ScanJob } from './api.js';
 import { ficheLinks } from './okf.js';
-import type { OkfContradiction, OkfError, OkfIndex, OkfView, PendingProposals } from './okf.js';
+import type { OkfIndex, PendingProposals } from './okf.js';
 
 export type Tab = 'general' | 'chronology' | 'graph';
 export type BodaccScanState = {
@@ -263,20 +263,10 @@ export function mappingView(data: ViewData, mappingValidated: string | null = nu
   }).join('')}</div></section>`).join('') || '<div class="pmd-empty">Aucune entité détectée.</div>'}</div><div class="pmd-mapping-footer"><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-close>Fermer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-save-mapping>Enregistrer</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="scan">Relancer l’anonymisation</button>${mappingValidated ? `<span class="pmd-mapping-validated">✓ Validé le ${escapeHtml(new Date(mappingValidated).toLocaleDateString('fr-FR'))}</span>` : '<button class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-validate-mapping>✓ Valider le mapping</button>'}</div></div>`;
 }
 
-export const CUSTOM_NATURE = '__piecemaker_custom_nature__';
-
 export function natureOptionsMarkup(nature: string, types: DocumentType[] = DEFAULT_DOCUMENT_TYPES): string {
   return [...new Set([nature, ...documentTypeNames(types)].filter(Boolean))]
     .sort((left, right) => left.localeCompare(right, 'fr', { sensitivity: 'base' }))
     .map((value) => `<option value="${escapeHtml(value)}" ${value === nature ? 'selected' : ''}>${escapeHtml(value)}</option>`).join('');
-}
-
-export function natureSelectMarkup(node: KnowledgeNode, types?: DocumentType[]): string {
-  return `<select class="pmd-nature-select" data-nature-select="${escapeHtml(node.id)}" aria-label="Nature de ${escapeHtml(node.label)}"><option value="">— Aucune —</option>${natureOptionsMarkup(textValue(node.data.nature), types)}<option value="${CUSTOM_NATURE}">Autre type…</option></select>`;
-}
-
-export function natureInputMarkup(nodeId: string): string {
-  return `<input class="pmd-nature-select" data-nature-input="${escapeHtml(nodeId)}" aria-label="Type de pièce personnalisé" placeholder="Saisissez le type de pièce">`;
 }
 
 /** Nom proposé `AAAA-MM-JJ_<Type>[ - <lieu>]`, vide tant que la date ou le type manque. */
@@ -286,24 +276,6 @@ export function proposedPieceName(date: string, nature: string, localisation: st
   const place = localisation.trim();
   const title = `${type.charAt(0).toLocaleUpperCase('fr')}${type.slice(1)}${place && !/\b[A-Z][A-Z_]*_\d+\b/.test(place) ? ` - ${place}` : ''}`;
   return `${date}_${title.replace(/[\\/:*?"<>|]/g, '-')}`;
-}
-
-function chronologyDateLabel(value: string): string {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  return match ? `${match[3]}/${match[2]}/${match[1]}` : value;
-}
-
-function chronologyFields(node: KnowledgeNode): { label: string; value: string }[] {
-  const fields = Array.isArray(node.data.fields) ? node.data.fields : [];
-  return fields.filter((field): field is { label: string; value: string } => Boolean(field) && typeof field === 'object' && typeof (field as { label?: unknown }).label === 'string' && typeof (field as { value?: unknown }).value === 'string');
-}
-
-const MENTION_FIELD = /^(siren|siret)$/i;
-
-function chronologyMentions(node: KnowledgeNode, related: KnowledgeNode[]): string[] {
-  const mentions = [...new Set([...related.map((entry) => entry.label), textValue(node.data.localisation)].filter(Boolean))];
-  const identifiers = chronologyFields(node).filter((field) => MENTION_FIELD.test(field.label) && field.value && !mentions.includes(field.value));
-  return [...mentions, ...identifiers.map((field) => `${field.label} ${field.value}`)];
 }
 
 function chronologyFolder(node: KnowledgeNode, projectPath: string): string {
@@ -327,51 +299,18 @@ export function linksMarkup(okf: OkfIndex | null, resource: string): string {
   return ficheLinks(okf, resource).map((link) => `<span class="pmd-badge" title="${escapeHtml(link.citation)}">${escapeHtml(`${link.label} ${link.title}`)}</span>`).join('');
 }
 
-function chronologyRow(node: KnowledgeNode, fieldLabels: string[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string, okf: OkfIndex | null): string {
-  const related = links
-    .filter((link) => link.relation === 'mentions' && (link.fromNodeId === node.id || link.toNodeId === node.id))
-    .map((link) => byId.get(link.fromNodeId === node.id ? link.toNodeId : link.fromNodeId))
-    .filter((entry): entry is KnowledgeNode => Boolean(entry && entry.kind !== 'document'));
-  const date = dateFor(node);
-  const fields = chronologyFields(node);
-  const fieldCells = fieldLabels.map((label) => `<td>${escapeHtml(fields.find((field) => field.label === label)?.value ?? '')}</td>`).join('');
-  const nature = textValue(node.data.nature);
-  const title = documentTitle(node, okf, projectPath);
-  return `<tr class="pmd-chronology-row" data-dated="${Boolean(date)}" data-open-document="${escapeHtml(node.id)}" data-chat-pick="${escapeHtml(title)}" data-chat-kind="Document" data-chat-file="${escapeHtml(documentResource(node, projectPath))}"><td class="pmd-chronology-name"><span class="pmd-card-title">${escapeHtml(title)}</span><div class="pmd-nature" data-nature-editor="${escapeHtml(node.id)}"><button type="button" class="pmd-badge pmd-nature-pill${nature ? '' : ' pmd-badge-muted'}" data-edit-nature="${escapeHtml(node.id)}" title="Changer la nature du document">${escapeHtml(nature || 'Nature à renseigner')}</button></div></td><td class="pmd-chronology-date">${escapeHtml(date ? chronologyDateLabel(date) : 'Date non renseignée')}</td><td><div class="pmd-badges">${chronologyMentions(node, related).map((label) => `<span class="pmd-badge">${escapeHtml(label)}</span>`).join('')}</div></td><td>${escapeHtml(chronologyFolder(node, projectPath) || 'Non classé')}</td><td><div class="pmd-badges" data-okf-links="${escapeHtml(documentResource(node, projectPath))}">${linksMarkup(okf, documentResource(node, projectPath))}</div></td>${fieldCells}<td class="pmd-chronology-edit"><button class="pmd-icon-button piecemaker-button piecemaker-button--icon" data-edit-document="${escapeHtml(node.id)}" aria-label="Modifier ${escapeHtml(node.label)}" title="Modifier le document">✎</button></td></tr>`;
-}
-
-export type ChronologySort = { column: 'document' | 'date' | 'classification'; direction: 'ascending' | 'descending' };
-
-function chronologyTable(nodes: KnowledgeNode[], byId: Map<string, KnowledgeNode>, links: KnowledgeLink[], projectPath: string, sort: ChronologySort, okf: OkfIndex | null): string {
-  if (!nodes.length) return '<div class="pmd-empty">Aucun document indexé.</div>';
-  const fieldLabels = [...new Set(nodes.flatMap((node) => chronologyFields(node).map((field) => field.label)))].filter((label) => !MENTION_FIELD.test(label));
-  const heading = (label: string) => `<th scope="col">${escapeHtml(label)}</th>`;
-  const sortHeading = (label: string, column: ChronologySort['column']) => {
-    const direction = sort.column === column ? sort.direction : 'none';
-    const arrow = direction === 'none' ? '↕' : direction === 'ascending' ? '↑' : '↓';
-    const edit = column === 'classification' ? '<button type="button" class="pmd-chronology-heading" data-action="edit-tree" title="Organiser l’arborescence du dossier">Classement ▾</button> ' : '';
-    return `<th scope="col" aria-sort="${direction}">${edit}<button type="button" class="pmd-chronology-heading" data-sort="${column}" aria-label="Trier par ${label.toLowerCase()}">${edit ? '' : label + ' '}${arrow}</button></th>`;
-  };
-  return `<div class="pmd-chronology-scroll"><table class="pmd-chronology-table"><thead><tr>${sortHeading('Document', 'document')}${sortHeading('Date', 'date')}${heading('Mentions')}${sortHeading('Classement', 'classification')}${heading('Liens')}${fieldLabels.map(heading).join('')}<th scope="col"><span class="pmd-sr-only">Modifier</span></th></tr></thead><tbody>${nodes.map((node) => chronologyRow(node, fieldLabels, byId, links, projectPath, okf)).join('')}</tbody></table></div>`;
-}
-
-function okfContradictions(contradictions: OkfContradiction[]): string {
-  if (!contradictions.length) return '';
-  return `<div class="pmd-okf-report" data-okf-report="contradictions"><strong>${contradictions.length} contradiction${contradictions.length > 1 ? 's' : ''} entre pièces</strong><ul>${contradictions.map((entry) => `<li><span class="pmd-okf-premise">${escapeHtml(entry.titre)}</span> <span class="pmd-badges">${entry.valeurs.map((value) => `<span class="pmd-badge">${escapeHtml(value.piece)} : ${escapeHtml(value.valeur)}</span>`).join('')}</span></li>`).join('')}</ul></div>`;
-}
-
-function okfErrors(errors: OkfError[] | null): string {
-  if (!errors) return '';
-  if (!errors.length) return '<div class="pmd-okf-report" data-okf-report="ok">Index vérifié : aucune erreur.</div>';
-  return `<div class="pmd-okf-report" data-okf-report="errors"><strong>${errors.length} erreur${errors.length > 1 ? 's' : ''} dans l’index</strong><ul>${errors.map((entry) => `<li><code>${escapeHtml(entry.fiche)}</code> ${escapeHtml(entry.erreur)}</li>`).join('')}</ul></div>`;
-}
-
-export function graphView(okf: OkfIndex | null, withPremises = false): string {
-  if (!okf) return '<div class="pmd-empty">Index indisponible.</div>';
-  const count = okf.fiches.filter((fiche) => okf.typesGraphe.includes(fiche.type)).length;
-  if (!count) return `<div class="pmd-empty">Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.</div>`;
+export function graphView(okf: OkfIndex | null, showPremises = true): string {
+  const hasDocuments = okf?.fiches.some((fiche) => okf.typesGraphe.includes(fiche.type));
+  const emptyMessage = okf ? `Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.` : 'Index indisponible.';
   const key = (kind: string, label: string) => `<span class="pmd-okf-key">${iconSvg(kind)}${label}</span>`;
-  return `<div class="pmd-toolbar"><div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, ${withPremises ? 'prémisses et ' : ''}parties.</div><span class="pmd-spacer"></span><label class="pmd-okf-toggle"><input type="checkbox" data-okf-premises${withPremises ? ' checked' : ''}> Afficher les prémisses</label><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}</div><div class="pmd-okf-graph-wrap" data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, prémisses et parties : fiches dans .piecemaker/okf/"><button type="button" class="pmd-icon-button pmd-okf-center" data-okf-center title="Centrer le graphe" aria-label="Centrer le graphe">⌖</button><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div></div>`;
+  return `<div class="pmd-okf-graph-wrap"${hasDocuments ? ' data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, prémisses et parties : fiches dans .piecemaker/okf/"' : ''}>
+    ${hasDocuments ? '<div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div>' : `<div class="pmd-empty">${emptyMessage}</div>`}
+    <div class="pmd-okf-legend" role="group" aria-label="Légende du graphe">
+      ${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}
+      <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${showPremises ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="okf-premises" aria-pressed="${showPremises}">Prémisses</button>
+      <a href="#" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</a>
+    </div>
+  </div>`;
 }
 
 export function proposalBanner(proposals?: PendingProposals): string {
@@ -383,20 +322,14 @@ export function proposalBanner(proposals?: PendingProposals): string {
   return `<div class="pmd-proposals" data-proposals role="status"${entries.length ? '' : ' hidden'}><span>L’assistant propose des modifications à examiner.</span>${entries.join('')}</div>`;
 }
 
-export function chronologyView(data: ViewData, projectPath = '', sort: ChronologySort = { column: 'date', direction: 'ascending' }, view: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null }): string {
-  const value = (node: KnowledgeNode) => sort.column === 'date' ? dateFor(node) : sort.column === 'classification' ? chronologyFolder(node, projectPath) : documentTitle(node, data.okf, projectPath);
-  const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
-  const documents = data.graph.nodes.filter((node) => node.kind === 'document').sort((left, right) => {
-    const a = value(left);
-    const b = value(right);
-    if (Boolean(a) !== Boolean(b)) return a ? -1 : 1;
-    const comparison = collator.compare(a, b) || collator.compare(left.label, right.label);
-    return sort.direction === 'ascending' ? comparison : -comparison;
-  });
-  const byId = new Map(data.graph.nodes.map((node) => [node.id, node]));
-  const label = { document: 'Document', date: 'Date', classification: 'Classement' }[sort.column];
+/** L'onglet Index : une seule vue, la revue tabulaire de l'Index (SQLite), montée dans `[data-index-analysis]` avec les liens OKF de chaque pièce. */
+export function chronologyView(proposals?: PendingProposals, chronology = false): string {
   return `
-    <div class="pmd-toolbar"><div class="pmd-subtitle">Tri : ${label} ${sort.direction === 'ascending' ? '↑' : '↓'}</div><span class="pmd-spacer"></span><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="okf-verify" title="Contrôler les fiches, les types et les liens de l’index">Vérifier l’index</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</button><button type="button" class="pmd-button pmd-button-primary piecemaker-button piecemaker-button--black piecemaker-button--sm" data-action="index-analysis">Analyse tabulaire</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
-    ${proposalBanner(view.proposals)}${okfErrors(view.errors)}${okfContradictions(view.contradictions || [])}
-    ${chronologyTable(documents, byId, data.graph.links, projectPath, sort, data.okf ?? null)}`;
+    ${proposalBanner(proposals)}
+    <div class="pmd-index-analysis" data-index-analysis></div>
+    <div class="pmd-okf-legend" role="group" aria-label="Légende de l’index">
+      <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${chronology ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="index-chronology" aria-pressed="${chronology}" title="Afficher seulement les pièces, de la plus ancienne à la plus récente">Chronologie</button>
+      <a href="#" data-action="edit-tree" title="Organiser l’arborescence du dossier (colonne Classement)">Arborescence</a>
+      <a href="#" data-action="edit-document-types">Types d'actes</a>
+    </div>`;
 }

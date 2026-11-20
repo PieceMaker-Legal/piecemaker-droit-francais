@@ -61,7 +61,8 @@ function issuedCommand(payload) {
   if (payload?.tool_name === 'Bash') return String(Array.isArray(input.command) ? input.command.join(' ') : input.command || '');
   if (payload?.tool_name === OKF_TOOL) {
     return (Array.isArray(input.writes) ? input.writes : []).map(({ action, source, reason, remove, ...link }) => {
-      try { return `pm ${pmArgv('index', action, action === 'mark_examined' ? { document: source, reason, remove } : { source, ...link }).join(' ')}`; } catch { return ''; }
+      const args = action === 'mark_examined' ? { document: source, reason, remove } : action === 'link_review' ? { premise: source, file: link.file, column: link.column === undefined ? undefined : String(link.column), remove } : { source, ...link };
+      try { return `pm ${pmArgv('index', action, args).join(' ')}`; } catch { return ''; }
     }).join('; ');
   }
   if (!FEATURE_TOOL.test(String(payload?.tool_name || '')) || input.action !== 'run') return '';

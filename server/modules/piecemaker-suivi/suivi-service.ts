@@ -10,6 +10,7 @@ import type { SuiviDossier, SuiviSnapshot } from '../../../shared/piecemaker-sui
 
 import { isLegalDate } from './legal-period.js';
 import type { SourceConnectors, SourceInfo } from './sources.js';
+import { describeRappels, localToday } from './suivi-rappels.js';
 import { describeSuivi, SUIVI_LEGACY_FILE, SUIVI_NAME, suiviPath, verifySuivi } from './suivi.js';
 import type { SuiviMark } from './suivi.js';
 
@@ -159,6 +160,9 @@ export function createSuiviService(getDatabase: () => Database.Database, connect
     verify,
     all,
     mark,
+    async rappels(jours = 7) {
+      return describeRappels(await all(), localToday(), jours);
+    },
     async command(cwd: string, input: { commande?: unknown; suivi?: unknown }): Promise<string> {
       if (input.commande !== undefined && input.commande !== 'verifier') throw new TypeError('Commande : verifier.');
       const fichier = await target(projectId(cwd).root, input.suivi);
@@ -185,6 +189,12 @@ export function createSuiviRouter(service: ReturnType<typeof createSuiviService>
 
 export function createSuiviLocalRouter(service: ReturnType<typeof createSuiviService>, isLoopback: (request: express.Request) => boolean, board: { command(input: Record<string, unknown>): Promise<string> }) {
   const router = express.Router();
+  router.get('/suivi/rappels', (request, response) => {
+    if (!isLoopback(request)) { response.status(403).json({ erreur: 'Réservé aux appels locaux.' }); return; }
+    const jours = Number(request.query.jours ?? 7);
+    if (!Number.isInteger(jours) || jours < 0 || jours > 90) { response.status(400).json({ erreur: 'jours : entier de 0 à 90.' }); return; }
+    service.rappels(jours).then((texte) => response.type('text/plain').send(texte), (error: unknown) => response.status(500).json({ erreur: error instanceof Error ? error.message : 'Rappels indisponibles.' }));
+  });
   router.post('/suivi', express.json(), (request, response) => {
     if (!isLoopback(request)) { response.status(403).json({ erreur: 'Réservé aux appels locaux.' }); return; }
     const { cwd, ...input } = request.body ?? {};

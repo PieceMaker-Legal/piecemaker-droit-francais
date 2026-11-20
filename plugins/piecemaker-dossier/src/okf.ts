@@ -1,19 +1,20 @@
+import { requestJson } from '../../../src/shared/authToken.js';
+
 import { iconSvg } from './document-types.js';
 import type { DocumentType } from './document-types.js';
 
 export type OkfRelation = { relation: string; target: string; citation: string; origin: string; at?: string; value?: string };
-export type OkfFiche = { id: string; type: string; title: string; titleCitation?: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; generated?: { by: string; at: string }; examen?: { motif: string; by: string; at: string } | null; relations: OkfRelation[] };
+export type OkfReviewRow = { row: string; label: string; resource: string; value: string; citation: string; author: 'human' | 'agent'; checkedAt?: string };
+export type OkfReviewLink = { fichier: string; colonne: number; titre: string; question: string; by: string; at: string; lignes: OkfReviewRow[]; erreur?: string };
+export type OkfReviewChoice = { fichier: string; titre: string; colonnes: Array<{ index: number; nom: string; format: string }> };
+export type OkfFiche = { id: string; type: string; title: string; titleCitation?: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; generated?: { by: string; at: string }; examen?: { motif: string; by: string; at: string } | null; revues?: OkfReviewLink[]; relations: OkfRelation[] };
 export type OkfRelationLabel = { name: string; label: string; inverse: string };
 export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[]; documentTypes?: DocumentType[] };
 export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
 export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
 export type OntologyProposal = { relations?: OntologyRelation[]; documentTypes?: DocumentType[]; motif: string; date: string };
 export type OntologyState = { relations: OntologyRelation[]; documentTypes?: DocumentType[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: OntologyProposal | null };
-export type OkfError = { fiche: string; erreur: string };
-export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
-export type OkfReport = { erreurs: OkfError[]; contradictions: OkfContradiction[] };
 export type PendingProposals = { ontologie: number; arborescence: number };
-export type OkfView = { index: OkfIndex | null; errors: OkfError[] | null; contradictions?: OkfContradiction[]; proposals?: PendingProposals };
 export type OkfLink = { source: string; relation: string; target: string; citation?: string; value?: string };
 
 export const PREMISE_TYPE = 'Premise';
@@ -26,21 +27,15 @@ export function relationLabel(index: OkfIndex | null, name: string, incoming = f
   return (incoming ? entry?.inverse : entry?.label) || (incoming ? INCOMING_LABELS : RELATION_LABELS)[name] || name;
 }
 
-async function request<T>(path: string, payload?: unknown, method = 'POST'): Promise<T> {
-  const token = localStorage.getItem('auth-token');
-  const headers = { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(payload ? { 'Content-Type': 'application/json' } : {}) };
-  const response = await fetch(`/api/piecemaker/okf${path}`, payload ? { method, headers, body: JSON.stringify(payload) } : { method: method === 'POST' ? 'GET' : method, headers });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.error || `Index OKF indisponible (${response.status}).`);
-  return body as T;
-}
+const request = <T>(path: string, payload?: unknown, method?: string): Promise<T> => requestJson<T>(`/api/piecemaker/okf${path}`, payload, method);
 
 export const okfApi = {
   read: (projectId: string) => request<OkfIndex>(`?projectId=${encodeURIComponent(projectId)}`),
   rebuild: (projectId: string) => request<{ written: number; removed: number }>('/rebuild', { projectId }),
-  verify: (projectId: string) => request<OkfReport>(`/verify?projectId=${encodeURIComponent(projectId)}`),
   link: (projectId: string, link: OkfLink) => request<OkfLink>('/link', { projectId, ...link }),
   unlink: (projectId: string, link: OkfLink) => request<OkfLink>('/unlink', { projectId, ...link }),
+  reviews: (projectId: string) => request<{ revues: OkfReviewChoice[] }>(`/revues?projectId=${encodeURIComponent(projectId)}`),
+  linkReview: (projectId: string, premise: string, fichier: string, colonne: number, retirer = false) => request<{ premise: string; fichier: string; colonne: number }>('/revue', { projectId, premise, fichier, colonne, ...(retirer ? { retirer: true } : {}) }),
   ontology: (projectId: string) => request<OntologyState>(`/ontologie?projectId=${encodeURIComponent(projectId)}`),
   saveOntology: (projectId: string, relations: OntologyRelation[]) => request<OntologyState>('/ontologie', { projectId, relations }, 'PUT'),
   saveTypes: (projectId: string, documentTypes: DocumentType[]) => request<OntologyState>('/types', { projectId, documentTypes }, 'PUT'),
@@ -87,10 +82,14 @@ export function graphElements(index: OkfIndex, withPremises = true): Array<{ dat
   ];
 }
 
-export function premiseEstablishers(index: OkfIndex, premiseId: string): Array<{ piece: string; resource: string; value: string; citation: string; origin: string; at?: string }> {
-  return index.fiches.flatMap((fiche) => fiche.relations
+export function premiseEstablishers(index: OkfIndex, premiseId: string): Array<{ piece: string; resource: string; value: string; citation: string; origin: string; at?: string; author?: 'human' | 'agent'; review?: string }> {
+  const linked = index.fiches.flatMap((fiche) => fiche.relations
     .filter((entry) => entry.relation === 'states' && entry.target === premiseId)
     .map((entry) => ({ piece: fiche.title, resource: fiche.resource, value: entry.value || '', citation: entry.citation, origin: entry.origin, at: entry.at })));
+  const reviewed = (index.fiches.find((fiche) => fiche.id === premiseId)?.revues || []).flatMap((review) => review.lignes.map((row) => ({
+    piece: index.fiches.find((fiche) => fiche.resource === row.resource)?.title || row.label, resource: row.resource, value: row.value, citation: row.citation, origin: 'piecemaker/tabular-review', at: row.checkedAt, author: row.author, review: review.titre,
+  })));
+  return [...linked, ...reviewed];
 }
 
 export function premiseParties(index: OkfIndex, premiseId: string): OkfFiche[] {
@@ -102,12 +101,6 @@ export function partyPremises(index: OkfIndex | null, code: string): OkfFiche[] 
   const party = index?.fiches.find((fiche) => fiche.type === PARTY_TYPE && fiche.title === code);
   if (!party) return [];
   return premises(index).filter((fiche) => fiche.relations.some((entry) => entry.relation === 'involves' && entry.target === party.id));
-}
-
-export function premiseReviewDraft(index: OkfIndex, premiseId: string, project: string) {
-  const premise = index.fiches.find((fiche) => fiche.id === premiseId);
-  if (!premise) return null;
-  return { project, title: premise.title, templateName: '', columns: [{ name: premise.title, prompt: premise.description || premise.title, format: 'text', premise: premise.single ? 'single' : 'checkpoint' }], rows: [] };
 }
 
 export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: number }>, gap: number, gapY = gap, rounds = 300): void {

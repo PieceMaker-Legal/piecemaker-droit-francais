@@ -9,7 +9,7 @@ type ProviderAuthStatusByProvider = Record<AgentProvider, ProviderAuthStatus>;
 
 type AgentsSettingsTabProps = {
   providerAuthStatus: ProviderAuthStatusByProvider;
-  onProviderLogin: (provider: AgentProvider) => void;
+  onProviderLogin: (provider: AgentProvider, customCommand?: string, customTitle?: string) => void;
   claudePermissions: ClaudePermissionsState;
   onClaudePermissionsChange: (value: ClaudePermissionsState) => void;
   cursorPermissions: CursorPermissionsState;
@@ -36,25 +36,27 @@ export default function AgentsSettingsTab({
   const visibleCategories = useMemo<AgentCategory[]>(() => (
     selectedAgent === 'opencode'
       ? ['account', 'permissions', 'mcp']
-      : ['account', 'permissions', 'mcp', 'skills']
+      : selectedAgent === 'hermes'
+        ? ['account', 'gateway', 'mcp', 'skills']
+        : ['account', 'permissions', 'mcp', 'skills']
   ), [selectedAgent]);
 
   const visibleAgents = useMemo<AgentProvider[]>(() => {
-    return ['claude', 'cursor', 'codex', 'mistral', 'opencode'];
+    return ['claude', 'cursor', 'codex', 'mistral', 'opencode', 'hermes'];
   }, []);
 
   const agentContextById = useMemo<AgentContextByProvider>(() => ({
     claude: {
       authStatus: providerAuthStatus.claude,
-      onLogin: () => onProviderLogin('claude'),
+      onLogin: (customCommand, customTitle) => onProviderLogin('claude', customCommand, customTitle),
     },
     cursor: {
       authStatus: providerAuthStatus.cursor,
-      onLogin: () => onProviderLogin('cursor'),
+      onLogin: (customCommand, customTitle) => onProviderLogin('cursor', customCommand, customTitle),
     },
     codex: {
       authStatus: providerAuthStatus.codex,
-      onLogin: () => onProviderLogin('codex'),
+      onLogin: (customCommand, customTitle) => onProviderLogin('codex', customCommand, customTitle),
     },
     mistral: {
       authStatus: providerAuthStatus.mistral,
@@ -62,7 +64,11 @@ export default function AgentsSettingsTab({
     },
     opencode: {
       authStatus: providerAuthStatus.opencode,
-      onLogin: () => onProviderLogin('opencode'),
+      onLogin: (customCommand, customTitle) => onProviderLogin('opencode', customCommand, customTitle),
+    },
+    hermes: {
+      authStatus: providerAuthStatus.hermes,
+      onLogin: (customCommand, customTitle) => onProviderLogin('hermes', customCommand, customTitle),
     },
   }), [
     onProviderLogin,
@@ -71,6 +77,7 @@ export default function AgentsSettingsTab({
     providerAuthStatus.cursor,
     providerAuthStatus.mistral,
     providerAuthStatus.opencode,
+    providerAuthStatus.hermes,
   ]);
 
   useEffect(() => {

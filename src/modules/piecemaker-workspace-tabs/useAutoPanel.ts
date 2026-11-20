@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { readWorkspaceContext } from '@/modules/piecemaker-context-suggestions';
-import { autoPanelTarget, draftFromResult, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
+import { OPEN_PANEL_EVENT } from '@/modules/piecemaker-workspace-tabs/requestWorkspacePanel';
+import { artifactFromResult, autoPanelTarget, draftFromResult, isArtifactPublish, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import type { AutoPanelTarget } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import { closeInEditor, openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import { showPlan } from '@/piecemaker/editor-tabs/planCalls';
@@ -26,6 +27,9 @@ const TABULAR_REVIEW_SHOW_EVENT = 'piecemaker:tabular-review-show';
 const TABULAR_REVIEW_SHOW_KEY = '__piecemakerTabularReviewShow';
 const TAMPON_SHOW_EVENT = 'piecemaker:tampon-show';
 const TAMPON_SHOW_KEY = '__piecemakerTamponShow';
+const ARTIFACTS_TAB: AppTab = 'plugin:piecemaker-artifacts';
+const ARTIFACTS_SHOW_EVENT = 'piecemaker:artifacts-show';
+const ARTIFACTS_SHOW_KEY = '__piecemakerArtifactsShow';
 
 type AutoPanelState = {
   sessionId: string | null;
@@ -67,9 +71,28 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
   });
 
   useEffect(() => {
+    const open = (event: Event) => {
+      const tab = (event as CustomEvent<{ tab?: unknown }>).detail?.tab;
+      if (typeof tab === 'string') state.current.openTab(tab as AppTab);
+    };
+    window.addEventListener(OPEN_PANEL_EVENT, open);
+    return () => window.removeEventListener(OPEN_PANEL_EVENT, open);
+  }, []);
+
+  useEffect(() => {
     const seen = new Set<string>();
     const awaitingDraft = new Set<string>();
+    const awaitingArtifact = new Set<string>();
     return subscribe((event) => {
+      if (event.kind === 'tool_result' && typeof event.toolId === 'string' && awaitingArtifact.delete(event.toolId)) {
+        const artifact = artifactFromResult(event.content);
+        if (artifact) {
+          (window as unknown as PendingWindow)[ARTIFACTS_SHOW_KEY] = { project: state.current.projectPath, artifact, preserveReview: true };
+          state.current.openTab(ARTIFACTS_TAB);
+          window.dispatchEvent(new Event(ARTIFACTS_SHOW_EVENT));
+        }
+        return;
+      }
       if (event.kind === 'tool_result' && typeof event.toolId === 'string' && awaitingDraft.delete(event.toolId)) {
         const draft = draftFromResult(event.content);
         if (draft) show({ kind: 'tabular-review', review: null, draft }, state.current, event.toolId);
@@ -83,6 +106,7 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
       if (toolId) seen.add(toolId);
       const sentAt = Date.parse(String(event.timestamp ?? ''));
       if (Number.isFinite(sentAt) && Date.now() - sentAt > MAX_AGE_MS) return;
+      if (toolId && isArtifactPublish(event.toolName, event.toolInput)) awaitingArtifact.add(toolId);
       const target = autoPanelTarget(event.toolName, event.toolInput);
       if (target?.kind === 'tabular-review' && target.awaitDraft && toolId) awaitingDraft.add(toolId);
       if (target) show(target, current, toolId);
@@ -116,6 +140,11 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
             handled = true;
           } else if (request.tab === TAMPON_TAB) {
             show({ kind: 'tampon', reload: true }, state.current, request.id);
+            handled = true;
+          } else if (request.tab === ARTIFACTS_TAB) {
+            (window as unknown as PendingWindow)[ARTIFACTS_SHOW_KEY] = { project: projectPath, artifact: request.review ?? null };
+            state.current.openTab(ARTIFACTS_TAB);
+            window.dispatchEvent(new Event(ARTIFACTS_SHOW_EVENT));
             handled = true;
           } else if (PLAIN_TABS.includes(request.tab as AppTab)) {
             state.current.openTab(request.tab as AppTab);

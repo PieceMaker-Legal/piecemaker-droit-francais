@@ -27,6 +27,11 @@ const { resolveFileRef, saveDocx } = vi.hoisted(() => ({
 
 vi.mock('@/piecemaker/chat/fileRef', () => ({ resolveFileRef }));
 
+vi.mock('@/modules/piecemaker-catala', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/modules/piecemaker-catala')>()),
+  useCatalaUpdates: vi.fn(),
+}));
+
 vi.mock('@/piecemaker/citations/CitationPanel', () => ({
   CitationPanel: ({ token, onClose }: { token: string; onClose: () => void }) => (
     <aside data-testid="citation" data-token={token}><button onClick={onClose}>Fermer la source</button></aside>

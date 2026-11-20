@@ -28,6 +28,8 @@ type ProviderTokenUsageServiceDependencies = {
   getClaudeContextWindow: () => string | undefined;
   getReportedClaudeContextWindow: (providerSessionId: string) => number | undefined;
   isProviderSessionSuperseded: (providerSessionId: string, provider: string) => boolean;
+  /** Whether the session has earlier parts its context was cleared off. */
+  hasClearedContext: (sessionId: string) => boolean;
 };
 
 type TokenUsageResult = {
@@ -96,6 +98,7 @@ const defaultDependencies: ProviderTokenUsageServiceDependencies = {
   getReportedClaudeContextWindow: (providerSessionId) => getReportedClaudeContextWindow(providerSessionId),
   isProviderSessionSuperseded: (providerSessionId, provider) =>
     sessionsDb.isProviderSessionSuperseded(providerSessionId, provider),
+  hasClearedContext: (sessionId) => sessionsDb.getClearedContextSegments(sessionId).length > 0,
 };
 
 /**
@@ -182,7 +185,7 @@ async function findCodexSessionFile(
 }
 
 /** Newest `token_count` snapshot in the given JSONL text, or null when it has none. */
-function findCodexTokenUsage(fileContent: string): TokenUsageResult | null {
+function findCodexTokenUsage(fileContent: string, currentContextOnly = false): TokenUsageResult | null {
   const lines = fileContent.trim().split('\n');
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -195,6 +198,7 @@ function findCodexTokenUsage(fileContent: string): TokenUsageResult | null {
         continue;
       }
 
+      if (currentContextOnly && !(tokenInfo.last_token_usage?.total_tokens > 0 && tokenInfo.model_context_window > 0)) return null;
       let inputTokens = 0;
       let outputTokens = 0;
       let totalTokens = 0;
@@ -407,7 +411,7 @@ export function createProviderTokenUsageService(
      * Resolves all provider-specific storage details from one app-facing
      * session id, then returns the latest usage snapshot for that provider.
      */
-    async getSessionTokenUsage(sessionId: string): Promise<TokenUsageResult> {
+    async getSessionTokenUsage(sessionId: string, currentContextOnly = false): Promise<TokenUsageResult> {
       const session = dependencies.getSessionById(sessionId);
       if (!session) {
         throw new AppError(`Session "${sessionId}" was not found.`, {
@@ -421,10 +425,15 @@ export function createProviderTokenUsageService(
       // stops being true the moment an edit rewinds the conversation off a
       // thread: until the replacement run announces its own id, the fallback
       // would resolve the retired transcript and report the discarded
-      // conversation's usage against an empty one.
+      // conversation's usage against an empty one. A session whose context was
+      // just cleared is in the same place: nothing has run on the new context
+      // yet, so it has used nothing.
       if (
         !session.provider_session_id
-        && dependencies.isProviderSessionSuperseded(sessionId, session.provider)
+        && (
+          dependencies.isProviderSessionSuperseded(sessionId, session.provider)
+          || dependencies.hasClearedContext(sessionId)
+        )
       ) {
         return {
           used: 0,
@@ -478,14 +487,14 @@ export function createProviderTokenUsageService(
         }
 
         const tail = await dependencies.readTextFileTail(sessionFilePath, TOKEN_USAGE_TAIL_BYTES);
-        const tailUsage = findCodexTokenUsage(tail.content);
+        const tailUsage = findCodexTokenUsage(tail.content, currentContextOnly);
         if (tailUsage || tail.isComplete) {
           return tailUsage ?? emptyCodexTokenUsage();
         }
 
         // A tail this large with no token_count row is pathological, but the
         // whole file is still authoritative when it happens.
-        return findCodexTokenUsage(await dependencies.readTextFile(sessionFilePath))
+        return findCodexTokenUsage(await dependencies.readTextFile(sessionFilePath), currentContextOnly)
           ?? emptyCodexTokenUsage();
       }
 
@@ -528,11 +537,11 @@ export function createProviderTokenUsageService(
       if (!claudeEntriesHaveUsage(entries) && !tail.isComplete) {
         entries = parseClaudeUsageEntries(await dependencies.readTextFile(sessionFilePath));
       }
-      return summarizeClaudeTokenUsage(
-        entries,
-        dependencies.getClaudeContextWindow(),
-        dependencies.getReportedClaudeContextWindow(providerSessionId),
-      );
+      const configuredWindow = dependencies.getClaudeContextWindow();
+      const reportedWindow = dependencies.getReportedClaudeContextWindow(providerSessionId);
+      const usage = summarizeClaudeTokenUsage(entries, configuredWindow, reportedWindow);
+      if (currentContextOnly && !reportedWindow && !(Number(configuredWindow) > 0)) return { ...usage, total: undefined };
+      return usage;
     },
   };
 }

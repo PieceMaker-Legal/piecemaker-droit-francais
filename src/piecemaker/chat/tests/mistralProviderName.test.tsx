@@ -14,6 +14,7 @@ const providerModels: Record<LLMProvider, string> = {
   codex: 'gpt-5',
   mistral: 'mistral-medium-3.5',
   opencode: 'default',
+  hermes: 'default',
 };
 
 describe('une session Mistral porte le nom Mistral', () => {

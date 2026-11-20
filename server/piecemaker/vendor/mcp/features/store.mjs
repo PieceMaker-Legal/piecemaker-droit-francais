@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { isView, viewGet, viewList, VIEW_WRITE_HINT } from './vue-dossier.mjs';
+import { isView as isCaseView, viewGet, viewList, VIEW_WRITE_HINT } from './vue-dossier.mjs';
 
 export const LIMITS = { bytes: 256 * 1024, depth: 32, documents: 25000, batch: 50, where: 10, segments: 16, listDefault: 100, listMax: 1000, reply: 4096 };
 const FEATURE_NAME = /^[a-z][a-z0-9_]{0,63}$/;
@@ -21,8 +21,8 @@ export class FeatureDataError extends Error {
 
 const fail = (code, message) => { throw new FeatureDataError(code, message); };
 
-function segmentsOf(feature, docPath, kind) {
-  if (!FEATURE_NAME.test(String(feature || ''))) fail('invalid_argument', `invalid feature name "${feature}".`);
+function checkedSegments(feature, docPath, kind, namePattern = FEATURE_NAME) {
+  if (!namePattern.test(String(feature || ''))) fail('invalid_argument', `invalid name "${feature}".`);
   const segments = String(docPath || '').split('/');
   if (segments.length > LIMITS.segments) fail('invalid_argument', `"${docPath}" has more than ${LIMITS.segments} segments.`);
   for (const segment of segments) {
@@ -149,9 +149,15 @@ function countDocuments(folder) {
   return fs.readdirSync(folder, { withFileTypes: true }).reduce((total, entry) => total + (entry.isDirectory() ? countDocuments(path.join(folder, entry.name)) : entry.name.endsWith('.json') ? 1 : 0), 0);
 }
 
-export function openStore(root) {
-  const base = path.join(root, '.piecemaker', 'features');
+/**
+ * `options` sert au MCP artifacts : `base` (dossier sous la racine), `namePattern` (nom du
+ * propriétaire des données), `views` (collections de lecture du dossier, propres à features).
+ */
+export function openStore(root, { base: baseParts = ['.piecemaker', 'features'], namePattern = FEATURE_NAME, views = true } = {}) {
+  const base = path.join(root, ...baseParts);
   const dataFolder = (feature) => path.join(base, 'data', feature);
+  const isView = (feature, segments) => views && isCaseView(feature, segments);
+  const segmentsOf = (feature, docPath, kind) => checkedSegments(feature, docPath, kind, namePattern);
   const docFile = (feature, segments) => `${path.join(dataFolder(feature), ...segments)}.json`;
 
   function readDoc(feature, segments) {
@@ -271,10 +277,10 @@ export function openStore(root) {
   };
 }
 
-export function openComments(root) {
+export function openComments(root, { base = ['.piecemaker', 'features'], namePattern = FEATURE_NAME } = {}) {
   const fileOf = (feature) => {
-    if (!FEATURE_NAME.test(String(feature || ''))) fail('invalid_argument', `invalid feature name "${feature}".`);
-    return path.join(root, '.piecemaker', 'features', 'comments', `${feature}.json`);
+    if (!namePattern.test(String(feature || ''))) fail('invalid_argument', `invalid name "${feature}".`);
+    return path.join(root, ...base, 'comments', `${feature}.json`);
   };
   const load = (file) => (fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : { threads: [] });
   const mutate = (feature, change) => {

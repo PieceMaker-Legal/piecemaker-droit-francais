@@ -16,13 +16,18 @@ import {
   text,
 } from './bundle.js';
 import { graphTypesOf, readOntology, relationNames } from './ontology.js';
+import type { ReviewAuthor } from './reviews.js';
+import { reviewRowPieces } from './reviews.js';
 
 export const OKF_SCHEME = 'okf:';
-export type PremisePiece = { resource: string; title: string; citation: string; value: string; origin: string };
+export type PremisePiece = { resource: string; title: string; citation: string; value: string; origin: string; author?: ReviewAuthor; review?: string };
 export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[] };
 export type OkfGap = { element: string; manque: string; programmes?: string[]; avocat?: true };
 export type OkfExamined = { element: string; motif: string; by: string; at: string };
 export const EXAMINED = 'examen_sans_lien';
+/** Revues tabulaires liées à une prémisse, dans sa fiche : leurs lignes positives l'établissent. */
+export const REVIEWS = 'revues';
+export const REVIEW_ACTOR = 'piecemaker/tabular-review';
 export const EXAMINE_HINT = 'pm okf examinee <pièce> --motif "…"';
 
 export const fingerprintOf = (projectPath: string, resource: string): string => {
@@ -34,17 +39,34 @@ export const premiseIdOf = (source: string): string => migratedId(`/${source.sli
 
 const live = (concept: Concept, relation: string) => (relationsOf(concept.frontmatter)[relation] || []).filter((entry) => !entry.dismissed);
 
-function evidenceOf(concepts: Concept[], id: string): PremiseEvidence | null {
+export const linkedReviews = (premise: Concept): Array<{ fichier: string; colonne: number }> => (Array.isArray(premise.frontmatter[REVIEWS]) ? premise.frontmatter[REVIEWS] as Array<Record<string, unknown>> : [])
+  .map((entry) => ({ fichier: text(entry?.fichier), colonne: Number(entry?.colonne) }))
+  .filter((entry) => entry.fichier && Number.isInteger(entry.colonne));
+
+/** Les lignes positives des revues liées, lues dans les revues elles-mêmes : chacune est une pièce signée agent ou humain. */
+export function reviewPieces(projectPath: string, premise: Concept, concepts: Concept[]): PremisePiece[] {
+  return linkedReviews(premise).flatMap((link) => reviewRowPieces(projectPath, link.fichier, link.colonne).lignes.map((row) => ({
+    resource: row.resource,
+    title: text(concepts.find((concept) => text(concept.frontmatter.resource) === row.resource)?.frontmatter.title) || row.label,
+    citation: row.citation,
+    value: row.value,
+    origin: REVIEW_ACTOR,
+    author: row.author,
+    review: link.fichier,
+  })));
+}
+
+function evidenceOf(projectPath: string, concepts: Concept[], id: string): PremiseEvidence | null {
   const premise = concepts.find((concept) => concept.id === id && concept.frontmatter.type === PREMISE_TYPE);
   if (!premise) return null;
-  const pieces = concepts.flatMap((concept) => live(concept, STATES)
+  const pieces: PremisePiece[] = concepts.flatMap((concept) => live(concept, STATES)
     .filter((entry) => entry.target === id)
     .map((entry) => ({ resource: text(concept.frontmatter.resource), title: text(concept.frontmatter.title), citation: entry.citation, value: entry.value || '', origin: entry.origin })));
-  return { id, title: text(premise.frontmatter.title), pieces };
+  return { id, title: text(premise.frontmatter.title), pieces: [...pieces, ...reviewPieces(projectPath, premise, concepts)] };
 }
 
 export function premiseEvidence(projectPath: string, source: string): PremiseEvidence | null {
-  return evidenceOf(readBundle(projectPath).filter((concept) => !concept.error), premiseIdOf(source));
+  return evidenceOf(projectPath, readBundle(projectPath).filter((concept) => !concept.error), premiseIdOf(source));
 }
 
 const NUMBER = /-?\d[\d   ]*(?:[.,]\d+)*/;
@@ -103,6 +125,10 @@ export function graphReport(projectPath: string): { manques: OkfGap[]; examinees
       else report(concept.id, `pièce à examiner : aucun lien vers une autre pièce ni prémisse ; si aucun passage ne justifie un lien : ${EXAMINE_HINT}`);
     }
     if (type === PARTY_TYPE && !involved.has(concept.id)) report(concept.id, 'partie sans mention dans une pièce ni prémisse qui la concerne');
+  }
+  for (const premise of premises) for (const piece of reviewPieces(projectPath, premise, concepts)) {
+    stated.add(premise.id);
+    if (piece.value) valued.add(premise.id);
   }
   for (const premise of premises) {
     if (!stated.has(premise.id)) report(premise.id, 'prémisse sans pièce citée');

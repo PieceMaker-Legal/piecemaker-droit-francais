@@ -1,5 +1,6 @@
 import type { Cell, ColumnAction, MarkdownDocument, Review, ReviewRow } from '../shared.js';
-import { classifyColumn, isCellFilled, NOT_FOUND_SUMMARY, REVIEW_FOLDER } from '../shared.js';
+import { classifyColumn, isCellFilled, NOT_FOUND_SUMMARY } from '../shared.js';
+import { isTechnicalPath } from '../../../../server/piecemaker/vendor/piecemaker-plugin/scripts/lib/technical-paths.cjs';
 
 /** Code d'anonymisation → nom réel, tiré du graphe du dossier. */
 export type Pseudonym = { masked: string; real: string };
@@ -62,7 +63,8 @@ export function pieceOf(row: ReviewRow, pieces: CasePiece[]): string | undefined
 /** Changement à appliquer à une ligne, ou `null` s'il n'y a rien à faire. */
 export function plannedChange(review: Review, row: ReviewRow, pseudonyms: Pseudonym[], pieces: CasePiece[] = []): PlannedChange | null {
   const piece = pieceOf(row, pieces);
-  if (!piece) return null;
+  // Une pièce .md convertie, un fichier de `.piecemaker` ou d'un autre dossier technique ne bouge jamais.
+  if (!piece || isTechnicalPath(piece)) return null;
   const extension = piece.match(/\.[^./]+$/)?.[0] ?? '';
   const rawName = depseudonymize(columnValue(review, row, 'rename'), pseudonyms);
   const name = extension && rawName.toLowerCase().endsWith(extension.toLowerCase()) ? rawName.slice(0, -extension.length) : rawName;
@@ -74,7 +76,7 @@ export function plannedChange(review: Review, row: ReviewRow, pseudonyms: Pseudo
     || Boolean(classified) && currentDirectory.normalize('NFC').startsWith(`${classified.normalize('NFC')}/`);
   const change: PlannedChange = { row, piece };
   if (name && name !== currentName) change.name = name;
-  if (directory && !inPlace) change.directory = directory;
+  if (directory && !inPlace && !isTechnicalPath(directory)) change.directory = directory;
   return change.name || change.directory ? change : null;
 }
 
@@ -95,14 +97,15 @@ function knownPaths(review: Review): Set<string> {
   return new Set(review.rows.flatMap((row) => [...(row.piece ? [row.piece] : []), ...row.documents.map((document) => document.source)]));
 }
 
-/** Pièces du dossier absentes de la revue, hors exports des analyses tabulaires. */
+/** Pièces du dossier absentes de la revue, hors dossiers techniques (exports, pièces converties, `.piecemaker`…). */
 export function newPieces(review: Review, pieces: CasePiece[]): CasePiece[] {
   const known = knownPaths(review);
-  return pieces.filter((piece) => !known.has(piece.path) && !(piece.markdown && known.has(piece.markdown)) && piece.path.split('/')[0] !== REVIEW_FOLDER);
+  return pieces.filter((piece) => !known.has(piece.path) && !(piece.markdown && known.has(piece.markdown)) && !isTechnicalPath(piece.path));
 }
 
 export function newNotes(review: Review, documents: MarkdownDocument[], pieces: CasePiece[]): MarkdownDocument[] {
   const known = knownPaths(review);
   const converted = new Set(pieces.map((piece) => piece.markdown));
-  return documents.filter((document) => !known.has(document.path) && !converted.has(document.path));
+  // Les notes sont les .md de l'avocat : jamais les pièces .md converties ni ce qui vit dans un dossier technique.
+  return documents.filter((document) => !known.has(document.path) && !converted.has(document.path) && !isTechnicalPath(document.path));
 }

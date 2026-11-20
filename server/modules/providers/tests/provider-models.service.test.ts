@@ -127,6 +127,7 @@ const createTestService = (options: {
   sessions?: ReturnType<typeof createSessionStore>;
   settings?: ReturnType<typeof createSettingsStore>;
   activeModel?: (provider: LLMProvider, sessionId?: string) => string;
+  servedModel?: (provider: LLMProvider, sessionId: string) => string | null;
   onCatalogRead?: (provider: LLMProvider) => void;
 } = {}) => {
   const catalog = options.catalog ?? createCatalogStore();
@@ -145,6 +146,9 @@ const createTestService = (options: {
         getCurrentActiveModel: async (sessionId) => createCurrentActiveModel(
           options.activeModel?.(provider, sessionId) ?? `${provider}-default`,
         ),
+        ...(options.servedModel
+          ? { getServedModel: async (sessionId: string) => options.servedModel?.(provider, sessionId) ?? null }
+          : {}),
       },
     }),
   });
@@ -393,6 +397,7 @@ test('allowed effort levels come from the provider, not from the built-in models
     cursor: [],
     opencode: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'thinking'],
     mistral: ['none', 'high'],
+    hermes: [],
   };
   for (const [provider, levels] of Object.entries(expectedLevels) as Array<[LLMProvider, string[]]>) {
     assert.deepEqual((await service.getProviderModels(provider)).EFFORT_LEVELS, levels, provider);
@@ -419,6 +424,50 @@ test('duplicate model ids are rejected within one provider', async () => {
     (error) => error instanceof AppError
       && error.code === 'MODEL_ID_ALREADY_EXISTS'
       && error.statusCode === 409,
+  );
+});
+
+test('a custom model whose id later became a built-in is listed once', async () => {
+  const { service, catalog } = createTestService();
+  // Written straight to the store: the service refuses this id today, but the
+  // row predates the built-in when an update ships a model the user added.
+  catalog.createCustomProviderModel('codex', { model: 'Mine', id: 'codex-default' });
+  await service.createCustomModel('codex', { model: 'Other', id: 'other-model' });
+
+  const listed = await service.getProviderModels('codex');
+  assert.deepEqual(
+    listed.OPTIONS.map((option) => [option.value, option.isCustom]),
+    [['codex-default', false], ['other-model', true]],
+  );
+
+  // Only the built-ins hide it: the row comes back with custom-models-only on.
+  const customOnly = await service.setCustomModelsOnly('codex', true);
+  assert.deepEqual(customOnly.OPTIONS.map((option) => option.value), ['codex-default', 'other-model']);
+});
+
+test('a custom model whose id later became a built-in can still be renamed, but not moved onto', async () => {
+  const { service, catalog } = createTestService();
+  const shadowed = catalog.createCustomProviderModel('codex', { model: 'Mine', id: 'codex-default' });
+  const other = await service.createCustomModel('codex', { model: 'Other', id: 'other-model' });
+
+  const renamed = await service.updateCustomModel('codex', shadowed.recordId, {
+    model: 'Renamed',
+    id: 'codex-default',
+  });
+  assert.equal(renamed.model.label, 'Renamed');
+
+  // The exemption covers a row keeping its own id, nothing else: another row
+  // still cannot take that id, and neither can a new one.
+  await assert.rejects(
+    () => service.updateCustomModel('codex', other.model.recordId as number, {
+      model: 'Other',
+      id: 'codex-default',
+    }),
+    (error) => error instanceof AppError && error.code === 'MODEL_ID_ALREADY_EXISTS',
+  );
+  await assert.rejects(
+    () => service.createCustomModel('codex', { model: 'New', id: 'codex-default' }),
+    (error) => error instanceof AppError && error.code === 'MODEL_ID_ALREADY_EXISTS',
   );
 });
 
@@ -585,4 +634,27 @@ test('resolveResumeModel never consults provider-global state', async () => {
 
   assert.equal(model, 'gpt-5.5');
   assert.equal(providerLookups, 0);
+});
+
+test('resolveSessionModel reports the exact model behind an alias when the provider knows it', async () => {
+  const { service } = createTestService({
+    sessions: createSessionStore({ 'session-1': 'default' }),
+    servedModel: () => 'claude-opus-5-5',
+  });
+
+  const resolved = await service.resolveSessionModel('claude', { sessionId: 'session-1' });
+
+  assert.equal(resolved.model, 'default');
+  assert.equal(resolved.servedModel, 'claude-opus-5-5');
+});
+
+test('resolveSessionModel leaves servedModel out when the provider cannot say', async () => {
+  const { service } = createTestService({
+    sessions: createSessionStore({ 'session-1': 'default' }),
+  });
+
+  const resolved = await service.resolveSessionModel('claude', { sessionId: 'session-1' });
+
+  assert.equal(resolved.model, 'default');
+  assert.equal('servedModel' in resolved, false);
 });

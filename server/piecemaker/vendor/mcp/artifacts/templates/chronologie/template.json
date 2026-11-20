@@ -1,0 +1,13 @@
+{
+  "title": "Chronologie",
+  "description": "Frise des événements du dossier, chacun daté et rattaché à sa pièce, construite par un script à partir d'un fichier d'événements.",
+  "intent": "other",
+  "icon": "timeline",
+  "entry": "index.html",
+  "read_first": ["README.md"],
+  "references": ["references/format.md"],
+  "scripts": [
+    { "name": "build", "file": "scripts/build.py", "description": "Lit un fichier d'événements (.json ou .csv) et écrit data.js pour la page.", "args": ["<événements.json|csv>"] }
+  ],
+  "data_files": ["data.js"]
+}

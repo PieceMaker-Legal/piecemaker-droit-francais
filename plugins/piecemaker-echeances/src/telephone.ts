@@ -1,3 +1,4 @@
+import { authenticatedFetch } from '../../../src/shared/authToken.js';
 import { escapeHtml, openModal } from '../../piecemaker-tabular-review/src/client/dom.js';
 
 type Connection = { available: boolean; name?: string; username?: string; url?: string; qr?: string; skill?: boolean; error?: string };
@@ -19,8 +20,7 @@ export function createTelephone(root: HTMLElement) {
       actions: [{ label: 'Fermer', value: 'close' }],
       onMount(dialog) {
         const content = dialog.querySelector<HTMLElement>('[data-telegram-connection]')!;
-        const token = localStorage.getItem('auth-token');
-        void fetch('/api/piecemaker/telegram', { headers: token ? { Authorization: `Bearer ${token}` } : {} }).then(async (response) => {
+        void authenticatedFetch('/api/piecemaker/telegram').then(async (response) => {
           const state = await response.json() as Connection;
           if (!response.ok || !state.available) throw new Error(state.error || 'Le bot ou la mini-app est indisponible.');
           if (!content.isConnected) return;

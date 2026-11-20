@@ -285,7 +285,7 @@ export async function buildPdf(review: Review): Promise<Buffer> {
 
 export async function exportReview(project: string, file: string, format: unknown): Promise<ExportResult> {
   if (format !== 'docx' && format !== 'pdf') throw new UserError('Format d’export non pris en charge.');
-  const review = readReview(project, file);
+  const review = await readReview(project, file);
   const content = format === 'docx' ? buildDocx(review) : await buildPdf(review);
   const filename = `${path.basename(file, '.json')}.${format satisfies ExportFormat}`;
   const target = path.join(reviewDirectory(project), filename);

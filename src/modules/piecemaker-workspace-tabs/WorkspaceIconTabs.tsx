@@ -1,10 +1,10 @@
-import { Folder, MessageSquare, type LucideIcon } from 'lucide-react';
+import { Folder, MessageSquare, PanelRight, type LucideIcon } from 'lucide-react';
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, KeyboardEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PluginIcon, usePlugins } from '@/modules/plugins';
-import { useCloseWorkspacePanel, useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
+import { useCloseWorkspacePanel, useIsAgentSession, useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/context/WorkspacePanelsContext';
 import { WorkspaceMoreMenu } from '@/modules/piecemaker-workspace-tabs/WorkspaceMoreMenu';
 import type { AppTab } from '@/shared/types';
 import { Pill, PillBar, Tooltip } from '@/shared/ui';
@@ -34,6 +34,8 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
   const { plugins } = usePlugins();
   const openPanels = useOpenWorkspacePanels();
   const closePanel = useCloseWorkspacePanel();
+  const isAgentSession = useIsAgentSession();
+  const agentLabel = t('tabs.agent', { defaultValue: 'PieceMaker Agent' });
   const isSelected = (id: AppTab) => id === activeTab || Boolean(openPanels?.includes(id));
   const containerRef = useRef<HTMLDivElement>(null);
   const [availableWidth, setAvailableWidth] = useState(0);
@@ -54,7 +56,7 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
     return () => observer.disconnect();
   }, []);
 
-  const capacity = Math.max(0, Math.floor((availableWidth - 8 + 2) / 36));
+  const capacity = Math.max(0, Math.floor((availableWidth - 8 + 2) / 36) - (isAgentSession ? 1 : 0));
   const visibleCount = Math.min(tabs.length, Math.max(0, capacity - 1));
   const visibleTabs = tabs.slice(0, visibleCount);
   const active = tabs.find((tab) => tab.id === activeTab);
@@ -96,6 +98,22 @@ export function WorkspaceIconTabs({ activeTab, setActiveTab }: WorkspaceIconTabs
           triggerClassName="piecemaker-workspace-icon-tab"
           items={overflowTabs.map((tab) => ({ key: tab.id, label: tab.label, icon: 'plugin' in tab ? pluginMenuIcon(tab.plugin) : tab.icon ?? undefined, onSelect: () => setActiveTab(tab.id) }))}
         />
+        {isAgentSession && (
+          <Tooltip content={agentLabel} position="bottom">
+            <Pill
+              isActive={isSelected('agent')}
+              role="tab"
+              aria-label={agentLabel}
+              aria-selected={isSelected('agent')}
+              tabIndex={-1}
+              onClick={() => closePanel && openPanels?.includes('agent') ? closePanel('agent') : setActiveTab('agent')}
+              onKeyDown={handleKeyDown}
+              className="piecemaker-workspace-icon-tab"
+            >
+              <PanelRight strokeWidth={isSelected('agent') ? 2.2 : 1.8} />
+            </Pill>
+          </Tooltip>
+        )}
       </PillBar>
     </div>
   );

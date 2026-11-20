@@ -23,8 +23,10 @@ Les liens fictifs de l’exemple ne constituent pas des références vérifiées
 
 Au-dessus de chaque fait du scénario, écrivez `## okf:/_premises/<fiche>.md`. La prémisse porte les pièces et leurs citations ; `pm catala verifier` les contrôle.
 
-Le graphe est un arbre lu de gauche à droite : la conclusion, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
-La couleur donne l’état de chaque case : vert pour validé, orange pour à établir ou à justifier, rouge pour non rempli.
+Chaque entrée du champ métier se calcule à partir des faits ainsi justifiés : qualifiez-la par une règle qui lit ces faits, ne la figez pas à `Inconnu`. Le contrôle `premisses` de `pm catala verifier` refuse une entrée qui n'en dérive pas, et alerte sur chaque prémisse de l'index qui ne fixe aucune entrée.
+
+Le graphe est un arbre lu de gauche à droite : la prétention, avec sa conclusion dessous, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
+La couleur donne la valeur du scénario : vert pour rempli ou vrai, orange pour indéterminé, rouge pour non rempli. L’état de la preuve est une étiquette à part (« Pièce à rattacher », « Relevé par l’agent, à relire », « Relu par l’avocat »). La conclusion liste les réserves.
 
 Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque définition garde son titre `##`. Le graphe affiche la source d’une condition seulement si elle diffère de celle de la règle. Le graphe signale une règle sans source et un fait sans pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans la vue Raisonnement.
 
@@ -41,7 +43,7 @@ Démarche : 2026-11-08 | demande de pièce | vérifier la réception | réponse 
 
 `Concerne` rattache ces notes à un identifiant ; il ne sert jamais à rattacher une source ou une citation. Employez des identifiants distincts pour des notions distinctes dans un programme.
 
-L’objectif et la conclusion finale sont la même case du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. Cette ligne titre la conclusion finale. N’en inventez pas : sans objectif annoncé, la conclusion garde son titre. Quand `tache.json` décrit le raisonnement, son `objectif` remplace cette ligne.
+L’objectif titre la prétention, la case de gauche du graphe. Écrivez une fois, hors section `Concerne`, l’objectif annoncé par l’avocat : `Objectif : Obtenir le paiement de l’indemnité`. N’en inventez pas : sans objectif annoncé, la prétention garde son titre. Quand `tache.json` décrit le raisonnement, son `objectif` remplace cette ligne.
 
 Quand un message contient ``[Carte « titre »](chemin:12 "lignes 12 à 15") — `identifiant` = Vrai, scénario Test``, l’avocat vise cette case du graphe. Le lien donne le fichier Catala, relatif au dossier, et les lignes de la définition avec son titre `##`. La suite donne l’identifiant Catala, sa valeur dans le scénario affiché et le nom de ce scénario.
 
@@ -57,3 +59,7 @@ Répétez `Démarche` pour conserver les démarches effectuées et leurs résult
 Dans un fichier de test, ces notes concernent seulement les exécutions qui utilisent ce fichier. Placez les explications communes dans le module métier.
 
 Le graphe signale les données sans pièce, les fondements absents et les citations non validées. Il ne décide pas de la valeur probante des pièces ni de la justesse juridique.
+
+## Contrat
+
+Pour un contrat (`"type": "transactional"` dans `tache.json`), le graphe montre la stipulation, son effet, les conditions de la clause, les dérogations et les hypothèses du cas de figure. Suivez `format.md`, « Contrat ».

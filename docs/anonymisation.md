@@ -38,7 +38,7 @@ flowchart TD
 ## 1. Lancement
 
 Surfaces : `AnonymizationLauncher`, `CaseMappingSetup`, `CaseFilesChronology`,
-plugin dossier. Toutes posent `POST /api/piecemaker/knowledge/scan`
+plugin dossier, carte de conversion du chat (`CaseConversionCard`). Toutes posent `POST /api/piecemaker/knowledge/scan`
 (`createKnowledgeRouter`, `createKnowledgeService.scan`).
 
 Le service démarre un job (`createKnowledgeScanJobs`) puis appelle

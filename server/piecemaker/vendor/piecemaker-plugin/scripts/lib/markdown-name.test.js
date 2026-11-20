@@ -12,20 +12,6 @@ const {
   markdownStemCandidates,
 } = require('./markdown-name.cjs');
 const { markdownCounterpart, WORKSPACE_SUBDIR } = require('./protection.cjs');
-const { structuredMarkdownCounterpart } = require('./case-folder-structure.cjs');
-
-const STRUCTURE = {
-  correspondence: '01_CORRESPONDANCE',
-  correspondenceClient: '01_Client',
-  correspondenceOpposingCounsel: '02_Avocats_adverses',
-  correspondenceThirdParties: '03_Tiers',
-  correspondenceMarkdown: '00 - Emails convertis Md',
-  dataRoom: '02_DATA_ROOM',
-  dataRoomMarkdown: '00 - Pièces converties Md',
-  drafts: '03_PROJETS',
-  notesAndResearch: '04_NOTES_ET_RECHERCHES',
-  procedure: '05_PROCEDURE',
-};
 
 function makeCase() {
   return fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'markdown-name-')));
@@ -100,26 +86,6 @@ test('un original sans homonyme garde son Markdown au nom simple', () => {
     fs.writeFileSync(markdown, '# Pièce fictive\n');
 
     assert.deepStrictEqual(markdownCounterpart(piece, root), { path: markdown, exists: true });
-  } finally {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
-});
-
-test('structuredMarkdownCounterpart retrouve le Markdown suffixé de la zone de conversion', () => {
-  const root = makeCase();
-  try {
-    fs.mkdirSync(path.join(root, '.piecemaker'));
-    fs.writeFileSync(
-      path.join(root, '.piecemaker', 'case-folder-structure.json'),
-      JSON.stringify({ version: 1, structure: STRUCTURE }),
-    );
-    const piece = path.join(root, STRUCTURE.dataRoom, 'a', 'exemple.pdf');
-    const output = path.join(root, STRUCTURE.dataRoom, STRUCTURE.dataRoomMarkdown);
-    fs.mkdirSync(output, { recursive: true });
-    const markdown = path.join(output, `${homonymMarkdownStem(piece, root)}.md`);
-    fs.writeFileSync(markdown, '# Pièce fictive\n');
-
-    assert.deepStrictEqual(structuredMarkdownCounterpart(piece, root), { path: markdown, exists: true });
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }

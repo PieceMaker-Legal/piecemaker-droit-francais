@@ -11,6 +11,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/shared/api';
 import type { LLMProvider, NormalizedMessage } from '@/shared/types';
+import { sideQuestionStore } from '@/modules/chat/hooks/useSideQuestions';
 import { removeOptimisticUserEchoes } from '@/modules/chat/utils/sessionMessageReconciliation';
 import {
   hasReachedCachedTailTimeBoundary,
@@ -117,6 +118,13 @@ async function requestSessionHistoryPage(
   const data = body?.data ?? body;
   const messages: NormalizedMessage[] = Array.isArray(data.messages) ? data.messages : [];
   console.info('[DEBUG sessionHistory] ok', { sessionId, options, ms: Math.round(performance.now() - debugStartedAt), messages: messages.length, total: data.total, hasMore: data.hasMore });
+
+  // The server sends the session's whole side-question list on every page
+  // (not just the page's own rows), so the store is replaced here rather
+  // than merged, regardless of which page this request fetched.
+  if (Array.isArray(data.sideQuestions)) {
+    sideQuestionStore.replaceForSession(sessionId, data.sideQuestions);
+  }
 
   return {
     messages,
@@ -236,12 +244,20 @@ function findServerTurnRangeByOrdinal(
   return { start, end };
 }
 
+function assistantEchoFingerprint(message: NormalizedMessage): string | null {
+  const content = (message.content || '').trim();
+  if (!content) {
+    return null;
+  }
+  return content.replace(/\s+/g, '');
+}
+
 function isAssistantTextEchoedInSameTurnOnServer(
   message: NormalizedMessage,
   serverMessages: NormalizedMessage[],
   realtimeMessages: NormalizedMessage[],
 ): boolean {
-  const assistantText = (message.content || '').trim();
+  const assistantText = assistantEchoFingerprint(message);
   if (!assistantText) {
     return false;
   }
@@ -257,7 +273,7 @@ function isAssistantTextEchoedInSameTurnOnServer(
     .some((serverMessage) =>
       serverMessage.kind === 'text'
       && serverMessage.role === 'assistant'
-      && (serverMessage.content || '').trim() === assistantText,
+      && assistantEchoFingerprint(serverMessage) === assistantText,
     );
 }
 
@@ -274,9 +290,9 @@ function dedupeAdjacentAssistantEchoes(merged: NormalizedMessage[]): NormalizedM
     const prev = out[out.length - 1];
     if (prev) {
       if (prev.kind === 'stream_delta' && m.kind === 'text' && m.role === 'assistant') {
-        const ps = (prev.content || '').trim();
-        const ms = (m.content || '').trim();
-        if (ps.length > 0 && ps === ms) {
+        const ps = assistantEchoFingerprint(prev);
+        const ms = assistantEchoFingerprint(m);
+        if (ps && ps === ms) {
           out[out.length - 1] = m;
           continue;
         }
@@ -287,8 +303,12 @@ function dedupeAdjacentAssistantEchoes(merged: NormalizedMessage[]): NormalizedM
         && prev.role === 'assistant'
         && m.role === 'assistant'
       ) {
-        const ms = (m.content || '').trim();
-        if (ms.length > 0 && ms === (prev.content || '').trim()) {
+        const ps = assistantEchoFingerprint(prev);
+        const ms = assistantEchoFingerprint(m);
+        if (ms && ms === ps) {
+          if ((m.content || '').length > (prev.content || '').length) {
+            out[out.length - 1] = m;
+          }
           continue;
         }
       }

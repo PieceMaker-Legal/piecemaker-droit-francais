@@ -26,7 +26,7 @@ const checkCredentials = (auth: ClaudeProviderAuth): Promise<CheckCredentialsRes
 // `claude --version`. Stubbing checkInstalled() lets the test cover the mapping
 // from checkCredentials() to the wire shape without the CLI.
 const getStatusWithCliInstalled = (auth: ClaudeProviderAuth): Promise<ProviderAuthStatus> => {
-  (auth as unknown as { checkInstalled: () => boolean }).checkInstalled = () => true;
+  auth.checkInstalled = () => ({ installed: true, exitCode: 0, version: '2.1.0' });
   return auth.getStatus();
 };
 
@@ -354,5 +354,28 @@ test('getStatus: passes the subscription override through to the wire shape, and
       // Omitted, not null: existing JSON consumers see exactly the old payload.
       assert.equal('subscriptionOverride' in status, false);
     });
+  });
+});
+
+test('getStatus reconnaît sur macOS la connexion signalée par le CLI sans fichier de jetons', { skip: process.platform !== 'darwin' }, async () => {
+  await withTempHome(async directory => {
+    const executable = path.join(directory, 'claude-fictif');
+    await writeFile(executable, [
+      '#!/bin/sh',
+      '[ "$*" = "auth status --json" ] || exit 1',
+      `echo '{"loggedIn":true,"authMethod":"oauth"}'`,
+    ].join('\n'), { mode: 0o700 });
+    const previous = process.env.CLAUDE_CLI_PATH;
+    process.env.CLAUDE_CLI_PATH = executable;
+    try {
+      await withEnv({}, async () => {
+        const status = await getStatusWithCliInstalled(new ClaudeProviderAuth());
+        assert.equal(status.authenticated, true);
+        assert.equal(status.method, 'oauth');
+      });
+    } finally {
+      if (previous === undefined) delete process.env.CLAUDE_CLI_PATH;
+      else process.env.CLAUDE_CLI_PATH = previous;
+    }
   });
 });

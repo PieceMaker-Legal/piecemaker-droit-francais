@@ -34,6 +34,8 @@ test('installe docx-cli et style-redaction-cabinet dans .agents/skills et les re
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'docx-cli', 'scripts', 'bootstrap.sh')), true);
   assert.match(fs.readFileSync(skillPath(folder, 'style-redaction-cabinet'), 'utf8'), /^---\nname: style-redaction-cabinet\n/);
   assert.match(fs.readFileSync(skillPath(folder, 'Skill-PieceMaker'), 'utf8'), /^---\nname: piecemaker\n/);
+  assert.match(fs.readFileSync(skillPath(folder, 'creation-artifacts'), 'utf8'), /^---\nname: creation-artifacts\n/);
+  assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'creation-artifacts', 'references', 'contrat-page.md')), true);
   assert.match(fs.readFileSync(skillPath(folder, 'catala'), 'utf8'), /^---\nname: catala\n/);
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'catala.mjs')), true);
   assert.equal(fs.existsSync(path.join(folder, '.agents', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')), true);
@@ -136,7 +138,7 @@ test('un répertoire à la place d’un lien provider est remplacé', () => {
 test('un dossier inexistant est journalisé sans lever d’erreur', (context) => {
   const warn = context.mock.method(console, 'warn', () => undefined);
   declareBundledSkills(path.join(temporaryFolder(), 'absent'));
-  assert.equal(warn.mock.callCount(), 6);
+  assert.equal(warn.mock.callCount(), 7);
 });
 
 const AGENT_FILES = ['.claude/agents/research-maker.md', '.codex/agents/research-maker.toml', '.vibe/agents/research-maker.toml', '.opencode/agent/research-maker.md', '.grok/agents/research-maker.md'];

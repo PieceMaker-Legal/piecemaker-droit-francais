@@ -18,19 +18,25 @@ import {
   parseConcept,
   partyId,
   relationsOf,
-  serializeConcept,
   squash,
   text,
-  writeIfChanged,
 } from './bundle.js';
 import type { Ontology } from './ontology.js';
 import { readOntology, relationNames, ruleOf } from './ontology.js';
 import { EXAMINED, fingerprintOf } from './premises.js';
+import { reviewColumn, reviewFileName } from './reviews.js';
+import type { OkfStore } from './store.js';
 import { quoted } from './verify.js';
+
+// Links, premises and examinations are written to SQLite only. The fiches read here are the views
+// generated from it just before (createOkfBackend rebuilds them before and after each write).
+export type OkfTarget = { projectPath: string; projectId: string; store: OkfStore };
 
 export type LinkInput = { source?: unknown; relation?: unknown; target?: unknown; citation?: unknown; value?: unknown; single?: unknown };
 export type Link = { source: string; relation: string; target: string };
 export type ExamInput = { source?: unknown; motif?: unknown };
+export type ReviewLinkInput = { premise?: unknown; fichier?: unknown; colonne?: unknown };
+export type ReviewLink = { premise: string; fichier: string; colonne: number };
 
 function load(projectPath: string, id: string, role: string) {
   const filePath = conceptFile(projectPath, id);
@@ -67,14 +73,8 @@ function endpoints(projectPath: string, name: string, input: LinkInput): { sourc
   return { source: documentId(projectPath, input.source, 'source'), target: name === STATES ? premiseId(text(input.target)) : documentId(projectPath, input.target, 'cible') };
 }
 
-function save(concept: { filePath: string; frontmatter: Record<string, unknown>; body: string }, relations: ReturnType<typeof relationsOf>): void {
-  const frontmatter = { ...concept.frontmatter, relations };
-  for (const name of Object.keys(relations)) if (!relations[name].length) delete relations[name];
-  if (!Object.keys(relations).length) delete (frontmatter as Record<string, unknown>).relations;
-  fs.writeFileSync(concept.filePath, serializeConcept(frontmatter, concept.body));
-}
-
-export function addLink(projectPath: string, input: LinkInput, markdownOf: MarkdownOf, origin = AGENT_ACTOR, now = new Date().toISOString()): Link {
+export function addLink(target: OkfTarget, input: LinkInput, markdownOf: MarkdownOf, origin = AGENT_ACTOR, now = new Date().toISOString()): Link {
+  const { projectPath, projectId, store } = target;
   const ontology = readOntology(projectPath);
   const name = relationName(input.relation, ontology);
   const ids = endpoints(projectPath, name, input);
@@ -100,52 +100,71 @@ export function addLink(projectPath: string, input: LinkInput, markdownOf: Markd
       if (!allowed.includes(type)) throw new TypeError(`${role} : ${concept.id} est de type « ${type} ». L'ontologie admet ${name} ${role === 'source' ? 'depuis' : 'vers'} : ${allowed.join(', ')}.`);
     }
   }
-  if (name === STATES) {
-    const premiseFile = conceptFile(projectPath, ids.target);
-    const title = text(input.target);
-    if (!fs.existsSync(premiseFile)) {
-      if (isPremiseId(title)) throw new TypeError(`cible : aucune fiche ${title}. Donner le titre de la prémisse pour la créer.`);
-      writeIfChanged(premiseFile, serializeConcept({ type: PREMISE_TYPE, title, description: title, ...(input.single === true ? { single_value: true } : {}), generated: { by: origin, at: now } }, ''));
-    } else if (input.single === true) {
-      const premise = load(projectPath, ids.target, 'cible');
-      fs.writeFileSync(premiseFile, serializeConcept({ ...premise.frontmatter, single_value: true }, premise.body));
+  store.transaction(() => {
+    if (name === STATES) {
+      const title = text(input.target);
+      if (!fs.existsSync(conceptFile(projectPath, ids.target)) && isPremiseId(title)) throw new TypeError(`cible : aucune fiche ${title}. Donner le titre de la prémisse pour la créer.`);
+      store.upsertPremise(projectId, { id: ids.target, title, description: title, single: input.single === true, by: origin, at: now });
     }
-  }
-
-  const relations = relationsOf(source.frontmatter);
-  relations[name] = [...(relations[name] || []).filter((entry) => entry.target !== ids.target), { target: ids.target, citation, origin, at: now, ...(value ? { value } : {}) }]
-    .sort((left, right) => left.target.localeCompare(right.target));
-  save(source, relations);
+    store.upsertRelation(projectId, { source: source.id, relation: name, target: ids.target, citation, value, origin, at: now, dismissed: false });
+  });
   return { source: source.id, relation: name, target: ids.target };
 }
 
-export function removeLink(projectPath: string, input: LinkInput): Link {
+export function removeLink(target: OkfTarget, input: LinkInput, now = new Date().toISOString()): Link {
+  const { projectPath, projectId, store } = target;
   const name = relationName(input.relation, null);
   const ids = endpoints(projectPath, name, input);
   const source = name === INVOLVES ? load(projectPath, ids.source, 'source') : loadDocument(projectPath, ids.source, 'source');
-  const relations = relationsOf(source.frontmatter);
-  const entry = (relations[name] || []).find((candidate) => candidate.target === ids.target && !candidate.dismissed);
+  const entry = (relationsOf(source.frontmatter)[name] || []).find((candidate) => candidate.target === ids.target && !candidate.dismissed);
   if (!entry) throw new TypeError(`aucun lien ${name} vers ${ids.target}.`);
-  if (DERIVED_ACTORS.includes(entry.origin)) entry.dismissed = true;
-  else relations[name] = relations[name].filter((candidate) => candidate !== entry);
-  save(source, relations);
+  if (DERIVED_ACTORS.includes(entry.origin)) store.upsertRelation(projectId, { source: source.id, relation: name, target: ids.target, citation: entry.citation, value: entry.value || '', origin: entry.origin, at: now, dismissed: true });
+  else store.deleteRelation(projectId, source.id, name, ids.target);
+  if (name === STATES) store.dropUnstatedPremise(projectId, ids.target);
   return { source: source.id, relation: name, target: ids.target };
 }
 
-export function markExamined(projectPath: string, input: ExamInput, origin = AGENT_ACTOR, now = new Date().toISOString()): { source: string; motif: string } {
+export function markExamined(target: OkfTarget, input: ExamInput, origin = AGENT_ACTOR, now = new Date().toISOString()): { source: string; motif: string } {
+  const { projectPath, projectId, store } = target;
   const concept = loadDocument(projectPath, documentId(projectPath, input.source, 'source'), 'source');
   const motif = squash(text(input.motif));
   if (!motif) throw new TypeError('motif absent : dire en une phrase pourquoi aucun passage du document ne justifie un lien ni une prémisse.');
-  const resource = text(concept.frontmatter.resource);
-  fs.writeFileSync(concept.filePath, serializeConcept({ ...concept.frontmatter, [EXAMINED]: { motif, by: origin, at: now, empreinte: fingerprintOf(projectPath, resource) } }, concept.body));
+  store.setExam(projectId, { source: concept.id, motif, by: origin, at: now, empreinte: fingerprintOf(projectPath, text(concept.frontmatter.resource)) });
   return { source: concept.id, motif };
 }
 
-export function unmarkExamined(projectPath: string, input: ExamInput): { source: string } {
+export function unmarkExamined(target: OkfTarget, input: ExamInput): { source: string } {
+  const { projectPath, projectId, store } = target;
   const concept = loadDocument(projectPath, documentId(projectPath, input.source, 'source'), 'source');
   if (!concept.frontmatter[EXAMINED]) throw new TypeError(`${concept.id} n'est pas marquée examinée sans lien.`);
-  const frontmatter = { ...concept.frontmatter };
-  delete frontmatter[EXAMINED];
-  fs.writeFileSync(concept.filePath, serializeConcept(frontmatter, concept.body));
+  store.clearExam(projectId, concept.id);
   return { source: concept.id };
+}
+
+/** Lie une colonne d'une revue tabulaire à une prémisse, créée au besoin d'après son titre : ses lignes positives l'établissent. */
+export function linkReview(target: OkfTarget, input: ReviewLinkInput, origin = AGENT_ACTOR, now = new Date().toISOString()): ReviewLink {
+  const { projectPath, projectId, store } = target;
+  const title = squash(text(input.premise));
+  if (!title) throw new TypeError('prémisse : donner le titre ou le chemin de la prémisse.');
+  const id = premiseId(title);
+  const file = reviewFileName(input.fichier);
+  const { index } = reviewColumn(projectPath, file, input.colonne);
+  const exists = fs.existsSync(conceptFile(projectPath, id));
+  if (!exists && isPremiseId(title)) throw new TypeError(`prémisse : aucune fiche ${title}. Donner le titre de la prémisse pour la créer.`);
+  store.transaction(() => {
+    if (!exists) store.upsertPremise(projectId, { id, title, description: title, single: false, by: origin, at: now });
+    store.upsertReviewLink(projectId, { premise: id, file, column: index, by: origin, at: now });
+  });
+  return { premise: id, fichier: file, colonne: index };
+}
+
+export function unlinkReview(target: OkfTarget, input: ReviewLinkInput): ReviewLink {
+  const { projectPath, projectId, store } = target;
+  const id = premiseId(squash(text(input.premise)));
+  const file = reviewFileName(input.fichier);
+  const given = Number(text(String(input.colonne ?? '')));
+  const column = Number.isInteger(given) && text(String(input.colonne ?? '')) !== '' ? given : reviewColumn(projectPath, file, input.colonne).index;
+  if (!store.deleteReviewLink(projectId, id, file, column)) throw new TypeError(`aucune revue ${file} › colonne ${column} liée à ${id}.`);
+  store.dropUnstatedPremise(projectId, id);
+  return { premise: id, fichier: file, colonne: column };
 }

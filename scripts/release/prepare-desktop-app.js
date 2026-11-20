@@ -72,9 +72,15 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
     name: `${packageJson.name}-desktop`,
     version: packageJson.version,
     productName: product.name,
+    // Electron derives its Linux app_id from this, and electron-builder matches
+    // StartupWMClass to it so desktop environments can associate running windows.
+    desktopName: `${product.appId}.desktop`,
     description: `${product.name} desktop shell`,
     author: packageJson.author,
     license: packageJson.license,
+    // The deb target writes this into the Debian control file and fails the
+    // build when it is missing; dmg and nsis do not need it.
+    homepage: packageJson.homepage,
     type: 'module',
     main: 'electron/main.js',
     dependencies: packageJson.dependencies,
@@ -114,6 +120,8 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
       },
       win: packageJson.build.win,
       nsis: packageJson.build.nsis,
+      linux: packageJson.build.linux,
+      deb: packageJson.build.deb,
     },
   };
 }

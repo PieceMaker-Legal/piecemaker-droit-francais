@@ -33,6 +33,22 @@ test('le tableau répond sans attendre le calcul de l’état du dossier', async
   assert.equal(calculs, 1);
 });
 
+test('le chat lit le cache persistant, puis partage la vérification du dossier', async () => {
+  let appels = 0;
+  const { root, etapes } = service(async () => {
+    appels++;
+    return { pret: true, lignes: [{ nom: 'conversion', ok: true, texte: '2 pièce(s), toutes converties' }] };
+  });
+  fs.writeFileSync(path.join(root, 'etats-dossiers.json'), JSON.stringify({
+    [root]: { pret: false, lignes: [{ nom: 'conversion', ok: false, texte: '1 pièce(s) non convertie(s) : pm dossier conversion' }] },
+  }));
+  assert.equal((await etapes.conversion(root, false))?.aConvertir, true);
+  assert.equal(appels, 0);
+  const results = await Promise.all([etapes.conversion(root, true), etapes.conversion(root, true)]);
+  assert.ok(results.every(result => result?.aConvertir === false));
+  assert.equal(appels, 1);
+});
+
 test('la liste des pièces non converties est abrégée', async () => {
   const pieces = Array.from({ length: 30 }, (_, index) => `  - Pièces/piece-${index}.pdf (à convertir)`);
   const { etapes } = service(async () => ({ pret: false, lignes: [{ nom: 'conversion', texte: ['30 pièce(s) non convertie(s)', ...pieces].join('\n'), ok: false }] }));

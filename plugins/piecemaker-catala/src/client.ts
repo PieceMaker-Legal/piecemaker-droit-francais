@@ -88,6 +88,7 @@ export function mount(container: HTMLElement, api: Host) {
     const parts = (program.tache?.raisonnements ?? []).filter((entry) => entry?.champ);
     const several = parts.length > 1;
     const part = parts.find((entry) => entry.champ === chosenPart) ?? parts[0];
+    const mode = program.tache?.type === 'transactional' ? 'transactional' as const : 'litigation' as const;
     const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const declaration = "(?:déclaration champ d'application|declaration scope)\\s+";
     const exercises = (scenario: Scenario, entry: Part) => {
@@ -106,13 +107,12 @@ export function mount(container: HTMLElement, api: Host) {
       const dot = scenario?.graphe ?? (several ? null : program.graphe);
       let model: Reasoning;
       let failure = scenario && !scenario.passed ? 'Ce scénario ne produit pas de graphe. Corrigez son exécution Catala.' : '';
-      try { model = reasoning(traced ? dot || 'digraph G {}' : 'digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage, traced ? provenance : undefined); }
-      catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage); }
+      try { model = reasoning(traced ? dot || 'digraph G {}' : 'digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage, traced ? provenance : undefined, mode); }
+      catch (problem) { failure = problem instanceof Error ? problem.message : String(problem); model = reasoning('digraph G {}', program.fichiers, program.citations?.results, program.tests?.coverage, undefined, mode); }
       return { model, failure, traced, scope: traced ? scenario?.scope ?? program.explication?.scope ?? '' : '' };
     };
     const { model, failure, traced, scope } = build(selected);
     if (part?.objectif) model.objective = part.objectif;
-    model.scope = part?.champ;
     steps = model.steps;
     shownScenario = scope;
     const issues = reasoningIssues(model);
@@ -121,7 +121,7 @@ export function mount(container: HTMLElement, api: Host) {
     const choice = data!.programmes.length > 1 ? `<select data-program-choice aria-label="Tâche" title="Tâche">${data!.programmes.map((entry) => `<option value="${escape(entry.nom)}"${entry === program ? ' selected' : ''}>${escape(entry.tache?.tache || entry.nom)}</option>`).join('')}</select>` : '';
     const named = (entry: Part) => [entry.rang, entry.objectif].filter(Boolean).join(' — ') || entry.champ;
     const partChoice = several ? `<select data-part-choice aria-label="Raisonnement" title="Raisonnement">${parts.map((entry) => `<option value="${escape(entry.champ)}"${entry === part ? ' selected' : ''}>${escape(named(entry))}</option>`).join('')}</select>` : '';
-    const task = program.tache?.tache ? `<p class="pmc-scenario" data-part="task">Tâche : <strong>${escape(program.tache.tache)}</strong>${program.tache.type ? ` <span class="pmc-muted">${escape(program.tache.type)}</span>` : ''}</p>` : '';
+    const task = program.tache?.tache ? `<p class="pmc-scenario" data-part="task">Tâche : <strong>${escape(program.tache.tache)}</strong>${program.tache.type ? ` <span class="pmc-muted">${escape(({ litigation: 'Contentieux', transactional: 'Contrat' } as Record<string, string>)[program.tache.type] ?? program.tache.type)}</span>` : ''}</p>` : '';
     const alerts = [...issues.map((entry) => `<li>${entry.id ? `<button type="button" class="pmc-text-action" data-goto="${entry.id}">${escape(entry.title)}</button>` : escape(entry.title)} : ${escape(entry.issue)}</li>`), ...gaps.map(plainGap).map((gap) => `<li>${escape(gap.meaning)}${gap.place ? ` <span class="pmc-muted">${escape(gap.place)}</span>` : ''}</li>`)];
     fixRequest = [`Corrige les erreurs du programme Catala \`${program.nom}\`, puis relance \`pm catala verifier\`. N’invente aucune source ni citation : signale ce qui manque.`, ...issues.map((entry) => `- ${entry.title} : ${entry.issue}`), ...gaps.map(plainGap).map((gap) => `- ${gap.meaning}${gap.place ? ` (${gap.place})` : ''}`)].join('\n');
     const briefs = several ? parts.map((entry) => {
@@ -134,7 +134,7 @@ export function mount(container: HTMLElement, api: Host) {
     const run = `<span class="pmc-run">${freshness(program)}<button type="button" data-draft aria-expanded="${draftOpen && Boolean(traced)}" title="${traced ? 'Rédiger un document à partir de ce raisonnement' : 'Calculez d’abord le raisonnement.'}"${traced ? '' : ' disabled'}>Rédiger</button><button type="button" class="pmc-alerts" data-alerts${alerts.length ? ` data-count="${alerts.length}"` : ''} aria-expanded="${alertsOpen}" title="${alerts.length ? `${alerts.length} erreur${alerts.length > 1 ? 's' : ''} à corriger` : 'Résultat de la vérification'}">Vérification${alerts.length ? `<span class="pmc-bubble">${alerts.length}</span>` : ''}</button></span>`;
     const outcome = alerts.length ? `<ul>${alerts.join('')}</ul>` : traced ? '<p>Aucune erreur.</p>' : '';
     const list = alertsOpen ? `<div class="pmc-alert-list" role="region" aria-label="Résultat de la vérification"><div class="pmc-alert-actions"><span class="pmc-muted">${escape(analysed(program))}</span>${recalc}${alerts.length ? `<button type="button" data-fix="${alerts.length}">Demander la correction</button>` : ''}</div>${outcome}</div>` : '';
-    const scenario = scenarios.length ? `<select data-scenario-choice aria-label="Scénario Catala" title="Scénario">${scenarios.map((entry) => `<option value="${escape(`${entry.fichier}:${entry.scope}`)}"${entry === selected ? ' selected' : ''}>${escape(human(entry.scope).replace(/^Test\s*/i, ''))} — ${entry.test_reussi ? 'test réussi' : 'test en échec'}</option>`).join('')}</select>` : program.explication?.scope ? `<span class="pmc-scenario" title="Scénario"><strong>${escape(program.explication.scope)}</strong></span>` : '';
+    const scenario = scenarios.length ? `<select data-scenario-choice aria-label="${mode === 'transactional' ? 'Cas de figure' : 'Scénario'}" title="${mode === 'transactional' ? 'Cas de figure' : 'Scénario'}">${scenarios.map((entry) => `<option value="${escape(`${entry.fichier}:${entry.scope}`)}"${entry === selected ? ' selected' : ''}>${mode === 'transactional' ? 'Cas' : 'Scénario'} : ${escape(human(entry.scope).replace(/^Test\s*/i, ''))}${entry.test_reussi ? '' : ' (résultat attendu non atteint)'}</option>`).join('')}</select>` : program.explication?.scope ? `<span class="pmc-scenario" title="Scénario"><strong>${escape(program.explication.scope)}</strong></span>` : '';
     const day = (value: string) => new Date(`${value}T00:00:00Z`).toLocaleDateString('fr-FR', { dateStyle: 'long', timeZone: 'UTC' });
     const check = program.perimee ? null : program.catleg;
     const dates = check?.dates_reference ?? [];

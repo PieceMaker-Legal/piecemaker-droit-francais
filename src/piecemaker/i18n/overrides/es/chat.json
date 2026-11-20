@@ -7,5 +7,10 @@
   },
   "projectSelection": {
     "startChatWithProvider": "Selecciona un expediente para empezar a chatear con {{provider}}"
+  },
+  "misc": {
+    "fallbackCommands": {
+      "memory": "Abrir el archivo de memoria CLAUDE.md del expediente."
+    }
   }
 }

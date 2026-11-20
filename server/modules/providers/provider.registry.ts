@@ -1,6 +1,7 @@
 import { ClaudeProvider } from '@/modules/providers/list/claude/claude.provider.js';
 import { CodexProvider } from '@/modules/providers/list/codex/codex.provider.js';
 import { CursorProvider } from '@/modules/providers/list/cursor/cursor.provider.js';
+import { HermesProvider } from '@/modules/providers/list/hermes/hermes.provider.js';
 import { MistralProvider } from '@/modules/providers/list/mistral/mistral.provider.js';
 import { OpenCodeProvider } from '@/modules/providers/list/opencode/opencode.provider.js';
 import type { IProvider } from '@/shared/interfaces.js';
@@ -13,6 +14,7 @@ const providers: Record<LLMProvider, IProvider> = {
   cursor: new CursorProvider(),
   mistral: new MistralProvider(),
   opencode: new OpenCodeProvider(),
+  hermes: new HermesProvider(),
 };
 
 /**
