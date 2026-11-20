@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { spreadBoxes, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
-import { chronologyView, documentTitle, graphView, linksMarkup, shell } from '../views.js';
+import { documentTitle, linksMarkup, shell } from '../views.js';
 import { indexRowResource, isPieceRow } from '../index-analysis.js';
 
 const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', relations });
@@ -55,21 +55,15 @@ describe('index OKF', () => {
     expect(isPieceRow(null, { id: 'd', documents: [] })).toBe(true);
   });
 
-  it('l’Index affiche la colonne Liens de chaque pièce et le rapport de vérification', () => {
+  it('l’Index affiche les liens et citations de chaque pièce', () => {
     const links = linksMarkup(index, indexRowResource({ id: 'r1', piece: 'Pièces/Courrier.pdf', documents: [{ source: 'Fichiers convertis PieceMaker/Courrier.md' }] }));
     expect(links).toContain('se réfère à → Contrat');
     expect(links).toContain('title="Nous faisons suite au contrat."');
     expect(indexRowResource({ id: 'r2', documents: [{ source: 'Pièces/Note.md' }] })).toBe('Pièces/Note.md');
-    const html = chronologyView({ errors: [{ fiche: '/Pièces/Courrier.pdf.md', erreur: 'type absent' }] });
-    expect(html).toContain('1 erreur dans l’index');
-    expect(html).not.toContain('data-okf-graph');
   });
 
   it('le graphe a son propre onglet, à côté de l’Index', () => {
     expect(shell('graph')).toMatch(/data-tab="chronology"[\s\S]*data-tab="graph" aria-selected="true"/);
-    expect(graphView(index)).toContain('data-okf-graph');
-    expect(graphView(index)).not.toMatch(/data-okf-premises checked/);
-    expect(graphView(index, true)).toContain('data-okf-premises checked');
   });
 });
 

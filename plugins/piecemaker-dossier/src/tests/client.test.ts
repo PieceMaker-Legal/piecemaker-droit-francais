@@ -2,10 +2,11 @@ import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { etapesApi, knowledgeApi } from '../api.js';
 import { mount, unmount } from '../client.js';
-import { okfApi } from '../okf.js';
+import { mountGraph, okfApi } from '../okf.js';
 import { mountIndexAnalysis } from '../index-analysis.js';
 
 vi.mock('../index-analysis.js', () => ({ mountIndexAnalysis: vi.fn(async () => vi.fn()) }));
+vi.mock('../okf.js', async (importOriginal) => ({ ...await importOriginal<typeof import('../okf.js')>(), mountGraph: vi.fn() }));
 import type { KnowledgeSnapshot } from '../types.js';
 
 let dom: JSDOM;
@@ -81,6 +82,72 @@ describe('Index', () => {
     expect(focus).toContain('chronology');
     expect(container.querySelector('.pmd-modal')).toBeNull();
   });
+
+  it('ouvre l’Index sans lancer de vérification OKF', async () => {
+    vi.stubGlobal('localStorage', dom.window.localStorage);
+    const fetchMock = vi.fn(async (_url: string) => ({ ok: true, status: 200, headers: new Headers(), json: async () => ({ folders: [] }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
+    container.querySelector<HTMLButtonElement>('[data-tab="chronology"]')!.click();
+    await vi.waitFor(() => expect(okfApi.read).toHaveBeenCalledWith(graph.projectId));
+    expect(fetchMock.mock.calls.some(([url]) => url.startsWith('/api/piecemaker/okf/verify'))).toBe(false);
+  });
+});
+
+describe('Graphe', () => {
+  it('repeint le graphe quand la préférence Prémisses change et la retrouve au montage suivant', async () => {
+    vi.stubGlobal('localStorage', dom.window.localStorage);
+    const index = {
+      types: ['Pièces', 'Premise'],
+      typesGraphe: ['Pièces'],
+      fiches: [{ id: '/contrat.md', type: 'Pièces', title: 'Contrat', description: '', resource: 'Contrat.pdf', date: '', relations: [] }],
+    };
+    vi.mocked(okfApi.read).mockResolvedValue(index);
+    const destroy = vi.fn();
+    vi.mocked(mountGraph).mockClear().mockResolvedValue({ center: vi.fn(), destroy, select: vi.fn() });
+    const openGraph = () => {
+      mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
+      container.querySelector<HTMLButtonElement>('[data-tab="graph"]')!.click();
+    };
+    const toggle = () => container.querySelector<HTMLButtonElement>('[data-action="okf-premises"]')!;
+    const expectPaint = (showPremises: boolean) => {
+      const lastPaint = vi.mocked(mountGraph).mock.lastCall;
+      expect(lastPaint?.[2]).toBe(showPremises);
+      expect(lastPaint?.[0] === container.querySelector('[data-okf-graph]')).toBe(true);
+      expect(toggle()?.getAttribute('aria-pressed')).toBe(String(showPremises));
+    };
+
+    openGraph();
+    await vi.waitFor(() => expectPaint(true));
+    toggle().focus();
+    toggle().click();
+    expectPaint(false);
+    expect(destroy).toHaveBeenCalled();
+    expect(dom.window.document.activeElement).toBe(toggle());
+    expect(localStorage.getItem('pmd-okf-premises')).toBe('0');
+
+    unmount(container);
+    openGraph();
+    await vi.waitFor(() => expectPaint(false));
+    toggle().click();
+    expectPaint(true);
+    expect(localStorage.getItem('pmd-okf-premises')).toBe('1');
+  });
+});
+
+describe('Liens des légendes', () => {
+  it.each([
+    ['chronology', 'edit-document-types', 'types', '[data-type-name]'],
+    ['graph', 'edit-ontology', 'relations', '[data-ontology-form]'],
+  ])('ouvre directement l’éditeur depuis %s', async (tab, action, pane, field) => {
+    vi.spyOn(okfApi, 'ontology').mockResolvedValue({ relations: [], systeme: [], personnalisee: false, types: [], documentTypes: [{ name: 'contrat', icon: 'file' }] });
+    mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
+    container.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)!.click();
+    const selector = `.pmd-okf-legend a[data-action="${action}"]`;
+    await vi.waitFor(() => expect(container.querySelector(selector)).not.toBeNull());
+    container.querySelector<HTMLAnchorElement>(selector)!.click();
+    await vi.waitFor(() => expect(container.querySelector(`[data-settings-pane="${pane}"]:not([hidden]) ${field}`)).not.toBeNull());
+  });
 });
 
 describe('Index : classement', () => {
@@ -108,7 +175,7 @@ describe('Index : classement', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     await openIndex();
-    container.querySelector<HTMLButtonElement>('[data-action="edit-tree"]')!.click();
+    container.querySelector<HTMLAnchorElement>('.pmd-okf-legend a[data-action="edit-tree"]')!.click();
     await vi.waitFor(() => expect(container.querySelector('[data-tree-name]')).not.toBeNull());
     const firstName = container.querySelector<HTMLInputElement>('[data-tree-name]')!;
     firstName.value = 'Contrats/Signés';
@@ -130,7 +197,7 @@ describe('Index : classement', () => {
     expect(init.headers).toMatchObject({ Authorization: 'Bearer test-token' });
     expect(JSON.parse(init.body as string)).toEqual({ project: '/dossier-exemple', folders: [{ name: 'Contrats/Signés', explanation: 'Les accords' }, { name: 'Courriers', explanation: 'Les échanges' }] });
     expect(fetchMock.mock.calls.map(([address]) => address)).toContain('/api/plugins/piecemaker-tabular-review/rpc/classification?project=%2Fdossier-exemple');
-    container.querySelector<HTMLButtonElement>('[data-action="edit-tree"]')!.click();
+    container.querySelector<HTMLAnchorElement>('.pmd-okf-legend a[data-action="edit-tree"]')!.click();
     await vi.waitFor(() => expect(container.querySelector('[data-tree-name]')).not.toBeNull());
     const calls = fetchMock.mock.calls.length;
     container.querySelector<HTMLButtonElement>('.pmd-modal [data-close]')!.click();
@@ -143,7 +210,7 @@ describe('Index : classement', () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 200, headers: new Headers(), json: async () => ({ folders }) }));
     vi.stubGlobal('fetch', fetchMock);
     await openIndex();
-    container.querySelector<HTMLButtonElement>('[data-action="edit-tree"]')!.click();
+    container.querySelector<HTMLAnchorElement>('.pmd-okf-legend a[data-action="edit-tree"]')!.click();
     await vi.waitFor(() => expect(container.querySelector('[data-tree-name]')).not.toBeNull());
     const rows = () => Array.from(container.querySelectorAll<HTMLElement>('[data-tree-row]'));
     expect(rows().map((row) => row.querySelector<HTMLInputElement>('[data-tree-name]')!.value)).toEqual(['Courriers', 'Contrats', 'Signés']);
