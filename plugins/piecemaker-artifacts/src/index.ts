@@ -121,14 +121,14 @@ export function mount(container: HTMLElement, api: Host) {
           ${item.description ? `<p>${escape(item.description)}</p>` : ''}
           <span class="pma-muted">v${item.version} · ${escape(date(item.updated_at))}${item.type ? ` · ${escape(item.type.replace('piecemaker://template/', ''))}` : ''}</span>
         </div>
-        <button class="pma-pin${item.pinned ? ' on' : ''}" data-pin="${escape(item.id)}" title="${item.pinned ? 'Désépingler' : 'Épingler'}" aria-pressed="${item.pinned}">📌</button>
+        <button type="button" class="pma-pin pma-icon-button piecemaker-button piecemaker-button--icon${item.pinned ? ' on' : ''}" data-pin="${escape(item.id)}" title="${item.pinned ? 'Désépingler' : 'Épingler'}" aria-pressed="${item.pinned}">📌</button>
       </article>`).join('');
     return `
       <header class="pma-bar">
-        <h2>Artifacts</h2>
+        <h2 class="piecemaker-display">Artifacts</h2>
         <div class="pma-tabs" role="tablist">
-          <button role="tab" aria-selected="${filter === 'all'}" data-filter="all">Tous</button>
-          <button role="tab" aria-selected="${filter === 'pinned'}" data-filter="pinned">Épinglés</button>
+          <button type="button" role="tab" class="pma-tab piecemaker-button piecemaker-button--sm" aria-selected="${filter === 'all'}" data-filter="all">Tous</button>
+          <button type="button" role="tab" class="pma-tab piecemaker-button piecemaker-button--sm" aria-selected="${filter === 'pinned'}" data-filter="pinned">Épinglés</button>
         </div>
       </header>
       ${error ? `<p class="pma-error">${escape(error)}</p>` : ''}
@@ -147,7 +147,7 @@ export function mount(container: HTMLElement, api: Host) {
     return `
       <aside class="pma-comments">
         <h3>Commentaires</h3>
-        <form data-comment><textarea name="text" rows="3" placeholder="Un commentaire pour l’assistant" aria-label="Commentaire" required></textarea><button>Envoyer</button></form>
+        <form data-comment><textarea class="pma-textarea" name="text" rows="3" placeholder="Un commentaire pour l’assistant" aria-label="Commentaire" required></textarea><button type="submit" class="piecemaker-button piecemaker-button--black piecemaker-button--sm">Envoyer</button></form>
         <ul>${open.map(one).join('') || '<li class="pma-muted">Aucun fil ouvert.</li>'}</ul>
         ${done.length ? `<details><summary>${done.length} résolu(s)</summary><ul>${done.map(one).join('')}</ul></details>` : ''}
       </aside>`;
@@ -158,13 +158,13 @@ export function mount(container: HTMLElement, api: Host) {
     const open = threads.filter((thread) => !thread.resolved).length;
     return `
       <header class="pma-bar">
-        <button class="pma-back" data-back aria-label="Retour à la galerie">←</button>
-        <h2 title="${escape(detail.url)}">${escape(detail.title)}</h2>
-        <select data-version aria-label="Version">${options}</select>
-        <button class="pma-pin${detail.pinned ? ' on' : ''}" data-pin="${escape(detail.id)}" aria-pressed="${detail.pinned}" title="${detail.pinned ? 'Désépingler' : 'Épingler'}">📌</button>
-        <button data-comments aria-pressed="${commentsOpen}">Commentaires${open ? ` (${open})` : ''}</button>
-        <button data-copy title="Copier le lien">Lien</button>
-        <button class="pma-danger" data-delete>${confirmDelete ? 'Confirmer la suppression' : 'Supprimer'}</button>
+        <button type="button" class="pma-icon-button piecemaker-button piecemaker-button--icon" data-back aria-label="Retour à la galerie">←</button>
+        <h2 class="piecemaker-display" title="${escape(detail.url)}">${escape(detail.title)}</h2>
+        <select class="pma-select" data-version aria-label="Version">${options}</select>
+        <button type="button" class="pma-pin pma-icon-button piecemaker-button piecemaker-button--icon${detail.pinned ? ' on' : ''}" data-pin="${escape(detail.id)}" aria-pressed="${detail.pinned}" title="${detail.pinned ? 'Désépingler' : 'Épingler'}">📌</button>
+        <button type="button" class="piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-comments aria-pressed="${commentsOpen}">Commentaires${open ? ` (${open})` : ''}</button>
+        <button type="button" class="piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-copy title="Copier le lien">Lien</button>
+        <button type="button" class="pma-danger piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-delete>${confirmDelete ? 'Confirmer la suppression' : 'Supprimer'}</button>
       </header>
       ${error ? `<p class="pma-error">${escape(error)}</p>` : ''}`;
   }
