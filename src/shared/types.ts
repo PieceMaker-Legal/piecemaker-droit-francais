@@ -2070,3 +2070,30 @@ type TaskPriority = 'high' | 'medium' | 'low' | string;
 
 /** Versions et propositions Word échangées avec le serveur. */
 export type { DocxEditAnnotation, DocxReview } from '@piecemaker/docx-review';
+
+export type ArtifactSummary = {
+  id: string;
+  url: string;
+  title: string;
+  description: string;
+  icon: string | null;
+  pinned: boolean;
+  version: number;
+  updated_at: string;
+};
+
+export type ArtifactDetail = ArtifactSummary & {
+  versions: { version: number; label: string | null; published_at: string }[];
+  data_stamp: number;
+};
+
+export type ArtifactPassage = { quote: string; start: number; before: string; after: string };
+
+export type ArtifactDecision = 'approved' | 'changes_requested';
+
+export type ArtifactThread = {
+  id: string;
+  anchor: { version?: number; passage?: ArtifactPassage; decision?: ArtifactDecision } | null;
+  resolved: boolean;
+  messages: { author: string; text: string; at: string }[];
+};

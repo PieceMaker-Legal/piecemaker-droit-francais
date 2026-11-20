@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import http from 'node:http';
+import { IncomingMessage, ServerResponse } from 'node:http';
+import { Socket } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -32,36 +33,68 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   const app = express();
   app.use('/api/piecemaker/local', createArtifactFrameRouter());
   app.use('/api/piecemaker', createArtifactsRouter({ getProjectPathById: () => null, getProjectPaths: () => [{ project_path: project }] }));
-  const server = http.createServer(app);
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  context.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
-  const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const query = `projectPath=${encodeURIComponent(project)}`;
-  const post = (route: string, body: object = {}) => fetch(`${origin}/api/piecemaker/${route}?${query}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const request = (url: string, body?: object) => new Promise<Response>((resolve, reject) => {
+    const socket = new Socket();
+    const incoming = new IncomingMessage(socket);
+    incoming.url = url;
+    incoming.method = body ? 'POST' : 'GET';
+    incoming.headers.host = '127.0.0.1';
+    if (body) {
+      const json = Buffer.from(JSON.stringify(body));
+      incoming.headers['content-type'] = 'application/json';
+      incoming.headers['content-length'] = String(json.length);
+      incoming.push(json);
+    }
+    incoming.push(null);
 
-  const list = await (await fetch(`${origin}/api/piecemaker/artifacts?${query}`)).json() as Array<{ id: string }>;
+    const outgoing = new ServerResponse(incoming);
+    incoming.on('error', reject);
+    outgoing.end = (chunk?: unknown) => {
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(outgoing.getHeaders())) headers.set(name, String(value));
+      resolve(new Response(chunk === undefined ? null : String(chunk), { status: outgoing.statusCode, headers }));
+      return outgoing;
+    };
+    app(incoming, outgoing);
+  });
+  const query = `projectPath=${encodeURIComponent(project)}`;
+  const post = (route: string, body: object = {}) => request(`/api/piecemaker/${route}?${query}`, body);
+
+  const list = await (await request(`/api/piecemaker/artifacts?${query}`)).json() as Array<{ id: string }>;
   assert.equal(list.length, 2);
-  assert.equal((await fetch(`${origin}/api/piecemaker/artifacts?projectPath=%2Fautre`)).status, 404);
+  assert.equal((await request(`/api/piecemaker/artifacts?projectPath=%2Fautre`)).status, 404);
 
   const { src } = await (await post(`artifacts/${plain.id}/frame`)).json() as { src: string };
-  const html = await fetch(`${origin}${src}`);
+  const html = await request(src);
   assert.equal(html.status, 200);
   assert.match(html.headers.get('content-security-policy') ?? '', /connect-src 'none'/);
   assert.match(await html.text(), /__piecemaker\/runtime\.js/);
-  assert.equal((await fetch(`${origin}${src.replace('index.html', 'style.css')}`)).status, 200);
-  assert.match(await (await fetch(`${origin}${src.replace('index.html', '__piecemaker/runtime.js')}`)).text(), /window\.artifact/);
-  assert.equal((await fetch(`${origin}${src.replace('index.html', 'absent.js')}`)).status, 404);
-  assert.equal((await fetch(`${origin}/api/piecemaker/local/artifact-frame/${'0'.repeat(48)}/index.html`)).status, 404);
+  assert.equal((await request(src.replace('index.html', 'style.css'))).status, 200);
+  assert.match(await (await request(src.replace('index.html', '__piecemaker/runtime.js'))).text(), /window\.artifact/);
+  assert.equal((await request(src.replace('index.html', 'absent.js'))).status, 404);
+  assert.equal((await request(`/api/piecemaker/local/artifact-frame/${'0'.repeat(48)}/index.html`)).status, 404);
 
   assert.equal((await post(`artifacts/${plain.id}/data`, { op: 'list', args: { collection: 'items' } })).status, 403);
   const set = await post(`artifacts/${withDb.id}/data`, { op: 'set', args: { collection: 'items', doc_id: 'a', data: { done: false } } });
   assert.equal(set.status, 200);
   const conflict = await post(`artifacts/${withDb.id}/data`, { op: 'update', args: { collection: 'items', doc_id: 'a', data: { done: true } } });
   assert.equal(conflict.status, 409);
-  const detail = await (await fetch(`${origin}/api/piecemaker/artifacts/${withDb.id}?${query}`)).json() as { data_stamp: number };
+  const detail = await (await request(`/api/piecemaker/artifacts/${withDb.id}?${query}`)).json() as { data_stamp: number };
   assert.ok(detail.data_stamp > 0);
 
-  assert.equal((await post(`artifacts/${plain.id}/comments`, { text: 'Ajouter la date', anchor: { version: 1 } })).status, 201);
-  const threads = await (await fetch(`${origin}/api/piecemaker/artifacts/${plain.id}/comments?${query}`)).json() as Array<{ messages: Array<{ author: string }> }>;
+  const commentRoute = `artifacts/${plain.id}/comments`;
+  const reviewRoute = `artifacts/${plain.id}/reviews`;
+  const passage = { quote: 'v1', start: 0, before: '', after: '' };
+  assert.equal((await post(commentRoute, { text: 'Ajouter la date', anchor: { version: 1, passage } })).status, 201);
+  assert.equal((await post(commentRoute, { text: 'Erreur de version', anchor: { version: 99 } })).status, 404);
+  assert.equal((await post(reviewRoute, { version: 1, decision: 'changes_requested' })).status, 400);
+  assert.equal((await post(reviewRoute, { version: 99, decision: 'approved' })).status, 404);
+  assert.equal((await post(reviewRoute, { version: 1, decision: 'approved' })).status, 201);
+  const threads = await (await request(`/api/piecemaker/${commentRoute}?${query}`)).json() as {
+    anchor: unknown;
+    messages: { author: string }[];
+  }[];
+  assert.deepEqual(threads[0].anchor, { version: 1, passage });
+  assert.deepEqual(threads[1].anchor, { kind: 'review', decision: 'approved', version: 1 });
   assert.equal(threads[0].messages[0].author, 'lawyer');
 });

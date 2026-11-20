@@ -5,7 +5,7 @@ description: "Créer ou modifier un artifact PieceMaker : une page HTML publiée
 
 # Créer un artifact
 
-Un artifact est une page HTML que tu publies dans l'onglet **Artifacts** du dossier. L'avocat la regarde, la commente, l'annote dans Plannotator, en garde les versions. Les outils sont ceux du MCP `artifacts` : `Artifact`, `ArtifactData`, `ArtifactComments`, `ArtifactTemplates`. Ils reprennent ceux de Claude, un lien s'écrit `piecemaker://artifact/<id>`.
+Un artifact est une page HTML que tu publies dans l'onglet **Artifacts** du dossier. L’avocat consulte les versions, les annote et rend ses décisions dans le volet. Les outils sont ceux du MCP `artifacts` : `Artifact`, `ArtifactData`, `ArtifactComments`, `ArtifactTemplates`. Ils reprennent ceux de Claude, un lien s'écrit `piecemaker://artifact/<id>`.
 
 ## Quand en faire un
 
@@ -43,8 +43,11 @@ Si la page tient des enregistrements que l'avocat ou toi ajouterez plus tard (su
 
 ## Commentaires et revue
 
-- `ArtifactComments read url=…` au début d'un travail sur un artifact existant : l'avocat a pu laisser des fils dans l'onglet ou dans Plannotator. Agis, réponds par `reply`, puis `resolve`.
-- Quand l'avocat veut relire et annoter la page : `ArtifactComments annotate url=…` ouvre la revue Plannotator dans son navigateur (`install=true` la première fois). Termine ton tour : ses annotations deviennent un fil, lu au prochain `read`.
+- Avant de modifier un artifact existant, appelle `ArtifactComments read url=…`. Les fils donnent la version, le passage cité et la décision de l’avocat.
+- À la demande de l’avocat, ouvre la revue avec `ArtifactComments annotate url=… ver=…`. Sans `ver`, l’outil ouvre la dernière version.
+- L’avocat peut surligner ou annoter un passage. Il peut approuver la version ou demander des modifications avec un motif.
+- Termine ton tour après avoir ouvert la revue. À la reprise, lis les retours avec `ArtifactComments read`. Les décisions ont la valeur `approved` ou `changes_requested` dans `anchor.decision`.
+- Réponds aux fils traités avec `reply`, puis marque-les comme résolus avec `resolve`. Une approbation porte sur la version indiquée.
 
 ## Templates
 

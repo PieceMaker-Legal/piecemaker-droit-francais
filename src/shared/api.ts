@@ -1,7 +1,33 @@
 import { authenticatedFetch as sharedAuthenticatedFetch, getStoredAuthToken, type ApiRequestOptions } from '@/shared/authToken';
 import { IS_PLATFORM } from '@/shared/utils';
 import { readVoiceConfig, voiceConfigHeaders } from '@/shared/voiceConfig';
-import type { DocxReview, MistralSdkAuthStatus } from '@/shared/types';
+import type { ArtifactDecision, ArtifactDetail, ArtifactPassage, ArtifactSummary, ArtifactThread, DocxReview, MistralSdkAuthStatus } from '@/shared/types';
+
+async function artifactRequest<T>(projectPath: string, route = '', body?: unknown, method?: string, version?: number): Promise<T> {
+  const query = new URLSearchParams({ projectPath });
+  if (version !== undefined) query.set('ver', String(version));
+  const response = await authenticatedFetch(`/api/piecemaker/artifacts${route}?${query}`, {
+    method: method ?? (body === undefined ? 'GET' : 'POST'),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || `Artifacts indisponibles (HTTP ${response.status}).`);
+  return result as T;
+}
+
+export const artifactsApi = {
+  list: (project: string) => artifactRequest<ArtifactSummary[]>(project),
+  detail: (project: string, id: string) => artifactRequest<ArtifactDetail>(project, `/${encodeURIComponent(id)}`),
+  frame: (project: string, id: string, version: number) => artifactRequest<{ src: string }>(project, `/${encodeURIComponent(id)}/frame`, {}, undefined, version),
+  pin: (project: string, id: string, pinned: boolean) => artifactRequest<ArtifactSummary>(project, `/${encodeURIComponent(id)}/pin`, { pinned }),
+  remove: (project: string, id: string) => artifactRequest(project, `/${encodeURIComponent(id)}`, undefined, 'DELETE'),
+  threads: (project: string, id: string) => artifactRequest<ArtifactThread[]>(project, `/${encodeURIComponent(id)}/comments`),
+  comment: (project: string, id: string, body: { text: string; anchor: { version: number; passage?: ArtifactPassage } } | { text: string; thread_id: string }) =>
+    artifactRequest<ArtifactThread>(project, `/${encodeURIComponent(id)}/comments`, body),
+  decide: (project: string, id: string, body: { version: number; decision: ArtifactDecision; text: string }) =>
+    artifactRequest<ArtifactThread>(project, `/${encodeURIComponent(id)}/reviews`, body),
+  data: (project: string, id: string, op: string, args: unknown) => artifactRequest(project, `/${encodeURIComponent(id)}/data`, { op, args }),
+};
 
 export async function docxReviewRequest(projectId: string, path: string, body?: Record<string, unknown>): Promise<DocxReview> {
   const response = await authenticatedFetch(`/api/piecemaker/docx-review?${new URLSearchParams({ projectId, path })}`, body ? {

@@ -3,12 +3,11 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createHash } = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
 const PAGE = '<!doctype html><html><head><title>Chronologie du litige</title></head><body><h1>v1</h1></body></html>';
 
-async function connect({ home, plannotator } = {}) {
+async function connect({ home } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'artifacts-server-'));
   fs.mkdirSync(path.join(root, '.piecemaker'));
   const calls = [];
@@ -19,7 +18,7 @@ async function connect({ home, plannotator } = {}) {
   const { openTemplates } = await import('./templates.mjs');
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
   const templates = openTemplates({ home: home ?? fs.mkdtempSync(path.join(os.tmpdir(), 'artifacts-home-')), env: {} });
-  await createServer({ root, pm, templates, ...(plannotator ? { plannotator } : {}) }).connect(serverSide);
+  await createServer({ root, pm, templates }).connect(serverSide);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(clientSide);
   const call = async (name, args) => {
@@ -136,27 +135,55 @@ test('ArtifactData keeps a versioned database per artifact', async () => {
   assert.match((await call('ArtifactData', { action: 'get', url: 'piecemaker://artifact/absent-000000', collection: 'items', doc_id: 'kbis' })).text, /no artifact/);
 });
 
-test('ArtifactComments answers threads and turns a finished Plannotator review into one', async () => {
-  const started = [];
-  const plannotator = { install: async () => ({}), start: (file, resultFile) => { started.push({ file, resultFile }); return { pid: 1 }; } };
-  const { call, write, root } = await connect({ plannotator });
+test('ArtifactComments opens the requested version and reads and answers saved review threads', async () => {
+  const { call, write, calls, root } = await connect();
   write('page.html', PAGE);
   const url = urlIn((await call('Artifact', { file_path: 'page.html' })).text);
-  const annotate = await call('ArtifactComments', { action: 'annotate', url });
+  const id = url.split('/').pop();
+  write('page.html', PAGE.replace('v1', 'v2'));
+  await call('Artifact', { url, file_path: 'page.html' });
+
+  const annotate = await call('ArtifactComments', { action: 'annotate', url, ver: 1 });
   assert.equal(annotate.error, false, annotate.text);
-  const review = /thread (pn-[0-9a-f]{8})/.exec(annotate.text)[1];
-  assert.match(started[0].file, /index\.html$/);
+  assert.deepEqual(calls[0].slice(0, 4), ['tab', 'afficher', 'artifacts', `${id}@v1`]);
+  assert.equal((await call('ArtifactComments', { action: 'annotate', url, ver: 99 })).error, true);
+  assert.equal(calls.length, 1);
   assert.deepEqual(JSON.parse((await call('ArtifactComments', { action: 'read', url })).text), []);
-  fs.writeFileSync(started[0].resultFile, JSON.stringify({ decision: 'annotated', feedback: 'Ajouter la date de l’assignation.' }));
+
+  const { openArtifactReviews } = await import('./reviews.mjs');
+  const native = openArtifactReviews(root);
+  const passage = { quote: 'v1', start: 0, before: '', after: '' };
+  const annotation = await native.comment(id, { text: 'Préciser la date.', anchor: { version: 1, passage } });
+  await native.decide(id, { version: 1, decision: 'changes_requested', text: 'Vérifier la chronologie.' });
+  await native.decide(id, { version: 2, decision: 'approved' });
+
   const threads = JSON.parse((await call('ArtifactComments', { action: 'read', url })).text);
-  assert.equal(threads[0].id, review);
-  assert.equal(threads[0].anchor.source, 'plannotator');
-  assert.match(threads[0].messages[0].text, /assignation/);
-  await call('ArtifactComments', { action: 'reply', url, thread_id: review, text: 'Ajoutée.' });
-  const resolved = JSON.parse((await call('ArtifactComments', { action: 'resolve', url, thread_id: review })).text);
+  assert.deepEqual(threads.map(({ anchor }) => anchor.version), [1, 1, 2]);
+  assert.deepEqual(threads[0].anchor.passage, passage);
+  assert.equal(threads[1].anchor.decision, 'changes_requested');
+  assert.equal(threads[1].messages[0].text, 'Vérifier la chronologie.');
+  assert.equal(threads[2].anchor.decision, 'approved');
+  await call('ArtifactComments', { action: 'reply', url, thread_id: annotation.id, text: 'Ajoutée.' });
+  await call('ArtifactComments', { action: 'resolve', url, thread_id: annotation.id });
+  const [resolved] = JSON.parse((await call('ArtifactComments', { action: 'read', url, thread_id: annotation.id })).text);
   assert.equal(resolved.resolved, true);
-  assert.equal(resolved.messages.length, 2);
-  assert.ok(fs.existsSync(path.join(root, '.piecemaker', 'artifacts', 'comments')));
+  assert.equal(resolved.messages[1].text, 'Ajoutée.');
+});
+
+test('ArtifactComments recovers older completed reviews once, using files within the case', async () => {
+  const { call, write } = await connect();
+  write('page.html', PAGE);
+  const url = urlIn((await call('Artifact', { file_path: 'page.html' })).text);
+  const folder = `.piecemaker/artifacts/reviews/${url.split('/').pop()}`;
+  write(`${folder}/previous.review.json`, JSON.stringify({ version: 1, result_file: '/old-location/result.json' }));
+  write(`${folder}/previous.result.json`, JSON.stringify({ decision: 'annotated', feedback: 'Revoir la date.' }));
+  write(`${folder}/dismissed.review.json`, JSON.stringify({ version: 1 }));
+  write(`${folder}/dismissed.result.json`, JSON.stringify({ decision: 'dismissed' }));
+  const first = JSON.parse((await call('ArtifactComments', { action: 'read', url })).text);
+  assert.equal(first.length, 1);
+  assert.equal(first[0].anchor.decision, 'changes_requested');
+  assert.equal(first[0].messages[0].text, 'Revoir la date.');
+  assert.deepEqual(JSON.parse((await call('ArtifactComments', { action: 'read', url })).text), first);
 });
 
 test('open shows the Artifacts tab on the artifact, pin and delete', async () => {
@@ -195,25 +222,6 @@ test('ArtifactTemplates syncs the repository, which wins over the bundled templa
   const saved = JSON.parse((await call('ArtifactTemplates', { action: 'save', url, name: 'chronologie', intent: 'other', readme: '# Chronologie\n' })).text);
   assert.equal(saved.type_url, 'piecemaker://template/chronologie');
   assert.equal(saved.committed, true);
-});
-
-test('Plannotator is pinned by checksum and runs without any outgoing call', async () => {
-  const { openPlannotator, PLANNOTATOR, PRIVATE_ENV, platformKey } = await import('./plannotator.mjs');
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'plannotator-home-'));
-  const bytes = Buffer.from('binary');
-  const fetchImpl = async () => ({ ok: true, status: 200, arrayBuffer: async () => bytes });
-  const wrong = openPlannotator({ home, fetchImpl, platform: 'linux', arch: 'x64', env: {} });
-  await assert.rejects(() => wrong.install(), /checksum mismatch/);
-  assert.equal(wrong.status().installed, false);
-  PLANNOTATOR.sha256['linux-x64'] = createHash('sha256').update(bytes).digest('hex');
-  const spawned = [];
-  const spawnImpl = (bin, args, options) => { spawned.push({ bin, args, env: options.env }); return { pid: 7, unref() {} }; };
-  const right = openPlannotator({ home, fetchImpl, spawnImpl, platform: 'linux', arch: 'x64', env: {} });
-  assert.equal((await right.install()).installed, true);
-  right.start('/case/index.html', '/case/result.json');
-  assert.deepEqual(spawned[0].args, ['annotate', '/case/index.html', '--gate', '--json', '--no-jina', '--result-file', '/case/result.json', '--render-html']);
-  for (const [name, value] of Object.entries(PRIVATE_ENV)) assert.equal(spawned[0].env[name], value);
-  assert.equal(platformKey('freebsd', 'x64'), null);
 });
 
 test('a template script runs in the PieceMaker Python environment and is never copied into the artifact', async () => {

@@ -1,6 +1,6 @@
 # Runtime d'une page : `window.artifact`
 
-PieceMaker injecte un petit runtime en tête de chaque page affichée dans l'onglet Artifacts. Hors de l'onglet (fichier ouvert directement, revue Plannotator), `window.artifact` n'existe pas : teste-le et affiche un message plutôt que de planter.
+PieceMaker injecte un petit runtime en tête de chaque page affichée dans l'onglet Artifacts. Si le fichier est ouvert directement, `window.artifact` n'existe pas : teste-le et affiche un message plutôt que de planter.
 
 ## Base partagée (`capabilities={"db": {}}`)
 

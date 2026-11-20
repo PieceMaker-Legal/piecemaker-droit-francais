@@ -7,10 +7,10 @@ flowchart LR
   A[Agent] -->|Artifact publish / read / list| S[".piecemaker/artifacts/items/<id>/"]
   A -->|ArtifactData| D[".piecemaker/artifacts/data/<id>/"]
   A -->|ArtifactComments| C[".piecemaker/artifacts/comments/<id>.json"]
-  A -->|ArtifactComments annotate| P[Plannotator v0.29.0]
-  P -->|result-file| R[".piecemaker/artifacts/reviews/<id>/"] --> C
+  A -->|ArtifactComments annotate| O[Volet Artifacts]
+  O -->|Annotations et décisions| C
   A -->|ArtifactTemplates sync / save / push| T["~/.piecemaker/artifacts-templates (dépôt Git)"]
-  O[Onglet Artifacts] -->|/api/piecemaker/artifacts/*| S
+  O -->|/api/piecemaker/artifacts/*| S
   O -->|iframe sandbox + jeton| F["/api/piecemaker/local/artifact-frame/<jeton>/…"]
   F -->|window.artifact postMessage| O
 ```
@@ -21,7 +21,7 @@ flowchart LR
 |---|---|---|
 | `Artifact` | `publish` (défaut), `read`, `list`, `delete`, `open`, `pin`, `unpin`, `quickstart` | pages, versions, fichiers annexes, assets, templates |
 | `ArtifactData` | `get`, `list`, `query`, `set`, `update`, `str_replace`, `delete`, `batch` | base partagée d'un artifact, même moteur que `FeatureData` (`store.mjs`) |
-| `ArtifactComments` | `read`, `reply`, `resolve`, `annotate` | fils de l'avocat (onglet ou Plannotator) |
+| `ArtifactComments` | `read`, `reply`, `resolve`, `annotate` | ouverture de la revue, annotations et décisions de l’avocat |
 | `ArtifactTemplates` | `list`, `read`, `run`, `status`, `sync`, `save`, `push` | bibliothèque de templates, dépôt séparé, scripts Python des templates |
 
 Repris d'Artifact : `file_path`, `url`, `title` (repli quand la page n'a pas de `<title>`), `description`, `icon`, `label`, `edits` (tout ou rien, puis écrits sur disque), `files` (carte chemin publié → source, `null` retire, les absents restent), `type_url`, `capabilities`, `pin`, `force`, `asset` / `file_paths`, `path`, `ver`, `scope` (`mine`, `pinned`, `types`, `files`, `versions`, `assets`), `limit`, `type`, `intent` (`document`, `slides`, `design`, `other`).
@@ -43,27 +43,26 @@ Non repris : partage entre utilisateurs (un dossier n'a qu'un avocat), `contract
 .piecemaker/artifacts/items/<id>/assets/<hex>.<ext> assets téléversés
 .piecemaker/artifacts/data/<id>/<collection>/<doc>.json
 .piecemaker/artifacts/comments/<id>.json
-.piecemaker/artifacts/reviews/<id>/<revue>.review.json|.result.json
 ```
 
 Une version est écrite dans un dossier temporaire puis renommée : jamais de version à moitié écrite. Le Hérisson (entrée `artifacts` de `herisson.json`) refuse Edit, Write et le shell sous `.piecemaker/artifacts/`.
 
 ## Affichage
 
-- L'onglet (`plugins/piecemaker-artifacts`) demande un jeton d'affichage (`POST /api/piecemaker/artifacts/:id/frame`, authentifié), valable une heure, puis charge `/api/piecemaker/local/artifact-frame/<jeton>/index.html` dans une iframe `sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"`, sans `allow-same-origin` : la page n'a ni le jeton de session ni le stockage de PieceMaker.
+- Le manifeste `plugins/piecemaker-artifacts` déclare le volet. Le volet natif (`src/modules/piecemaker-artifacts`) demande un jeton d'affichage (`POST /api/piecemaker/artifacts/:id/frame`, authentifié), valable une heure, puis charge `/api/piecemaker/local/artifact-frame/<jeton>/index.html` dans une iframe `sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads"`, sans `allow-same-origin` : la page n'a ni le jeton de session ni le stockage de PieceMaker.
 - CSP de la page : `connect-src 'none'` (aucune requête réseau), images et médias de l'application ou `data:`/`blob:`, scripts des CDN admis par Claude (cdnjs, jsdelivr, unpkg, tailwind, jquery), styles Google Fonts.
 - Le serveur injecte `__piecemaker/runtime.js` en tête de la page : `window.artifact.db` (capability `db`), `window.artifact.theme`, `window.artifact.download`, événements `artifact:data` et `artifact:theme`. Les appels passent par `postMessage` vers l'onglet, qui vérifie la source et appelle `POST /api/piecemaker/artifacts/:id/data`, refusé sans la capability.
 - L'onglet interroge l'artifact affiché toutes les 3 s : nouvelle version → rechargement (si l'avocat regarde la dernière), base modifiée → `artifact:data`.
-- Galerie : tous / épinglés, épingler, supprimer (deux clics), copier le lien, changer de version, commentaires, « Annoter ».
+- Galerie : tous / épinglés, épingler, supprimer (deux clics), copier le lien, changer de version et ouvrir la revue.
 
-## Plannotator
+## Revue dans PieceMaker
 
-[backnotprop/plannotator](https://github.com/backnotprop/plannotator), MIT OR Apache-2.0, surface locale d'annotation de plans et de pages HTML.
-
-- Binaire de release **v0.29.0** épinglé, empreintes SHA-256 par plateforme dans `plannotator.mjs` ; installé dans `~/.piecemaker/plannotator/v0.29.0/` à la première revue (`install=true`, ou bouton Annoter). Une empreinte fausse n'installe rien. `PIECEMAKER_PLANNOTATOR_BIN` désigne un binaire déjà présent.
-- Lancé avec `DO_NOT_TRACK=1`, `NO_ANON_PING=1`, `PLANNOTATOR_SHARE=disabled`, `PLANNOTATOR_UPDATE_CHECK=0` et `--no-jina` : ni ping quotidien, ni lien de partage hébergé, ni vérification de mise à jour, ni lecteur d'URL distant.
-- `plannotator annotate <page> --gate --json --result-file <fichier> [--render-html]`, détaché : l'outil rend la main tout de suite ; le résultat (`approved`, `annotated` + `feedback`, `dismissed`) devient un fil de l'avocat au prochain `ArtifactComments read` (ou à l'ouverture des commentaires dans l'onglet).
-- Mise à jour de Plannotator : changer `version` et les cinq empreintes (fichiers `.sha256` de la release), puis relancer `server.test.js`.
+- Le bouton **Revue** ouvre les commentaires de la version affichée. L’avocat peut surligner un passage, y ajouter une remarque ou commenter la version entière.
+- L’avocat peut approuver la version ou demander des modifications. Une demande contient un motif. Chaque décision est liée à la version affichée.
+- PieceMaker enregistre les fils et les décisions dans `.piecemaker/artifacts/comments/<id>.json`. Les annotations incluent le texte sélectionné, sa position et son contexte immédiat.
+- `ArtifactComments annotate url=… ver=…` ouvre la revue à cette version via la commande de volet existante. Sans `ver`, l’outil choisit la dernière version.
+- `ArtifactComments read` renvoie les fils. Les décisions portent la valeur `approved` ou `changes_requested` dans `anchor.decision`. L’assistant peut répondre, puis résoudre chaque fil traité.
+- PieceMaker récupère les anciennes décisions terminées lors de la lecture des fils. Les fils déjà importés restent consultables.
 
 ## Templates
 
