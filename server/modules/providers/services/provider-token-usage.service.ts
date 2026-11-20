@@ -185,7 +185,7 @@ async function findCodexSessionFile(
 }
 
 /** Newest `token_count` snapshot in the given JSONL text, or null when it has none. */
-function findCodexTokenUsage(fileContent: string): TokenUsageResult | null {
+function findCodexTokenUsage(fileContent: string, currentContextOnly = false): TokenUsageResult | null {
   const lines = fileContent.trim().split('\n');
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -198,6 +198,7 @@ function findCodexTokenUsage(fileContent: string): TokenUsageResult | null {
         continue;
       }
 
+      if (currentContextOnly && !(tokenInfo.last_token_usage?.total_tokens > 0 && tokenInfo.model_context_window > 0)) return null;
       let inputTokens = 0;
       let outputTokens = 0;
       let totalTokens = 0;
@@ -410,7 +411,7 @@ export function createProviderTokenUsageService(
      * Resolves all provider-specific storage details from one app-facing
      * session id, then returns the latest usage snapshot for that provider.
      */
-    async getSessionTokenUsage(sessionId: string): Promise<TokenUsageResult> {
+    async getSessionTokenUsage(sessionId: string, currentContextOnly = false): Promise<TokenUsageResult> {
       const session = dependencies.getSessionById(sessionId);
       if (!session) {
         throw new AppError(`Session "${sessionId}" was not found.`, {
@@ -486,14 +487,14 @@ export function createProviderTokenUsageService(
         }
 
         const tail = await dependencies.readTextFileTail(sessionFilePath, TOKEN_USAGE_TAIL_BYTES);
-        const tailUsage = findCodexTokenUsage(tail.content);
+        const tailUsage = findCodexTokenUsage(tail.content, currentContextOnly);
         if (tailUsage || tail.isComplete) {
           return tailUsage ?? emptyCodexTokenUsage();
         }
 
         // A tail this large with no token_count row is pathological, but the
         // whole file is still authoritative when it happens.
-        return findCodexTokenUsage(await dependencies.readTextFile(sessionFilePath))
+        return findCodexTokenUsage(await dependencies.readTextFile(sessionFilePath), currentContextOnly)
           ?? emptyCodexTokenUsage();
       }
 
@@ -536,11 +537,11 @@ export function createProviderTokenUsageService(
       if (!claudeEntriesHaveUsage(entries) && !tail.isComplete) {
         entries = parseClaudeUsageEntries(await dependencies.readTextFile(sessionFilePath));
       }
-      return summarizeClaudeTokenUsage(
-        entries,
-        dependencies.getClaudeContextWindow(),
-        dependencies.getReportedClaudeContextWindow(providerSessionId),
-      );
+      const configuredWindow = dependencies.getClaudeContextWindow();
+      const reportedWindow = dependencies.getReportedClaudeContextWindow(providerSessionId);
+      const usage = summarizeClaudeTokenUsage(entries, configuredWindow, reportedWindow);
+      if (currentContextOnly && !reportedWindow && !(Number(configuredWindow) > 0)) return { ...usage, total: undefined };
+      return usage;
     },
   };
 }

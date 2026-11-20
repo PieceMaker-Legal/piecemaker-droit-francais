@@ -372,6 +372,7 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
 
     const convertedStart = converted.length;
     const sharedMetadata = {
+      agentCard: msg.agentCard,
       displayText: msg.displayText,
       commandName: msg.commandName,
       commandMessage: msg.commandMessage,
@@ -401,7 +402,7 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         const content = msg.content || '';
         const images = Array.isArray(msg.images) && msg.images.length > 0 ? msg.images : undefined;
         const files = Array.isArray(msg.files) && msg.files.length > 0 ? msg.files : undefined;
-        if (!content.trim() && !images && !files) break;
+        if (!content.trim() && !images && !files && !msg.agentCard) break;
 
         if (msg.role === 'user') {
           // Parse task notifications

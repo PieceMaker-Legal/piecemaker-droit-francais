@@ -1,6 +1,7 @@
+import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-import { chronologyView, citationListMarkup, generalView, mappingView, proposedPieceName } from '../views.js';
+import { chronologyView, citationListMarkup, generalView, graphView, mappingView, proposedPieceName } from '../views.js';
 import type { KnowledgeSnapshot } from '../types.js';
 
 const snapshot: KnowledgeSnapshot = {
@@ -28,7 +29,43 @@ describe('Index du dossier', () => {
     expect(html.match(/data-index-analysis/g)).toHaveLength(1);
     expect(html).not.toContain('pmd-chronology-table');
     expect(html).not.toContain('data-action="index-analysis"');
-    expect(html).toContain('data-action="okf-verify"');
+    expect(JSDOM.fragment(html).querySelectorAll('[data-okf-reports], [data-okf-report], [data-okf-graph]')).toHaveLength(0);
+  });
+
+  it('affiche la chronologie et les liens de réglage dans la légende', () => {
+    const view = JSDOM.fragment(chronologyView());
+    const legend = view.querySelector('.pmd-okf-legend')!;
+    expect(legend.querySelector('button[data-action="index-chronology"][aria-pressed="false"]')?.textContent).toBe('Chronologie');
+    expect(Array.from(legend.querySelectorAll('a[href]'), (link) => link.textContent)).toEqual(['Arborescence', "Types d'actes"]);
+    expect(view.querySelector('.pmd-toolbar, .pmd-subtitle, [data-action="okf-verify"], [data-action="refresh"], [data-action="edit-ontology"]')).toBeNull();
+    expect(view.querySelectorAll('button')).toHaveLength(1);
+  });
+
+  it('conserve le bandeau de propositions et ses accès aux éditeurs', () => {
+    const view = JSDOM.fragment(chronologyView({ ontologie: 1, arborescence: 1 }));
+    const banner = view.querySelector('[data-proposals]:not([hidden])')!;
+    expect(banner.querySelector('[data-action="edit-ontology"]')).not.toBeNull();
+    expect(banner.querySelector('[data-action="edit-tree"]')).not.toBeNull();
+  });
+});
+
+describe('Graphe du dossier', () => {
+  it.each([[undefined, true, 'black'], [false, false, 'glass']] as const)('affiche la légende et le bouton Prémisses avec la préférence %s', (showPremises, pressed, variant) => {
+    const view = JSDOM.fragment(graphView({
+      types: ['Pièces'],
+      typesGraphe: ['Pièces'],
+      fiches: [{ id: '/contrat.md', type: 'Pièces', title: 'Contrat', description: '', resource: 'Contrat.pdf', date: '', relations: [] }],
+    }, showPremises));
+    const wrap = view.querySelector('.pmd-okf-graph-wrap')!;
+    expect(wrap.querySelector('[data-okf-graph]')).not.toBeNull();
+    const legend = wrap.querySelector('.pmd-okf-legend')!;
+    expect(Array.from(legend.querySelectorAll('.pmd-okf-key'), (key) => key.textContent)).toEqual(['Type du document', 'Prémisse', 'Partie']);
+    expect(legend.querySelector('a[href][data-action="edit-ontology"]')?.textContent).toBe('Ontologie');
+    const toggle = legend.querySelector('button[data-action="okf-premises"]');
+    expect(toggle?.textContent).toBe('Prémisses');
+    expect(toggle?.getAttribute('aria-pressed')).toBe(String(pressed));
+    expect(toggle?.classList.contains(`piecemaker-button--${variant}`)).toBe(true);
+    expect(view.querySelector('.pmd-toolbar, .pmd-subtitle, [data-action="refresh"], [data-okf-center], [data-okf-premises]')).toBeNull();
   });
 });
 
@@ -220,22 +257,5 @@ describe('citationListMarkup', () => {
     expect(html).toContain('data-remove-citation="12"');
     expect(html.match(/<button/g)).toHaveLength(1);
     expect(html.match(/<li /g)).toHaveLength(2);
-  });
-});
-
-describe('index OKF contradictions', () => {
-  const contradiction = { premise: '/_premises/Prix.md', titre: 'Prix', valeurs: [{ piece: 'Contrat', valeur: '1 000 €' }, { piece: 'Courrier', valeur: '1 200 €' }] };
-
-  it('shows the contradictions between pieces in the chronology', () => {
-    const html = chronologyView({ errors: null, contradictions: [contradiction] });
-    expect(html).toContain('data-okf-report="contradictions"');
-    expect(html).toContain('Prix');
-    expect(html).toContain('Contrat : 1 000 €');
-    expect(html).toContain('Courrier : 1 200 €');
-  });
-
-  it('shows no contradiction report without contradictions', () => {
-    expect(chronologyView({ errors: null, contradictions: [] })).not.toContain('data-okf-report="contradictions"');
-    expect(chronologyView({ errors: null })).not.toContain('data-okf-report="contradictions"');
   });
 });

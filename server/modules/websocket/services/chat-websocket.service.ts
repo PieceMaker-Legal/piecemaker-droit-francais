@@ -872,6 +872,7 @@ export async function runDetachedChatTurn(
     sessionId: string;
     userId: string | number | null;
     content: string;
+    displayContent?: string;
     options?: AnyRecord;
     /**
      * Aborts a run already in progress instead of refusing to start. A
@@ -933,7 +934,7 @@ export async function runDetachedChatTurn(
         id: generateMessageId('local_server'),
         provider,
         sessionId: input.sessionId,
-        content: input.content,
+        content: input.displayContent ?? input.content,
         images: attachments.filter(isImageAttachmentDescriptor),
         files: attachments.filter((attachment) => !isImageAttachmentDescriptor(attachment)),
       }));

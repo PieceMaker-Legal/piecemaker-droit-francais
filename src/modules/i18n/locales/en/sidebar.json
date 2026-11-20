@@ -26,6 +26,10 @@
   "sessions": {
     "title": "Sessions",
     "newSession": "New Session",
+    "piecemakerAgent": "PieceMaker Agent",
+    "piecemakerAgentTitle": "Open PieceMaker Agent for this folder",
+    "tabularReview": "Tabular Review",
+    "tabularReviewTitle": "Analyze this folder's Markdown documents as a table",
     "deleteSession": "Delete Session",
     "renameSession": "Rename Session",
     "noSessions": "No sessions yet",
