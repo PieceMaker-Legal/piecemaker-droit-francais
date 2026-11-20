@@ -102,8 +102,11 @@ const MessageCopyControl = ({
 
   const handleMessageClick = (event: MouseEvent<HTMLDivElement>) => {
     const { target, currentTarget } = event;
-    if (event.defaultPrevented || event.button !== 0 || event.detail > 1
-      || !(target instanceof Element) || !currentTarget.contains(target)
+    if (event.defaultPrevented || event.button !== 0 || event.detail > 1 || !(target instanceof Element)) {
+      return;
+    }
+    const copyTarget = target.closest('[data-message-copy-target]');
+    if (!copyTarget || !currentTarget.contains(copyTarget)
       || target.closest(INTERACTIVE_TARGET) || window.getSelection()?.isCollapsed === false) {
       return;
     }
