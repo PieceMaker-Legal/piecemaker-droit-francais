@@ -235,22 +235,22 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
   const onOpenArtifact = (url: string) => openAgentOutput(projectPath, { kind: 'artifact', ref: url });
 
   return <div className="pm-agent-panel flex h-full min-w-0 flex-col text-foreground" aria-label="Volet de l’agent">
-    <header className="relative flex h-12 shrink-0 items-center gap-1 border-b border-border px-3">
-      <nav role="tablist" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+    <header className="relative flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-1">
+      <nav role="tablist" className="flex min-w-0 flex-wrap items-center gap-1">
         {TABS.map(([value, label]) => <button key={value} role="tab" type="button" aria-selected={tab === value} onClick={() => onTab(value)}
-          className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-1.5 text-[15px] ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
-          {label}{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
+          className={`flex min-w-0 items-center gap-2 rounded-xl px-3 py-1.5 text-left text-sm font-medium ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
         </button>)}
       </nav>
       <button type="button" aria-label="Ajouter" aria-haspopup="menu" aria-expanded={menu === 'plus'} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => setMenu(menu === 'plus' ? null : 'plus')}><Plus className="h-[18px] w-[18px]" /></button>
-      {menu === 'plus' && <div role="menu" className="absolute right-12 top-11 z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
+      {menu === 'plus' && <div role="menu" className="absolute right-12 top-full z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
         <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-accent" onClick={customView}>Vue personnalisée</button>
       </div>}
       <button type="button" aria-label="Paramètres" title="Paramètres" aria-pressed={tab === 'settings'} className="shrink-0 rounded-lg p-2 hover:bg-accent" onClick={() => { setMenu(null); onTab('settings'); }}><SettingsIcon className="h-[18px] w-[18px]" /></button>
       <span className="flex-1" />
       <button type="button" aria-label="Rechercher" aria-pressed={searching} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => { setSearching(!searching); onTab('threads'); }}><Search className="h-[18px] w-[18px]" /></button>
       <button type="button" aria-label="Filtrer" aria-expanded={menu === 'filter'} className={`shrink-0 rounded-lg p-2 hover:bg-accent ${filter !== 'all' ? 'text-blue-500' : 'text-foreground/80'}`} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}><Filter className="h-[18px] w-[18px]" /></button>
-      {menu === 'filter' && <div role="menu" className="absolute right-2 top-11 z-20 w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
+      {menu === 'filter' && <div role="menu" className="absolute right-2 top-full z-20 w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
         {(['all', ...Object.keys(THREAD_STATE_LABELS)] as Array<AgentThreadState | 'all'>).map((value) => <button key={value} role="menuitemradio" aria-checked={filter === value} type="button"
           className="block w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { setFilter(value); setMenu(null); onTab('threads'); }}>{value === 'all' ? 'Tous les états' : THREAD_STATE_LABELS[value]}</button>)}
       </div>}

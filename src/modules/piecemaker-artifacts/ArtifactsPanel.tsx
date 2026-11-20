@@ -7,14 +7,12 @@ import {
 import { ArtifactFrame } from '@/modules/piecemaker-artifacts/ArtifactFrame';
 import { ArtifactReview } from '@/modules/piecemaker-artifacts/ArtifactReview';
 import { ArtifactState } from '@/modules/piecemaker-artifacts/ArtifactState';
+import { ARTIFACTS_TAB, ARTIFACTS_SHOW_EVENT, ARTIFACTS_SHOW_KEY } from '@/modules/piecemaker-artifacts/openArtifactInPanel';
 import { useArtifactResource } from '@/modules/piecemaker-artifacts/hooks/useArtifactResource';
 import { artifactsApi } from '@/shared/api';
 import { Badge, Button, Card, Dialog, DialogContent, DialogTitle } from '@/shared/ui';
 import type { ArtifactDetail, ArtifactPassage, ArtifactSummary } from '@/shared/types';
 
-const TAB = 'plugin:piecemaker-artifacts';
-const SHOW_EVENT = 'piecemaker:artifacts-show';
-const SHOW_KEY = '__piecemakerArtifactsShow';
 const icons = {
   chart: BarChart3, dashboard: BarChart3, calendar: Calendar, slides: Presentation, checklist: CheckSquare,
   tracker: CheckSquare, map: Map, table: Table, code: Code2, timeline: List,
@@ -208,9 +206,9 @@ function ArtifactsProject({ project }: { project: string }) {
   useEffect(() => {
     const takeShow = () => {
       const holder = window as unknown as Record<string, { project?: string | null; artifact?: string | null; preserveReview?: boolean } | undefined>;
-      const request = holder[SHOW_KEY];
+      const request = holder[ARTIFACTS_SHOW_KEY];
       if (!request || (request.project && request.project !== project)) return;
-      delete holder[SHOW_KEY];
+      delete holder[ARTIFACTS_SHOW_KEY];
       const value = request.artifact?.replace(/^piecemaker:\/\/artifact\//, '');
       if (!value) return;
       const match = /^([a-z][a-z0-9-]{2,63})(?:@v([1-9]\d*))?$/.exec(value);
@@ -219,14 +217,14 @@ function ArtifactsProject({ project }: { project: string }) {
       setTarget((current) => request.preserveReview && current?.id === id && current.reviewing
         ? current : { id, version: version ? Number(version) : null, reviewing: Boolean(version) });
     };
-    window.addEventListener(SHOW_EVENT, takeShow);
+    window.addEventListener(ARTIFACTS_SHOW_EVENT, takeShow);
     takeShow();
-    return () => window.removeEventListener(SHOW_EVENT, takeShow);
+    return () => window.removeEventListener(ARTIFACTS_SHOW_EVENT, takeShow);
   }, [project]);
 
   const file = target?.reviewing ? `${target.id}@v${target.version}` : target?.id;
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: TAB, ...(file && { file }) } }));
+    window.dispatchEvent(new CustomEvent('piecemaker:panel-focus', { detail: { tab: ARTIFACTS_TAB, ...(file && { file }) } }));
   }, [file, project]);
 
   return target

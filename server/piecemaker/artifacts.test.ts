@@ -8,6 +8,8 @@ import test from 'node:test';
 
 import express from 'express';
 
+import type { NormalizedMessage } from '@/shared/types.js';
+
 import { createArtifactFrameRouter, createArtifactsRouter, frameCsp, injectRuntime } from './artifacts.js';
 import { openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
 
@@ -27,12 +29,34 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   await writeFile(path.join(project, 'style.css'), 'body{}');
   const artifacts = openArtifacts(project);
   const page = (await import('node:fs')).readFileSync(path.join(project, 'page.html'), 'utf8');
+  context.mock.timers.enable({ apis: ['Date'], now: new Date('2026-01-01T12:00:00Z') });
   const plain = artifacts.publish({ page, files: { 'style.css': 'style.css' } });
+  context.mock.timers.tick(1000);
   const withDb = artifacts.publish({ page, capabilities: { db: {} } });
 
+  context.mock.timers.tick(1000);
+  const foreign = artifacts.publish({ page, title: 'Hors session' });
+  context.mock.timers.tick(1000);
+  artifacts.publish({ url: plain.url, page });
+  const toolName = 'mcp__artifacts__Artifact';
+  const row = { sessionId: 'fil-a', timestamp: plain.created_at };
+  const receipt = (item: typeof plain) => `Artifact ${item.url} — ${item.title}\nversion 1 of 1 · updated ${item.created_at}`;
+  const messages: NormalizedMessage[] = [
+    { ...row, id: 'c1', provider: 'claude', kind: 'tool_use', toolName, toolId: 'c1', toolInput: { file_path: 'page.html' } },
+    { ...row, id: 'r1', provider: 'claude', kind: 'tool_result', toolId: 'c1', content: JSON.stringify([{ type: 'text', text: receipt(plain) }]) },
+    { ...row, id: 'c2', provider: 'codex', kind: 'tool_use', toolName, toolId: 'c2', toolInput: JSON.stringify({ file_path: 'page.html' }) },
+    { ...row, id: 'r2', provider: 'codex', kind: 'tool_result', toolId: 'c2', content: JSON.stringify({ content: [{ type: 'text', text: receipt(withDb) }] }) },
+    { ...row, id: 'c3', provider: 'mistral', kind: 'tool_use', toolName, toolId: 'c3', toolInput: { action: 'read', url: foreign.url }, toolResult: { content: receipt(foreign) } },
+  ];
   const app = express();
   app.use('/api/piecemaker/local', createArtifactFrameRouter());
-  app.use('/api/piecemaker', createArtifactsRouter({ getProjectPathById: () => null, getProjectPaths: () => [{ project_path: project }] }));
+  app.use('/api/piecemaker', createArtifactsRouter({ getProjectPathById: () => null, getProjectPaths: () => [{ project_path: project }] }, {
+    getSessionById: (id) => ({ project_path: id === 'autre-dossier' ? '/autre' : project, created_at: plain.created_at, forked_from_session_id: null }),
+    fetchHistory: async (id) => ({ messages: id === 'fil-a' ? messages : id === 'fil-b' ? [{
+      ...row, sessionId: id, id: 'c4', provider: 'mistral', kind: 'tool_use', toolName, toolId: 'c4',
+      toolInput: { type_url: 'piecemaker://template/page' }, toolResult: { content: receipt(foreign) },
+    }] : [] }),
+  }));
   const request = (url: string, body?: object) => new Promise<Response>((resolve, reject) => {
     const socket = new Socket();
     const incoming = new IncomingMessage(socket);
@@ -61,7 +85,14 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   const post = (route: string, body: object = {}) => request(`/api/piecemaker/${route}?${query}`, body);
 
   const list = await (await request(`/api/piecemaker/artifacts?${query}`)).json() as Array<{ id: string }>;
-  assert.equal(list.length, 2);
+  assert.equal(list.length, 3);
+  const sessionItems = async (id: string) => request(`/api/piecemaker/artifacts/session/${id}?${query}`);
+  const created = await (await sessionItems('fil-a')).json() as Array<{ id: string }>;
+  assert.deepEqual(created.map(({ id }) => id), [withDb.id, plain.id]);
+  const secondSession = await (await sessionItems('fil-b')).json() as Array<{ id: string }>;
+  assert.deepEqual(secondSession.map(({ id }) => id), [foreign.id]);
+  assert.deepEqual(await (await sessionItems('fil-vide')).json(), []);
+  assert.equal((await sessionItems('autre-dossier')).status, 404);
   assert.equal((await request(`/api/piecemaker/artifacts?projectPath=%2Fautre`)).status, 404);
 
   const { src } = await (await post(`artifacts/${plain.id}/frame`)).json() as { src: string };

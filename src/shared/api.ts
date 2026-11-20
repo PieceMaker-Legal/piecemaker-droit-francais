@@ -17,6 +17,7 @@ async function artifactRequest<T>(projectPath: string, route = '', body?: unknow
 
 export const artifactsApi = {
   list: (project: string) => artifactRequest<ArtifactSummary[]>(project),
+  forSession: (project: string, sessionId: string) => artifactRequest<ArtifactSummary[]>(project, `/session/${encodeURIComponent(sessionId)}`),
   detail: (project: string, id: string) => artifactRequest<ArtifactDetail>(project, `/${encodeURIComponent(id)}`),
   frame: (project: string, id: string, version: number) => artifactRequest<{ src: string }>(project, `/${encodeURIComponent(id)}/frame`, {}, undefined, version),
   pin: (project: string, id: string, pinned: boolean) => artifactRequest<ArtifactSummary>(project, `/${encodeURIComponent(id)}/pin`, { pinned }),
