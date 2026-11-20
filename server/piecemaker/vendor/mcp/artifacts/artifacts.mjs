@@ -165,9 +165,9 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
     };
   }
 
-  function all() {
+  function ids() {
     if (!fs.existsSync(base)) return [];
-    return fs.readdirSync(base).filter((name) => ID_PATTERN.test(name) && fs.existsSync(metaFile(name))).map(load);
+    return fs.readdirSync(base).filter((name) => ID_PATTERN.test(name) && fs.existsSync(metaFile(name)));
   }
 
   function newId(title) {
@@ -263,6 +263,16 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
     versionFolder,
     load,
     summary,
+    hasDocument(relativePath) {
+      return ids().some((id) => {
+        try {
+          const { document } = load(id);
+          return typeof document === 'string' && path.normalize(document) === relativePath;
+        } catch {
+          return false;
+        }
+      });
+    },
     editableSource,
     updateFromSource(url, expectedVersion) {
       const id = idOf(url);
@@ -366,7 +376,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
         if (scope === 'assets') return (meta.assets ?? []).map(({ id, file, type: assetType, size }) => ({ id, url: `assets/${file}`, type: assetType, size }));
         return meta.versions.map(({ version, label, published_at: at, files: published, digest }) => ({ version, label, published_at: at, files: published.length + 1, digest })).reverse();
       }
-      let items = all();
+      let items = ids().map(load);
       if (scope === 'pinned') items = items.filter((meta) => meta.pinned);
       if (type) items = items.filter((meta) => meta.type === type);
       return items.sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at))).slice(0, max).map(summary);

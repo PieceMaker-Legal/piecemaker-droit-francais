@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 
-import { ArtifactsPanel } from '@/modules/piecemaker-artifacts';
+import { ArtifactsPanel, SessionArtifacts } from '@/modules/piecemaker-artifacts';
 import { ThemeProvider } from '@/shared/context/ThemeContext';
 import type { ArtifactThread } from '@/shared/types';
 
@@ -69,4 +69,33 @@ test('a review opened by the agent saves annotations and decisions to its select
   await waitFor(() => expect(screen.getByRole('complementary', { name: 'Revue de la version 2' })).toBeTruthy());
   await screen.findByText('Aucun commentaire sur cette version.');
   expect(screen.queryByText(quote)).toBeNull();
+});
+
+test('opens an artifact created in the current thread in the existing panel', async () => {
+  const project = '/dossiers/projet-fictif';
+  const id = 'note-fictive';
+  const title = 'Note fictive';
+  const artifact = { id, title, url: `piecemaker://artifact/${id}`, version: 1, updated_at: '2026-01-01' };
+  vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+    const { pathname } = new URL(input, 'http://localhost');
+    if (pathname.endsWith('/session/fil-fictif')) return Response.json([artifact]);
+    if (pathname.endsWith('/artifacts')) return Response.json([]);
+    if (pathname.endsWith(`/artifacts/${id}`)) {
+      return Response.json({ ...artifact, versions: [{ version: 1, published_at: '2026-01-01' }] });
+    }
+    if (pathname.endsWith('/frame')) return Response.json({ src: '/apercu-fictif' });
+    if (pathname.endsWith('/comments')) return Response.json([]);
+    return new Response(null, { status: 404 });
+  }));
+
+  render(<ThemeProvider>
+    <SessionArtifacts project={project} sessionId="fil-fictif" subscribe={() => () => undefined} />
+    <ArtifactsPanel project={project} />
+  </ThemeProvider>);
+  const threadArtifacts = await screen.findByRole('group', { name: 'Artifacts de la session' });
+  fireEvent.click(within(threadArtifacts).getByRole('button', { name: title }));
+  await waitFor(() => {
+    const frame = screen.getAllByTitle(title).find((node) => node instanceof HTMLIFrameElement);
+    expect(frame?.getAttribute('src')).toBe('/apercu-fictif');
+  });
 });

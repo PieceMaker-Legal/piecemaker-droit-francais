@@ -60,7 +60,7 @@ Une version est écrite dans un dossier temporaire puis renommée : jamais de ve
 Dans **Projet › Contexte › Artéfacts**, le contenu s’ouvre à gauche. La session de création apparaît à droite si son historique contient la première publication. Le fil associé au livrable reste accessible si cet historique manque.
 
 - HTML : **Modifier le HTML** ouvre l’éditeur de fichiers. Enregistre le fichier, ferme l’éditeur puis choisis **Actualiser depuis le fichier** pour créer une version de l’artifact. Si la source n’est plus disponible dans le dossier, PieceMaker crée une copie de travail depuis la version affichée.
-- Word : `Artifact publish file_path=<document.docx>` référence le document du dossier. Eigenpal ouvre ce document et l’enregistre par le parcours Word habituel. La suppression de l’artifact conserve le document.
+- Word : `Artifact publish file_path=<document.docx>` référence le document du dossier. Eigenpal ouvre ce document et l’enregistre par le parcours Word habituel. Le fichier porte la mention **Artéfact** dans le volet Word, même si tu le rouvres par son chemin. La suppression de l’artifact retire la mention et conserve le document.
 
 ## Revue dans PieceMaker
 
