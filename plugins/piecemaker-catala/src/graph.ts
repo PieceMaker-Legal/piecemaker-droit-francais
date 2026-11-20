@@ -494,7 +494,7 @@ function writer(model: Reasoning) {
     const reason = step.clause && step.clause.met === 'ok' ? (step.clause.kind === 'any' ? 'L’une des conditions est remplie.' : 'Les conditions sont remplies.')
       : step.clause && step.clause.met === 'ko' ? (step.clause.kind === 'any' ? 'Aucune condition n’est remplie.' : 'Au moins une condition n’est pas remplie.')
       : step.conditional ? 'Une condition d’application sélectionne cette définition.' : '';
-    return value || reason ? `<div class="pmc-part" data-part="projection"><h4>${step.answer ? words.outcome : mode === 'transactional' ? 'Dans ce cas de figure' : 'Dans ce scénario'}</h4><div class="pmc-projection" data-tone="${tone(step.value)}">${value}<span>${escape(reason)}</span></div></div>` : '';
+    return value || reason ? `<div class="pmc-part" data-part="projection"><h4>${step.answer ? words.outcome : mode === 'transactional' ? 'Projection au cas de figure' : 'Projection au scénario'}</h4><div class="pmc-projection" data-tone="${tone(step.value)}">${value}<span>${escape(reason)}</span></div></div>` : '';
   };
   const serves = (step: Step) => {
     const used = model.steps.filter((rule) => rule.kind === 'rule' && rule.parents.includes(step.id));
