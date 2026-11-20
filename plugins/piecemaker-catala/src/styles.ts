@@ -78,8 +78,6 @@ p.pmc-scenario{margin:0}
 .pmc-legend{display:flex;gap:6px 16px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--border);font-size:11.5px;color:var(--muted)}
 .pmc-legend .pmc-ok,.pmc-legend .pmc-ko{font-weight:600}
 .pmc-map-scroll{flex:1;min-height:0;overflow:auto;padding:12px 14px}
-.pmc-program{flex:1;min-height:0;overflow:auto;padding:14px 16px 22px;line-height:1.5}.pmc-program-file h2,.pmc-program-file h3,.pmc-program-file h4{margin:18px 0 8px;color:var(--ink)}.pmc-program-file p{margin:0 0 8px}.pmc-program-graph{overflow-x:auto;margin:6px 0}.pmc-program-code{margin:4px 0 12px;font-size:12px}.pmc-program-code summary{cursor:pointer;color:var(--muted)}.pmc-program-code pre{overflow:auto;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--soft)}
-.pmc .pmc-program .pmc-branch>*{position:relative}
 .pmc-map-summary{margin-bottom:12px}
 .pmc-docs{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:10px}.pmc-docs li{display:flex;flex-direction:column;gap:4px;padding-left:10px;border-left:2px solid var(--border)}.pmc-docs li[data-kind=piece]{border-left-color:#2f7d63}.pmc-docs q{display:block;font:italic 13.5px/1.5 var(--editorial);color:var(--ink)}.pmc-docs .pmc-reference{align-self:flex-start;text-align:left}
 .pmc-calculation{color:var(--muted);font-size:12.5px}

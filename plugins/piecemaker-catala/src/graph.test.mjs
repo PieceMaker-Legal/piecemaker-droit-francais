@@ -193,6 +193,18 @@ test('builds a graph from native JSON when DOT is unavailable and preserves the 
   assert.match(reasoningCard(answer, model), /autre règle/);
 });
 
+test('omits Catala records and the scenario block from the written reasoning', () => {
+  const model = reasoning(`digraph G {
+    x001 [label=<<table><tr><td>examen</td></tr><tr><td>ExamenFictif { -- état: Inconnu }</td></tr><tr><td>= {&quot;état&quot;:&quot;Inconnu&quot;}</td></tr></table>>];
+    x002 [label=<<table><tr><td>constat</td></tr><tr><td>= ExamenFictif { -- état: Inconnu }</td></tr></table>>];
+    x003 [label=<<table><tr><td>suite_possible</td></tr><tr><td>examen</td></tr><tr><td>= true</td></tr></table>>];
+    x001 -> x003 [style="solid"];
+  }`);
+  const document = new JSDOM(reasoningText(model)).window.document;
+  assert.match(document.body.textContent, /Examen.*Constat/s);
+  assert.doesNotMatch(document.body.textContent, /Examen\s*Fictif|\{"état"|Dans ce scénario/i);
+});
+
 test('distinguishes statutes, case law and other references without treating a website as legal authority', () => {
   const file = { ...module, contenu: `${module.contenu}\n## Sources\nConcerne : résolution_possible\n[Décision fictive](https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001)\n[Documentation](https://example.org/explication)\n` };
   const graph = new JSDOM(reasoningGraph(reasoning(dot, [file], citations))).window.document;

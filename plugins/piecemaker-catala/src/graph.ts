@@ -1,6 +1,6 @@
 import { sourceContext } from './source-context.js';
 import { catalaDocumentation } from '../../../server/piecemaker/vendor/skills/Skill-PieceMaker/scripts/catala-documentation.mjs';
-import { display, formula, reasoningMap, WORDS, modeOf, type Mode } from './reasoning-map.js';
+import { display, formula, reasoningMap, structured, WORDS, modeOf, type Mode } from './reasoning-map.js';
 import { nativeExecution, type NativeOrigin, type NativeProvenance } from './native-provenance.js';
 import { applicationMarkup, conditionApplication } from './condition-application.js';
 
@@ -316,7 +316,8 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     const body = node.kind === 'conclusion' && node.lines.length > 2 ? node.lines.slice(1) : node.lines;
     let equal = -1;
     body.forEach((line, index) => { if (line.startsWith('=')) equal = index; });
-    const value = human(equal >= 0 ? body.slice(equal).join(' ').replace(/^=\s*/, '') : node.kind !== 'condition' && body.length > 1 ? body.at(-1)! : '');
+    const rawValue = (equal >= 0 ? body.slice(equal).join(' ').replace(/^=\s*/, '') : node.kind !== 'condition' && body.length > 1 ? body.at(-1)! : '').trim();
+    const value = structured(rawValue) ? rawValue : human(rawValue);
     const kind = node.kind === 'input' ? 'fact' : node.kind === 'condition' ? 'condition' : 'rule';
     const head = kind === 'condition' ? body.slice(0, equal >= 0 ? equal : undefined).join(' ') : body[0] ?? '';
     const expression = kind === 'condition' ? head : body.slice(1, equal >= 0 ? equal : body.length > 1 ? -1 : undefined).join(' ');
@@ -331,7 +332,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
       } };
       if (file) for (const location of coverage.locations) if (location.file === file.chemin) visit(location.tree);
     }
-    const matches = native?.variables.filter((variable) => key(variable.name) === key(head) && human(variable.value) === value) ?? [];
+    const matches = native?.variables.filter((variable) => key(variable.name) === key(head) && (structured(variable.value) ? variable.value : human(variable.value)) === value) ?? [];
     const variable = fallback ? native?.variables.find((variable) => variable.id === id) : matches.length === 1 ? matches[0] : undefined;
     const origins = variable?.origins.filter((entry) => entry.file && entry.line > 0).map(enrich) ?? [];
     if (!origins.some((entry) => entry.selected && entry.role === 'definition') && node.source) {
@@ -366,7 +367,7 @@ export function reasoning(dot: string, files: File[] = [], citations: Citation[]
     if (step.kind !== 'rule') continue;
     step.conditional = !step.expression && edges.some((edge) => edge.to === step.id && edge.dashed);
     const conditions = step.parents.map((id) => steps.get(id)!).filter((parent) => parent.kind === 'condition');
-    const parts = [...conditions.map((condition) => parseClause(condition.expression, find) ?? { kind: 'leaf' as const, text: condition.expression, ref: condition.id, refs: condition.parents, members: [], met: '' }), parseClause(step.expression, find)].filter((part): part is Clause => Boolean(part));
+    const parts = [...conditions.map((condition) => parseClause(condition.expression, find) ?? { kind: 'leaf' as const, text: condition.expression, ref: condition.id, refs: condition.parents, members: [], met: '' }), (structured(step.value) || structured(step.expression)) ? null : parseClause(step.expression, find)].filter((part): part is Clause => Boolean(part));
     step.clause = parts.length ? conjunction('all', parts) : null;
     if (step.clause) { judge(step.clause, steps); infer(step.clause, step.value === 'Vrai' ? 'ok' : step.value === 'Faux' ? 'ko' : ''); }
     step.parents = [...new Set(step.parents.flatMap((id) => steps.get(id)!.kind === 'condition' ? steps.get(id)!.parents : [id]))];
@@ -457,6 +458,7 @@ function writer(model: Reasoning) {
     const excluded = new Set(basis.map(identity));
     const foundation = basis.length ? sourceList(basis) : '';
     if (!step.clause) {
+      if (structured(step.value) || structured(step.expression)) return foundation;
       if (step.expression) return `${foundation}<p class="pmc-formula">${escape(human(step.expression))}</p>`;
       if (step.conditional) return `${foundation}<p class="pmc-formula">Cette définition dépend d’une condition d’application.</p>`;
       const written = formula(step, human);
@@ -488,26 +490,26 @@ function writer(model: Reasoning) {
     return parents.length ? `<ul class="pmc-justification">${parents.map((parent) => parent.kind === 'fact' ? factLine(parent) : `<li><button type="button" class="pmc-text-action" data-goto="${parent.id}">${escape(parent.title)}</button> ${pill(tone(parent.value), display(parent))}</li>`).join('')}</ul>` : '';
   };
   const projection = (step: Step) => {
-    const value = step.value ? pill(tone(step.value), display(step)) : pill('warn', 'Indéterminé');
+    const value = step.value ? (display(step) ? pill(tone(step.value), display(step)) : '') : pill('warn', 'Indéterminé');
     const reason = step.clause && step.clause.met === 'ok' ? (step.clause.kind === 'any' ? 'L’une des conditions est remplie.' : 'Les conditions sont remplies.')
       : step.clause && step.clause.met === 'ko' ? (step.clause.kind === 'any' ? 'Aucune condition n’est remplie.' : 'Au moins une condition n’est pas remplie.')
       : step.conditional ? 'Une condition d’application sélectionne cette définition.' : '';
-    return `<div class="pmc-projection" data-tone="${tone(step.value)}">${value}<span>${escape(reason)}</span></div>`;
+    return value || reason ? `<div class="pmc-part" data-part="projection"><h4>${step.answer ? words.outcome : mode === 'transactional' ? 'Projection au cas de figure' : 'Projection au scénario'}</h4><div class="pmc-projection" data-tone="${tone(step.value)}">${value}<span>${escape(reason)}</span></div></div>` : '';
   };
   const serves = (step: Step) => {
     const used = model.steps.filter((rule) => rule.kind === 'rule' && rule.parents.includes(step.id));
     return used.length ? `<p class="pmc-serves">Sert à établir : ${used.map((rule) => `<button type="button" class="pmc-text-action" data-goto="${rule.id}">${escape(rule.title)}</button>`).join(', ')}</p>` : '';
   };
   const card = (step: Step, rank = 0) => {
-    const native = step.origins.length || model.nativeIssues.length ? `<details class="pmc-native"><summary>Origine native Catala</summary>${model.nativeIssues.map((issue) => `<p class="pmc-warn">${escape(issue)}</p>`).join('')}${step.origins.map((entry) => `<section><h4>${entry.role === 'declaration' ? 'Déclaration' : entry.role === 'condition' ? 'Condition' : 'Définition'}${entry.selected ? ' · appliquée au scénario' : ' · autre règle'}</h4>${sourceLink({ kind: 'origin', label: entry.headings.join(' › ') || 'Passage du programme', target: entry.file, origin: entry.file, quote: entry.text, status: '' })}<p class="pmc-muted">Ligne ${entry.line}, colonne ${entry.column} à ligne ${entry.endLine}, colonne ${entry.endColumn}</p>${entry.expression ? `<p>${escape(human(entry.expression))}</p>` : ''}${sourceList(entry.sources)}</section>`).join('')}</details>` : '';
+    const native = step.origins.length || model.nativeIssues.length ? `<details class="pmc-native"><summary>Origine native Catala</summary>${model.nativeIssues.map((issue) => `<p class="pmc-warn">${escape(issue)}</p>`).join('')}${step.origins.map((entry) => `<section><h4>${entry.role === 'declaration' ? 'Déclaration' : entry.role === 'condition' ? 'Condition' : 'Définition'}${entry.selected ? ' · appliquée au scénario' : ' · autre règle'}</h4>${sourceLink({ kind: 'origin', label: entry.headings.join(' › ') || 'Passage du programme', target: entry.file, origin: entry.file, quote: entry.text, status: '' })}<p class="pmc-muted">Ligne ${entry.line}, colonne ${entry.column} à ligne ${entry.endLine}, colonne ${entry.endColumn}</p>${entry.expression && !structured(entry.expression) ? `<p>${escape(human(entry.expression))}</p>` : ''}${sourceList(entry.sources)}</section>`).join('')}</details>` : '';
     const notes = `${native}${step.notes.justification ? `<p>${escape(step.notes.justification)}</p>` : ''}${step.tests.length ? `<p class="pmc-muted">Exercé par les tests : ${step.tests.map(escape).join(', ')}.</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${step.notes.demarches.length ? `<h4>Démarches effectuées</h4><ul>${step.notes.demarches.map((line) => `<li>${escape(line)}</li>`).join('')}</ul>` : ''}`;
     const application = conditionApplication(step, model);
-    if (application) return `<section class="pmc-rule" data-card="${step.id}" data-kind="${application.kind}"><header><span class="pmc-kind">${application.kind === 'exception' ? words.exception : words.rule}</span><h3>${escape(step.title)}</h3></header>${applicationMarkup(application, sourceLink, mode)}<div class="pmc-part" data-part="scenario"><h4>${mode === 'transactional' ? 'Dans ce cas de figure' : 'Dans ce scénario'}</h4>${factPill(step)}</div>${step.clause ? `<details><summary>Conditions de cette qualification</summary>${rulePart(step)}</details>` : ''}${notes}</section>`;
+    if (application) return `<section class="pmc-rule" data-card="${step.id}" data-kind="${application.kind}"><header><span class="pmc-kind">${application.kind === 'exception' ? words.exception : words.rule}</span><h3>${escape(step.title)}</h3></header>${applicationMarkup(application, sourceLink, mode)}${step.clause ? `<details><summary>Conditions de cette qualification</summary>${rulePart(step)}</details>` : ''}${notes}</section>`;
     if (step.kind === 'fact') {
       const used = model.steps.filter((rule) => rule.parents.includes(step.id));
       return `<section class="pmc-rule" data-card="${step.id}" data-kind="fact" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${words.fact}</span><h3>${escape(step.title)}</h3>${factPill(step)}</header><div class="pmc-part" data-part="justification"><h4>Pièces citées</h4>${step.sources.some((source) => source.kind === 'piece') ? sourceList(step.sources.filter((source) => source.kind === 'piece')) : `<p class="pmc-muted">${mode === 'transactional' ? 'Hypothèse du cas de figure, sans pièce.' : 'Aucune pièce rattachée à ce fait.'}</p>`}${notes}${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}${used.length ? `<h4>Retenu pour</h4><ul class="pmc-sources">${used.map((rule) => `<li><button type="button" class="pmc-text-action" data-goto="${rule.id}">${escape(rule.title)}</button></li>`).join('')}</ul>` : ''}</div></section>`;
     }
-    return `<section class="pmc-rule" data-card="${step.id}" data-kind="${step.answer ? 'answer' : 'rule'}" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${step.answer ? words.root : words.rule}</span><h3>${escape(step.answer && model.objective || step.title)}</h3></header>${serves(step)}<div class="pmc-part" data-part="rule"><h4>La règle</h4>${rulePart(step)}</div><div class="pmc-part" data-part="projection"><h4>${step.answer ? words.outcome : mode === 'transactional' ? 'Dans ce cas de figure' : 'Dans ce scénario'}</h4>${projection(step)}</div><div class="pmc-part" data-part="justification"><h4>Justification</h4>${notes}${justification(step) || `<p class="pmc-muted">${mode === 'transactional' ? 'Aucune hypothèse à l’appui de cet effet.' : 'Aucun élément de fait à l’appui de cette solution.'}</p>`}</div>${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</section>`;
+    return `<section class="pmc-rule" data-card="${step.id}" data-kind="${step.answer ? 'answer' : 'rule'}" data-tone="${tone(step.value)}"><header><span class="pmc-kind">${step.answer ? words.root : words.rule}</span><h3>${escape(step.answer && model.objective || step.title)}</h3></header>${serves(step)}<div class="pmc-part" data-part="rule"><h4>La règle</h4>${rulePart(step)}</div>${projection(step)}<div class="pmc-part" data-part="justification"><h4>Justification</h4>${notes}${justification(step) || `<p class="pmc-muted">${mode === 'transactional' ? 'Aucune hypothèse à l’appui de cet effet.' : 'Aucun élément de fait à l’appui de cette solution.'}</p>`}</div>${step.issue ? `<p class="pmc-warn">${escape(step.issue)}</p>` : ''}</section>`;
   };
   return { steps, card, title };
 }
@@ -538,6 +540,6 @@ export function reasoningIssues(model: Reasoning) {
   ];
 }
 
-export function reasoningGraph(model: Reasoning, only?: Step[]) {
-  return reasoningMap(model, human, sourceLink, only);
+export function reasoningGraph(model: Reasoning) {
+  return reasoningMap(model, human, sourceLink);
 }

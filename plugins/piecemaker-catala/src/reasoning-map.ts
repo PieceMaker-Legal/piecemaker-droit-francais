@@ -10,8 +10,16 @@ const ratio = (text: string) => { const [a, b] = text.split('/').map(Number); re
 
 const bare = (value: string) => value.trim().replace(/\s*\(\)$/, '');
 
+export const structured = (value: string) => /^(?:\[|(?:[\p{L}_][\p{L}\p{N}_]*\s*)?\{)/u.test(value);
+
 export function display(step: Step) {
   const value = bare(step.value);
+  if (structured(value)) {
+    try {
+      const qualification = JSON.parse(value)?.qualification;
+      return typeof qualification === 'string' ? qualification : '';
+    } catch { return ''; }
+  }
   const type = step.type.toLowerCase();
   if (/^vrai$/i.test(value)) return 'Oui';
   if (/^faux$/i.test(value)) return 'Non';
@@ -40,7 +48,7 @@ const definition = (step: Step) => step.origins.find((origin) => origin.selected
 export function formula(step: Step, human: (text: string) => string) {
   const text = definition(step).replace(/\s+/g, ' ').match(/(?:^|\s)égal à\s+(.+)$/)?.[1]?.trim() ?? step.expression;
   const plain = text.replace(/^qualifier de\s*\((.*)\)$/, '$1').replace(/^qualifier de\s+/, '');
-  if (!plain || /\b(?:cumul|qualifier|selon|si|soit|existe|pour)\b/.test(plain)) return '';
+  if (!plain || structured(step.value) || structured(plain) || /\b(?:cumul|qualifier|selon|si|soit|existe|pour)\b/.test(plain)) return '';
   return date(plain).replace(/[\p{L}_][\p{L}\p{N}_]*/gu, (word) => /^(?:et|ou|non)$/.test(word) || /^(?:janvier|février|mars|avril|mai|juin|juillet|août|septembre|octobre|novembre|décembre|1er)$/.test(word) ? word : /_/.test(word) ? human(word) : word)
     .replace(/(\d+) jour\b/g, (_, n) => `${n} jour${n === '1' ? '' : 's'}`).replace(/(\d+) an\b/g, (_, n) => `${n} an${n === '1' ? '' : 's'}`).replace(/(\d+) mois\b/g, '$1 mois')
     .replace(/>=/g, '≥').replace(/<=/g, '≤').replace(/\s\*\s/g, ' × ').replace(/\s\/\s/g, ' ÷ ').replace(/\s=\s/g, ' = ');
