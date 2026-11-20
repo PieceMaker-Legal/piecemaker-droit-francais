@@ -52,7 +52,12 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   app.use('/api/piecemaker/local', createArtifactFrameRouter());
   app.use('/api/piecemaker', createArtifactsRouter({ getProjectPathById: () => null, getProjectPaths: () => [{ project_path: project }] }, {
     getSessionById: (id) => ({ project_path: id === 'autre-dossier' ? '/autre' : project, created_at: plain.created_at, forked_from_session_id: null }),
-    fetchHistory: async (id) => ({ messages: id === 'fil-a' ? messages : id === 'fil-b' ? [{
+    listProjectSessions: () => [
+      { session_id: 'fil-a', created_at: plain.created_at, updated_at: plain.created_at, forked_from_session_id: null },
+      { session_id: 'fil-b', created_at: foreign.created_at, updated_at: foreign.created_at, forked_from_session_id: null },
+      { session_id: 'bifurcation', created_at: foreign.created_at, updated_at: foreign.created_at, forked_from_session_id: 'fil-a' },
+    ],
+    fetchHistory: async (id) => ({ messages: (id === 'fil-a' || id === 'bifurcation') ? messages : id === 'fil-b' ? [{
       ...row, sessionId: id, id: 'c4', provider: 'mistral', kind: 'tool_use', toolName, toolId: 'c4',
       toolInput: { type_url: 'piecemaker://template/page' }, toolResult: { content: receipt(foreign) },
     }] : [] }),
@@ -95,6 +100,10 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   assert.equal((await sessionItems('autre-dossier')).status, 404);
   assert.equal((await request(`/api/piecemaker/artifacts?projectPath=%2Fautre`)).status, 404);
 
+  const creator = async (id: string) => (await request(`/api/piecemaker/artifacts/${id}/creator?${query}`)).json();
+  assert.deepEqual(await creator(plain.id), { sessionId: 'fil-a' });
+  assert.deepEqual(await creator(foreign.id), { sessionId: 'fil-b' });
+
   const { src } = await (await post(`artifacts/${plain.id}/frame`)).json() as { src: string };
   const html = await request(src);
   assert.equal(html.status, 200);
@@ -112,6 +121,23 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   assert.equal(conflict.status, 409);
   const detail = await (await request(`/api/piecemaker/artifacts/${withDb.id}?${query}`)).json() as { data_stamp: number };
   assert.ok(detail.data_stamp > 0);
+
+  const sourceRoute = `artifacts/${plain.id}/source`;
+  const { path: source } = await (await post(sourceRoute, { version: 2, update: false })).json() as { path: string };
+  await writeFile(path.join(project, source), page.replace('>v1<', '>v2<'));
+  assert.equal((await post(sourceRoute, { version: 2, update: true })).status, 200);
+  assert.equal((await post(sourceRoute, { version: 2, update: true })).status, 409);
+  const { src: latest } = await (await post(`artifacts/${plain.id}/frame`)).json() as { src: string };
+  assert.match(await (await request(latest)).text(), />v2</);
+  assert.match(await (await request(src)).text(), />v1</);
+
+  const wordFile = 'note-fictive.docx';
+  await writeFile(path.join(project, wordFile), Buffer.from('PK\x03\x04'));
+  const word = artifacts.publishDocument({ filePath: wordFile, title: undefined, description: undefined, icon: undefined, pin: undefined });
+  const wordDetail = await (await request(`/api/piecemaker/artifacts/${word.id}?${query}`)).json() as { document_path: string };
+  assert.equal(wordDetail.document_path, wordFile);
+  assert.deepEqual(await creator(word.id), { sessionId: null });
+  assert.equal((await post(`artifacts/${word.id}/frame`)).status, 400);
 
   const commentRoute = `artifacts/${plain.id}/comments`;
   const reviewRoute = `artifacts/${plain.id}/reviews`;

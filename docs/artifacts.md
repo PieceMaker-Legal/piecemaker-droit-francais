@@ -1,6 +1,6 @@
 # Artifacts (MCP `artifacts` et onglet Artifacts)
 
-Reprise, dans PieceMaker, de la fonction Artifacts de Claude : l'agent publie des pages HTML pour le dossier, l'avocat les voit dans l'onglet **Artifacts**, en garde les versions, les commente et les annote. Les quatre outils reprennent les paramètres de ceux de Claude ; un lien s'écrit `piecemaker://artifact/<id>`, un template `piecemaker://template/<nom>`.
+Reprise, dans PieceMaker, de la fonction Artifacts de Claude : l'agent publie des pages HTML et des documents Word pour le dossier, l'avocat les voit dans l'onglet **Artifacts**, en garde les versions, les commente et les annote. Les quatre outils reprennent les paramètres de ceux de Claude ; un lien s'écrit `piecemaker://artifact/<id>`, un template `piecemaker://template/<nom>`.
 
 ```mermaid
 flowchart LR
@@ -54,6 +54,13 @@ Une version est écrite dans un dossier temporaire puis renommée : jamais de ve
 - Le serveur injecte `__piecemaker/runtime.js` en tête de la page : `window.artifact.db` (capability `db`), `window.artifact.theme`, `window.artifact.download`, événements `artifact:data` et `artifact:theme`. Les appels passent par `postMessage` vers l'onglet, qui vérifie la source et appelle `POST /api/piecemaker/artifacts/:id/data`, refusé sans la capability.
 - L'onglet interroge l'artifact affiché toutes les 3 s : nouvelle version → rechargement (si l'avocat regarde la dernière), base modifiée → `artifact:data`.
 - Galerie : tous / épinglés, épingler, supprimer (deux clics), copier le lien, changer de version et ouvrir la revue.
+
+## Ouverture depuis Projet
+
+Dans **Projet › Contexte › Artéfacts**, le contenu s’ouvre à gauche. La session de création apparaît à droite si son historique contient la première publication. Le fil associé au livrable reste accessible si cet historique manque.
+
+- HTML : **Modifier le HTML** ouvre l’éditeur de fichiers. Enregistre le fichier, ferme l’éditeur puis choisis **Actualiser depuis le fichier** pour créer une version de l’artifact. Si la source n’est plus disponible dans le dossier, PieceMaker crée une copie de travail depuis la version affichée.
+- Word : `Artifact publish file_path=<document.docx>` référence le document du dossier. Eigenpal ouvre ce document et l’enregistre par le parcours Word habituel. La suppression de l’artifact conserve le document.
 
 ## Revue dans PieceMaker
 

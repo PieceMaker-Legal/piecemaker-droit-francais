@@ -267,3 +267,33 @@ test('the Python interpreter is resolved like the conversion pipeline', async ()
   fs.rmSync(shared);
   assert.throws(() => piecemakerPython({ home, env: {}, platform: 'linux' }), /shared PieceMaker Python environment is missing/);
 });
+
+test('a Word artifact refers to the editable project document and deletes only the artifact', async () => {
+  const { call, write, root } = await connect();
+  const document = 'Artifacts/rapport-fictif.docx';
+  write(document, Buffer.from('PK\x03\x04version initiale'));
+  const result = await call('Artifact', { file_path: document, title: 'Rapport fictif' });
+  assert.equal(result.error, false, result.text);
+  const url = urlIn(result.text);
+  const [artifact] = JSON.parse((await call('Artifact', { action: 'list' })).text);
+  assert.equal(artifact.format, 'docx');
+  const source = path.join(root, document);
+  const updated = Buffer.from('PK\x03\x04version enregistrée');
+  fs.writeFileSync(source, updated);
+  const read = await call('Artifact', { action: 'read', url });
+  assert.match(read.text, /saved at: Artifacts[\\/]rapport-fictif\.docx/);
+  assert.match(read.text, new RegExp(`, ${updated.length} bytes`));
+  assert.equal((await call('Artifact', { action: 'delete', url })).error, false);
+  assert.deepEqual(fs.readFileSync(source), updated);
+
+  const external = fs.mkdtempSync(path.join(os.tmpdir(), 'artifact-external-'));
+  try {
+    fs.writeFileSync(path.join(external, 'externe.docx'), updated);
+    fs.symlinkSync(external, path.join(root, 'lien'), 'junction');
+    const refused = await call('Artifact', { file_path: 'lien/externe.docx' });
+    assert.equal(refused.error, true);
+    assert.match(refused.text, /permission_denied/);
+  } finally {
+    fs.rmSync(external, { recursive: true, force: true });
+  }
+});

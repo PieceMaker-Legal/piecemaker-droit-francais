@@ -322,6 +322,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createFeatureCommentsRouter(projectsDb));
   router.use(createArtifactsRouter(projectsDb, {
     getSessionById: (id) => sessionsDb.getSessionById(id),
+    listProjectSessions: (root) => sessionsDb.getSessionsByProjectPathIncludingArchived(root, false),
     fetchHistory: (id) => sessionsService.fetchHistory(id),
   }));
   router.use(createFileLinksRouter());

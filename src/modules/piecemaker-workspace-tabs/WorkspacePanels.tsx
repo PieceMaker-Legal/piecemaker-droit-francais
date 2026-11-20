@@ -257,7 +257,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                       {rowIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="horizontal" label={`Hauteur fenêtres colonne ${columnIndex + 1}`} value={column.split} onMove={(delta) => resizeRows(column, delta)} />}
                       {tab === 'files' ? <WorkspaceFilesPanel label={label} selectedProject={props.selectedProject} documentOpen={viewerOpen} expanded={expandedTab === tab} hidden={hidden} style={style} onSlots={setFilesSlots} onToggleExpand={toggleFilesExpand} onClose={() => close(tab)} />
                       : <Card className="piecemaker-workspace-panel" hidden={hidden} style={style}>
-                        {tab === 'agent' ? <AgentPanel projectPath={props.selectedProject!.fullPath} panelActions={panelActions} /> : <>
+                        {tab === 'agent' ? <AgentPanel projectPath={props.selectedProject!.fullPath} projectId={props.selectedProject!.projectId} panelActions={panelActions} /> : <>
                           <header className="piecemaker-workspace-panel-header">
                             <span className="truncate text-sm font-medium">{label}</span>
                             {panelActions}
@@ -266,7 +266,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                             {tab === 'git' && <GitPanel selectedProject={props.selectedProject} isMobile={props.isMobile} onFileOpen={(filePath) => openInEditor(filePath)} onProjectSelect={props.onProjectSelect} onProjectsRefresh={props.onProjectsRefresh} />}
                             {tab === 'browser' && <BrowserUsePanel isVisible={!expandedTab || expandedTab === tab} onShowSettings={props.onShowSettings} />}
                             {plugin && (plugin.name === 'piecemaker-artifacts'
-                              ? <ArtifactsPanel project={props.selectedProject?.fullPath || props.selectedProject?.path || null} />
+                              ? <ArtifactsPanel project={props.selectedProject?.fullPath || props.selectedProject?.path || null} projectId={props.selectedProject?.projectId} />
                               : <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />)}
                           </div>
                         </>}

@@ -7,7 +7,7 @@ import express from 'express';
 
 import type { NormalizedMessage } from '@/shared/types.js';
 
-import { openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
+import { artifactProjectFile, openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
 import { openArtifactReviews } from './vendor/mcp/artifacts/reviews.mjs';
 import { openStore } from './vendor/mcp/features/store.mjs';
 
@@ -15,6 +15,7 @@ type Projects = { getProjectPathById(id: string): string | null; getProjectPaths
 type Failure = { code?: string; message: string };
 type ArtifactSessions = {
   getSessionById(id: string): { project_path: string | null; created_at: string; forked_from_session_id: string | null } | null;
+  listProjectSessions: (root: string) => { session_id: string; created_at: string; updated_at: string }[];
   fetchHistory(id: string): Promise<{ messages: NormalizedMessage[] }>;
 };
 
@@ -88,15 +89,7 @@ function publicationText(content: string): string {
   return typeof text === 'string' ? text : '';
 }
 
-async function artifactsCreatedInSession(root: string, sessionId: string, sessions: ArtifactSessions) {
-  const session = sessions.getSessionById(sessionId);
-  if (!session?.project_path || path.resolve(session.project_path) !== path.resolve(root)) {
-    throw Object.assign(new Error('Session introuvable dans ce dossier.'), { code: 'not_found' });
-  }
-
-  if (!fs.existsSync(path.join(root, '.piecemaker', 'artifacts', 'items'))) return [];
-
-  const { messages } = await sessions.fetchHistory(sessionId);
+function artifactCreationIds(messages: NormalizedMessage[]) {
   const creations = new Set<string>();
   const ids = new Set<string>();
   for (const message of messages) {
@@ -112,6 +105,19 @@ async function artifactsCreatedInSession(root: string, sessionId: string, sessio
     const id = result && /^Artifact piecemaker:\/\/artifact\/([a-z][a-z0-9-]{2,63}) — [\s\S]*?\r?\nversion 1 of 1 · updated /.exec(publicationText(result))?.[1];
     if (id) ids.add(id);
   }
+  return ids;
+}
+
+async function artifactsCreatedInSession(root: string, sessionId: string, sessions: ArtifactSessions) {
+  const session = sessions.getSessionById(sessionId);
+  if (!session?.project_path || path.resolve(session.project_path) !== path.resolve(root)) {
+    throw Object.assign(new Error('Session introuvable dans ce dossier.'), { code: 'not_found' });
+  }
+
+  if (!fs.existsSync(path.join(root, '.piecemaker', 'artifacts', 'items'))) return [];
+
+  const { messages } = await sessions.fetchHistory(sessionId);
+  const ids = artifactCreationIds(messages);
 
   const artifacts = openArtifacts(root);
   const items = Array.from(ids).flatMap((id) => {
@@ -125,6 +131,26 @@ async function artifactsCreatedInSession(root: string, sessionId: string, sessio
     }
   });
   return items.sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+async function artifactCreator(root: string, id: string, sessions: ArtifactSessions) {
+  const artifact = openArtifacts(root).load(id);
+  const createdAt = Date.parse(artifact.created_at);
+  const candidates = sessions.listProjectSessions(root)
+    .filter((session) => {
+      const startedAt = Date.parse(session.created_at);
+      return !Number.isFinite(startedAt) || startedAt <= createdAt;
+    })
+    .sort((a, b) => Math.abs(Date.parse(a.updated_at) - createdAt) - Math.abs(Date.parse(b.updated_at) - createdAt));
+  for (const { session_id } of candidates) {
+    try {
+      const { messages } = await sessions.fetchHistory(session_id);
+      if (artifactCreationIds(messages).has(id)) return { sessionId: session_id };
+    } catch {
+      continue;
+    }
+  }
+  return { sessionId: null };
 }
 
 export function createArtifactsRouter(projects: Projects, sessions: ArtifactSessions) {
@@ -156,7 +182,30 @@ export function createArtifactsRouter(projects: Projects, sessions: ArtifactSess
     send(response, (async () => {
       const artifacts = openArtifacts(root);
       const meta = artifacts.load(artifactId(request));
-      return { ...artifacts.summary(meta), versions: artifacts.list({ scope: 'versions', url: meta.id }), assets: meta.assets ?? [], data_stamp: latestChange(path.join(root, '.piecemaker', 'artifacts', 'data', meta.id)) };
+      let document_path: string | null = null;
+      if (typeof meta.document === 'string' && /\.docx$/i.test(meta.document)) {
+        try { document_path = artifactProjectFile(root, meta.document); } catch { document_path = null; }
+      }
+      return { ...artifacts.summary(meta), document_path, versions: artifacts.list({ scope: 'versions', url: meta.id }), assets: meta.assets ?? [], data_stamp: latestChange(path.join(root, '.piecemaker', 'artifacts', 'data', meta.id)) };
+    })());
+  });
+
+  router.get('/artifacts/:id/creator', (request, response) => {
+    const root = rootOf(request, response);
+    if (root) send(response, artifactCreator(root, artifactId(request), sessions));
+  });
+
+  router.post('/artifacts/:id/source', express.json(), (request, response) => {
+    const root = rootOf(request, response);
+    if (!root) return;
+    const { version, update } = request.body ?? {};
+    if (!Number.isSafeInteger(version) || version < 1 || typeof update !== 'boolean') {
+      return void response.status(400).json({ error: 'Version ou action invalide.' });
+    }
+    send(response, (async () => {
+      const artifacts = openArtifacts(root);
+      const id = artifactId(request);
+      return update ? artifacts.updateFromSource(id, version) : { path: artifacts.editableSource(id, version, true) };
     })());
   });
 
@@ -165,6 +214,9 @@ export function createArtifactsRouter(projects: Projects, sessions: ArtifactSess
     if (!root) return;
     send(response, (async () => {
       const artifacts = openArtifacts(root);
+      if (artifacts.load(artifactId(request)).document) {
+        throw Object.assign(new Error('Ouvrez ce document dans l’éditeur Word.'), { code: 'invalid_argument' });
+      }
       const page = artifacts.read({ url: artifactId(request), ver: typeof request.query.ver === 'string' ? request.query.ver : undefined });
       return { src: `/api/piecemaker/local/artifact-frame/${issueFrame(root, page.meta.id, page.version)}/index.html`, version: page.version, capabilities: page.meta.capabilities };
     })());

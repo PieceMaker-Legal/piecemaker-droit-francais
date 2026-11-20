@@ -7,7 +7,7 @@ import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
-import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
+import { ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 
@@ -212,13 +212,14 @@ function Scheduled({ state, act }: { state: AgentState; act: AgentActions }) {
   </li>)}</ul>;
 }
 
-export function AgentPanel({ projectPath, panelActions }: { projectPath: string; panelActions?: ReactNode }) {
+export function AgentPanel({ projectPath, projectId, panelActions }: { projectPath: string; projectId: string; panelActions?: ReactNode }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
   const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<AgentThreadState | 'all'>('all');
+  const [artifact, setArtifact] = useState<{ id: string; title: string; sessionId: string | null } | null>(null);
   const onTab = setTab;
 
   function customView() {
@@ -232,7 +233,15 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
   }
 
   const active = state?.threads.filter((thread) => ACTIVE_THREAD_STATES.includes(thread.state)).length ?? 0;
-  const onOpenArtifact = (url: string) => openAgentOutput(projectPath, { kind: 'artifact', ref: url });
+  const onOpenArtifact = (url: string) => {
+    const id = /^piecemaker:\/\/artifact\/([a-z][a-z0-9-]{2,63})$/.exec(url)?.[1];
+    if (!id || !state) return;
+    const entry = state.artifacts.find((item) => item.url === url);
+    if (!entry) return;
+    const deliverable = state.deliverables.find((item) => item.kind === 'artifact' && (item.ref === url || item.ref === id) && item.threadId);
+    const sessionId = state.threads.find((thread) => thread.id === deliverable?.threadId)?.sessionId ?? null;
+    setArtifact({ id, title: entry.title, sessionId });
+  };
 
   return <div className="pm-agent-panel flex h-full min-w-0 flex-col text-foreground" aria-label="Volet de l’agent">
     <header className="relative flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-1">
@@ -256,6 +265,7 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
       </div>}
       {panelActions && <div className="flex shrink-0 items-center gap-1 [&_button]:p-1 [&_svg]:size-4">{panelActions}</div>}
     </header>
+    {artifact && <ProjectArtifactDialog project={projectPath} projectId={projectId} artifact={artifact} associatedSessionId={artifact.sessionId} onClose={() => setArtifact(null)} />}
     {error && <p role="alert" className="px-4 py-2 text-sm">{error}</p>}
     {!state && !error && <p className="px-4 py-8 text-center text-sm">Chargement de PieceMaker Agent…</p>}
     {state && <>

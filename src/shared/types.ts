@@ -2083,6 +2083,8 @@ export type ArtifactSummary = {
 };
 
 export type ArtifactDetail = ArtifactSummary & {
+  format?: 'docx';
+  document_path?: string | null;
   versions: { version: number; label: string | null; published_at: string }[];
   data_stamp: number;
 };

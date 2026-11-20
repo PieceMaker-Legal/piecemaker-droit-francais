@@ -71,15 +71,15 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
 
   server.registerTool('Artifact', {
     description: [
-      'Artifacts of the case: HTML pages you publish for the lawyer (a report, a dashboard, a tracker, an explainer, slides), shown in the Artifacts tab with their versions. Same contract as the Artifact tool of Claude; a link is piecemaker://artifact/<id>.',
+      'Artifacts of the case: HTML pages and Word documents you publish for the lawyer (a report, a dashboard, a tracker, an explainer, slides), shown in the Artifacts tab with their versions. Same contract as the Artifact tool of Claude; a link is piecemaker://artifact/<id>.',
       `For a new artifact, call quickstart first with its intent: it names the template to start from and the skill ${SKILL} to follow.`,
-      'publish (default) takes file_path (the page, .html, in the case folder) plus an optional one-sentence description and icon; with url it adds a version to that artifact. edits (old_str/new_str copied exactly, each once) change the file and publish it in one call. files maps published paths to source files ({"data.json": "out/data.json"}), null removes one; files left out are kept. type_url (piecemaker://template/<name>) creates the artifact from a template, with no file_path needed. asset=true with url uploads file_path (or file_paths) to the asset store and returns the url to reference.',
+      'publish (default) takes file_path (an .html page or a .docx document in the case folder) plus an optional one-sentence description and icon; with url it adds a version to that artifact. edits (old_str/new_str copied exactly, each once) change the file and publish it in one call. files maps published paths to source files ({"data.json": "out/data.json"}), null removes one; files left out are kept. type_url (piecemaker://template/<name>) creates the artifact from a template, with no file_path needed. asset=true with url uploads file_path (or file_paths) to the asset store and returns the url to reference.',
       'A publish to an artifact this session has not read or published is refused: read it first and build on what comes back. If it changed since your read, merge onto the newer version and publish again (force only when the lawyer said to discard that version).',
       'read returns the page (path for one file, ver for an older version). list returns the artifacts (scope mine, pinned, types, files, versions, assets). delete removes an artifact (path = an asset id removes that asset) only when the lawyer asks. open shows it to the lawyer: right after another tool changed it, or when asked; a publish needs no open. pin and unpin only when the lawyer asks.',
     ].join(' '),
     inputSchema: {
       action: z.enum(['publish', 'read', 'list', 'delete', 'open', 'pin', 'unpin', 'quickstart']).optional(),
-      file_path: z.string().optional().describe('publish: the page (.html) in the case folder. With asset=true: the file to upload.'),
+      file_path: z.string().optional().describe('publish: an .html page or a .docx document in the case folder. With asset=true: the file to upload.'),
       file_paths: z.array(z.string()).max(25).optional().describe('publish with asset=true: several files to upload.'),
       url: z.string().optional().describe('An artifact link piecemaker://artifact/<id> (or the id alone).'),
       title: z.string().max(200).optional().describe('publish: fallback title when the page has no <title>.'),
@@ -138,6 +138,13 @@ export function createServer({ root = process.cwd(), pm = runPmScript, templates
         const url = required(input.url, 'url', 'publish with asset');
         const sources = input.file_paths ?? [required(input.file_path, 'file_path', 'publish with asset')];
         return text(sources.map((source) => { try { return { file: source, ...artifacts.uploadAsset(url, source) }; } catch (error) { return { file: source, error: error.message }; } }));
+      }
+      if (input.file_path && /\.docx$/i.test(input.file_path)) {
+        if (input.url || input.edits || input.files || input.type_url || input.capabilities || input.label || input.force) {
+          throw Object.assign(new Error('A Word artifact links to a DOCX in the project. Use the Word editor to change it.'), { code: 'invalid_argument' });
+        }
+        const result = artifacts.publishDocument({ filePath: input.file_path, title: input.title, description: input.description, icon: input.icon, pin: input.pin });
+        return text(header(result, [`Word document: ${result.published_files[0]}`]));
       }
       if (input.type_url && !input.url) return text(await createFromTemplate(input));
       let page;

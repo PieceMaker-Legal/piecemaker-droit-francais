@@ -41,6 +41,7 @@ const TYPES = {
   '.json': 'application/json; charset=utf-8', '.csv': 'text/csv; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif',
   '.webp': 'image/webp', '.avif': 'image/avif', '.ico': 'image/x-icon', '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg',
   '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.otf': 'font/otf', '.xml': 'application/xml',
 };
@@ -108,6 +109,15 @@ export function sourceFile(root, source) {
   return resolved;
 }
 
+export function artifactProjectFile(root, source) {
+  const file = sourceFile(root, source);
+  const relative = path.relative(path.resolve(root), file);
+  const realRelative = path.relative(fs.realpathSync(root), fs.realpathSync(file));
+  const outside = (target) => target === '..' || target.startsWith(`..${path.sep}`) || path.isAbsolute(target);
+  if (outside(relative) || outside(realRelative)) fail('permission_denied', 'The artifact source must be inside the project.');
+  return relative;
+}
+
 /** Applique des remplacements exacts (chacun présent une seule fois), tout ou rien. */
 export function applyEdits(content, edits) {
   if (!Array.isArray(edits) || !edits.length) return content;
@@ -132,7 +142,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
   const seen = new Map();
 
   function load(id) {
-    const file = metaFile(id);
+    const file = metaFile(idOf(id));
     if (!fs.existsSync(file)) fail('not_found', `no artifact ${urlOf(id)}.`);
     return JSON.parse(fs.readFileSync(file, 'utf8'));
   }
@@ -151,6 +161,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
       url: urlOf(meta.id), id: meta.id, title: meta.title, description: meta.description ?? '', icon: meta.icon ?? null,
       type: meta.type ?? null, pinned: Boolean(meta.pinned), version: current?.version ?? 0, versions: meta.versions.length,
       created_at: meta.created_at, updated_at: meta.updated_at, capabilities: meta.capabilities ?? {},
+      ...(meta.document && { format: 'docx' }),
     };
   }
 
@@ -219,13 +230,64 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
     if (value !== undefined && (typeof value !== 'string' || value.length > max)) fail('invalid_argument', `${name} is a text of at most ${max} characters.`);
   }
 
+  function editableSource(url, expectedVersion, prepare) {
+    const id = idOf(url);
+    const meta = load(id);
+    const current = meta.versions.at(-1);
+    if (meta.document) fail('invalid_argument', 'This artifact is a Word document.');
+    if (current?.version !== expectedVersion) fail('conflict', 'A newer artifact version is available. Reopen it before editing.');
+    if (current.source && /\.html?$/i.test(current.source)) {
+      try { return artifactProjectFile(root, current.source); } catch (error) {
+        if (!(error instanceof ArtifactError)) throw error;
+      }
+    }
+    const directory = path.resolve(root, 'Artifacts');
+    if (prepare && !fs.existsSync(directory)) fs.mkdirSync(directory, { recursive: true });
+    if (fs.existsSync(directory) && fs.realpathSync(directory) !== path.join(fs.realpathSync(root), 'Artifacts')) {
+      fail('permission_denied', 'The artifact draft directory must be inside the project.');
+    }
+    const draft = path.join(directory, `${id}-v${expectedVersion}.html`);
+    if (prepare) {
+      try {
+        fs.copyFileSync(path.join(versionFolder(id, expectedVersion), 'index.html'), draft, fs.constants.COPYFILE_EXCL);
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+      }
+    }
+    return artifactProjectFile(root, draft);
+  }
+
   return {
     root,
     folder,
     versionFolder,
     load,
     summary,
+    editableSource,
+    updateFromSource(url, expectedVersion) {
+      const id = idOf(url);
+      const sourcePath = editableSource(id, expectedVersion, false);
+      const page = fs.readFileSync(path.resolve(root, sourcePath), 'utf8');
+      if (page === fs.readFileSync(path.join(versionFolder(id, expectedVersion), 'index.html'), 'utf8')) return summary(load(id));
+      seen.set(id, expectedVersion);
+      return this.publish({ url: id, page, sourcePath });
+    },
     markSeen(id) { seen.set(id, load(id).versions.at(-1)?.version ?? 0); },
+
+    publishDocument({ filePath, title, description, icon, pin }) {
+      const document = artifactProjectFile(root, filePath);
+      if (!/\.docx$/i.test(document)) fail('invalid_argument', 'Expected a .docx document.');
+      checkText('description', description, LIMITS.description);
+      checkText('icon', icon, LIMITS.icon);
+      const resolvedTitle = title || path.basename(document, path.extname(document));
+      const at = now();
+      const meta = {
+        id: newId(resolvedTitle), title: resolvedTitle, description, icon, document, pinned: Boolean(pin),
+        created_at: at, updated_at: at, versions: [{ version: 1, label: null, published_at: at, files: [] }],
+      };
+      save(meta);
+      return { ...summary(meta), created: true, published_files: [document] };
+    },
 
     /**
      * publish : crée un artifact (sans `url`) ou ajoute une version (avec `url`). `page` est le HTML
@@ -242,6 +304,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
       if (url) {
         const id = idOf(url);
         meta = load(id);
+        if (meta.document) fail('invalid_argument', 'Edit this Word artifact in the document editor.');
         const live = meta.versions.at(-1)?.version ?? 0;
         if (!seen.has(id)) {
           seen.set(id, live);
@@ -280,6 +343,11 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
       const meta = load(idOf(url));
       seen.set(meta.id, meta.versions.at(-1)?.version ?? 0);
       const version = versionOf(meta, ver);
+      if (meta.document && (!published || published === meta.document)) {
+        const document = artifactProjectFile(root, meta.document);
+        return { meta: summary(meta), version: version.version, path: document, file: path.resolve(root, document), type: contentTypeOf(document) };
+      }
+      if (meta.document) fail('not_found', `No file ${published} in this Word artifact.`);
       if (published && ASSET_ID.test(published)) {
         const asset = (meta.assets ?? []).find((entry) => entry.id === published) ?? fail('not_found', `no asset ${published}.`);
         return { meta: summary(meta), version: version.version, path: published, file: path.join(folder(meta.id), 'assets', asset.file), type: asset.type };
@@ -294,7 +362,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
       const max = Math.min(Number(limit) || LIMITS.listDefault, LIMITS.listMax);
       if (scope === 'files' || scope === 'assets' || scope === 'versions') {
         const meta = load(idOf(required(url, 'url', `list scope ${scope}`)));
-        if (scope === 'files') return ['index.html', ...meta.versions.at(-1).files].map((file) => ({ path: file, type: contentTypeOf(file) }));
+        if (scope === 'files') return (meta.document ? [meta.document] : ['index.html', ...meta.versions.at(-1).files]).map((file) => ({ path: file, type: contentTypeOf(file) }));
         if (scope === 'assets') return (meta.assets ?? []).map(({ id, file, type: assetType, size }) => ({ id, url: `assets/${file}`, type: assetType, size }));
         return meta.versions.map(({ version, label, published_at: at, files: published, digest }) => ({ version, label, published_at: at, files: published.length + 1, digest })).reverse();
       }
@@ -330,6 +398,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
 
     uploadAsset(url, source) {
       const meta = load(idOf(url));
+      if (meta.document) fail('invalid_argument', 'A Word artifact has no published assets.');
       const resolved = sourceFile(root, source);
       const type = contentTypeOf(resolved);
       if (!type) fail('invalid_argument', `"${source}": not a standard web media type.`);
@@ -346,6 +415,7 @@ export function openArtifacts(root, { now = () => new Date().toISOString() } = {
     /** Fichier servi pour l'affichage : `assets/<fichier>` ou un fichier publié de la version. */
     servedFile(id, version, published) {
       const meta = load(idOf(id));
+      if (meta.document) return null;
       if (published.startsWith('assets/')) {
         const asset = (meta.assets ?? []).find((entry) => `assets/${entry.file}` === published);
         return asset ? { file: path.join(folder(meta.id), 'assets', asset.file), type: asset.type } : null;
