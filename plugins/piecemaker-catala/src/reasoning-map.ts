@@ -9,7 +9,6 @@ const number = (value: number, digits = 3) => value.toLocaleString('fr-FR', { ma
 const ratio = (text: string) => { const [a, b] = text.split('/').map(Number); return b ? a / b : a; };
 
 const bare = (value: string) => value.trim().replace(/\s*\(\)$/, '');
-export const structured = (value: string) => value.startsWith('{') || value.startsWith('[');
 
 export const structured = (value: string) => /^(?:\[|(?:[\p{L}_][\p{L}\p{N}_]*\s*)?\{)/u.test(value);
 
@@ -70,7 +69,7 @@ export function proofOf(step: Step, model: Reasoning): Proof | null {
   const mode = modeOf(model);
   if (step.kind === 'fact') {
     const pieces = step.sources.filter((source) => source.kind === 'piece');
-    if (!pieces.length) return mode === 'transactional' ? null : { state: 'warn', text: 'Pièce à rattacher' };
+    if (!pieces.length) return mode === 'transactional' || step.parents.length ? null : { state: 'warn', text: 'Pièce à rattacher' };
     if (pieces.some((piece) => piece.status === 'failed')) return { state: 'ko', text: 'Citation introuvable dans la pièce' };
     if (pieces.some((piece) => piece.author === 'agent')) return { state: 'warn', text: 'Relevé par l’agent, à relire' };
     if (pieces.every((piece) => piece.author === 'human')) return { state: 'ok', text: 'Relu par l’avocat' };
@@ -197,7 +196,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const foundation = step.kind === 'rule' ? sources.filter((source) => source.kind !== 'origin' && source.kind !== 'piece') : (application?.basis ?? []).filter((source) => !stated.has(identity(source)));
     const pieces = sources.filter((source) => source.kind === 'piece');
     const statement = [...new Set(pieces.map((piece) => piece.premise).filter((text): text is string => Boolean(text) && text !== step.title))];
-    const written = step.kind === 'rule' && !step.clause && !isGoal ? formula(step, human) : '';
+    const written = step.kind === 'rule' && !step.clause && (!isGoal || structured(step.value)) ? formula(step, human) : '';
     const calculation = written && written.replace(/\s/g, '') !== display(step).replace(/\s/g, '') ? written : '';
     const top = step.clause?.kind === 'all' ? step.clause.members : step.clause ? [step.clause] : [];
     const explained = new Set(top.flatMap((member) => references(member, false).map(([reference]) => reference.id)));
@@ -208,7 +207,8 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const above = missing.length ? `<button type="button" class="pmc-text-action pmc-upstream" data-goto="${missing[0].id}">${missing.length} point${missing.length > 1 ? 's' : ''} ouvert${missing.length > 1 ? 's' : ''} en amont</button>` : '';
     const proof = proofOf(step, model);
     const aliases = step === principal?.state ? ` data-summary-of="${[...summarized].join(' ')}"` : '';
-    const card = `<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}"${aliases} data-kind="${isGoal ? 'answer' : exception ? 'exception' : step.kind}" data-state="${isGoal ? 'neutral' : current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === principal?.state ? step.title : isGoal && model.objective || step.title)}</h3>${statement.map((text) => `<p class="pmc-statement">${escape(text)}</p>`).join('')}${isGoal ? '' : `<p class="pmc-result">${status(step, current)}${badge(proof)}</p>`}${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, 'law')}${documents(pieces, 'evidence')}${exceptions(step)}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${isGoal ? badge(proof) : above}</article>`;
+    const shownValue = step === principal?.state || structured(step.value) ? display(step) : '';
+    const card = `<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}"${aliases} data-kind="${isGoal ? 'answer' : exception ? 'exception' : step.kind}" data-state="${step === principal?.state ? truth(step) : isGoal ? 'neutral' : current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === principal?.state ? step.title : isGoal && model.objective || step.title)}</h3>${statement.map((text) => `<p class="pmc-statement">${escape(text)}</p>`).join('')}${shownValue ? `<span class="pmc-value">${escape(shownValue)}</span>` : ''}${isGoal ? '' : `<p class="pmc-result">${status(step, current)}${badge(proof)}</p>`}${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, 'law')}${documents(pieces, 'evidence')}${exceptions(step)}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${isGoal ? badge(proof) : above}</article>`;
     const result = isGoal ? `<div class="pmc-root">${card}<span class="pmc-arrow" aria-hidden="true"></span>${outcome(step)}</div>` : card;
     const others = !owner && sharedResults.get(step.id);
     if (!others) return branch(result, children, isGoal ? truth(step) : current);

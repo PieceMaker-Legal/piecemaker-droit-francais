@@ -27,13 +27,15 @@ vi.mock(import('@/piecemaker/docx'), async (importOriginal) => ({
   ...await importOriginal(),
   DocxDocumentViewer: ({ file }: { file: { path: string } }) => <p>Éditeur Word de {file.path}</p>,
 }));
-vi.mock(import('@/shared/api'), async (importOriginal) => ({
-  ...await importOriginal(),
-  api: { sessionDetails: async (id: string) => ({
-    ok: true,
-    json: async () => ({ data: { sessionId: id, provider: 'claude', project: { projectId: 'fil', fullPath: '/dossiers/exemple-fil' } } }),
-  }) },
-}));
+vi.mock(import('@/shared/api'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    api: { ...actual.api, sessionDetails: async (id: string) => Response.json({
+      data: { sessionId: id, provider: 'claude', project: { projectId: 'fil', fullPath: '/dossiers/exemple-fil' } },
+    }) },
+  };
+});
 vi.mock('@/shared/context/UiPreferencesContext', () => ({ useUiPreferences: () => ({}) }));
 vi.mock('@/modules/chat', () => ({
   ChatInterface: ({ selectedSession, selectedProject }: { selectedSession: ProjectSession; selectedProject: Project }) => (

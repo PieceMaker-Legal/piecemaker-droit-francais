@@ -245,7 +245,7 @@ Citation : « ${quote} »
   };
   const graph = new JSDOM(reasoningGraph(reasoning('', [file], [], undefined, provenance))).window.document;
   const condition = [...graph.querySelectorAll('[data-node]')].find((node) => node.querySelector('h3').textContent === 'Persistance');
-  assert.equal(condition.querySelector('.pmc-box-kind').textContent, 'Condition');
+  assert.equal(condition.querySelector('.pmc-box-kind').textContent, 'Fait');
   assert.doesNotMatch(condition.textContent, /Pièce à rattacher/);
   const piece = condition.closest('.pmc-branch').querySelector('.pmc-children [data-kind="piece"][data-open-reference]');
   assert.equal(piece.dataset.target, target);
@@ -264,7 +264,8 @@ test('shows both outcomes of a shared rule with a single supporting branch', () 
   const roots = graph.querySelectorAll('.pmc-map > .pmc-branch');
   assert.equal(roots.length, 1);
   assert.match(roots[0].querySelector('[data-node="x002"]').textContent, /Non remplie/);
-  assert.match(roots[0].querySelector('[data-node="x003"]').textContent, /Remplie/);
+  assert.match(roots[0].querySelector('.pmc-root').textContent, /Résolution encore possible/);
+  assert.equal(roots[0].dataset.state, 'ok');
   assert.equal(roots[0].querySelectorAll(':scope > .pmc-children [data-node="x001"]').length, 1);
 });
 
@@ -294,7 +295,7 @@ champ d'application Exemple:
     const document = new JSDOM(reasoningGraph(model)).window.document;
     const roots = [...document.querySelectorAll('.pmc-map > .pmc-branch [data-node]')];
     assert.deepEqual(roots.map((node) => node.querySelector('h3').textContent), ['État principal', 'Montant annexe']);
-    assert.equal(roots[0].querySelector('.pmc-box-kind').textContent, 'Objectif');
+    assert.equal(roots[0].querySelector('.pmc-box-kind').textContent, 'Prétention');
     assert.equal(roots[0].querySelector('.pmc-value').textContent, state);
     if (state === 'Écarté') assert.equal(roots[0].dataset.state, 'ko');
   }
