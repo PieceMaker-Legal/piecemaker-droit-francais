@@ -66,10 +66,10 @@ async function buildSessionUpsertedEvent(
 }
 
 /** Announces one session. Used by the chat run registry when a run reports its provider-native id. */
-export async function broadcastSessionUpserted(sessionIdOrProviderSessionId: string): Promise<void> {
+export async function broadcastSessionUpserted(sessionIdOrProviderSessionId: string, historyChanged = false): Promise<void> {
   const event = await buildSessionUpsertedEvent(sessionIdOrProviderSessionId);
   if (event) {
-    broadcastToConnectedClients(JSON.stringify(event));
+    broadcastToConnectedClients(JSON.stringify(historyChanged ? { ...event, historyChanged } : event));
   }
 }
 

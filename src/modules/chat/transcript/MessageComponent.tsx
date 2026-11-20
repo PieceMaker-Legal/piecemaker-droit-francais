@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { lazy, memo, Suspense, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, GitBranchIcon, PencilIcon, XIcon } from 'lucide-react';
 
@@ -17,6 +17,8 @@ import MessageSpeakControl from '@/modules/chat/transcript/MessageSpeakControl';
 import { useIsExportingTranscript } from '@/modules/chat/context/TranscriptRenderContext';
 import { MemoryCitations } from '@/modules/chat/transcript/MemoryCitations';
 import { useDismissSideQuestion } from '@/modules/chat/hooks/useSideQuestions';
+
+const AgentChatCard = lazy(async () => ({ default: (await import('@/modules/piecemaker-workspace-tabs')).AgentChatCard }));
 
 type MessageComponentProps = {
   message: ChatMessage;
@@ -493,6 +495,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                     </div>
                   );
                 })()}
+                {message.agentCard && selectedProject && <Suspense><AgentChatCard card={message.agentCard} project={selectedProject.fullPath} /></Suspense>}
               </div>
             )}
 
