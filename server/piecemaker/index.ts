@@ -320,7 +320,11 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createDocxDocumentRouter());
   router.use(createDocxReviewRouter(projectsDb));
   router.use(createFeatureCommentsRouter(projectsDb));
-  router.use(createArtifactsRouter(projectsDb));
+  router.use(createArtifactsRouter(projectsDb, {
+    getSessionById: (id) => sessionsDb.getSessionById(id),
+    listProjectSessions: (root) => sessionsDb.getSessionsByProjectPathIncludingArchived(root, false),
+    fetchHistory: (id) => sessionsService.fetchHistory(id),
+  }));
   router.use(createFileLinksRouter());
   router.use(createInstitutionalTermsRouter(institutionalTerms));
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));

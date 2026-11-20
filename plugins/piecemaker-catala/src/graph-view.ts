@@ -65,7 +65,7 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
       event.preventDefault();
       if (view.dataset.mode === 'written') goto(link.dataset.goto!);
       else {
-        const destination = nodes.find((node) => node.dataset.card === link.dataset.goto && !node.closest('[hidden]'));
+        const destination = nodes.find((node) => !node.closest('[hidden]') && (node.dataset.card === link.dataset.goto || node.dataset.summaryOf?.split(' ').includes(link.dataset.goto!)));
         const owner = link.closest<HTMLElement>('[data-node]');
         select(destination?.dataset.node ?? owner?.dataset.node ?? '');
         destination?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });

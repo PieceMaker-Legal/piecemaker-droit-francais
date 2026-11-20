@@ -231,7 +231,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const resolvedPathRef = useRef(file.path);
   const shownPathRef = useRef<string | null>(null);
   const replacingDocumentRef = useRef(false);
-  const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number; filePath: string } | null>(null);
+  const [loaded, setLoaded] = useState<{ buffer: ArrayBuffer; version: number; filePath: string; artifact: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [outlineOpen, setOutlineOpen] = useState(false);
@@ -241,10 +241,11 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
   const commentsOpenFromClickRef = useRef(false);
   const [revisionHint, setRevisionHint] = useState<{ x: number; y: number } | null>(null);
 
-  const fetchVersion = useCallback(async () => {
+  const fetchVersion = useCallback(async (includeArtifact = false) => {
     const epoch = documentEpochRef.current;
     const requestVersion = (filePath: string) => {
       const query = new URLSearchParams({ projectId: projectId ?? '', path: filePath });
+      if (includeArtifact) query.set('includeArtifact', 'true');
       return authenticatedFetch(`/api/piecemaker/docx-document/version?${query}`);
     };
     let filePath = resolvedPathRef.current;
@@ -258,8 +259,8 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     if (epoch === documentEpochRef.current) resolvedPathRef.current = filePath;
-    const current = (await response.json()) as { version: number };
-    return { filePath, version: current.version };
+    const current = (await response.json()) as { version: number; artifact?: boolean };
+    return { filePath, version: current.version, artifact: Boolean(current.artifact) };
   }, [projectId]);
 
   const load = useCallback(async (discardChanges = false) => {
@@ -268,7 +269,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
     if (loadingEpochRef.current === epoch) return;
     loadingEpochRef.current = epoch;
     try {
-      const { filePath, version } = await fetchVersion();
+      const { filePath, version, artifact } = await fetchVersion(true);
       if (epoch !== documentEpochRef.current) return;
       const response = await api.readFileBlob(projectId, filePath);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -291,6 +292,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
       versionRef.current = version;
       setError(null);
       if (editor && parsed) {
+        setLoaded((current) => current && current.artifact !== artifact ? { ...current, artifact } : current);
         const scroller = containerRef.current?.querySelector<HTMLElement>('.docx-editor__scroll-container');
         const scrollTop = scroller?.scrollTop ?? 0;
         replacingDocumentRef.current = true;
@@ -304,7 +306,7 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
         return;
       }
       shownPathRef.current = filePath;
-      setLoaded({ buffer, version, filePath });
+      setLoaded({ buffer, version, filePath, artifact });
     } finally {
       if (loadingEpochRef.current === epoch) loadingEpochRef.current = null;
     }
@@ -622,7 +624,10 @@ export default function DocxDocumentViewer({ file, projectId, isSidebar, onClose
             </div>
           )}
           renderTitleBarRight={() => (
-            <button type="button" onClick={() => { void close(); }} className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted" aria-label="Fermer">✕</button>
+            <div className="flex items-center gap-2">
+              {loaded.artifact && <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-foreground">Artéfact</span>}
+              <button type="button" onClick={() => { void close(); }} className="rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-muted" aria-label="Fermer">✕</button>
+            </div>
           )}
           style={{ flex: 1, minHeight: 0 }}
         />

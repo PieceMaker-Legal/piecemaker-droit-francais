@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { BrowserUsePanel, useBrowserUseEnabled } from '@/modules/browser-use';
 import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
-import { ArtifactsPanel } from '@/modules/piecemaker-artifacts';
 import { AgentPanel } from '@/modules/piecemaker-workspace-tabs/agent/AgentPanel';
 import { useAgentSession } from '@/modules/piecemaker-workspace-tabs/agent/useAgentSession';
 import { PanelAnonymizationButton } from '@/modules/piecemaker-workspace-tabs/PanelAnonymizationButton';
@@ -257,7 +256,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                       {rowIndex > 0 && !expandedTab && <WorkspaceColumnSeparator orientation="horizontal" label={`Hauteur fenêtres colonne ${columnIndex + 1}`} value={column.split} onMove={(delta) => resizeRows(column, delta)} />}
                       {tab === 'files' ? <WorkspaceFilesPanel label={label} selectedProject={props.selectedProject} documentOpen={viewerOpen} expanded={expandedTab === tab} hidden={hidden} style={style} onSlots={setFilesSlots} onToggleExpand={toggleFilesExpand} onClose={() => close(tab)} />
                       : <Card className="piecemaker-workspace-panel" hidden={hidden} style={style}>
-                        {tab === 'agent' ? <AgentPanel projectPath={props.selectedProject!.fullPath} panelActions={panelActions} /> : <>
+                        {tab === 'agent' ? <AgentPanel key={props.selectedProject!.fullPath} projectId={props.selectedProject!.projectId} projectPath={props.selectedProject!.fullPath} panelActions={panelActions} onShowSettings={props.onShowSettings} /> : <>
                           <header className="piecemaker-workspace-panel-header">
                             <span className="truncate text-sm font-medium">{label}</span>
                             {panelActions}
@@ -265,9 +264,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                           <div className="piecemaker-workspace-panel-content">
                             {tab === 'git' && <GitPanel selectedProject={props.selectedProject} isMobile={props.isMobile} onFileOpen={(filePath) => openInEditor(filePath)} onProjectSelect={props.onProjectSelect} onProjectsRefresh={props.onProjectsRefresh} />}
                             {tab === 'browser' && <BrowserUsePanel isVisible={!expandedTab || expandedTab === tab} onShowSettings={props.onShowSettings} />}
-                            {plugin && (plugin.name === 'piecemaker-artifacts'
-                              ? <ArtifactsPanel project={props.selectedProject?.fullPath || props.selectedProject?.path || null} />
-                              : <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />)}
+                            {plugin && <PluginTabContent pluginName={plugin.name} selectedProject={props.selectedProject} selectedSession={props.selectedSession} onOpenFileInEditor={openInEditor} />}
                           </div>
                         </>}
                       </Card>}

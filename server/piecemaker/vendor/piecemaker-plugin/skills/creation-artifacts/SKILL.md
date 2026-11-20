@@ -5,7 +5,7 @@ description: "Créer ou modifier un artifact PieceMaker : une page HTML publiée
 
 # Créer un artifact
 
-Un artifact est une page HTML que tu publies dans l'onglet **Artifacts** du dossier. L’avocat consulte les versions, les annote et rend ses décisions dans le volet. Les outils sont ceux du MCP `artifacts` : `Artifact`, `ArtifactData`, `ArtifactComments`, `ArtifactTemplates`. Ils reprennent ceux de Claude, un lien s'écrit `piecemaker://artifact/<id>`.
+Un artifact est une page HTML ou un document Word présenté dans l'onglet **Artifacts** du dossier. L’avocat consulte les versions, les annote et rend ses décisions dans le volet. Les outils sont ceux du MCP `artifacts` : `Artifact`, `ArtifactData`, `ArtifactComments`, `ArtifactTemplates`. Ils reprennent ceux de Claude, un lien s'écrit `piecemaker://artifact/<id>`.
 
 ## Quand en faire un
 
@@ -19,6 +19,8 @@ Un artifact est une page HTML que tu publies dans l'onglet **Artifacts** du doss
 2. Si un template convient : **`Artifact publish type_url=<template> title="<nom>"`**. Le résultat donne l'URL de l'artifact et les pages à lire d'abord du template : lis-les, puis remplis l'artifact en publiant tes fichiers à cette `url`.
 3. Sinon : écris la page dans le dossier (`Artifacts/<nom>.html` par exemple, jamais sous `.piecemaker/`), lis `references/contrat-page.md`, puis **`Artifact publish file_path=<page> description="<une phrase>" icon=<mot>`**.
 4. Donne à l'avocat le lien, en une ligne. L'onglet s'ouvre seul après un publish : pas d'`open`.
+
+Pour un document Word, appelle `Artifact publish file_path=<document.docx>` avec le chemin du fichier dans le dossier. L’artifact ouvre ce fichier dans Eigenpal et suit ses sauvegardes Word.
 
 ## Modifier
 
@@ -44,9 +46,9 @@ Si la page tient des enregistrements que l'avocat ou toi ajouterez plus tard (su
 ## Commentaires et revue
 
 - Avant de modifier un artifact existant, appelle `ArtifactComments read url=…`. Les fils donnent la version, le passage cité et la décision de l’avocat.
-- À la demande de l’avocat, ouvre la revue avec `ArtifactComments annotate url=… ver=…`. Sans `ver`, l’outil ouvre la dernière version.
-- L’avocat peut surligner ou annoter un passage. Il peut approuver la version ou demander des modifications avec un motif.
-- Termine ton tour après avoir ouvert la revue. À la reprise, lis les retours avec `ArtifactComments read`. Les décisions ont la valeur `approved` ou `changes_requested` dans `anchor.decision`.
+- À la demande de l’avocat, ouvre les commentaires avec `ArtifactComments annotate url=… ver=…`. Sans `ver`, l’outil ouvre la dernière version.
+- Dans Projet, l’avocat peut surligner ou annoter un passage. Il peut approuver la version ou demander des modifications avec un motif.
+- Termine ton tour après avoir ouvert les commentaires. À la reprise, lis les retours avec `ArtifactComments read`. Les décisions ont la valeur `approved` ou `changes_requested` dans `anchor.decision`.
 - Réponds aux fils traités avec `reply`, puis marque-les comme résolus avec `resolve`. Une approbation porte sur la version indiquée.
 
 ## Templates
