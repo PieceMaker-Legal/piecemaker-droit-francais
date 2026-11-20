@@ -336,6 +336,8 @@ export function useChatRealtimeHandlers({
 
         // Sidebar/global events — owned by useProjectsState.
         case 'session_upserted':
+          if (sid && msg.historyChanged === true) void requestLatestMessages(sid, isActiveRef.current && sid === activeViewSessionId);
+          return;
         case 'loading_progress':
         // Owned by useScheduledMessages, which reads the composer banner's
         // list again. Not a transcript row.

@@ -13,6 +13,7 @@ function initialState(): ProjectState {
     },
     threads: [], messages: [], decisions: [], schedules: [], deliverables: [], lookups: [],
     orchestrator: {
+      chatSessionId: null, chatProvider: null, needsRecap: false, heldUpdates: [],
       sessionId: null, key: randomUUID(), provider: null, turns: 0, running: false, pending: [],
       holdingUntil: null, quietAt: null, lastUserAt: null, postsSinceUser: 0, userId: null, recaps: 0,
     },
@@ -35,6 +36,21 @@ export function openProjectStore(root: string) {
     write('etat.json', JSON.stringify({ ...state, revision }, null, 2));
     state.revision = revision;
   }
+  const orch = state.orchestrator;
+  const legacy = orch.chatSessionId === undefined;
+  if (legacy) {
+    orch.chatSessionId = orch.sessionId;
+    orch.chatProvider = orch.provider;
+    if (orch.sessionId) orch.recoverPostsFrom = orch.sessionId;
+    orch.heldUpdates = [];
+  }
+  if (legacy || orch.running) {
+    orch.needsRecap = Boolean(orch.chatSessionId || orch.recaps);
+    orch.sessionId = null;
+    orch.provider = null;
+    orch.turns = 0;
+    orch.key = randomUUID();
+  }
   let interrupted = state.orchestrator.running;
   state.orchestrator.running = false;
   for (const thread of state.threads) {
@@ -51,7 +67,7 @@ export function openProjectStore(root: string) {
       if (message.approval?.status === 'pending') message.approval.status = 'resolved';
     }
   }
-  if (interrupted || !state.revision) save();
+  if (legacy || interrupted || !state.revision) save();
 
   function finishMemory({ text, revision, updatedAt }: Memory) {
     write('memoire.md', text);

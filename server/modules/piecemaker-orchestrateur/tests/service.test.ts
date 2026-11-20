@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
@@ -30,6 +30,7 @@ function fixture(ctx: TestContext) {
       aborted.delete(session);
       turns.push({ session, content, options, end(result = success) { processing.delete(session); resolve(result); } });
     }),
+    previousPostIds: async () => new Set(), chatChanged() {}, changeChatProvider() {}, contextRatio: async () => null,
     sessionModel: () => null,
     defaultModel: async (_p, purpose) => purpose === 'lookup' ? 'économique' : 'standard',
     models: async () => [],
@@ -62,7 +63,7 @@ function fixture(ctx: TestContext) {
   return { root, service, deps, turns, user, call, state, start, tick, requests, processing, notices, sessions };
 }
 
-test('Un tour regroupe les événements en attente, retire les yeux et publie la dernière réponse', async ctx => {
+test('Un tour regroupe les événements en attente, retire les yeux sans publier la réponse privée', async ctx => {
   const f = fixture(ctx);
   const unknown = path.join(f.root, 'inconnu');
   await assert.rejects(f.service.call(unknown, 'inconnue', 'list_threads'), { code: 403 });
@@ -86,8 +87,7 @@ test('Un tour regroupe les événements en attente, retire les yeux et publie la
   f.turns[1].end();
   await flush();
   const s = await f.state();
-  assert.equal(s.messages.filter(m => m.author === 'orchestrator').length, 1);
-  assert.equal(s.messages.find(m => m.author === 'orchestrator')?.text, 'Réponse de session-1');
+  assert.ok(s.messages.every(m => m.author === 'user'));
   assert.ok(s.messages.every(m => m.reactions.every(r => r.by !== 'system')));
   await assert.rejects(f.service.call(f.root, key, 'read_memory'), { code: 403 });
 });
@@ -237,26 +237,66 @@ test('Annuler un rappel, un message différé et une routine empêche leur exéc
   assert.ok(!state.orchestrator.pending.some(event => ['reminder', 'send_later', 'routine'].includes(event.type)));
 });
 
-test('La mémoire refuse une ancienne révision. Le recyclage invalide la clé et reprend avec la mémoire.', async ctx => {
+for (const trigger of ['tours', 'usage', 'échec', 'manuel', 'fournisseur']) {
+  test('Le recyclage attend la fin du tour et conserve le chat : ' + trigger, async ctx => {
+    const f = fixture(ctx);
+    const chat = await f.service.session(f.root);
+    f.service.updateSettings(f.root, { recycleAfter: trigger === 'tours' ? 1 : 60, instructions: 'Consigne du projet' });
+    let reads = 0;
+    f.deps.contextRatio = async () => { reads++; return trigger === 'usage' ? 0.71 : 0.7; };
+    const original = 'Premier message ' + 'x'.repeat(500);
+    f.user(original);
+    await flush();
+    const first = (await f.state()).orchestrator;
+    await f.call('update_memory', { revision: 0, text: 'Mémoire fictive' });
+    await assert.rejects(f.call('update_memory', { revision: 0, text: 'Écrasement' }), { code: 400 });
+    await f.call('no_reply_needed', { reason: 'holding_updates' });
+    if (trigger === 'manuel') f.service.recycle(f.root);
+    if (trigger === 'fournisseur') f.service.updateSettings(f.root, { orchestratorProvider: 'codex' });
+    f.user('En attente');
+    assert.equal(f.turns.length, 1);
+    assert.equal(reads, 0);
+    f.turns[0].end(trigger === 'échec' ? { started: true, error: 'Erreur fictive' } : success);
+    await flush();
+    assert.notEqual(f.turns[1].session, first.sessionId);
+    assert.match(f.turns[1].content, /Do not repost anything[\s\S]*Mémoire fictive/);
+    assert.ok(f.turns[1].content.includes(original));
+    assert.ok(f.turns[1].content.includes('Consigne du projet'));
+    assert.doesNotMatch(f.turns[1].content, /<wake reason=/);
+    f.user('Pendant la reprise');
+    await flush();
+    assert.equal(f.turns.length, 2);
+    await assert.rejects(f.service.call(f.root, first.key, 'post_message', { text: 'Ancienne clé' }), { code: 403 });
+    f.turns[1].end();
+    await flush();
+    assert.equal(f.turns[2].session, f.turns[1].session);
+    assert.match(f.turns[2].content, /En attente[\s\S]*Pendant la reprise/);
+    assert.doesNotMatch(f.turns[2].content, /# Your role/);
+    assert.equal((await f.service.session(f.root)).sessionId, chat.sessionId);
+  });
+}
+
+test('La reprise conserve les travaux, les attentes et les livrables du dossier', async ctx => {
   const f = fixture(ctx);
-  f.service.updateSettings(f.root, { recycleAfter: 1 });
-  f.user('Premier');
+  f.user('Classer les pièces');
   await flush();
-  const first = (await f.state()).orchestrator;
-  await f.call('update_memory', { revision: 0, text: 'Consigne fictive' });
-  await assert.rejects(f.call('update_memory', { revision: 0, text: 'Écrasement' }), { code: 400 });
+  const thread = await f.start('Vérifier le classement');
+  await f.call('set_thread_reminder', { thread_id: thread.id, days: 2 });
+  await f.call('update_deliverable', { thread_id: thread.id, ref: 'classement.docx', kind: 'document' });
+  await f.call('send_later', { at: '2026-01-10T12:00:00Z', text: 'Vérifier la réponse' });
+  await f.call('ask_decision', { question: 'Quel format ?', recommended: 0, options: [
+    { label: 'Document', consequence: 'Modifiable' }, { label: 'PDF', consequence: 'Figé' },
+  ] });
+  await f.call('no_reply_needed', { reason: 'holding_updates' });
+  f.service.recycle(f.root);
   f.turns[0].end();
   await flush();
-  assert.equal((await f.state()).orchestrator.sessionId, null);
-  f.user('Suite');
-  await flush();
-  await assert.rejects(f.service.call(f.root, first.key, 'post_message', { text: 'Ancienne clé' }), { code: 403 });
-  assert.notEqual(f.turns[1].session, first.sessionId);
-  assert.match(f.turns[1].content, /Do not repost anything[\s\S]*Consigne fictive/);
-  f.service.updateSettings(f.root, { recycleAfter: 60 });
-  f.turns[1].end({ started: true, error: 'Erreur' });
-  await flush();
-  assert.equal((await f.state()).orchestrator.sessionId, null);
+  const recap = f.turns.at(-1)!.content;
+  for (const value of [thread.title, 'working', 'classement.docx', 'Vérifier la réponse', 'Quel format ?', (await f.state()).threads[0].reminderAt!]) {
+    assert.ok(recap.includes(value), value);
+  }
+  assert.match(recap, /"heldUpdates": \[\s*\{[\s\S]*Classer les pièces/);
+  assert.ok(!recap.includes(thread.key));
 });
 
 test('Un dossier extérieur attend un accord propre au fil, y compris après une mise en file', async ctx => {
@@ -374,42 +414,52 @@ test('Sans fournisseur connecté, l’orchestrateur prévient une fois, réessai
   assert.equal(state.orchestrator.pending.length, 0);
 });
 
-test('La session de l’agent est une session CloudCLI : le message écrit dans son chat part en wake avec les règles', async ctx => {
+test('Le chat conserve les posts et les sorties, et fournit le modèle du tour privé', async ctx => {
   const f = fixture(ctx);
-  const opened = await f.service.session(f.root, 1);
-  assert.deepEqual(opened, { sessionId: 'session-1', provider: 'claude' });
-  assert.deepEqual(await f.service.session(f.root), opened);
-  assert.equal(f.service.isOrchestratorSession('session-1'), true);
-  assert.equal(f.service.isOrchestratorSession('autre'), false);
-  assert.equal(await f.service.composerTurn(f.root, 'autre', 'Bonjour', null, async () => success), false);
-  const runs: { content: string; options: TurnOptions }[] = [];
-  let finish!: (result: TurnResult) => void;
-  const turn = f.service.composerTurn(f.root, 'session-1', 'Prépare les conclusions', null, (content, options) => {
-    runs.push({ content, options });
-    return new Promise(resolve => { finish = resolve; });
-  });
+  const chat = await f.service.session(f.root, 1);
+  f.deps.sessionModel = id => id === chat.sessionId ? 'modele-fictif' : null;
+  f.user('Prépare le document');
   await flush();
-  assert.equal(runs.length, 1);
-  assert.match(runs[0].content, /# Your role[\s\S]*<wake reason="message"[^>]*>\n {2}<event type="message" trust="principal"[^>]*>Prépare les conclusions<\/event>/);
-  assert.ok(runs[0].options.allowedTools.includes('mcp__orchestrateur'));
-  assert.equal(wakeDisplay(runs[0].content), 'Prépare les conclusions');
-  const key = (await f.state()).orchestrator.key;
-  await f.service.call(f.root, key, 'no_reply_needed', { reason: 'nothing_to_add' });
-  finish(success);
-  assert.equal(await turn, true);
-  const s = await f.state();
-  assert.equal(s.orchestrator.running, false);
-  assert.equal(s.orchestrator.turns, 1);
-  assert.equal(s.messages[0].author, 'user');
-  assert.equal(f.turns.length, 0);
-  f.deps.sessionModel = session => session === opened.sessionId ? 'modele-fictif' : null;
-  await f.service.composerTurn(f.root, 'session-1', 'Et ensuite ?', null, async (content) => {
-    assert.doesNotMatch(content, /# Your role/);
-    return success;
-  });
-  f.service.react(f.root, s.messages[0].id, '👍', true);
-  await flush();
+  assert.notEqual(f.turns[0].session, chat.sessionId);
   assert.equal(f.turns[0].options.model, 'modele-fictif');
+  await f.call('post_message', { text: 'Document prêt', attached_outputs: [{ kind: 'file', ref: 'exemple.docx' }] });
+  await f.call('no_reply_needed', { reason: 'nothing_to_add' });
+  f.turns[0].end();
+  await flush();
+  const history = await f.service.chatHistory(f.root, chat.sessionId!);
+  assert.deepEqual(history?.map(m => [m.role, m.content]), [
+    ['user', 'Prépare le document'], ['assistant', 'Document prêt'],
+  ]);
+  assert.deepEqual(history?.[1].agentCard?.outputs, [{ kind: 'file', ref: 'exemple.docx' }]);
+  assert.equal(await f.service.chatHistory(f.root, f.turns[0].session), null);
+});
+
+test('Un ancien dossier conserve son chat et attend le prochain événement pour reprendre', async ctx => {
+  const f = fixture(ctx);
+  await f.service.session(f.root);
+  f.service.stop();
+  const file = path.join(f.root, '.piecemaker/orchestrateur/etat.json');
+  const old = JSON.parse(readFileSync(file, 'utf8'));
+  delete old.orchestrator.chatSessionId;
+  const message = { author: 'orchestrator', at: '2026-01-01', attachments: [], decisionIds: [], reactions: [] };
+  old.messages.push({ ...message, id: 'post', text: 'Réponse publiée' }, { ...message, id: 'fin', text: 'Récapitulatif privé' });
+  f.deps.previousPostIds = async id => new Set(id === 'ancien-chat' ? ['post'] : []);
+  Object.assign(old.orchestrator, { sessionId: 'ancien-chat', provider: 'claude', turns: 12 });
+  writeFileSync(file, JSON.stringify(old));
+  const restarted = createOrchestratorService(f.deps);
+  restarted.start();
+  ctx.after(() => restarted.stop());
+  assert.equal(restarted.sessionId(f.root), 'ancien-chat');
+  assert.deepEqual((await restarted.chatHistory(f.root, 'ancien-chat'))?.map(row => row.content), ['Réponse publiée']);
+  await f.tick(3000);
+  assert.equal(f.turns.length, 0);
+  restarted.postUserMessage(f.root, 'Suite');
+  await flush();
+  assert.notEqual(f.turns[0].session, 'ancien-chat');
+  assert.match(f.turns[0].content, /separate wake/);
+  f.turns[0].end();
+  await flush();
+  assert.equal(wakeDisplay(f.turns[1].content), 'Suite');
 });
 
 test('Un wake sans message de l’avocat s’affiche comme une ligne lisible', () => {

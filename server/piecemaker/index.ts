@@ -9,9 +9,9 @@ import { getConnection, projectsDb, sessionsDb, userPreferencesDb } from '@/modu
 import { desktopAuthRoutes } from '@/modules/desktop-auth/index.js';
 import { createNotificationEvent, notifyUserIfEnabled } from '@/modules/notifications/index.js';
 import { createOrchestratorLocalRouter, createOrchestratorRouter, createOrchestratorService, wakeDisplay, type RunnableProvider } from '@/modules/piecemaker-orchestrateur/index.js';
-import { chatRunRegistry, runDetachedChatTurn } from '@/modules/websocket/index.js';
+import { broadcastSessionUpserted, chatRunRegistry, runDetachedChatTurn } from '@/modules/websocket/index.js';
 import { createBoardRouter, createBoardService, createEtapesRouter, createEtapesService, createSuiviLocalRouter, createSuiviRouter, createSuiviService, createTachesService } from '@/modules/piecemaker-suivi/index.js';
-import { providerModelsService, providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
+import { providerTokenUsageService, providerModelsService, providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerAuthService } from '@/modules/providers/services/provider-auth.service.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import { findApplicationRoot, getModuleDirectory, readObjectRecord } from '@/shared/utils.js';
@@ -139,8 +139,30 @@ function orchestratorTurnOptions(userId: number | null, { provider, permissionMo
   return { permissionMode, toolsSettings: { ...preferences, allowedTools, disallowedTools, permissionMode, skipPermissions }, skipPermissions };
 }
 
+const providerHistory = sessionsService.fetchHistory.bind(sessionsService);
 const orchestrator = createOrchestratorService({
+  previousPostIds: async sessionId => {
+    const { messages } = await providerHistory(sessionId);
+    const calls = new Set(messages.filter(m => m.kind === 'tool_use' && m.toolName === 'mcp__orchestrateur__post_message').map(m => m.toolId).filter(Boolean));
+    const ids = new Set<string>();
+    for (const row of messages) {
+      if (row.kind !== 'tool_result' || !row.toolId || !calls.has(row.toolId) || row.isError) continue;
+      const result = JSON.stringify(row.toolResult?.content ?? row.content ?? '');
+      for (const id of result.match(/msg_[0-9a-f-]{36}/gi) ?? []) ids.add(id);
+    }
+    return ids;
+  },
   now: () => new Date(),
+  contextRatio: async (sessionId, provider) => {
+    if (provider === 'mistral') return null;
+    const usage = await providerTokenUsageService.getSessionTokenUsage(sessionId, true);
+    return usage.total && usage.total > 0 ? usage.used / usage.total : null;
+  },
+  chatChanged: sessionId => { void broadcastSessionUpserted(sessionId, true); },
+  changeChatProvider: (sessionId, provider) => {
+    getConnection().prepare('UPDATE sessions SET provider = ?, model = NULL WHERE session_id = ?').run(provider, sessionId);
+    void broadcastSessionUpserted(sessionId);
+  },
   sessionModel: sessionId => sessionsDb.getSessionById(sessionId)?.model ?? null,
   providers: createOrchestratorProviderStatuses(providerAuthService.getProviderAuthStatus, mistralSdkAuth.status),
   permissions: async (provider, userId) => {
@@ -159,11 +181,15 @@ const orchestrator = createOrchestratorService({
     return catalog.DEFAULT;
   },
   models: async provider => (await providerModelsService.getProviderModels(provider)).OPTIONS.map(({ value, label }) => ({ value, label: label ?? value })),
-  openSession: (provider, root, title) => sessionsService.createAppSession(provider, root, title).sessionId,
-  runTurn: (sessionId, userId, content, options) => runDetachedChatTurn({
-    sessionId, userId, content, displayContent: wakeDisplay(content) ?? undefined,
-    options: { ...orchestratorTurnOptions(userId, options), model: options.model, effort: options.effort, piecemakerOrchestrator: true },
-  }, { runtime: providerRuntimeService }),
+  openSession: (provider, root, title, hidden) => sessionsService.createAppSession(provider, root, title, hidden).sessionId,
+  runTurn: async (sessionId, userId, content, options) => {
+    const result = await runDetachedChatTurn({
+      sessionId, userId, content, displayContent: wakeDisplay(content) ?? undefined,
+      options: { ...orchestratorTurnOptions(userId, options), attachments: options.attachments, model: options.model, effort: options.effort, piecemakerOrchestrator: true },
+    }, { runtime: providerRuntimeService });
+    const complete = chatRunRegistry.getRun(sessionId)?.events.find(event => event.kind === 'complete');
+    return result.started && !result.error && complete?.success === false ? { ...result, error: 'Tour interrompu.' } : result;
+  },
   lastAnswer: lastSessionAnswer,
   history: async (sessionId, limit) => {
     const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
@@ -220,7 +246,7 @@ installLegalCodeHarness({ runtime: providerRuntimeService, sessions: sessionsSer
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
 installLibrarySkillVisibility(providerSkillsService, library.store);
 installLibraryRuntime(providerRuntimeService, sessionsService, library.store);
-installOrchestratorRuntime(providerRuntimeService, sessionsService, orchestrator, orchestratorTurnOptions);
+installOrchestratorRuntime(providerRuntimeService, sessionsService, orchestrator, id => sessionsDb.getSessionById(id)?.project_path ?? null);
 installSessionProxyRuntime(providerRuntimeService, anonymizer, () => [...projectsDb.getProjectPaths(), ...projectsDb.getArchivedProjectPaths()]);
 installModelDiscovery(providerRegistry, { discoverers: { codex: discoverCodexModels } });
 const timesheet = createTimesheetBackend(piecemakerHome());

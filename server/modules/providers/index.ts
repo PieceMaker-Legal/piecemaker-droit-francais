@@ -27,3 +27,4 @@ export {
   MAX_SIDE_QUESTIONS_PER_SESSION,
   sideQuestionsService,
 } from './services/side-questions.service.js';
+export { providerTokenUsageService } from './services/provider-token-usage.service.js';
