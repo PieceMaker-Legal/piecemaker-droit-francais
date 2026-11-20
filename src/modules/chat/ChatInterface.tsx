@@ -126,6 +126,8 @@ function ChatInterface({
     currentProviderEffortOptions,
     currentProviderModel,
     currentProviderModelOptions,
+    currentServedModel,
+    refreshSessionSelection,
     permissionMode,
     pendingPermissionRequests,
     setPendingPermissionRequests,
@@ -201,6 +203,17 @@ function ChatInterface({
     watchedRunSessionsRef,
     sessionStore,
   });
+
+  // A finished turn may have run on a different release than the last one
+  // (an alias such as `default` follows the newest model), so the composer
+  // asks again which exact model answered.
+  const wasProcessingRef = useRef(isProcessing);
+  useEffect(() => {
+    if (wasProcessingRef.current && !isProcessing) {
+      refreshSessionSelection();
+    }
+    wasProcessingRef.current = isProcessing;
+  }, [isProcessing, refreshSessionSelection]);
 
   // The composer's send is a run this socket starts, so it is watched from
   // the moment it is dispatched rather than re-subscribed to.
@@ -636,6 +649,7 @@ function ChatInterface({
           availableEffortOptions={currentProviderEffortOptions}
           onSelectEffort={handleSelectComposerEffort}
           model={currentProviderModel}
+          servedModel={currentServedModel}
           availableModelOptions={currentProviderModelOptions}
           onSelectModel={handleSelectComposerModel}
           modelsLoading={providerModelsLoading}

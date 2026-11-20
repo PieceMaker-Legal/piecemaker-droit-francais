@@ -10,7 +10,8 @@ export function mountExplanation(view: HTMLElement, openReference: (target: stri
     const scale = frame.width / canvas.offsetWidth || 1;
     const selecting = nodes.some((node) => node.classList.contains('is-dim'));
     wires.innerHTML = [...canvas.querySelectorAll<HTMLElement>('.pmc-children')].flatMap((group) => {
-      const from = group.previousElementSibling!.getBoundingClientRect();
+      const source = group.previousElementSibling!;
+      const from = (source.matches('.pmc-root') ? source.firstElementChild! : source).getBoundingClientRect();
       return [...group.children].map((child) => {
         const to = child.firstElementChild!.getBoundingClientRect();
         const [x1, y1, x2, y2] = [from.right - frame.left, from.top + from.height / 2 - frame.top, to.left - frame.left, to.top + to.height / 2 - frame.top].map((value) => Math.round(value / scale));

@@ -430,6 +430,19 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
     };
   };
 
+  /** The exact model behind the session's latest turn, when the provider can say. */
+  const readServedModel = async (provider: LLMProvider, sessionId: string): Promise<string | null> => {
+    const models = resolveProvider(provider).models;
+    if (typeof models.getServedModel !== 'function') {
+      return null;
+    }
+    try {
+      return (await models.getServedModel(sessionId))?.trim() || null;
+    } catch {
+      return null;
+    }
+  };
+
   /**
    * Answers "which model is this session using?" for every display surface.
    *
@@ -449,6 +462,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
       : '';
 
     if (normalizedSessionId) {
+      const servedModel = await readServedModel(provider, normalizedSessionId);
       const recordedSelection = readRecordedSessionSelection(normalizedSessionId);
       if (recordedSelection?.model) {
         return {
@@ -457,6 +471,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
           model: recordedSelection.model,
           effort: recordedSelection.effort,
           source: 'session',
+          ...(servedModel ? { servedModel } : {}),
         };
       }
 
@@ -474,6 +489,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
           model: resolvedProviderModel,
           effort: recordedSelection?.effort ?? null,
           source: 'provider',
+          ...(servedModel ? { servedModel } : {}),
         };
       }
 
@@ -483,6 +499,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
         model: normalizedRequestedModel || providerCatalog.DEFAULT,
         effort: recordedSelection?.effort ?? null,
         source: normalizedRequestedModel ? 'session' : 'default',
+        ...(servedModel ? { servedModel } : {}),
       };
     }
 

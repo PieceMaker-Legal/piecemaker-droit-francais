@@ -1,0 +1,54 @@
+> Usage de Maintenance
+
+# Cas de figure
+
+Chaque cas pose des hypothèses : un contrat se teste sur les situations qu’il
+doit régler, pas sur des faits établis par des pièces.
+
+```catala
+#[test]
+déclaration champ d'application CasRetardSimple:
+  résultat calcul champ d'application Maintenance.PénalitéDeRetard
+
+champ d'application CasRetardSimple:
+  règle calcul.signalement_écrit rempli
+  définition calcul.heures_avant_intervention égal à 72
+  règle calcul.force_majeure non rempli
+  assertion calcul.pénalité_due = 576 €
+```
+
+```catala
+#[test]
+déclaration champ d'application CasRetardPlafonné:
+  résultat calcul champ d'application Maintenance.PénalitéDeRetard
+
+champ d'application CasRetardPlafonné:
+  règle calcul.signalement_écrit rempli
+  définition calcul.heures_avant_intervention égal à 400
+  règle calcul.force_majeure non rempli
+  assertion calcul.pénalité_due = 2 400 €
+```
+
+```catala
+#[test]
+déclaration champ d'application CasForceMajeure:
+  résultat calcul champ d'application Maintenance.PénalitéDeRetard
+
+champ d'application CasForceMajeure:
+  règle calcul.signalement_écrit rempli
+  définition calcul.heures_avant_intervention égal à 400
+  règle calcul.force_majeure rempli
+  assertion calcul.pénalité_due = 0 €
+```
+
+```catala
+#[test]
+déclaration champ d'application CasSansSignalementÉcrit:
+  résultat calcul champ d'application Maintenance.PénalitéDeRetard
+
+champ d'application CasSansSignalementÉcrit:
+  règle calcul.signalement_écrit non rempli
+  définition calcul.heures_avant_intervention égal à 72
+  règle calcul.force_majeure non rempli
+  assertion calcul.pénalité_due = 0 €
+```

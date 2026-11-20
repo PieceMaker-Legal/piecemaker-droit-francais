@@ -1,9 +1,9 @@
 import fsSync from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 import Database from 'better-sqlite3';
 
+import { getHermesHome } from '@/modules/providers/list/hermes/hermes-home.js';
 import { sessionsDb } from '@/modules/database/index.js';
 import type { IProviderSessionSynchronizer } from '@/shared/interfaces.js';
 import { normalizeSessionName } from '@/shared/utils.js';
@@ -17,7 +17,7 @@ type HermesSessionRow = {
   message_count: number | null;
 };
 
-const HERMES_DB_PATH = path.join(os.homedir(), '.hermes', 'state.db');
+const hermesDbPath = () => path.join(getHermesHome(), 'state.db');
 
 function unixSecondsToIso(value: number | null | undefined): string {
   if (!value || !Number.isFinite(value)) {
@@ -27,10 +27,10 @@ function unixSecondsToIso(value: number | null | undefined): string {
 }
 
 function openHermesDatabase(): Database.Database | null {
-  if (!fsSync.existsSync(HERMES_DB_PATH)) {
+  if (!fsSync.existsSync(hermesDbPath())) {
     return null;
   }
-  return new Database(HERMES_DB_PATH, { readonly: true, fileMustExist: true });
+  return new Database(hermesDbPath(), { readonly: true, fileMustExist: true });
 }
 
 export class HermesSessionSynchronizer implements IProviderSessionSynchronizer {
@@ -69,7 +69,7 @@ export class HermesSessionSynchronizer implements IProviderSessionSynchronizer {
   }
 
   async synchronizeFile(filePath: string): Promise<string | null> {
-    if (path.resolve(filePath) !== HERMES_DB_PATH) {
+    if (path.resolve(filePath) !== hermesDbPath()) {
       return null;
     }
 
@@ -103,7 +103,7 @@ export class HermesSessionSynchronizer implements IProviderSessionSynchronizer {
       normalizeSessionName(row.title ?? undefined, 'Untitled Hermes Session'),
       unixSecondsToIso(row.started_at),
       unixSecondsToIso(row.ended_at ?? row.started_at),
-      HERMES_DB_PATH,
+      hermesDbPath(),
     );
     return true;
   }

@@ -14,11 +14,7 @@ export type OntologyRelation = { name: string; label: string; inverse: string; d
 export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
 export type OntologyProposal = { relations?: OntologyRelation[]; documentTypes?: DocumentType[]; motif: string; date: string };
 export type OntologyState = { relations: OntologyRelation[]; documentTypes?: DocumentType[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: OntologyProposal | null };
-export type OkfError = { fiche: string; erreur: string };
-export type OkfContradiction = { premise: string; titre: string; valeurs: Array<{ piece: string; valeur: string }> };
-export type OkfReport = { erreurs: OkfError[]; contradictions: OkfContradiction[] };
 export type PendingProposals = { ontologie: number; arborescence: number };
-export type OkfView = { index: OkfIndex | null; errors: OkfError[] | null; contradictions?: OkfContradiction[]; proposals?: PendingProposals };
 export type OkfLink = { source: string; relation: string; target: string; citation?: string; value?: string };
 
 export const PREMISE_TYPE = 'Premise';
@@ -36,7 +32,6 @@ const request = <T>(path: string, payload?: unknown, method?: string): Promise<T
 export const okfApi = {
   read: (projectId: string) => request<OkfIndex>(`?projectId=${encodeURIComponent(projectId)}`),
   rebuild: (projectId: string) => request<{ written: number; removed: number }>('/rebuild', { projectId }),
-  verify: (projectId: string) => request<OkfReport>(`/verify?projectId=${encodeURIComponent(projectId)}`),
   link: (projectId: string, link: OkfLink) => request<OkfLink>('/link', { projectId, ...link }),
   unlink: (projectId: string, link: OkfLink) => request<OkfLink>('/unlink', { projectId, ...link }),
   reviews: (projectId: string) => request<{ revues: OkfReviewChoice[] }>(`/revues?projectId=${encodeURIComponent(projectId)}`),

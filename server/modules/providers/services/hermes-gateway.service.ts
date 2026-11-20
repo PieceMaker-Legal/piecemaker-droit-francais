@@ -1,6 +1,7 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
 import { promisify } from 'node:util';
 
+import { getHermesProfileArgs } from '@/modules/providers/list/hermes/hermes-home.js';
 import { AppError } from '@/shared/utils.js';
 
 const execFileAsync = promisify(execFile);
@@ -106,6 +107,12 @@ class HermesGatewayService {
   private gatewayProcess: ChildProcess | null = null;
   private readonly logs: string[] = [];
   private lastExit: HermesGatewayStatus['lastExit'] = null;
+  private preflight: (() => Promise<void>) | null = null;
+
+  /** Runs before any Hermes command, e.g. to create the profile the server uses. */
+  setPreflight(preflight: (() => Promise<void>) | null): void {
+    this.preflight = preflight;
+  }
 
   async getStatus(): Promise<HermesGatewayStatus> {
     const versionResult = await this.runHermes(['--version'], { timeout: 5000 });
@@ -135,8 +142,8 @@ class HermesGatewayService {
       logs: this.getLogs(),
       lastExit: this.lastExit,
       commands: {
-        setup: [...this.commandPrefix(), 'gateway', 'setup'].join(' '),
-        run: [...this.commandPrefix(), 'gateway', 'run'].join(' '),
+        setup: [...this.commandPrefix(), ...getHermesProfileArgs(), 'gateway', 'setup'].join(' '),
+        run: [...this.commandPrefix(), ...getHermesProfileArgs(), 'gateway', 'run'].join(' '),
       },
     };
   }
@@ -152,6 +159,7 @@ class HermesGatewayService {
       return currentStatus;
     }
 
+    await this.preflight?.();
     const args = [...HERMES_BASE_ARGS, 'gateway', 'run', '--accept-hooks'];
     this.appendLog(`[cloudcli] starting Hermes gateway: ${HERMES_COMMAND} ${args.join(' ')}`);
     this.lastExit = null;
@@ -264,6 +272,7 @@ class HermesGatewayService {
 
   private async runHermes(args: string[], options: { timeout: number }): Promise<CommandResult> {
     try {
+      if (args[0] !== '--version') await this.preflight?.();
       const result = await execFileAsync(HERMES_COMMAND, [...HERMES_BASE_ARGS, ...args], {
         timeout: options.timeout,
         maxBuffer: 1024 * 1024,

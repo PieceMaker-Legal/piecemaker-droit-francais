@@ -6,7 +6,7 @@ import { etapesApi, knowledgeApi } from './api.js';
 import { PARTY_TYPE, mountGraph, okfApi } from './okf.js';
 import type { OkfGraph } from './okf.js';
 import { ficheCardMarkup } from './okf-card.js';
-import type { OkfView } from './okf.js';
+import type { PendingProposals } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
 import { askConfirm, askPrompt, bindAliasEditors, deleteEntity, documentEditor, institutionalTermsEditor, modal, nodeEditor, partyTypePicker } from './editors.js';
 import { removedAliasOperations } from './exclusions.js';
@@ -85,8 +85,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     indexHost = null;
     indexProject = '';
   };
-  let okfView: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null };
-  let showPremises = (() => { try { return localStorage.getItem('pmd-okf-premises') === '1'; } catch { return false; } })();
+  let proposals: PendingProposals | undefined;
+  let showPremises = (() => { try { return localStorage.getItem('pmd-okf-premises') !== '0'; } catch { return true; } })();
   const okfHandle = () => {
     const projectId = context.project?.name || '';
     return {
@@ -249,9 +249,9 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         mappingValidated = etapes.mappingValide ?? null;
         paintScanStatus();
       }, () => undefined);
-      void pendingProposals(projectId, context.project.path).then((proposals) => {
+      void pendingProposals(projectId, context.project.path).then((pending) => {
         if (sequence !== loadSequence) return;
-        okfView = { ...okfView, proposals };
+        proposals = pending;
         const host = root.querySelector<HTMLElement>('[data-proposals]');
         if (host) host.outerHTML = proposalBanner(proposals);
       }, () => undefined);
@@ -457,7 +457,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     destroyGraph = null;
     if (!context.project) content.innerHTML = '<div class="pmd-empty">Sélectionnez un projet CloudCLI.</div>';
     else if (active === 'chronology') {
-      content.innerHTML = chronologyView(okfView, indexChronology);
+      content.innerHTML = chronologyView(proposals, indexChronology);
       attachIndex(content.querySelector<HTMLElement>('[data-index-analysis]'));
       return;
     } else if (!data) content.innerHTML = '<div class="pmd-empty">Chargement…</div>';
@@ -518,7 +518,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         if (node) documentEditor(root, data, node, projectPath, save, renamePiece, okfHandle());
       });
     };
-    wrap.querySelector('[data-okf-center]')?.addEventListener('click', () => graph?.center());
     wrap.addEventListener('keydown', (event) => { if (event.key === 'Escape' && wrap.querySelector('[data-okf-detail]')) closeDetail(); });
     void mountGraph(graphHost, data.okf, showPremises, (fiche) => showFiche(fiche.id)).then((mounted) => {
       if (!graphHost.isConnected) return mounted.destroy();
@@ -547,14 +546,17 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         paintContent();
         return;
       }
-      const premisesToggle = target.closest<HTMLInputElement>('[data-okf-premises]');
-      if (premisesToggle) {
-        showPremises = premisesToggle.checked;
+      const control = target.closest<HTMLElement>('[data-action]');
+      const action = control?.dataset.action;
+      if (control?.matches('.pmd-okf-legend a')) event.preventDefault();
+      if (action === 'okf-premises') {
+        const focused = document.activeElement === control;
+        showPremises = !showPremises;
         try { localStorage.setItem('pmd-okf-premises', showPremises ? '1' : '0'); } catch { }
         paintContent();
+        if (focused) root.querySelector<HTMLButtonElement>('[data-action="okf-premises"]')?.focus({ preventScroll: true });
         return;
       }
-      const action = target.closest<HTMLElement>('[data-action]')?.dataset.action;
       if (action === 'index-chronology') {
         indexChronology = !indexChronology;
         try { localStorage.setItem('pmd-index-chronologie', indexChronology ? '1' : '0'); } catch { /* préférence locale seulement */ }
@@ -562,19 +564,12 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         notifyChronology();
         return;
       }
-      if (action === 'okf-verify' && context.project) {
-        void okfApi.verify(context.project.name).then(({ erreurs, contradictions }) => {
-          okfView = { ...okfView, errors: erreurs, contradictions };
-          paintContent();
-        }).catch(showError);
-        return;
-      }
       if (action === 'edit-ontology' && context.project) {
-        void editOntology(root, context.project.name, () => { okfView = { ...okfView, errors: null, contradictions: [] }; void load(); }, context.project.path).catch(showError);
+        void editOntology(root, context.project.name, () => { void load(); }, context.project.path).catch(showError);
         return;
       }
-      if (action === 'edit-tree' && context.project) {
-        void editOntology(root, context.project.name, () => { void load(); }, context.project.path, 'tree').catch(showError);
+      if ((action === 'edit-tree' || action === 'edit-document-types') && context.project) {
+        void editOntology(root, context.project.name, () => { void load(); }, context.project.path, action === 'edit-tree' ? 'tree' : 'types').catch(showError);
         return;
       }
       if (action === 'company-search') {
@@ -625,11 +620,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
             render();
           }
         })();
-        return;
-      }
-      if (action === 'refresh') {
-        if (context.project) viewCache.delete(context.project.name);
-        void load();
         return;
       }
       if (action === 'toggle-tiers') {
@@ -848,6 +838,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
     if (changedProject) {
       closeIndex();
       data = null;
+      proposals = undefined;
       scanJob = null;
       bodaccStates.clear();
       void load();

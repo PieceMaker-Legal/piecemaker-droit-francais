@@ -85,6 +85,7 @@ p.pmc-scenario{margin:0}
 .pmc-map-refs .pmc-reference{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px 7px;border:1px solid var(--border);border-radius:8px;font:500 12px var(--piecemaker-font-ui,Inter,system-ui,sans-serif);color:var(--ink);text-decoration:none;background:var(--soft)}
 .pmc-map-refs .pmc-reference:before{content:'§ ';color:var(--muted)}
 .pmc-map-refs .pmc-reference[data-kind=piece]:before{content:'▤ '}
+.pmc-map-refs .pmc-reference[data-kind=clause]:before,.pmc-chip[data-kind=clause]:before{content:'¶ '}.pmc-docs li[data-kind=clause]{border-left-color:#6d5bd0}
 .pmc-map-refs .pmc-reference[data-citation=failed]{color:var(--ko)}
 .pmc-unused{margin:0 0 18px;color:var(--muted);font-size:12px}
 .pmc-unused summary{cursor:pointer}.pmc-unused p{margin:5px 0}
@@ -116,6 +117,22 @@ p.pmc-scenario{margin:0}
 .pmc[data-picking] .pmc-view,.pmc[data-picking] [data-card],.pmc[data-picking] [data-card] *{cursor:crosshair}.pmc[data-picking] [data-card]:hover{outline:2px solid var(--accent);outline-offset:3px}
 .pmc-map .is-dim{opacity:.3}
 .pmc-map-legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0;font-size:11.5px;font-weight:500}.pmc-map-legend span{--tint:var(--muted);color:var(--ink)}.pmc-map-legend span:before{content:'';display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:3px;background:var(--tint)}.pmc-map-legend [data-state=ok]{--tint:#2f8f5b}.pmc-map-legend [data-state=warn]{--tint:#c98a1b}.pmc-map-legend [data-state=ko]{--tint:#c45b5b}
+
+.pmc-root{flex:none;display:flex;flex-direction:column;align-items:center;width:290px}.pmc-root>.pmc-map-node,.pmc-root>.pmc-outcome{width:100%}
+.pmc-branch>.pmc-root{position:sticky;top:20%;bottom:20%}
+.pmc-arrow{position:relative;display:block;width:2px;height:26px;margin:4px 0 10px;background:var(--muted)}.pmc-arrow:after{content:'';position:absolute;left:-5px;bottom:-8px;border:6px solid transparent;border-top:8px solid var(--muted);border-bottom:0}
+.pmc-outcome{--tint:var(--muted);padding:10px 12px;border:2px solid color-mix(in srgb,var(--tint) 80%,transparent);border-radius:12px;background:color-mix(in srgb,var(--tint) 12%,var(--surface));color:var(--ink)}
+.pmc-outcome h3{margin:0;font-size:15px;line-height:1.35;color:color-mix(in srgb,var(--tint) 55%,var(--ink))}
+.pmc-reserve{margin:6px 0 2px!important;font-size:12px;color:var(--muted)}.pmc-reserves{margin:0;padding-left:18px;font-size:12.5px}.pmc-reserves li{margin:2px 0}
+.pmc-proof{--tint:var(--muted);display:inline-flex;align-items:center;gap:4px;padding:0 8px;border:1px solid color-mix(in srgb,var(--tint) 60%,transparent);border-radius:999px;font-size:11px;font-weight:600;line-height:18px;white-space:nowrap;color:color-mix(in srgb,var(--tint) 62%,var(--ink));background:var(--surface)}
+.pmc-proof:before{content:'▤'}.pmc-proof[data-proof=ok]{--tint:var(--ok-line,#2f8f5b)}.pmc-proof[data-proof=warn]{--tint:var(--warn-line,#c98a1b)}.pmc-proof[data-proof=ko]{--tint:var(--ko-line,#c45b5b)}
+.pmc-map-node[data-kind=rule] .pmc-proof:before,.pmc-map-node[data-kind=exception] .pmc-proof:before,.pmc-map-node[data-kind=answer] .pmc-proof:before{content:'§'}
+.pmc-statement{margin:4px 0 0!important;font:italic 13px/1.45 var(--editorial);color:var(--ink)}
+.pmc-author{font-size:11px;color:var(--muted)}.pmc-author[data-author=agent]{color:var(--warn)}
+.pmc-overridden{margin-top:8px;padding:6px 9px;border:1px dashed var(--border);border-radius:8px;color:var(--muted);font-size:12px}.pmc-overridden p{margin:2px 0!important;text-decoration:line-through;text-decoration-color:color-mix(in srgb,var(--muted) 60%,transparent)}.pmc-overridden p.pmc-muted{text-decoration:none}.pmc-overridden .pmc-map-refs{margin-top:4px}
+.pmc .pmc-upstream{display:block;margin-top:7px;font-size:11.5px;color:var(--warn)}
+.pmc-others-map{margin-top:32px;padding-top:12px;border-top:1px solid var(--border)}.pmc-others-map>h4{margin:0 0 2px;font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.pmc-others-map>p{margin:0 0 6px}
+.pmc-map-legend [data-legend=proof]:before{width:16px;height:10px;border:1.5px solid var(--muted);background:none;border-radius:999px}
 
 .pmc-others h3{font-size:15px}
 .pmc-code-block{margin:10px 0;border:1px solid var(--border);border-radius:10px;background:var(--surface);font:12.5px/1.5 var(--piecemaker-font-ui,Inter,system-ui,sans-serif)}

@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, premiseLinks, runCatala, selectProgram, sharedPython, toolCommand, typecheckErrors } from './catala.mjs';
-import { catalaDocumentation, premiseCoverage } from './catala-documentation.mjs';
+import { catalaDocumentation, clauseHeading, premiseCoverage } from './catala-documentation.mjs';
 import { run } from './pm.mjs';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
@@ -325,6 +325,22 @@ test('catleg checks only identifiers cited in an article title, not in a doc att
     fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '#[doc.source = "LEGIARTI000000000001"]\n');
     assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2026-03-04' }, deps }), /sans article cité/);
     assert.deepEqual(report().fichiers[0].articles, []);
+  } finally { cleanup(); }
+});
+
+test('catleg passes a contract that cites no statute and still checks a cited article', async () => {
+  const task = { tache: 'Contrat fictif', type: 'transactional', date_vigueur: '2026-03-04', raisonnements: [{ champ: 'Prime', objectif: 'Fixer la prime', rang: 'Article 1' }] };
+  const { dossier, deps, report, directory, cleanup } = catlegScenario({ 'prime.catala_fr': '## Article 1 — Prime\n\n« La prime est de 100 €. »\n' }, task);
+  try {
+    assert.match(await runCatala({ commande: 'catleg', cwd: dossier, flags: {}, deps }), /clauses du contrat/);
+    assert.equal(report().passed, true);
+    fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify({ ...task, type: 'litigation' }));
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: {}, deps });
+    assert.equal(report().passed, false, 'a litigation program must cite an article');
+    fs.writeFileSync(path.join(directory, 'tache.json'), JSON.stringify(task));
+    fs.writeFileSync(path.join(directory, 'prime.catala_fr'), '## Article fictif | LEGIARTI000000000001\n');
+    await runCatala({ commande: 'catleg', cwd: dossier, flags: { au: '2019-12-31' }, deps });
+    assert.equal(report().passed, false, 'a statute cited by a contract is still checked');
   } finally { cleanup(); }
 });
 
@@ -1023,4 +1039,20 @@ test('verifier fails on underived inputs and warns on premises that set no input
     assert.match(output, /\n  resolution\.catala_fr:37: \[WARNING\] premise okf:\/_premises\/listee\.md/);
     assert.deepEqual(premiseLinks(dossier, 'resolution').unlinked, ['listee.md', 'orpheline.md', 'ouverture.md']);
   } finally { cleanup(); }
+});
+
+test('a contract anchors its rules to clauses and needs no premise for its hypotheses', () => {
+  assert.equal(clauseHeading('Article 5 — Pénalités de retard', '« Tout retard ouvre droit à une pénalité. »', true), true);
+  assert.equal(clauseHeading('Article 5 — Pénalités de retard', '« Tout retard ouvre droit à une pénalité. »', false), false);
+  assert.equal(clauseHeading('Clause 5 du contrat', '« Tout retard ouvre droit à une pénalité. »', false), true);
+  assert.equal(clauseHeading('Article 1224 | LEGIARTI000032041482', '« La résolution résulte… »', true), false);
+  assert.equal(clauseHeading('Article 5 — Pénalités de retard', 'Texte sans guillemets.', true), false);
+  const example = path.resolve(import.meta.dirname, '../../../../../../docs/tests/contrat-maintenance/.piecemaker/catala/penalites-maintenance');
+  const module = fs.readFileSync(path.join(example, 'maintenance.catala_fr'), 'utf8');
+  assert.deepEqual(catalaDocumentation(module, { contract: true }).errors, []);
+  assert.match(catalaDocumentation(module).errors[0].message, /règle sans source juridique/);
+  const scenarios = fs.readFileSync(path.join(example, 'test_maintenance.catala_fr'), 'utf8');
+  assert.deepEqual(catalaDocumentation(scenarios, { test: true, contract: true }).errors, []);
+  const unanchored = module.replace(/^## Article 5 — .*$/m, '## Pénalités');
+  assert.match(catalaDocumentation(unanchored, { contract: true }).errors.map((error) => error.message).join('\n'), /règle sans clause ni texte/);
 });

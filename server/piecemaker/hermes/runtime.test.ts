@@ -29,6 +29,7 @@ test('Hermes installs its plugin once and binds commands to the launching instan
     assert.deepEqual(fs.readFileSync(calls, 'utf8').trim().split('\n').map(line => JSON.parse(line)), [['plugins', 'enable', 'piecemaker']]);
     const plugin = path.join(process.env.HERMES_HOME, 'plugins/piecemaker');
     assert.ok(fs.existsSync(path.join(plugin, 'skills/piecemaker/SKILL.md')));
+    assert.ok(fs.existsSync(path.join(process.env.HERMES_HOME, 'scripts/piecemaker-rappels.py')));
     const directory = path.join(plugin, 'bindings');
     const binding = JSON.parse(fs.readFileSync(path.join(directory, fs.readdirSync(directory)[0]), 'utf8'));
     assert.equal(binding.home, process.env.CLOUDCLI_HOME);

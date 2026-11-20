@@ -63,6 +63,7 @@ const TOOLS_RULE_LINES = [
   '- Règle juridique en programme, calcul formel, preuve sur les exceptions → skill catala',
   '- Lire, modifier, annoter ou créer un fichier Word .docx → skill docx-cli',
   '- Rédiger ou relire un acte, un courrier, un document juridique → skill style-redaction-cabinet, puis docx-cli',
+  '- Page à regarder ou à utiliser (synthèse visuelle, tableau de bord, suivi, présentation) → outil Artifact : quickstart, puis skill creation-artifacts',
   '- Instruction, gabarit ou skill personnels → skill ajout-de-fonctionnalites',
   '- Textes, jurisprudence, BODACC → outils MCP legifrance, sans skill',
   DELEGATION_LINE,

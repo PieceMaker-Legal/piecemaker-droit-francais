@@ -5,7 +5,7 @@ import { nodePosition } from './party-codes.js';
 import type { KnowledgeNode, KnowledgeSnapshot, NodeKind } from './types.js';
 import type { CompanySearchResult, ScanJob } from './api.js';
 import { ficheLinks } from './okf.js';
-import type { OkfContradiction, OkfError, OkfIndex, OkfView, PendingProposals } from './okf.js';
+import type { OkfIndex, PendingProposals } from './okf.js';
 
 export type Tab = 'general' | 'chronology' | 'graph';
 export type BodaccScanState = {
@@ -299,23 +299,18 @@ export function linksMarkup(okf: OkfIndex | null, resource: string): string {
   return ficheLinks(okf, resource).map((link) => `<span class="pmd-badge" title="${escapeHtml(link.citation)}">${escapeHtml(`${link.label} ${link.title}`)}</span>`).join('');
 }
 
-function okfContradictions(contradictions: OkfContradiction[]): string {
-  if (!contradictions.length) return '';
-  return `<div class="pmd-okf-report" data-okf-report="contradictions"><strong>${contradictions.length} contradiction${contradictions.length > 1 ? 's' : ''} entre pièces</strong><ul>${contradictions.map((entry) => `<li><span class="pmd-okf-premise">${escapeHtml(entry.titre)}</span> <span class="pmd-badges">${entry.valeurs.map((value) => `<span class="pmd-badge">${escapeHtml(value.piece)} : ${escapeHtml(value.valeur)}</span>`).join('')}</span></li>`).join('')}</ul></div>`;
-}
-
-function okfErrors(errors: OkfError[] | null): string {
-  if (!errors) return '';
-  if (!errors.length) return '<div class="pmd-okf-report" data-okf-report="ok">Index vérifié : aucune erreur.</div>';
-  return `<div class="pmd-okf-report" data-okf-report="errors"><strong>${errors.length} erreur${errors.length > 1 ? 's' : ''} dans l’index</strong><ul>${errors.map((entry) => `<li><code>${escapeHtml(entry.fiche)}</code> ${escapeHtml(entry.erreur)}</li>`).join('')}</ul></div>`;
-}
-
-export function graphView(okf: OkfIndex | null, withPremises = false): string {
-  if (!okf) return '<div class="pmd-empty">Index indisponible.</div>';
-  const count = okf.fiches.filter((fiche) => okf.typesGraphe.includes(fiche.type)).length;
-  if (!count) return `<div class="pmd-empty">Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.</div>`;
+export function graphView(okf: OkfIndex | null, showPremises = true): string {
+  const hasDocuments = okf?.fiches.some((fiche) => okf.typesGraphe.includes(fiche.type));
+  const emptyMessage = okf ? `Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.` : 'Index indisponible.';
   const key = (kind: string, label: string) => `<span class="pmd-okf-key">${iconSvg(kind)}${label}</span>`;
-  return `<div class="pmd-toolbar"><div class="pmd-subtitle">Types affichés : ${escapeHtml(okf.typesGraphe.join(', '))}, ${withPremises ? 'prémisses et ' : ''}parties.</div><span class="pmd-spacer"></span><label class="pmd-okf-toggle"><input type="checkbox" data-okf-premises${withPremises ? ' checked' : ''}> Afficher les prémisses</label><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div><div class="pmd-okf-legend" aria-label="Légende du graphe">${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}</div><div class="pmd-okf-graph-wrap" data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, prémisses et parties : fiches dans .piecemaker/okf/"><button type="button" class="pmd-icon-button pmd-okf-center" data-okf-center title="Centrer le graphe" aria-label="Centrer le graphe">⌖</button><div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div></div>`;
+  return `<div class="pmd-okf-graph-wrap"${hasDocuments ? ' data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, prémisses et parties : fiches dans .piecemaker/okf/"' : ''}>
+    ${hasDocuments ? '<div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div>' : `<div class="pmd-empty">${emptyMessage}</div>`}
+    <div class="pmd-okf-legend" role="group" aria-label="Légende du graphe">
+      ${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}
+      <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${showPremises ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="okf-premises" aria-pressed="${showPremises}">Prémisses</button>
+      <a href="#" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</a>
+    </div>
+  </div>`;
 }
 
 export function proposalBanner(proposals?: PendingProposals): string {
@@ -328,9 +323,13 @@ export function proposalBanner(proposals?: PendingProposals): string {
 }
 
 /** L'onglet Index : une seule vue, la revue tabulaire de l'Index (SQLite), montée dans `[data-index-analysis]` avec les liens OKF de chaque pièce. */
-export function chronologyView(view: Pick<OkfView, 'errors' | 'contradictions' | 'proposals'> = { errors: null }, chronology = false): string {
+export function chronologyView(proposals?: PendingProposals, chronology = false): string {
   return `
-    <div class="pmd-toolbar"><div class="pmd-subtitle">Une ligne par pièce, une colonne par question : l’Index du dossier.</div><span class="pmd-spacer"></span><button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${chronology ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="index-chronology" aria-pressed="${chronology}" title="Afficher seulement les pièces, de la plus ancienne à la plus récente">Chronologie</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="okf-verify" title="Contrôler les fiches, les types et les liens de l’index">Vérifier l’index</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</button><button type="button" class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="edit-tree" title="Organiser l’arborescence du dossier (colonne Classement)">Arborescence</button><button class="pmd-button piecemaker-button piecemaker-button--glass piecemaker-button--sm" data-action="refresh">Actualiser</button></div>
-    ${proposalBanner(view.proposals)}${okfErrors(view.errors)}${okfContradictions(view.contradictions || [])}
-    <div class="pmd-index-analysis" data-index-analysis></div>`;
+    ${proposalBanner(proposals)}
+    <div class="pmd-index-analysis" data-index-analysis></div>
+    <div class="pmd-okf-legend" role="group" aria-label="Légende de l’index">
+      <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${chronology ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="index-chronology" aria-pressed="${chronology}" title="Afficher seulement les pièces, de la plus ancienne à la plus récente">Chronologie</button>
+      <a href="#" data-action="edit-tree" title="Organiser l’arborescence du dossier (colonne Classement)">Arborescence</a>
+      <a href="#" data-action="edit-document-types">Types d'actes</a>
+    </div>`;
 }

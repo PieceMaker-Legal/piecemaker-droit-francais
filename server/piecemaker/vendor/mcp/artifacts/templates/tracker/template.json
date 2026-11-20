@@ -1,0 +1,1 @@
+{ "title": "Suivi partagé", "description": "Liste d'éléments à suivre (tâches, pièces à obtenir, questions au client) enregistrée dans la base de l'artifact : l'avocat la coche, l'agent la lit et l'alimente par ArtifactData.", "intent": "other", "icon": "checklist", "entry": "index.html", "read_first": ["README.md"], "capabilities": { "db": {} }, "data_files": [] }

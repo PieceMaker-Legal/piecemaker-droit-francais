@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 
+import { getHermesHome } from '@/modules/providers/list/hermes/hermes-home.js';
 import type { IProviderModels } from '@/shared/interfaces.js';
 import type {
   ProviderCurrentActiveModel,
@@ -22,7 +22,7 @@ export const HERMES_FALLBACK_MODELS: ProviderModelsDefinition = {
   DEFAULT: HERMES_CONFIGURED_MODEL,
 };
 
-const HERMES_CONFIG_PATH = path.join(os.homedir(), '.hermes', 'config.yaml');
+const hermesConfigPath = () => path.join(getHermesHome(), 'config.yaml');
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -118,7 +118,7 @@ export class HermesProviderModels implements IProviderModels {
 
   private async readConfiguredModel(): Promise<string | null> {
     try {
-      const content = await readFile(HERMES_CONFIG_PATH, 'utf8');
+      const content = await readFile(hermesConfigPath(), 'utf8');
       return readOptionalString(readYamlPath(content, ['model', 'default']))
         ?? readOptionalString(readYamlPath(content, ['model']))
         ?? null;

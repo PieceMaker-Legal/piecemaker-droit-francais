@@ -21,6 +21,7 @@ import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
 import { installCodexPlanRuntime } from './codex-plan.js';
 import { installCodexEventsRuntime } from './codex-events.js';
+import { createHermesRouter } from './hermes/routes.js';
 import { installHermesPieceMaker } from './hermes/runtime.js';
 import { createCitationStore } from './harness/citation-store.js';
 import { installChatCitationHarness } from './harness/chat-harness.js';
@@ -44,6 +45,7 @@ import { createSessionDossierRouter } from './session-dossier/session-dossier-ro
 import { createBodaccSearchRouter } from './bodacc-search.js';
 import { createDocxDocumentRouter } from './docx-document.js';
 import { createDocxReviewRouter } from './docx-review.js';
+import { createArtifactFrameRouter, createArtifactsRouter } from './artifacts.js';
 import { createFeatureCommentsRouter } from './feature-comments.js';
 import { createExternalFileRouter, createFileLinksRouter } from './file-links.js';
 import { createShellEnvironmentRouter, resolveDesktopShellEnvironment } from './shell-environment.js';
@@ -138,7 +140,7 @@ folderHistory.onChange(etapes.invalider);
 for (const { project_path: projectPath } of suivi.projects()) etapes.invalider(projectPath);
 installCodexPlanRuntime(providerRuntimeService);
 installCodexEventsRuntime(providerRuntimeService, sessionsService);
-installHermesPieceMaker(providerRuntimeService, applicationRoot);
+const hermes = installHermesPieceMaker(providerRuntimeService, applicationRoot);
 installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
 installLegalCodeHarness({ runtime: providerRuntimeService, sessions: sessionsService, applicationRoot });
@@ -182,6 +184,7 @@ localRouter.use(knowledge.localRouter);
 localRouter.use(createSuiviLocalRouter(suivi, isLoopback, board));
 localRouter.use(createSessionDossierRouter(sessionsDb, isLoopback));
 localRouter.use(createOpenPanelRequestsRouter());
+localRouter.use(createArtifactFrameRouter());
 localRouter.use(createCatalaUpdatedRouter(isLoopback, () => projectsDb.getProjectPaths().map((row) => row.project_path), createCatalaCitationCheck(catalaScriptPath(applicationRoot), catalaCitations)));
 localRouter.use(vendor.createPieceMakerStampingLocalRouter(isLoopback));
 localRouter.use(createTabularReviewLocalRouter({
@@ -207,6 +210,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));
   router.use(createTelegramRouter());
+  router.use('/hermes', createHermesRouter(hermes.ensure));
   router.use('/library', library.router);
   router.use(knowledge.router);
   router.use(createCompanySearchRouter());
@@ -214,6 +218,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createDocxDocumentRouter());
   router.use(createDocxReviewRouter(projectsDb));
   router.use(createFeatureCommentsRouter(projectsDb));
+  router.use(createArtifactsRouter(projectsDb));
   router.use(createFileLinksRouter());
   router.use(createInstitutionalTermsRouter(institutionalTerms));
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));
