@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import express from 'express';
 
+import { readCasePair, writeCaseAbout, writeCaseRoadmap } from './case-pair.js';
 import type { createOrchestratorService } from './service.js';
 
 type Service = ReturnType<typeof createOrchestratorService>;
@@ -75,6 +76,15 @@ export function createOrchestratorRouter(service: Service, projects: Projects, b
   router.post('/schedule/cancel', route((root, { body }) => service.cancelScheduled(root, body.kind, body.id)));
   router.post('/recycle', route(root => service.recycle(root)));
   router.post('/dream', route(root => service.dream(root)));
+  const caseFolder = (root: string, folder: unknown) => {
+    if (!service.isCentral(root)) throw Object.assign(new Error('Réservé à l’agent central.'), { code: 403 });
+    const found = typeof folder === 'string' && path.isAbsolute(folder) ? projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(folder) && !service.isCentral(row.project_path)) : undefined;
+    if (!found) throw Object.assign(new Error('Dossier introuvable.'), { code: 404 });
+    return found.project_path;
+  };
+  router.get('/case', route((root, { query }) => readCasePair(caseFolder(root, query.folder))));
+  router.put('/case/about', route((root, { body }) => writeCaseAbout(caseFolder(root, body.folder), body.text)));
+  router.put('/case/roadmap', route((root, { body }) => writeCaseRoadmap(caseFolder(root, body.folder), body.roadmap)));
   return router;
 }
 

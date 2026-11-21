@@ -94,6 +94,10 @@ export type AgentState = {
   projectIds?: Record<string, string | null>;
 };
 export type CentralAgent = { project: string; projectId: string | null; sessionId: string | null };
+export type CaseRoadmapLine = { intitule?: string; kind?: string; date?: string; okf?: string; de?: string; avant?: string; delai?: Record<string, number>; [key: string]: unknown };
+export type CaseSuivi = { matter?: Record<string, unknown>; evenements?: Record<string, CaseRoadmapLine>; echeances?: Record<string, CaseRoadmapLine> };
+export type CaseRoadmap = { synthese?: Record<string, unknown>; etapes?: unknown; suivis?: Record<string, CaseSuivi>; suivisSupprimes?: Record<string, CaseSuivi>; [key: string]: unknown };
+export type CasePair = { folder: string; name: string; about: string; roadmap: CaseRoadmap; error: string | null; paths: { about: string; roadmap: string } };
 
 const BASE = '/api/piecemaker/orchestrateur';
 
@@ -108,4 +112,7 @@ export const agentApi = {
   openCentral: () => requestJson<CentralAgent & { sessionId: string; provider: AgentProvider | null }>(`${BASE}/central/session`, {}),
   post: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }),
   put: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }, 'PUT'),
+  casePair: (project: string, folder: string) => requestJson<CasePair>(`${BASE}/case?project=${encodeURIComponent(project)}&folder=${encodeURIComponent(folder)}`),
+  saveAbout: (project: string, folder: string, text: string) => requestJson<CasePair>(`${BASE}/case/about`, { project, folder, text }, 'PUT'),
+  saveRoadmap: (project: string, folder: string, roadmap: CaseRoadmap) => requestJson<CasePair>(`${BASE}/case/roadmap`, { project, folder, roadmap }, 'PUT'),
 };

@@ -11,7 +11,7 @@ import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import type { AgentState, AgentThread } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AppTab, Project, ProjectSession } from '@/shared/types';
 
-const calls = vi.hoisted(() => ({ list: [] as Array<{ url: string; body?: unknown; method?: string }>, state: null as unknown, agentSession: null as string | null }));
+const calls = vi.hoisted(() => ({ list: [] as Array<{ url: string; body?: unknown; method?: string }>, state: null as unknown, agentSession: null as string | null, pair: null as unknown }));
 
 vi.mock('@/shared/authToken', () => ({
   requestJson: vi.fn(async (url: string, body?: unknown, method?: string) => {
@@ -19,6 +19,8 @@ vi.mock('@/shared/authToken', () => ({
     if (url.includes('/state?')) return calls.state;
     if (url.includes('/session?')) return { sessionId: calls.agentSession };
     if (url.endsWith('/central')) return { project: CENTRAL, projectId: 'central', sessionId: 'agent-1' };
+    if (url.includes('/case?')) return calls.pair;
+    if (url.endsWith('/case/about') || url.endsWith('/case/roadmap')) return { ...(calls.pair as object), ...(url.endsWith('/about') ? { about: (body as { text: string }).text } : { roadmap: (body as { roadmap: unknown }).roadmap }) };
     return {};
   }),
 }));
@@ -223,4 +225,45 @@ it('règle le dream de l’agent central dans un onglet des paramètres et le la
   expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, dream: { enabled: true } }, method: 'PUT' });
   expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, dream: { hour: 4 } }, method: 'PUT' });
   expect(calls.list.some((call) => call.url.endsWith('/dream'))).toBe(true);
+});
+
+it('liste les dossiers de l’agent central dans le contexte, en ajoute un et modifie leur About et leur Roadmap', async () => {
+  const exemple = '/dossiers/Societe Exemple';
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  data.settings.folders = [PROJECT];
+  data.dossiers = [{ path: PROJECT, selected: true }, { path: exemple, selected: false }];
+  calls.state = data;
+  calls.pair = {
+    folder: PROJECT, name: 'Dupont', about: '# Dupont\n', error: null, paths: { about: '/brain/projects/Dupont/About.md', roadmap: '/brain/projects/Dupont/Roadmap.json' },
+    roadmap: { synthese: { parties: { etat: 'valide' }, okf: { etat: 'à exécuter : 2 manque(s)' } }, suivis: { 'appel-suivi.json': { echeances: { audience: { intitule: 'Audience de plaidoirie', kind: 'hearing', date: '2026-12-01' } } } } },
+  };
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Contexte' }));
+  const dossiers = await screen.findByRole('region', { name: 'Dossiers' });
+  fireEvent.click(screen.getByRole('button', { name: 'Ajouter un dossier' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Dossier à ajouter' }), { target: { value: exemple } });
+  fireEvent.click(screen.getByRole('button', { name: 'Ajouter le dossier' }));
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, folders: [PROJECT, exemple] }, method: 'PUT' });
+  fireEvent.click(dossiers.querySelector(`[data-case="${PROJECT}"] button`)!);
+  fireEvent.click(await screen.findByRole('button', { name: 'About' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'About.md de Dupont' }), { target: { value: '# Dupont\n\nStatut : en cours\n' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/case/about', body: { project: CENTRAL, folder: PROJECT, text: '# Dupont\n\nStatut : en cours\n' }, method: 'PUT' });
+  fireEvent.click(screen.getByRole('button', { name: 'Roadmap' }));
+  expect(screen.getByRole('list', { name: 'Synthèse' }).textContent).toContain('Index : à exécuter : 2 manque(s)');
+  fireEvent.change(screen.getByRole('textbox', { name: 'Intitulé de audience' }), { target: { value: 'Audience de renvoi' } });
+  fireEvent.change(screen.getByRole('textbox', { name: 'Nouvelle ligne' }), { target: { value: 'Dépôt des conclusions' } });
+  fireEvent.change(screen.getByLabelText('Date de la nouvelle ligne'), { target: { value: '2026-11-30' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Ajouter la ligne' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+  await act(async () => undefined);
+  const saved = calls.list.find((call) => call.url.endsWith('/case/roadmap'))!.body as { roadmap: { suivis: Record<string, { echeances: Record<string, unknown> }> } };
+  expect(saved.roadmap.suivis['appel-suivi.json'].echeances).toEqual({
+    audience: { intitule: 'Audience de renvoi', kind: 'hearing', date: '2026-12-01' },
+    'dépôt des conclusions': { intitule: 'Dépôt des conclusions', kind: 'filing', date: '2026-11-30' },
+  });
 });

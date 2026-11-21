@@ -19,7 +19,8 @@ import { WorkspaceViewer as EditorSidebar } from '@/modules/piecemaker-workspace
 import WorkspaceHeader from '@/modules/project-workspace/WorkspaceHeader';
 import WorkspaceStateView from '@/modules/project-workspace/WorkspaceStateView';
 import WorkspaceErrorBoundary from '@/modules/project-workspace/WorkspaceErrorBoundary';
-import { useSubagentFileOpen, withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
+import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
+import { useSubagentFileOpen } from '@/modules/piecemaker-workspace-tabs';
 
 type WorkspaceMainProps = {
   selectedProject: Project | null;

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { ACTIVE_THREAD_STATES, agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AgentDeliverable, AgentDreamSettings, AgentProvider, AgentSettings, AgentState, AgentThread, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
+import { CaseFolders } from '@/modules/piecemaker-workspace-tabs/agent/CaseFolders';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
 import { useSubagent } from '@/modules/piecemaker-workspace-tabs/agent/subagent';
@@ -110,6 +111,7 @@ function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: Ag
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
       <div className="px-2 pb-2"><select aria-label="Visibilité" className="rounded-lg bg-transparent text-[15px] text-foreground" defaultValue="me"><option value="me">Vous uniquement</option></select></div>
+      {state.central && <CaseFolders state={state} projectPath={projectPath} save={(patch) => void act('settings', patch, 'PUT')} />}
       <Section title="Instructions" count={state.settings.instructions.trim() ? 1 : 0}>
         <Row icon={<NotebookPen className="h-4 w-4" />} title="Instructions du projet" detail={state.settings.instructions.trim() || 'Aucune pour l’instant'} onClick={() => onTab('settings')} />
       </Section>

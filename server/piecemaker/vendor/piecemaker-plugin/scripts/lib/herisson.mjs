@@ -88,7 +88,7 @@ function suiviErrors(content) {
 
 const ROADMAP_OWNED = { etapes: 'the case steps (etapes) are set by the lawyer on the board of the Suivi des dossiers tab', synthese: 'the synthesis (synthese) is written by the script synthese.mjs next to Roadmap.json, run by pm check; change the script to change what it records' };
 
-function roadmapErrors(file, content) {
+export function roadmapErrors(file, content) {
   let value;
   try { value = content.trim() ? JSON.parse(content) : {}; } catch (error) {
     const position = /position (\d+)/.exec(error.message);
