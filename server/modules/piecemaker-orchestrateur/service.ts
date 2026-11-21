@@ -124,7 +124,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
   const thread = (id: unknown) => find(state.threads, id, 'Fil');
   const decision = (id: unknown) => find(state.decisions, id, 'Décision');
   const active = (t: Thread) => t.state === 'working' || t.state === 'blocked';
-  const runs = new Map<string, { reply?: ThreadReply }>();
+  const runs = new Map<string, { reply?: ThreadReply; startedAt?: string }>();
   let manualRecycle = false;
   let initializing = false;
   let currentBatch: WakeEvent[] = [];
@@ -295,12 +295,16 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     Object.assign(t, { state: 'stopped', updatedAt: now(), external: false });
     threadWake(t, 'thread_stopped', 'system', 'Thread stopped.');
   }
-  async function finish(t: Thread, run: { reply?: ThreadReply }, error: string | null) {
+  async function finish(t: Thread, run: { reply?: ThreadReply; startedAt?: string }, error: string | null) {
     if (runs.get(t.id) !== run) return;
     let answer = '';
+    let report: string | null = null;
     try {
       if (t.sessionId && !error && !run.reply && !deps.wasAborted(t.sessionId)) answer = await deps.lastAnswer(t.sessionId);
     } catch (cause) { error = String(cause); }
+    if (central && t.sessionId && !error && run.startedAt && deps.herissonReport) {
+      try { report = await deps.herissonReport(t.sessionId, t.projectPath, run.startedAt); } catch { report = null; }
+    }
     if (runs.get(t.id) !== run) return;
     runs.delete(t.id);
     t.updatedAt = now();
@@ -313,7 +317,8 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       if (!t.retries && !invalidModel(error)) retry(t);
       else threadWake(t, 'thread_failed', 'system', error);
     } else {
-      const reply = run.reply ?? { at: now(), text: answer, outputs: [] };
+      const base = run.reply ?? { at: now(), text: answer, outputs: [] };
+      const reply = report ? { ...base, text: `${base.text}\n\n<system-report>\n${report}\n</system-report>` } : base;
       t.replies.push(reply);
       t.error = null;
       t.state = t.resolved ? 'done' : 'review_ready';
@@ -324,7 +329,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     drain();
   }
   async function launch(t: Thread) {
-    const run = {};
+    const run = { startedAt: now() };
     runs.set(t.id, run);
     t.state = 'working';
     t.updatedAt = now();

@@ -114,6 +114,14 @@ const sourceConnectors = createSourceConnectors();
 const suivi = createSuiviService(getConnection, { ...sourceConnectors, premise: premiseDate });
 const board = createBoardService(getConnection, suivi);
 const pmScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')).href;
+const herissonScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'piecemaker-plugin', 'scripts', 'herisson.mjs')).href;
+async function herissonReport(sessionId: string, projectPath: string, since: string) {
+  const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
+  const calls = history.messages.filter(message => message.kind === 'tool_use' && message.toolName && message.timestamp >= since).map(message => ({ tool_name: message.toolName, tool_input: message.toolInput }));
+  if (!calls.length) return null;
+  const { workReport } = await import(herissonScript) as { workReport(root: string, calls: unknown[]): Promise<string | null> };
+  return workReport(projectPath, calls);
+}
 async function lastSessionAnswer(sessionId: string) {
   const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
   return history.messages.filter(message => message.kind === 'text' && message.role === 'assistant' && !message.parentToolUseId).at(-1)?.content ?? '';
@@ -202,6 +210,7 @@ const orchestrator = createOrchestratorService({
     return result.started && !result.error && complete?.success === false ? { ...result, error: 'Tour interrompu.' } : result;
   },
   lastAnswer: lastSessionAnswer,
+  herissonReport,
   history: async (sessionId, limit) => {
     const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
     return history.messages.flatMap(({ kind, role, content, parentToolUseId }) =>

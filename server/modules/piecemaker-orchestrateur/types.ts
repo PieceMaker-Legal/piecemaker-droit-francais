@@ -220,6 +220,7 @@ export type OrchestratorDependencies = {
   openSession(provider: RunnableProvider, projectPath: string, title: string, hidden?: boolean): string;
   runTurn(sessionId: string, userId: number | null, content: string, options: TurnOptions): Promise<TurnResult>;
   lastAnswer(sessionId: string): Promise<string>;
+  herissonReport?(sessionId: string, projectPath: string, since: string): Promise<string | null>;
   history(sessionId: string, limit: number): Promise<Array<{ role: string; text: string }>>;
   wasAborted(sessionId: string): boolean;
   isProcessing(sessionId: string): boolean;

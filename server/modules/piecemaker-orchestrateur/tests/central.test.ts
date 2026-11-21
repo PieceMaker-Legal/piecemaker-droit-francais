@@ -19,6 +19,7 @@ function fixture(ctx: TestContext) {
   for (const folder of [dupont, exemple, autre]) mkdirSync(folder);
   const opened: Array<{ title: string; root: string; hidden?: boolean }> = [];
   const turns: { session: string; content: string; options: TurnOptions; end: (result?: TurnResult) => void }[] = [];
+  const reports: Array<{ session: string; root: string; since: string }> = [];
   const deps: OrchestratorDependencies = {
     centralRoot: central,
     now: () => new Date(2026, 0, 5, 12, 0),
@@ -31,6 +32,7 @@ function fixture(ctx: TestContext) {
     sessionModel: () => null, defaultModel: async () => 'standard', models: async () => [],
     permissions: async () => ({ allowedTools: [], disallowedTools: [] }),
     lastAnswer: async () => 'Réponse', history: async () => [], pending: () => [], resolve() {},
+    herissonReport: async (session, root, since) => { reports.push({ session, root, since }); return 'Rapport hérisson (1 check(s) on the work of this thread):'; },
     wasAborted: () => false, isProcessing: () => false, abort: async () => true, notify() {},
     approvedFolders: () => [dupont, exemple, autre], artifacts: () => [], connectors: () => [],
   };
@@ -39,7 +41,7 @@ function fixture(ctx: TestContext) {
   ctx.after(() => { service.stop(); rmSync(base, { recursive: true, force: true }); });
   const state = () => service.state(central);
   const call = async (tool: string, args: Record<string, unknown> = {}) => service.call(central, (await state()).orchestrator.key, tool, args);
-  return { central, dupont, exemple, autre, service, opened, turns, state, call };
+  return { central, dupont, exemple, autre, service, opened, turns, reports, state, call };
 }
 
 test('L’agent central ouvre sa conversation dans son propre dossier et choisit ses dossiers parmi les dossiers connus', async ctx => {
@@ -126,4 +128,23 @@ test('Le dream de l’agent central passe une fois par nuit à l’heure choisie
   for (let i = 0; i < 5; i++) await flush();
   assert.equal(f.turns.length, count);
   assert.throws(() => f.service.updateSettings(f.dupont, { dream: { enabled: true } }), /réservé/);
+});
+
+test('La réponse d’un fil revient à l’agent central avec le rapport du Hérisson sur son travail', async ctx => {
+  const f = fixture(ctx);
+  f.service.updateSettings(f.central, { folders: [f.dupont] });
+  f.service.postUserMessage(f.central, 'Mets à jour le suivi Dupont', 1);
+  await flush();
+  await f.call('start_thread', { title: 'Mettre à jour le suivi', instructions: 'Suivi', ack_project: 'Je lance', ack_thread: 'Je m’en occupe', folder: f.dupont });
+  await flush();
+  f.turns.at(-1)!.end();
+  await flush();
+  await flush();
+  assert.deepEqual(f.reports.map(r => [r.session, r.root]), [[f.turns.at(-1)!.session, f.dupont]]);
+  const thread = (await f.state()).threads[0];
+  assert.equal(thread.replies.at(-1)!.text, 'Réponse\n\n<system-report>\nRapport hérisson (1 check(s) on the work of this thread):\n</system-report>');
+  f.turns[0].end();
+  for (let i = 0; i < 5; i++) await flush();
+  const wake = f.turns.find(turn => turn.content.includes('<system-report>'));
+  assert.ok(wake, 'le réveil de l’agent central porte le rapport');
 });
