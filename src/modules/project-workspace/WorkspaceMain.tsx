@@ -1,4 +1,3 @@
-import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
 import React, { useCallback, useEffect, type Dispatch, type SetStateAction, useState } from 'react';
 
 import { ChatInterface } from '@/modules/chat';
