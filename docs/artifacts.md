@@ -11,6 +11,7 @@ flowchart LR
   O -->|Commentaires| C
   A -->|ArtifactTemplates sync / save / push| T["~/.piecemaker/artifacts-templates (dépôt Git)"]
   O -->|/api/piecemaker/artifacts/*| S
+  O -->|/api/piecemaker/artifact-templates/*| T
   O -->|iframe sandbox + jeton| F["/api/piecemaker/local/artifact-frame/<jeton>/…"]
   F -->|window.artifact postMessage| O
 ```
@@ -53,7 +54,8 @@ Une version est écrite dans un dossier temporaire puis renommée : jamais de ve
 - CSP de la page : `connect-src 'none'` (aucune requête réseau), images et médias de l'application ou `data:`/`blob:`, scripts des CDN admis par Claude (cdnjs, jsdelivr, unpkg, tailwind, jquery), styles Google Fonts.
 - Le serveur injecte `__piecemaker/runtime.js` en tête de la page : `window.artifact.db` (capability `db`), `window.artifact.theme`, `window.artifact.download`, événements `artifact:data` et `artifact:theme`. Les appels passent par `postMessage` vers l'onglet, qui vérifie la source et appelle `POST /api/piecemaker/artifacts/:id/data`, refusé sans la capability.
 - L'onglet interroge l'artifact affiché toutes les 3 s : nouvelle version → rechargement (si l'avocat regarde la dernière), base modifiée → `artifact:data`.
-- Galerie : tous / épinglés, épingler, supprimer (deux clics), copier le lien, changer de version et ouvrir les commentaires. Un artéfact Word s’ouvre dans l’éditeur de fichiers.
+- Galerie : trois onglets — **Artefacts** (tous les artifacts publiés du dossier), **Épinglés**, **Templates** (bibliothèque du dépôt GitHub). Épingler, supprimer (deux clics), copier le lien, changer de version et ouvrir les commentaires. Un artéfact Word s’ouvre dans l’éditeur de fichiers.
+- Onglet **Templates** : `GET /api/piecemaker/artifact-templates` liste les templates (embarqués + dépôt cloné), `GET /api/piecemaker/artifact-templates/status` rend l’état GitHub (dépôt, branche, dernier `sync`, commit, modifications locales) et `POST /api/piecemaker/artifact-templates/sync` clone ou avance rapide le clone local — jamais de push, réservé à `ArtifactTemplates push`. Un clic sur un template copie son lien `piecemaker://template/<nom>` pour le donner à l’assistant (`Artifact publish type_url=…`).
 
 ## Ouverture depuis Projet
 

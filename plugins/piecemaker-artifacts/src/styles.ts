@@ -44,6 +44,12 @@ export const STYLES = `
 .pma-muted{color:var(--pma-muted);font-size:12px}
 .pma-empty{min-height:280px;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px 16px;color:var(--pma-muted)}
 .pma-error{margin:12px 22px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--pma-danger) 35%,var(--pma-border));border-radius:10px;background:color-mix(in srgb,var(--pma-danger) 6%,var(--pma-surface));color:var(--pma-danger);font-size:13px}
+.pma-notice{margin:12px 22px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--pma-accent) 35%,var(--pma-border));border-radius:10px;background:color-mix(in srgb,var(--pma-accent) 6%,var(--pma-surface));color:var(--pma-text);font-size:13px}
+.pma-git{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 24px 0;padding:10px 14px;border:1px solid var(--pma-glass-border);border-radius:12px;background:var(--pma-glass-bg);box-shadow:var(--pma-glass-shadow)}
+.pma-git-info{flex:1;min-width:220px;display:flex;flex-direction:column;gap:2px;font-size:12px;color:var(--pma-text);overflow-wrap:anywhere}
+.pma-git-info b{color:var(--pma-ink);font-weight:600}
+.pma-git .piecemaker-button{flex:0 0 auto}
+.pma-git + .pma-grid{padding-top:14px}
 .pma-view{flex:1;display:grid;grid-template-columns:1fr;min-height:0}
 .pma-view.with-comments{grid-template-columns:1fr 300px}
 .pma-view iframe{width:100%;height:100%;min-height:480px;border:0;background:#fff}

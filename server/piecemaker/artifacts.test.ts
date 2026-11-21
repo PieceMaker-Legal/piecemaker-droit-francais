@@ -13,6 +13,34 @@ import type { NormalizedMessage } from '@/shared/types.js';
 import { createArtifactFrameRouter, createArtifactsRouter, frameCsp, injectRuntime } from './artifacts.js';
 import { openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
 
+/** Appelle une appli express sans port : un IncomingMessage/ ServerResponse sur un socket factice. */
+function serve(app: express.Express) {
+  return (url: string, body?: object) => new Promise<Response>((resolve, reject) => {
+    const socket = new Socket();
+    const incoming = new IncomingMessage(socket);
+    incoming.url = url;
+    incoming.method = body ? 'POST' : 'GET';
+    incoming.headers.host = '127.0.0.1';
+    if (body) {
+      const json = Buffer.from(JSON.stringify(body));
+      incoming.headers['content-type'] = 'application/json';
+      incoming.headers['content-length'] = String(json.length);
+      incoming.push(json);
+    }
+    incoming.push(null);
+
+    const outgoing = new ServerResponse(incoming);
+    incoming.on('error', reject);
+    outgoing.end = (chunk?: unknown) => {
+      const headers = new Headers();
+      for (const [name, value] of Object.entries(outgoing.getHeaders())) headers.set(name, String(value));
+      resolve(new Response(chunk === undefined ? null : String(chunk), { status: outgoing.statusCode, headers }));
+      return outgoing;
+    };
+    app(incoming, outgoing);
+  });
+}
+
 test('le runtime passe en tête de page, avant tout script', () => {
   assert.equal(injectRuntime('<!doctype html><html><head><script>1</script></head></html>'), '<!doctype html><html><head>\n<script src="__piecemaker/runtime.js"></script><script>1</script></head></html>');
   assert.match(injectRuntime('<!doctype html><p>x</p>'), /^<!doctype html>\n<script src="__piecemaker\/runtime\.js"><\/script>/);
@@ -64,30 +92,7 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
       toolInput: { type_url: 'piecemaker://template/page' }, toolResult: { content: receipt(foreign) },
     }] : [] }),
   }));
-  const request = (url: string, body?: object) => new Promise<Response>((resolve, reject) => {
-    const socket = new Socket();
-    const incoming = new IncomingMessage(socket);
-    incoming.url = url;
-    incoming.method = body ? 'POST' : 'GET';
-    incoming.headers.host = '127.0.0.1';
-    if (body) {
-      const json = Buffer.from(JSON.stringify(body));
-      incoming.headers['content-type'] = 'application/json';
-      incoming.headers['content-length'] = String(json.length);
-      incoming.push(json);
-    }
-    incoming.push(null);
-
-    const outgoing = new ServerResponse(incoming);
-    incoming.on('error', reject);
-    outgoing.end = (chunk?: unknown) => {
-      const headers = new Headers();
-      for (const [name, value] of Object.entries(outgoing.getHeaders())) headers.set(name, String(value));
-      resolve(new Response(chunk === undefined ? null : String(chunk), { status: outgoing.statusCode, headers }));
-      return outgoing;
-    };
-    app(incoming, outgoing);
-  });
+  const request = serve(app);
   const query = `projectPath=${encodeURIComponent(project)}`;
   const post = (route: string, body: object = {}) => request(`/api/piecemaker/${route}?${query}`, body);
 
@@ -159,4 +164,39 @@ test('la page s’affiche par un jeton, sa base n’est ouverte qu’avec la cap
   assert.deepEqual(threads[0].anchor, { version: 1, passage });
   assert.deepEqual(threads[1].anchor, { kind: 'review', decision: 'approved', version: 1 });
   assert.equal(threads[0].messages[0].author, 'lawyer');
+});
+
+test('routes des templates : liste, statut GitHub et synchronisation (jamais de push)', async (context) => {
+  const project = await mkdtemp(path.join(os.tmpdir(), 'artifacts-templates-routes-'));
+  context.after(() => rm(project, { recursive: true, force: true }));
+  const synced: unknown[] = [];
+  const status = { repository: 'https://github.com/exemple/biblio.git', branch: 'main', last_sync: '2026-11-20T10:00:00.000Z', clone: '/tmp/biblio', cloned: true, head: 'abc1234 2026-11-20 biblio', local_changes: [' M suivi/index.html'], templates: ['suivi (repository)'] };
+  const fake = {
+    list: () => [{ type_url: 'piecemaker://template/suivi', name: 'suivi', title: 'Suivi', description: 'Tableau de suivi', intent: 'other', icon: null, capabilities: {}, read_first: [], entry: 'index.html', data_files: [], references: [], scripts: [], source: 'repository', folder: '/tmp/biblio/suivi' }],
+    status: async () => status,
+    sync: async (options?: unknown) => { synced.push(options ?? {}); return status; },
+  };
+  const app = express();
+  app.use('/api/piecemaker', createArtifactsRouter(
+    { getProjectPathById: () => null, getProjectPaths: () => [{ project_path: project }] },
+    { getSessionById: () => null, listProjectSessions: () => [], fetchHistory: async () => ({ messages: [] }) },
+    fake as unknown as Parameters<typeof createArtifactsRouter>[2],
+  ));
+  const request = serve(app);
+
+  const list = await (await request('/api/piecemaker/artifact-templates')).json() as Array<Record<string, unknown>>;
+  assert.equal(list.length, 1);
+  assert.deepEqual(list[0], { type_url: 'piecemaker://template/suivi', name: 'suivi', title: 'Suivi', description: 'Tableau de suivi', intent: 'other', icon: null, source: 'repository' });
+
+  const gitStatus = await (await request('/api/piecemaker/artifact-templates/status')).json() as typeof status;
+  assert.equal(gitStatus.repository, 'https://github.com/exemple/biblio.git');
+  assert.equal(gitStatus.cloned, true);
+  assert.deepEqual(gitStatus.local_changes, [' M suivi/index.html']);
+
+  const sync = await request('/api/piecemaker/artifact-templates/sync', {});
+  assert.equal(sync.status, 200);
+  assert.deepEqual(synced, [{}]);
+  const withRepo = await request('/api/piecemaker/artifact-templates/sync', { repository: 'https://github.com/exemple/autre.git', branch: 'dev' });
+  assert.equal(withRepo.status, 200);
+  assert.deepEqual(synced[1], { repository: 'https://github.com/exemple/autre.git', branch: 'dev' });
 });

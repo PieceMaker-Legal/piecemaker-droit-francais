@@ -9,10 +9,12 @@ import type { NormalizedMessage } from '@/shared/types.js';
 
 import { artifactProjectFile, isCustomView, openArtifacts } from './vendor/mcp/artifacts/artifacts.mjs';
 import { openArtifactReviews } from './vendor/mcp/artifacts/reviews.mjs';
+import { openTemplates } from './vendor/mcp/artifacts/templates.mjs';
 import { openStore } from './vendor/mcp/features/store.mjs';
 
 type Projects = { getProjectPathById(id: string): string | null; getProjectPaths(): Array<{ project_path: string }> };
 type Failure = { code?: string; message: string };
+type TemplatesApi = Pick<ReturnType<typeof openTemplates>, 'list' | 'status' | 'sync'>;
 type ArtifactSessions = {
   getSessionById(id: string): { project_path: string | null; created_at: string; forked_from_session_id: string | null } | null;
   listProjectSessions: (root: string) => { session_id: string; created_at: string; updated_at: string }[];
@@ -155,7 +157,7 @@ async function artifactCreator(root: string, id: string, sessions: ArtifactSessi
   return { sessionId: null };
 }
 
-export function createArtifactsRouter(projects: Projects, sessions: ArtifactSessions) {
+export function createArtifactsRouter(projects: Projects, sessions: ArtifactSessions, templates: TemplatesApi = openTemplates()) {
   const router = express.Router();
   const rootOf = (request: express.Request, response: express.Response): string | null => {
     const wanted = typeof request.query.projectPath === 'string' ? path.resolve(request.query.projectPath) : '';
@@ -171,6 +173,24 @@ export function createArtifactsRouter(projects: Projects, sessions: ArtifactSess
     const root = rootOf(request, response);
     if (!root) return;
     send(response, (async () => openArtifacts(root).list({ scope: request.query.scope === 'pinned' ? 'pinned' : 'mine', limit: 200 }))());
+  });
+
+  /** Bibliothèque de templates du volet : embarqués + dépôt GitHub cloné (hors dossier, donc sans projectPath). */
+  router.get('/artifact-templates', (_request, response) => {
+    send(response, (async () => templates.list({}).map(({ type_url, name, title, description, intent, icon, source }) => ({ type_url, name, title, description, intent, icon, source })))());
+  });
+
+  router.get('/artifact-templates/status', (_request, response) => {
+    send(response, templates.status());
+  });
+
+  /** Avance rapide du clone local. Aucun push : la publication sur GitHub reste une action distincte de l'avocat. */
+  router.post('/artifact-templates/sync', express.json(), (request, response) => {
+    const body = (request.body ?? {}) as { repository?: unknown; branch?: unknown };
+    send(response, templates.sync({
+      ...(typeof body.repository === 'string' && body.repository ? { repository: body.repository } : {}),
+      ...(typeof body.branch === 'string' && body.branch ? { branch: body.branch } : {}),
+    }));
   });
 
   router.get('/artifacts/session/:sessionId', (request, response) => {
