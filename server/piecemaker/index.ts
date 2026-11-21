@@ -60,6 +60,7 @@ import { installModelDiscovery } from './model-discovery/index.js';
 import { discoverCodexModels } from './model-discovery/codex-catalog.js';
 import { startProjectRegistry } from './project-registry.js';
 import { createFolderHistory } from './folder-history/history.js';
+import { createQuotaHandoffRouter } from './quota-handoff.js';
 import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-panels.js';
 import { startRemoteAccess } from './remote/index.js';
 import { createTelegramRouter } from './telegram/index.js';
@@ -326,6 +327,20 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));
   router.use(createShellEnvironmentRouter(shellEnvironment));
   router.use(createOpenPanelsRouter(piecemakerHome()));
+  router.use(createQuotaHandoffRouter({
+    source: (sessionId) => {
+      const session = sessionsDb.getSessionById(sessionId);
+      return session?.project_path ? { provider: session.provider, projectPath: session.project_path } : null;
+    },
+    history: async (sessionId) => (await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 })).messages.flatMap(({ kind, role, content, parentToolUseId }) =>
+      kind === 'text' && (role === 'user' || role === 'assistant') && typeof content === 'string' && !parentToolUseId ? [{ role, text: content }] : []),
+    openSession: (provider, projectPath, title) => sessionsService.createAppSession(provider, projectPath, title).sessionId,
+    runTurn: ({ sessionId, userId, content, displayContent, provider, model, permissionMode }) => {
+      const toolsSettings = toolPreferences(provider as RunnableProvider, userId);
+      return runDetachedChatTurn({ sessionId, userId, content, displayContent, options: { model, permissionMode, toolsSettings: { ...toolsSettings, permissionMode }, skipPermissions: permissionMode === 'bypassPermissions' } }, { runtime: providerRuntimeService });
+    },
+    announce: (sessionId) => { void broadcastSessionUpserted(sessionId); },
+  }));
   router.use(remoteRouter);
   router.use(createMistralSdkAuthRouter());
   return router;
