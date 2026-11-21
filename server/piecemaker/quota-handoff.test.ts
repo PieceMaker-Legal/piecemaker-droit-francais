@@ -57,6 +57,14 @@ test('ouvre une session chez le nouveau provider et y lance la reprise', async (
   assert.match(String(turn.displayContent), /Claude, limite atteinte/);
 });
 
+test('un changement de fournisseur demandé ne parle pas de limite', async () => {
+  const response = await post({ sessionId: 'source', provider: 'mistral', model: 'mistral-medium', reason: 'switch' });
+  assert.equal(response.status, 200);
+  const turn = turns.at(-1)!;
+  assert.match(String(turn.content), /poursuit avec toi la conversation menée jusqu'ici avec Claude/);
+  assert.equal(turn.displayContent, 'Suite de la conversation menée avec Claude.');
+});
+
 test('refuse une session inconnue ou un provider invalide', async () => {
   assert.equal((await post({ sessionId: 'absente', provider: 'codex', model: 'gpt-5.5' })).status, 404);
   assert.equal((await post({ sessionId: 'source', provider: 'inconnu', model: 'x' })).status, 400);

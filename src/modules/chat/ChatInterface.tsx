@@ -39,6 +39,8 @@ import { useDocxCommentQuestions } from '@/piecemaker/chat/useDocxCommentQuestio
 import { prepareCommandMenuCommands } from '@/piecemaker/chat/prepareCommandMenuCommands';
 import { useContextSuggestion } from '@/modules/piecemaker-context-suggestions';
 import { CaseConversionCard } from '@/modules/piecemaker-case-conversion';
+import { ProviderSwitchSection } from '@/modules/piecemaker-quota';
+import { writeSelectedProvider } from '@/shared/selectedProvider';
 
 type ChatInterfaceProps = {
   isActive: boolean;
@@ -488,6 +490,21 @@ function ChatInterface({
     }
   }, [currentProviderEffort, currentProviderModel, input, permissionMode, scheduleMessage, setInput]);
 
+  const switchSessionId = currentSessionId || selectedSession?.id || null;
+  const renderProviderSwitch = useCallback((close: () => void) => (
+    <ProviderSwitchSection
+      provider={provider}
+      sessionId={switchSessionId}
+      projectPath={selectedProject?.fullPath ?? null}
+      onPickForNewChat={(nextProvider, model) => {
+        setProvider(nextProvider);
+        writeSelectedProvider(nextProvider);
+        setStoredProviderModel(nextProvider, model);
+      }}
+      onDone={close}
+    />
+  ), [provider, selectedProject?.fullPath, setProvider, setStoredProviderModel, switchSessionId]);
+
   const permissionContextValue = useMemo(() => ({
     pendingPermissionRequests,
     handlePermissionDecision,
@@ -653,6 +670,7 @@ function ChatInterface({
           availableModelOptions={currentProviderModelOptions}
           onSelectModel={handleSelectComposerModel}
           modelsLoading={providerModelsLoading}
+          renderModelMenuExtra={renderProviderSwitch}
           tokenBudget={tokenBudget}
           onShowTokenUsage={showCostModal}
           onClearContext={supportsContextClearing && (currentSessionId || selectedSession?.id) ? handleClearContextClick : undefined}

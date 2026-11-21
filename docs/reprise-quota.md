@@ -26,3 +26,15 @@ Un `429` seul n'est pas reconnu (« article 429 »). Tests : `server/piecemaker/
 - chaîne de priorité ordonnée des modèles de secours.
 
 Une carte déjà traitée (case changée, bascule faite) est notée dans `localStorage` (`piecemaker-quota-handled`) pour ne pas être rejouée automatiquement.
+
+## Changer de fournisseur depuis le chat
+
+Le menu du modèle du compositeur (`ComposerModelMenu`, prop `renderExtra` passée par `ChatComposer` › `renderModelMenuExtra` depuis `ChatInterface`) se termine par « Changer de fournisseur » (`ProviderSwitchSection.tsx`), qui liste les modèles des autres fournisseurs :
+
+- chat neuf : choisit le fournisseur et le modèle du premier message ;
+- session du PieceMaker Agent : `PUT /api/piecemaker/orchestrateur/settings` (`orchestratorProvider`, `orchestratorModel`), appliqué au prochain message (Claude, Codex, Mistral seulement) ;
+- autre session : `POST /quota/handoff` avec `reason: 'switch'`, nouvelle session qui reçoit la fin de la conversation.
+
+## Réglages du volet de l'Agent
+
+Les champs texte « Modèle » de l'agent et des fils sont remplacés par des listes (`ModelSelect.tsx`) remplies avec le catalogue de chaque fournisseur ; changer le fournisseur de l'agent remet son modèle au défaut.

@@ -64,12 +64,13 @@ export async function cancelResumes(rows: ScheduledMessage[]): Promise<void> {
   await Promise.all(rows.map((row) => api.scheduledMessages.cancel(row.id)));
 }
 
-export async function handOffSession(sessionId: string, currentProvider: string, target: QuotaChainEntry): Promise<string> {
+export async function handOffSession(sessionId: string, currentProvider: string, target: QuotaChainEntry, reason: 'quota' | 'switch' = 'quota'): Promise<string> {
   const { sessionId: nextSessionId } = await pmPost<{ sessionId: string }>('/quota/handoff', {
     sessionId,
     provider: target.provider,
     model: target.model,
     permissionMode: sessionPermissionMode(sessionId, currentProvider),
+    reason,
   });
   return nextSessionId;
 }

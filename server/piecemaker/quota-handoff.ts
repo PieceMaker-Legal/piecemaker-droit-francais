@@ -22,14 +22,16 @@ const PROVIDER_NAMES: Record<string, string> = { claude: 'Claude', codex: 'Codex
 
 const clip = (text: string) => (text.length > TURN_CHARACTERS ? `${text.slice(0, TURN_CHARACTERS)} […]` : text);
 
-export function buildHandoffPrompt(previousProvider: string, history: HistoryEntry[]): string {
+export function buildHandoffPrompt(previousProvider: string, history: HistoryEntry[], reason: 'quota' | 'switch' = 'quota'): string {
   const turns = history
     .filter((entry) => entry.text.trim() && !detectQuotaLimit(entry.text))
     .slice(-HISTORY_TURNS)
     .map((entry) => `[${entry.role === 'user' ? 'Avocat' : 'Assistant'}]\n${clip(entry.text.trim())}`);
   const name = PROVIDER_NAMES[previousProvider] ?? previousProvider;
   return [
-    `La session précédente, menée avec ${name}, s'est arrêtée : sa limite d'utilisation est atteinte. Tu reprends le travail dans le même dossier.`,
+    reason === 'quota'
+      ? `La session précédente, menée avec ${name}, s'est arrêtée : sa limite d'utilisation est atteinte. Tu reprends le travail dans le même dossier.`
+      : `L'avocat poursuit avec toi la conversation menée jusqu'ici avec ${name}, dans le même dossier.`,
     turns.length ? `Fin de la conversation précédente :\n\n<conversation-precedente>\n${turns.join('\n\n')}\n</conversation-precedente>` : 'La conversation précédente ne contient aucun échange lisible.',
     "Continue la tâche en cours là où elle s'est arrêtée, sans refaire ce qui est déjà fait. Vérifie l'état des fichiers du dossier avant de les modifier.",
   ].join('\n\n');
@@ -49,6 +51,7 @@ export function createQuotaHandoffRouter(dependencies: QuotaHandoffDependencies)
     const provider = readText(body.provider) as HandoffProvider;
     const model = readText(body.model);
     const permissionMode = readText(body.permissionMode) || 'default';
+    const reason = body.reason === 'switch' ? 'switch' : 'quota';
     if (!sourceId || !HANDOFF_PROVIDERS.includes(provider) || !model) {
       response.status(400).json({ error: 'sessionId, provider et model sont requis.' });
       return;
@@ -59,8 +62,9 @@ export function createQuotaHandoffRouter(dependencies: QuotaHandoffDependencies)
       return;
     }
     try {
-      const content = buildHandoffPrompt(source.provider, await dependencies.history(sourceId));
-      const displayContent = `Reprise du travail de la session précédente (${PROVIDER_NAMES[source.provider] ?? source.provider}, limite atteinte).`;
+      const content = buildHandoffPrompt(source.provider, await dependencies.history(sourceId), reason);
+      const previous = PROVIDER_NAMES[source.provider] ?? source.provider;
+      const displayContent = reason === 'quota' ? `Reprise du travail de la session précédente (${previous}, limite atteinte).` : `Suite de la conversation menée avec ${previous}.`;
       const sessionId = dependencies.openSession(provider, source.projectPath, displayContent);
       dependencies.announce(sessionId);
       const userId = Number((request as Request & { user?: { id?: unknown } }).user?.id);
