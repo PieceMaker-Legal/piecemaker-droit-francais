@@ -44,3 +44,23 @@ test('a selection spanning nested elements is highlighted at the selected occurr
     page.close();
   }
 });
+
+test('db.get resolves null for a missing document and rejects other errors', { timeout: 3000 }, async () => {
+  const runtime = fs.readFileSync(path.join(__dirname, 'runtime.js'), 'utf8');
+  const dom = new JSDOM('<main></main>', { runScripts: 'outside-only' });
+  const page = dom.window;
+  try {
+    const errors = { absent: { message: 'missing', code: 'not_found' }, cassé: { message: 'broken', code: 'internal' } };
+    page.postMessage = (message) => {
+      if (message.op !== 'get') return;
+      page.dispatchEvent(new page.MessageEvent('message', {
+        source: page, data: { channel: 'piecemaker-artifact', id: message.id, error: errors[message.args.doc_id] },
+      }));
+    };
+    page.eval(runtime);
+    assert.equal(await page.artifact.db.get('compteurs', 'absent'), null);
+    await assert.rejects(page.artifact.db.get('compteurs', 'cassé'), /broken/);
+  } finally {
+    dom.window.close();
+  }
+});

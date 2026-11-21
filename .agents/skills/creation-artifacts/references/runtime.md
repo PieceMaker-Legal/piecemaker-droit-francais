@@ -8,7 +8,7 @@ Mêmes règles qu'`ArtifactData` : collections et documents, `version` incrémen
 
 ```js
 const db = window.artifact?.db;
-await db.get('items', 'i1');                          // {id, path, data, version, updatedAt}
+await db.get('items', 'i1');                          // {id, path, data, version, updatedAt}, null s'il n'existe pas
 await db.list('items', { limit: 100 });               // {documents, next_cursor}
 await db.query('items', { where: [['done', '==', false]], order_by: { field: 'order' } });
 await db.set('items', 'i1', { text: 'Obtenir le Kbis', done: false });     // création

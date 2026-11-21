@@ -154,7 +154,7 @@
   window.artifact = {
     theme: document.documentElement.dataset.theme || null,
     db: {
-      get: (collection, docId) => call('get', { collection, doc_id: docId }),
+      get: (collection, docId) => call('get', { collection, doc_id: docId }).catch((error) => { if (error.code === 'not_found') return null; throw error; }),
       list: (collection, query = {}) => call('list', { collection, query }),
       query: (collection, query = {}) => call('query', { collection, query }),
       set: write('set'),

@@ -71,7 +71,7 @@ export function ArtifactFrame({
           reply({ result });
         }
       } catch (failure) {
-        reply({ error: { message: (failure as Error).message } });
+        reply({ error: { message: (failure as Error).message, code: (failure as Error & { code?: string }).code } });
       }
     };
     window.addEventListener('message', receive);
