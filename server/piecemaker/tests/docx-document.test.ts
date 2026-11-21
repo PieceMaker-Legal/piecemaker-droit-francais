@@ -11,6 +11,7 @@ import JSZip from 'jszip';
 import { closeConnection, initializeDatabase, projectsDb } from '@/modules/database/index.js';
 
 import { createDocxDocumentRouter } from '../docx-document.js';
+import { openArtifacts } from '../vendor/mcp/artifacts/artifacts.mjs';
 
 async function withDocxServer(run: (baseUrl: string, projectId: string, projectRoot: string) => Promise<void>) {
   const previousDatabasePath = process.env.DATABASE_PATH;
@@ -73,5 +74,30 @@ test('GET version rejects an unknown project or unsafe path and reports a missin
     assert.equal((await fetch(documentUrl(baseUrl, '/version', 'project-absent', 'acte.docx'))).status, 400);
     assert.equal((await fetch(documentUrl(baseUrl, '/version', projectId, '../outside.docx'))).status, 400);
     assert.equal((await fetch(documentUrl(baseUrl, '/version', projectId, 'absent.docx'))).status, 404);
+  });
+});
+
+
+test('a Word artifact stays marked when the original file is saved and reopened by path', async () => {
+  await withDocxServer(async (baseUrl, projectId, projectRoot) => {
+    const file = 'rapport-fictif.docx';
+    const url = documentUrl(baseUrl, '', projectId, file);
+    const versionUrl = `${documentUrl(baseUrl, '/version', projectId, path.join(projectRoot, file))}&includeArtifact=true`;
+    await fetch(url, { method: 'PUT', body: await docxBytes() });
+    const before = await (await fetch(versionUrl)).json() as { version: number; artifact?: boolean };
+    assert.equal(before.artifact, undefined);
+
+    const { url: artifact } = openArtifacts(projectRoot).publishDocument({
+      filePath: file, title: 'Rapport fictif', description: undefined, icon: undefined, pin: undefined,
+    });
+    const updated = await new JSZip().file('word/document.xml', '<w:document><w:body/></w:document>').generateAsync({ type: 'uint8array' });
+    const saved = await fetch(url, { method: 'PUT', headers: { 'If-Match': String(before.version) }, body: updated });
+    assert.equal(saved.status, 200);
+    const reopened = await (await fetch(versionUrl)).json() as { version: number; artifact?: boolean };
+    assert.equal(reopened.artifact, true);
+    assert.deepEqual(await readFile(path.join(projectRoot, file)), Buffer.from(updated));
+
+    openArtifacts(projectRoot).remove({ url: artifact });
+    assert.deepEqual(await (await fetch(versionUrl)).json(), { version: reopened.version });
   });
 });

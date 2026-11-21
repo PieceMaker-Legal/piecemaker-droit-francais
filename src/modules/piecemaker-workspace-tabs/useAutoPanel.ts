@@ -87,7 +87,7 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
       if (event.kind === 'tool_result' && typeof event.toolId === 'string' && awaitingArtifact.delete(event.toolId)) {
         const artifact = artifactFromResult(event.content);
         if (artifact) {
-          (window as unknown as PendingWindow)[ARTIFACTS_SHOW_KEY] = { project: state.current.projectPath, artifact, preserveReview: true };
+          (window as unknown as PendingWindow)[ARTIFACTS_SHOW_KEY] = { project: state.current.projectPath, artifact };
           state.current.openTab(ARTIFACTS_TAB);
           window.dispatchEvent(new Event(ARTIFACTS_SHOW_EVENT));
         }

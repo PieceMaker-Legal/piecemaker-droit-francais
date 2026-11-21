@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import type { ComponentProps } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -12,12 +12,35 @@ import type { AppTab, Project, ProjectSession } from '@/shared/types';
 const calls = vi.hoisted(() => ({ list: [] as Array<{ url: string; body?: unknown; method?: string }>, state: null as unknown, agentSession: null as string | null }));
 
 vi.mock('@/shared/authToken', () => ({
+  authenticatedFetch: (url: string, options?: RequestInit) => fetch(url, options),
   requestJson: vi.fn(async (url: string, body?: unknown, method?: string) => {
     calls.list.push({ url, body, method });
     if (url.includes('/state?')) return calls.state;
     if (url.includes('/session?')) return { sessionId: calls.agentSession };
     return {};
   }),
+}));
+vi.mock('@/piecemaker/editor-tabs/SessionTab', () => ({
+  SessionTab: ({ id }: { id: string }) => <p>Session {id}</p>,
+}));
+vi.mock(import('@/piecemaker/docx'), async (importOriginal) => ({
+  ...await importOriginal(),
+  DocxDocumentViewer: ({ file }: { file: { path: string } }) => <p>Éditeur Word de {file.path}</p>,
+}));
+vi.mock(import('@/shared/api'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    api: { ...actual.api, sessionDetails: async (id: string) => Response.json({
+      data: { sessionId: id, provider: 'claude', project: { projectId: 'fil', fullPath: '/dossiers/exemple-fil' } },
+    }) },
+  };
+});
+vi.mock('@/shared/context/UiPreferencesContext', () => ({ useUiPreferences: () => ({}) }));
+vi.mock('@/modules/chat', () => ({
+  ChatInterface: ({ selectedSession, selectedProject }: { selectedSession: ProjectSession; selectedProject: Project }) => (
+    <p>Session {selectedSession.id} dans {selectedProject.fullPath}</p>
+  ),
 }));
 vi.mock('@/piecemaker/editor-tabs/editorPanels', () => ({ openInEditor: vi.fn() }));
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
@@ -69,16 +92,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('liste les fils, les décisions à traiter et ouvre un fil comme une session CloudCLI', async () => {
-  render(<MemoryRouter><AgentPanel projectPath={PROJECT} /><Location /></MemoryRouter>);
+it('liste les fils, les décisions à traiter et ouvre le chat du fil dans le volet sans quitter le coordinateur', async () => {
+  render(<MemoryRouter initialEntries={['/session/agent-1']}><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /><Location /></MemoryRouter>);
   expect((await screen.findAllByText('Rédiger la note de synthèse')).length).toBe(2);
   expect(screen.getByText('Fils de discussion')).toBeTruthy();
   expect(screen.getByText('À traiter')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Plan long/ }));
   await act(async () => undefined);
   expect(calls.list.some((call) => call.url.endsWith('/decision') && (call.body as { option: number }).option === 1)).toBe(true);
-  fireEvent.click(document.querySelector('[data-thread="f1"] button')!);
-  expect(screen.getByTestId('location').textContent).toBe('/session/s1');
+  fireEvent.click(screen.getByRole('button', { name: /Rédiger la note de synthèse.*En cours/i }));
+  const conversation = await screen.findByText('Session s1 dans /dossiers/exemple-fil');
+  expect(conversation.closest('[aria-label="Volet de l’agent"]')).toBeTruthy();
+  expect(screen.getByTestId('location').textContent).toBe('/session/agent-1');
+  fireEvent.click(screen.getByRole('button', { name: 'Retour aux fils de discussion' }));
+  expect(screen.queryByText('Session s1 dans /dossiers/exemple-fil')).toBeNull();
+  expect(screen.getByText('Fils de discussion')).toBeTruthy();
 });
 
 const Workspace = withWorkspacePanels((props) => <WorkspaceIconTabs activeTab={props.activeTab} setActiveTab={props.setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />);
@@ -121,7 +149,7 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
     { id: 's2', kind: 'cron', text: '', at: null, nextRunAt: at, cron: '0 * * * *', thread: { title: 'Routine fictive' }, lastFiredAt: null },
   ];
   calls.state = data;
-  render(<MemoryRouter><AgentPanel projectPath={PROJECT} /></MemoryRouter>);
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
   fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
   expect(await screen.findByRole('textbox', { name: /Instructions du projet/ })).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(3);
@@ -133,4 +161,30 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
     await act(async () => undefined);
     expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/cancel', body: { project: PROJECT, kind, id }, method: undefined });
   }
+});
+
+it('ouvre le document Word à gauche et la session de publication à droite depuis Contexte', async () => {
+  const id = 'rapport-fictif';
+  const url = `piecemaker://artifact/${id}`;
+  calls.state = {
+    ...state(),
+    artifacts: [{ url, title: 'Rapport fictif' }],
+    deliverables: [{ id: 'livrable-fictif', kind: 'artifact', ref: url, threadId: thread.id }],
+  };
+  vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+    const pathname = new URL(input, 'http://localhost').pathname;
+    if (pathname.endsWith('/creator')) return Response.json({ sessionId: 'fil-createur' });
+    if (pathname.endsWith(`/artifacts/${id}`)) {
+      return Response.json({ id, url, format: 'docx', title: 'Rapport fictif', document_path: 'Artifacts/rapport-fictif.docx' });
+    }
+    return new Response(null, { status: 404 });
+  }));
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Contexte' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Rapport fictif/ }));
+  const workspace = screen.getByRole('dialog', { name: 'Rapport fictif' });
+  await within(workspace).findByText('Éditeur Word de Artifacts/rapport-fictif.docx');
+  await within(within(workspace).getByRole('complementary', { name: 'Session de création' })).findByText('Session fil-createur');
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Fermer l’artifact' }));
+  expect(screen.queryByRole('dialog', { name: 'Rapport fictif' })).toBeNull();
 });

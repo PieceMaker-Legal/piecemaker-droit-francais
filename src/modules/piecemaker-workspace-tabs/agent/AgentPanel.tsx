@@ -1,15 +1,17 @@
-import { ChevronDown, ChevronRight, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, ChevronDown, ChevronRight, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
-import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
+import { ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
+
+const ThreadConversation = lazy(() => import('@/modules/piecemaker-workspace-tabs/agent/ThreadConversation'));
+const threadLoading = <p role="status" className="p-4 text-sm">Chargement de la session…</p>;
 
 type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled';
 
@@ -51,8 +53,7 @@ function DeliverableState({ deliverable, act }: { deliverable: AgentDeliverable;
   </select>;
 }
 
-function Threads({ state, act, query, filter }: { state: AgentState; act: AgentActions; query: string; filter: AgentThreadState | 'all' }) {
-  const navigate = useNavigate();
+function Threads({ state, act, query, filter, onOpen }: { state: AgentState; act: AgentActions; query: string; filter: AgentThreadState | 'all'; onOpen: (threadId: string) => void }) {
   const pending = pendingCards(state).count;
   const threads = state.threads
     .filter((thread) => filter === 'all' || thread.state === filter)
@@ -65,7 +66,7 @@ function Threads({ state, act, query, filter }: { state: AgentState; act: AgentA
     const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
     const active = ACTIVE_THREAD_STATES.includes(thread.state);
     return <li key={thread.id} className="group rounded-xl px-2 py-2 hover:bg-accent" data-thread={thread.id}>
-      <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && navigate(`/session/${thread.sessionId}`)}>
+      <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => onOpen(thread.id)}>
         <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[15px] text-foreground">{thread.title}</span>
@@ -212,13 +213,16 @@ function Scheduled({ state, act }: { state: AgentState; act: AgentActions }) {
   </li>)}</ul>;
 }
 
-export function AgentPanel({ projectPath, panelActions }: { projectPath: string; panelActions?: ReactNode }) {
+export function AgentPanel({ projectPath, projectId, panelActions, onShowSettings }: { projectPath: string; projectId: string; panelActions?: ReactNode; onShowSettings?: () => void }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
   const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<AgentThreadState | 'all'>('all');
+  const [artifact, setArtifact] = useState<{ id: string; title: string; sessionId: string | null } | null>(null);
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const openThread = state?.threads.find((thread) => thread.id === openThreadId);
   const onTab = setTab;
 
   function customView() {
@@ -232,36 +236,59 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
   }
 
   const active = state?.threads.filter((thread) => ACTIVE_THREAD_STATES.includes(thread.state)).length ?? 0;
-  const onOpenArtifact = (url: string) => openAgentOutput(projectPath, { kind: 'artifact', ref: url });
+  const onOpenArtifact = (url: string) => {
+    const id = /^piecemaker:\/\/artifact\/([a-z][a-z0-9-]{2,63})$/.exec(url)?.[1];
+    if (!id || !state) return;
+    const entry = state.artifacts.find((item) => item.url === url);
+    if (!entry) return;
+    const deliverable = state.deliverables.find((item) => item.kind === 'artifact' && (item.ref === url || item.ref === id) && item.threadId);
+    const sessionId = state.threads.find((thread) => thread.id === deliverable?.threadId)?.sessionId ?? null;
+    setArtifact({ id, title: entry.title, sessionId });
+  };
 
-  return <div className="pm-agent-panel flex h-full min-w-0 flex-col text-foreground" aria-label="Volet de l’agent">
-    <header className="relative flex h-12 shrink-0 items-center gap-1 border-b border-border px-3">
-      <nav role="tablist" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+  const panelClass = 'pm-agent-panel flex h-full min-w-0 flex-col text-foreground';
+  if (openThread?.sessionId) return <div className={panelClass} aria-label="Volet de l’agent">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+        <button type="button" aria-label="Retour aux fils de discussion" title="Retour aux fils de discussion" className="shrink-0 rounded-lg p-2 hover:bg-accent" onClick={() => setOpenThreadId(null)}>
+          <ArrowLeft className="size-4" />
+        </button>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{openThread.title}</h2>
+        {panelActions && <div className="flex shrink-0 items-center gap-1 [&_button]:p-1 [&_svg]:size-4">{panelActions}</div>}
+      </header>
+      <Suspense fallback={threadLoading}>
+        <ThreadConversation key={openThread.sessionId} sessionId={openThread.sessionId} onShowSettings={onShowSettings} />
+      </Suspense>
+  </div>;
+
+  return <div className={panelClass} aria-label="Volet de l’agent">
+    <header className="relative flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-1">
+      <nav role="tablist" className="flex min-w-0 flex-wrap items-center gap-1">
         {TABS.map(([value, label]) => <button key={value} role="tab" type="button" aria-selected={tab === value} onClick={() => onTab(value)}
-          className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-1.5 text-[15px] ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
-          {label}{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
+          className={`flex min-w-0 items-center gap-2 rounded-xl px-3 py-1.5 text-left text-sm font-medium ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
         </button>)}
       </nav>
       <button type="button" aria-label="Ajouter" aria-haspopup="menu" aria-expanded={menu === 'plus'} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => setMenu(menu === 'plus' ? null : 'plus')}><Plus className="h-[18px] w-[18px]" /></button>
-      {menu === 'plus' && <div role="menu" className="absolute right-12 top-11 z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
+      {menu === 'plus' && <div role="menu" className="absolute right-12 top-full z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
         <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-accent" onClick={customView}>Vue personnalisée</button>
       </div>}
       <button type="button" aria-label="Paramètres" title="Paramètres" aria-pressed={tab === 'settings'} className="shrink-0 rounded-lg p-2 hover:bg-accent" onClick={() => { setMenu(null); onTab('settings'); }}><SettingsIcon className="h-[18px] w-[18px]" /></button>
       <span className="flex-1" />
       <button type="button" aria-label="Rechercher" aria-pressed={searching} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => { setSearching(!searching); onTab('threads'); }}><Search className="h-[18px] w-[18px]" /></button>
       <button type="button" aria-label="Filtrer" aria-expanded={menu === 'filter'} className={`shrink-0 rounded-lg p-2 hover:bg-accent ${filter !== 'all' ? 'text-blue-500' : 'text-foreground/80'}`} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}><Filter className="h-[18px] w-[18px]" /></button>
-      {menu === 'filter' && <div role="menu" className="absolute right-2 top-11 z-20 w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
+      {menu === 'filter' && <div role="menu" className="absolute right-2 top-full z-20 w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
         {(['all', ...Object.keys(THREAD_STATE_LABELS)] as Array<AgentThreadState | 'all'>).map((value) => <button key={value} role="menuitemradio" aria-checked={filter === value} type="button"
           className="block w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { setFilter(value); setMenu(null); onTab('threads'); }}>{value === 'all' ? 'Tous les états' : THREAD_STATE_LABELS[value]}</button>)}
       </div>}
       {panelActions && <div className="flex shrink-0 items-center gap-1 [&_button]:p-1 [&_svg]:size-4">{panelActions}</div>}
     </header>
+    {artifact && <ProjectArtifactDialog project={projectPath} projectId={projectId} artifact={artifact} associatedSessionId={artifact.sessionId} onClose={() => setArtifact(null)} />}
     {error && <p role="alert" className="px-4 py-2 text-sm">{error}</p>}
     {!state && !error && <p className="px-4 py-8 text-center text-sm">Chargement de PieceMaker Agent…</p>}
     {state && <>
       {searching && tab === 'threads' && <div className="border-b border-border px-4 py-2"><input autoFocus aria-label="Rechercher un fil" className={inputClass} placeholder="Rechercher un fil" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} />}
+        {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} onOpen={setOpenThreadId} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
         {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
         {tab === 'scheduled' && <Scheduled state={state} act={act} />}
