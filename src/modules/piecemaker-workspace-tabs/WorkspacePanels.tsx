@@ -259,6 +259,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
                         {tab === 'agent' ? <AgentPanel key={props.selectedProject!.fullPath} projectId={props.selectedProject!.projectId} projectPath={props.selectedProject!.fullPath} panelActions={panelActions} onShowSettings={props.onShowSettings} /> : <>
                           <header className="piecemaker-workspace-panel-header">
                             <span className="truncate text-sm font-medium">{label}</span>
+                            {plugin && <div className="piecemaker-workspace-panel-header-slot" />}
                             {panelActions}
                           </header>
                           <div className="piecemaker-workspace-panel-content">

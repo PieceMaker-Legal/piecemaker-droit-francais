@@ -123,7 +123,6 @@ export function formatDuration(seconds: number): string {
 type ViewState = {
   context: PluginContext;
   scope: TimesheetScope;
-  folder: string;
   entries: TimesheetEntry[];
   loaded: boolean;
   loading: boolean;
@@ -133,6 +132,10 @@ type ViewState = {
   requestId: number;
   abortController: AbortController | null;
   unsubscribe: (() => void) | null;
+  headerSlot: HTMLElement | null;
+  filterButton: HTMLButtonElement | null;
+  filterMenu: HTMLDivElement | null;
+  headerCleanup: (() => void) | null;
   root: HTMLElement;
   style: HTMLStyleElement;
   disposed: boolean;
@@ -147,9 +150,8 @@ const STYLE_TEXT = `
   .pm-timesheet__title { margin: 0 0 6px; font-family: var(--piecemaker-font-editorial, EB Garamond, Georgia, serif); font-size: 1.25rem; font-weight: 500; letter-spacing: -.02em; }
   .pm-timesheet__subtitle { margin: 4px 0; color: var(--pm-timesheet-muted); line-height: 1.5; }
   .pm-timesheet__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
-  .pm-timesheet__select { font: inherit; cursor: pointer; color: inherit; background: transparent; border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: .75rem; padding: 7px 12px; box-shadow: none; }
   .pm-timesheet__button:disabled { opacity: .4; cursor: not-allowed; }
-  .pm-timesheet__button:focus-visible, .pm-timesheet__select:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%), 0 0 0 4px hsl(var(--background, 0 0% 100%)); }
+  .pm-timesheet__button:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%), 0 0 0 4px hsl(var(--background, 0 0% 100%)); }
   .pm-timesheet__status { min-height: 24px; margin: 12px 0; color: var(--pm-timesheet-muted); }
   .pm-timesheet__status--error { color: #b91c1c; }
   .pm-timesheet__sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
@@ -169,14 +171,21 @@ const STYLE_TEXT = `
   .pm-timesheet__month-total { margin-left: auto; color: var(--pm-timesheet-muted); font-weight: 400; white-space: nowrap; }
   .pm-timesheet__month-actions { display: inline-flex; gap: 6px; flex-shrink: 0; }
   .pm-timesheet__month-actions button:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%), 0 0 0 4px hsl(var(--background, 0 0% 100%)); }
-  .pm-timesheet__date { white-space: nowrap; }
-  .pm-timesheet__folder { max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pm-timesheet__session { max-width: 260px; overflow-wrap: anywhere; }
-  .pm-timesheet__conclusion { max-width: 420px; white-space: pre-wrap; }
+  .pm-timesheet__folder { overflow-wrap: anywhere; }
+  .pm-timesheet__folder-name { font-weight: 600; }
+  .pm-timesheet__date { display: inline-block; margin-top: 4px; padding: 1px 8px; border-radius: 9999px; background: hsl(var(--muted, 0 0% 93%)); color: var(--pm-timesheet-muted); font-size: 11px; white-space: nowrap; }
+  .pm-timesheet__session { max-width: 460px; }
+  .pm-timesheet__session-name { font-weight: 600; overflow-wrap: anywhere; }
+  .pm-timesheet__conclusion { white-space: pre-wrap; }
   .pm-timesheet__conclusion summary { cursor: pointer; color: inherit; }
   .pm-timesheet__conclusion summary:focus-visible { outline: none; box-shadow: 0 0 0 2px rgb(0 136 255 / 40%); }
   .pm-timesheet__conclusion p { margin: 4px 0; color: var(--pm-timesheet-muted); line-height: 1.5; }
   .pm-timesheet__muted { color: var(--pm-timesheet-muted); }
+  .pm-timesheet__time { text-align: right; white-space: nowrap; }
+  .piecemaker-workspace-panel-header .pm-timesheet-filter-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; display: flex; flex-direction: column; gap: 2px; min-width: 190px; padding: 4px; border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: 10px; background: hsl(var(--background, 0 0% 100%)); box-shadow: 0 10px 30px rgb(0 0 0 / 15%); }
+  .piecemaker-workspace-panel-header .pm-timesheet-filter-menu button { width: auto; height: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 6px; font-size: 13px; text-align: left; white-space: nowrap; }
+  .piecemaker-workspace-panel-header .pm-timesheet-filter-menu button:hover { background: hsl(var(--muted, 0 0% 93%)); }
+  .piecemaker-workspace-panel-header .pm-timesheet-filter-menu button[aria-checked='true'] { background: hsl(var(--primary, 217 91% 60%) / 0.14); color: hsl(var(--primary, 217 91% 60%)); font-weight: 500; }
   @media (max-width: 600px) {
     .pm-timesheet { padding: 16px; }
     .pm-timesheet__header { display: block; }
@@ -439,25 +448,98 @@ const exportMonthToPdf = (entries: TimesheetEntry[], label: string, key: string)
   downloadFile(`timesheet-${key}.pdf`, createPdf(entries, label), 'application/pdf');
 };
 
-type FolderOption = { key: string; label: string };
-
-const folderOptions = (entries: TimesheetEntry[]): FolderOption[] => {
-  const options = new Map<string, FolderOption>();
-  for (const entry of entries) {
-    const key = entry.projectId ?? entry.projectName;
-    if (!key || options.has(key)) continue;
-    options.set(key, { key, label: entry.projectName || key });
-  }
-  return [...options.values()].sort((left, right) => left.label.localeCompare(right.label, 'fr') || left.key.localeCompare(right.key, 'fr'));
-};
-
-const entryFolderKey = (entry: TimesheetEntry): string => entry.projectId ?? entry.projectName;
-
 const projectLabel = (project: PluginContext['project']): string => {
   if (!project) return 'Dossier actuel';
   const trimmedPath = project.path.replace(/[\\/]+$/, '');
   const segments = trimmedPath.split(/[\\/]/).filter(Boolean);
   return segments.at(-1) || project.path || 'Dossier actuel';
+};
+
+const SCOPE_FILTER_OPTIONS: Array<{ value: TimesheetScope; label: string }> = [
+  { value: 'all', label: 'Tous les dossiers' },
+  { value: 'project', label: 'Dossier ouvert' },
+];
+
+const FUNNEL_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-funnel h-[18px] w-[18px]" aria-hidden="true"><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"></path></svg>';
+
+const syncFilterControls = (state: ViewState): void => {
+  state.filterButton?.setAttribute('aria-pressed', String(state.scope === 'project'));
+  state.filterMenu?.querySelectorAll<HTMLButtonElement>('button[data-scope]').forEach((item) => {
+    item.setAttribute('aria-checked', String(item.dataset.scope === state.scope));
+  });
+};
+
+const closeFilterMenu = (state: ViewState): void => {
+  state.filterMenu?.remove();
+  state.filterMenu = null;
+  state.filterButton?.setAttribute('aria-expanded', 'false');
+};
+
+const openFilterMenu = (state: ViewState): void => {
+  if (!state.headerSlot || state.filterMenu) return;
+  const menu = makeElement('div', 'pm-timesheet-filter-menu');
+  menu.setAttribute('role', 'menu');
+  for (const option of SCOPE_FILTER_OPTIONS) {
+    const item = appendText(menu, 'button', option.label);
+    item.type = 'button';
+    item.setAttribute('role', 'menuitemradio');
+    item.dataset.scope = option.value;
+    item.addEventListener('click', () => {
+      closeFilterMenu(state);
+      if (state.scope === option.value) return;
+      state.scope = option.value;
+      syncFilterControls(state);
+      void load(state, true);
+    });
+  }
+  state.headerSlot.appendChild(menu);
+  state.filterMenu = menu;
+  state.filterButton?.setAttribute('aria-expanded', 'true');
+  syncFilterControls(state);
+};
+
+const buildHeaderFilter = (state: ViewState): void => {
+  const slot = state.root.closest('.piecemaker-workspace-panel')?.querySelector('.piecemaker-workspace-panel-header-slot') ?? null;
+  state.headerSlot = slot as HTMLElement | null;
+  if (!slot) return;
+  const button = makeElement('button', 'pm-timesheet-filter');
+  button.type = 'button';
+  button.innerHTML = FUNNEL_ICON;
+  button.setAttribute('aria-label', 'Filtrer le timesheet : tous les dossiers ou dossier ouvert');
+  button.title = 'Filtrer : tous les dossiers ou dossier ouvert';
+  button.setAttribute('aria-haspopup', 'menu');
+  button.setAttribute('aria-expanded', 'false');
+  button.addEventListener('click', () => {
+    if (state.filterMenu) closeFilterMenu(state);
+    else openFilterMenu(state);
+  });
+  slot.appendChild(button);
+  state.filterButton = button;
+  const onPointerDown = (event: MouseEvent): void => {
+    if (!state.filterMenu) return;
+    if (state.headerSlot?.contains(event.target as Node)) return;
+    closeFilterMenu(state);
+  };
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape' && state.filterMenu) closeFilterMenu(state);
+  };
+  document.addEventListener('mousedown', onPointerDown);
+  document.addEventListener('keydown', onKeyDown);
+  state.headerCleanup = () => {
+    document.removeEventListener('mousedown', onPointerDown);
+    document.removeEventListener('keydown', onKeyDown);
+  };
+  syncFilterControls(state);
+};
+
+const disposeHeaderFilter = (state: ViewState): void => {
+  state.headerCleanup?.();
+  state.headerCleanup = null;
+  state.filterMenu?.remove();
+  state.filterMenu = null;
+  state.filterButton?.remove();
+  state.filterButton = null;
+  state.headerSlot = null;
 };
 
 const buildTable = (entries: TimesheetEntry[]): HTMLDivElement => {
@@ -468,8 +550,8 @@ const buildTable = (entries: TimesheetEntry[]): HTMLDivElement => {
   table.appendChild(caption);
   const head = makeElement('thead');
   const headerRow = makeElement('tr');
-  for (const label of ['Date', 'Dossier', 'Session', 'Temps', 'Conclusion']) {
-    const header = appendText(headerRow, 'th', label);
+  for (const [label, className] of [['Dossier', ''], ['Session', ''], ['Temps', 'pm-timesheet__time']] as const) {
+    const header = appendText(headerRow, 'th', label, className || undefined);
     header.scope = 'col';
   }
   head.appendChild(headerRow);
@@ -490,7 +572,7 @@ const buildTable = (entries: TimesheetEntry[]): HTMLDivElement => {
       currentMonth = key;
       const monthRow = makeElement('tr', 'pm-timesheet__month');
       const monthCell = makeElement('td');
-      monthCell.colSpan = 5;
+      monthCell.colSpan = 3;
       const monthContent = makeElement('div', 'pm-timesheet__month-content');
       appendText(monthContent, 'span', monthLabel(entry.startedAt), 'pm-timesheet__month-label');
       appendText(monthContent, 'span', formatDuration(totalSeconds(entriesByMonth.get(key) ?? [])), 'pm-timesheet__month-total');
@@ -509,29 +591,28 @@ const buildTable = (entries: TimesheetEntry[]): HTMLDivElement => {
       body.appendChild(monthRow);
     }
     const row = makeElement('tr');
-    appendText(row, 'td', formatDate(entry.startedAt), 'pm-timesheet__date');
     const folderCell = makeElement('td', 'pm-timesheet__folder');
     folderCell.title = entry.projectPath || entry.projectName;
-    folderCell.textContent = entry.projectName;
+    appendText(folderCell, 'div', entry.projectName, 'pm-timesheet__folder-name');
+    appendText(folderCell, 'span', formatDate(entry.startedAt), 'pm-timesheet__date');
     row.appendChild(folderCell);
-    appendText(row, 'td', entry.sessionName, 'pm-timesheet__session');
-    const durationCell = appendText(row, 'td', formatDuration(entry.activeSeconds));
-    durationCell.title = `Temps écoulé : ${formatDuration(entry.elapsedSeconds)}`;
-    const conclusionCell = makeElement('td', 'pm-timesheet__conclusion');
+    const sessionCell = makeElement('td', 'pm-timesheet__session');
+    appendText(sessionCell, 'div', entry.sessionName, 'pm-timesheet__session-name');
     if (entry.conclusion) {
-      const details = makeElement('details');
+      const details = makeElement('details', 'pm-timesheet__conclusion');
       const summary = makeElement('summary');
       const preview = entry.conclusion.replace(/\s+/g, ' ').trim();
       summary.textContent = preview.length > 110 ? `${preview.slice(0, 107)}…` : preview;
       const paragraph = makeElement('p');
       paragraph.textContent = entry.conclusion;
       details.append(summary, paragraph);
-      conclusionCell.appendChild(details);
+      sessionCell.appendChild(details);
     } else {
-      conclusionCell.textContent = 'Aucune conclusion';
-      conclusionCell.classList.add('pm-timesheet__muted');
+      appendText(sessionCell, 'p', 'Aucune conclusion', 'pm-timesheet__muted');
     }
-    row.appendChild(conclusionCell);
+    row.appendChild(sessionCell);
+    const durationCell = appendText(row, 'td', formatDuration(entry.activeSeconds), 'pm-timesheet__time');
+    durationCell.title = `Temps écoulé : ${formatDuration(entry.elapsedSeconds)}`;
     body.appendChild(row);
   }
   table.appendChild(body);
@@ -557,7 +638,7 @@ const paintStatus = (state: ViewState): void => {
 
 const render = (state: ViewState): void => {
   const { root, context } = state;
-  const visibleEntries = state.scope === 'all' && state.folder ? state.entries.filter((entry) => entryFolderKey(entry) === state.folder) : state.entries;
+  const visibleEntries = state.entries;
   clearElement(root);
   const header = makeElement('header', 'pm-timesheet__header');
   const heading = makeElement('div');
@@ -567,41 +648,6 @@ const render = (state: ViewState): void => {
   }
   header.appendChild(heading);
   const actions = makeElement('div', 'pm-timesheet__actions');
-  const scopeSelect = makeElement('select', 'pm-timesheet__select');
-  scopeSelect.setAttribute('aria-label', 'Périmètre du timesheet');
-  for (const option of [['all', 'Tous les dossiers'], ['project', 'Dossier actuel']] as const) {
-    const item = makeElement('option');
-    item.value = option[0];
-    item.textContent = option[1];
-    item.selected = state.scope === option[0];
-    scopeSelect.appendChild(item);
-  }
-  scopeSelect.addEventListener('change', () => {
-    state.scope = scopeSelect.value as TimesheetScope;
-    state.folder = '';
-    void load(state, true);
-  });
-  actions.appendChild(scopeSelect);
-  if (state.scope === 'all') {
-    const folderSelect = makeElement('select', 'pm-timesheet__select');
-    folderSelect.setAttribute('aria-label', 'Filtrer par dossier');
-    const allOption = makeElement('option');
-    allOption.value = '';
-    allOption.textContent = 'Tous les dossiers';
-    folderSelect.appendChild(allOption);
-    for (const folder of folderOptions(state.entries)) {
-      const option = makeElement('option');
-      option.value = folder.key;
-      option.textContent = folder.label;
-      folderSelect.appendChild(option);
-    }
-    folderSelect.value = state.folder;
-    folderSelect.addEventListener('change', () => {
-      state.folder = folderSelect.value;
-      render(state);
-    });
-    actions.appendChild(folderSelect);
-  }
   const refreshButton = makeElement('button', 'pm-timesheet__button piecemaker-button piecemaker-button--sm piecemaker-button--glass');
   refreshButton.type = 'button';
   refreshButton.textContent = state.refreshing ? 'Actualisation…' : 'Actualiser';
@@ -659,7 +705,6 @@ async function load(state: ViewState, refresh: boolean): Promise<void> {
     const cached = await fetchEntries(state.scope, projectId, controller.signal);
     if (state.disposed || state.requestId !== requestId) return;
     state.entries = cached;
-    if (state.folder && !state.entries.some((entry) => entryFolderKey(entry) === state.folder)) state.folder = '';
     state.loaded = true;
     state.loading = false;
     render(state);
@@ -677,7 +722,6 @@ async function load(state: ViewState, refresh: boolean): Promise<void> {
     const refreshed = await refreshEntries(state.scope, projectId, controller.signal);
     if (state.disposed || state.requestId !== requestId) return;
     state.entries = refreshed.entries;
-    if (state.folder && !state.entries.some((entry) => entryFolderKey(entry) === state.folder)) state.folder = '';
     state.refreshedAt = new Date();
     state.error = refreshed.errors.length > 0
       ? `Actualisation partielle : ${refreshed.errors.length} session(s) non actualisée(s).`
@@ -702,6 +746,7 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     previous.disposed = true;
     previous.abortController?.abort();
     previous.unsubscribe?.();
+    disposeHeaderFilter(previous);
     previous.style.remove();
     previous.root.remove();
   }
@@ -714,7 +759,6 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
   const state: ViewState = {
     context: api.context,
     scope: 'project',
-    folder: '',
     entries: [],
     loaded: false,
     loading: false,
@@ -724,6 +768,10 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     requestId: 0,
     abortController: null,
     unsubscribe: null,
+    headerSlot: null,
+    filterButton: null,
+    filterMenu: null,
+    headerCleanup: null,
     root,
     style,
     disposed: false,
@@ -736,9 +784,9 @@ export function mount(container: HTMLElement, api: PluginAPI): void {
     state.context = context;
     state.root.dataset.theme = context.theme;
     if (previousProject === nextProject) return;
-    if (state.scope === 'project') state.folder = '';
     void load(state, false);
   });
+  buildHeaderFilter(state);
   render(state);
   void load(state, false);
 }
@@ -749,6 +797,7 @@ export function unmount(container: HTMLElement): void {
   state.disposed = true;
   state.abortController?.abort();
   state.unsubscribe?.();
+  disposeHeaderFilter(state);
   state.style.remove();
   state.root.remove();
   states.delete(container);

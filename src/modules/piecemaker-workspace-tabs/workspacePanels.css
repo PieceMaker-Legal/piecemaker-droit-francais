@@ -125,6 +125,22 @@
   height: 14px;
 }
 
+.piecemaker-workspace-panel-header-slot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.piecemaker-workspace-panel-header-slot:empty {
+  display: none;
+}
+
+.piecemaker-workspace-panel-header-slot svg {
+  width: 18px;
+  height: 18px;
+}
+
 .piecemaker-workspace-panel-header .piecemaker-panel-anonymization {
   position: relative;
 }
