@@ -52,3 +52,17 @@ test('l’agent central ne lit pas lui-même les dossiers : il passe par un fil'
   assert.equal(decision('Read', { file_path: path.join(dupont, 'notes.md') }, central), 'deny');
   assert.equal(decision('Read', { file_path: path.join(shared, 'modele.md') }, central), 'allow');
 });
+
+test('un usage CLI ordinaire reste entièrement libre : seuls les autres dossiers sont fermés', () => {
+  for (const command of [
+    'git status && git log --oneline -5',
+    'npm install --prefix /tmp/outil && npx tsx script.ts',
+    'cat ~/.config/outil/config.json; ls ~/.cache /tmp /usr/local/bin',
+    'pm okf verify && docx read notes.docx',
+    'curl -s https://example.org -o /tmp/page.html',
+    'cd .. && ls',
+    'find / -name "*.log" 2>/dev/null | head',
+  ]) {
+    assert.equal(decision('Bash', { command }), 'allow', command);
+  }
+});
