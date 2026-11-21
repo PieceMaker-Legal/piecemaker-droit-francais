@@ -8,6 +8,7 @@ import { cn } from '@/shared/utils';
 import type { ProjectSession, RecentConversationListItem, SessionRowActions } from '@/shared/types';
 import { formatCompactAge } from '@/modules/sidebar/utils/sidebarProjectFormatting';
 import SessionOptions from '@/modules/sidebar/SessionOptions';
+import { SessionStateGroups, groupSessionsByState, sessionActivityState } from '@/modules/piecemaker-session-groups';
 
 type SidebarRecentConversationsProps = {
   conversations: RecentConversationListItem[];
@@ -156,8 +157,16 @@ export default function SidebarRecentConversations({
         <span className="text-[10px] tabular-nums text-muted-foreground/70">{total}</span>
       </div>
 
-      <div className="space-y-0.5">
-        {conversations.map((conversation) => {
+      <SessionStateGroups
+        groups={groupSessionsByState(conversations, (conversation) => sessionActivityState({
+          needsAttention: sessionActions.attentionSessionIds.has(conversation.sessionId),
+          isRunning: sessionActions.activeSessions.has(conversation.sessionId),
+          hasBackgroundWork: sessionActions.backgroundSessionIds.has(conversation.sessionId),
+        }))}
+        rowKey={(conversation) => conversation.sessionId}
+        headerClassName="px-2"
+        rowsClassName="space-y-0.5"
+        renderRow={(conversation) => {
           const isSelected = String(selectedSession?.id ?? '') === conversation.sessionId;
           const age = formatCompactAge(conversation.lastActivity, currentTime);
           const hasBackgroundWork = sessionActions.backgroundSessionIds.has(conversation.sessionId);
@@ -198,6 +207,17 @@ export default function SidebarRecentConversations({
                       role="status"
                       aria-label={t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })}
                       className="h-2 w-2 animate-pulse rounded-full bg-amber-500"
+                    />
+                  </Tooltip>
+                </div>
+              )}
+              {!showAttentionIndicator && isProcessing && (
+                <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
+                  <Tooltip content={t('tooltips.processingSessionIndicator', 'Processing session')} position="right">
+                    <div
+                      role="status"
+                      aria-label={t('tooltips.processingSessionIndicator', 'Processing session')}
+                      className="h-2 w-2 animate-pulse rounded-full bg-orange-500"
                     />
                   </Tooltip>
                 </div>
@@ -243,7 +263,7 @@ export default function SidebarRecentConversations({
                           <span
                             role="status"
                             aria-label={t('tooltips.backgroundWorkIndicator', 'Background work running')}
-                            className="h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-purple-500 dark:bg-purple-400"
+                            className="inline-block h-2 w-2 flex-shrink-0 animate-pulse rounded-full bg-purple-500 dark:bg-purple-400"
                           />
                         </Tooltip>
                       </>
@@ -288,8 +308,8 @@ export default function SidebarRecentConversations({
               />
             </div>
           );
-        })}
-      </div>
+        }}
+      />
 
       {hasMore && (
         // Kept as a button: a fallback where scrolling cannot trigger the load

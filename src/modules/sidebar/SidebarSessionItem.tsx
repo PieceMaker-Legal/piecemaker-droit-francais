@@ -80,9 +80,12 @@ function SidebarSessionItem({
   // Background work takes the recent-activity dot's place: the session is
   // still doing something, which says more than that it was touched lately.
   const showBackgroundIndicator = !showAttentionIndicator && hasBackgroundWork;
+  const showRunningIndicator = !showAttentionIndicator && !showBackgroundIndicator && isProcessing;
   const showRecentIndicator = !showAttentionIndicator && !showBackgroundIndicator && !isProcessing && sessionView.isActive;
   const indicatorLabel = showAttentionIndicator
     ? t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })
+    : showRunningIndicator
+      ? t('tooltips.processingSessionIndicator', 'Processing session')
     : showBackgroundIndicator
       ? t('tooltips.backgroundWorkIndicator', { defaultValue: 'Background work running' })
       : t('tooltips.activeSessionIndicator');
@@ -160,7 +163,7 @@ function SidebarSessionItem({
 
   return (
     <div className="group relative">
-      {(showAttentionIndicator || showBackgroundIndicator || showRecentIndicator) && (
+      {(showAttentionIndicator || showRunningIndicator || showBackgroundIndicator || showRecentIndicator) && (
         <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
           <Tooltip content={indicatorLabel} position="right">
             <div
@@ -170,6 +173,8 @@ function SidebarSessionItem({
                 'h-2 w-2 animate-pulse rounded-full',
                 showAttentionIndicator
                   ? 'bg-amber-500'
+                  : showRunningIndicator
+                    ? 'bg-orange-500'
                   : showBackgroundIndicator
                     ? 'bg-purple-500 dark:bg-purple-400'
                     : 'bg-green-500',
