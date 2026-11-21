@@ -137,6 +137,7 @@ type ChatComposerProps = {
   placeholder: string;
   isTextareaExpanded: boolean;
   sendByCtrlEnter?: boolean;
+  renderModelMenuExtra?: (close: () => void) => ReactNode;
 };
 
 /**
@@ -219,6 +220,7 @@ export default function ChatComposer({
   placeholder,
   isTextareaExpanded,
   sendByCtrlEnter,
+  renderModelMenuExtra,
 }: ChatComposerProps) {
   const { t } = useTranslation('chat');
   const fileDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -551,6 +553,7 @@ export default function ChatComposer({
               modelOptions={availableModelOptions}
               onSelectModel={onSelectModel}
               modelsLoading={modelsLoading}
+              renderExtra={renderModelMenuExtra}
             />
 
             <ComposerPermissionMenu

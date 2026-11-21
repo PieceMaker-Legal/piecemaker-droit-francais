@@ -2,6 +2,7 @@ import { ArrowLeft, ChevronDown, ChevronRight, File, Filter, Folder, FolderSync,
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
+import { ModelSelect } from '@/modules/piecemaker-quota';
 import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
@@ -164,8 +165,8 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
   return <div className="space-y-5 overflow-y-auto px-5 py-4 text-sm">
     <fieldset className="space-y-2">
       <legend className="text-[15px] text-foreground">Agent</legend>
-      <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={settings.orchestratorProvider} onChange={(event) => save({ orchestratorProvider: event.target.value as AgentSettings['orchestratorProvider'] })}>{providerOptions}</select></label>
-      <label className="block text-muted-foreground">Modèle initial (vide = modèle par défaut)<input className={`${inputClass} mt-1`} defaultValue={settings.orchestratorModel} onBlur={(event) => event.target.value !== settings.orchestratorModel && save({ orchestratorModel: event.target.value })} /></label>
+      <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={settings.orchestratorProvider} onChange={(event) => save({ orchestratorProvider: event.target.value as AgentSettings['orchestratorProvider'], orchestratorModel: '' })}>{providerOptions}</select></label>
+      <label className="block text-muted-foreground">Modèle<ModelSelect className={`${inputClass} mt-1`} providers={settings.orchestratorProvider === 'auto' ? PROVIDERS.filter((provider) => connected.has(provider)) : [settings.orchestratorProvider]} value={settings.orchestratorModel} onChange={(model) => save({ orchestratorModel: model })} /></label>
       <label className="block text-muted-foreground">Recycler la conversation après (tours)<input type="number" min={1} className={`${inputClass} mt-1`} defaultValue={settings.recycleAfter} onBlur={(event) => Number(event.target.value) > 0 && save({ recycleAfter: Number(event.target.value) })} /></label>
       <button type="button" className={buttonClass} onClick={() => void act('recycle')}>Recycler l’orchestrateur maintenant</button>
     </fieldset>
@@ -173,8 +174,8 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
       <legend className="text-[15px] text-foreground">Fils de discussion</legend>
       <label className="block text-muted-foreground">Fournisseur par défaut<select className={`${inputClass} mt-1`} value={settings.defaultProvider} onChange={(event) => save({ defaultProvider: event.target.value as AgentSettings['defaultProvider'] })}>{providerOptions}</select></label>
       {PROVIDERS.map((provider) => <div key={provider} className="grid grid-cols-[1fr_6rem] gap-2">
-        <label className="block text-muted-foreground">Modèle {PROVIDER_LABELS[provider]}<input className={`${inputClass} mt-1`} disabled={!connected.has(provider)} defaultValue={settings.defaultModels[provider] ?? ''}
-          onBlur={(event) => event.target.value.trim() && event.target.value !== settings.defaultModels[provider] && save({ defaultModels: { [provider]: event.target.value.trim() } })} /></label>
+        <label className="block text-muted-foreground">Modèle {PROVIDER_LABELS[provider]}<ModelSelect className={`${inputClass} mt-1`} providers={[provider]} disabled={!connected.has(provider)} value={settings.defaultModels[provider] ?? ''}
+          onChange={(model) => model && save({ defaultModels: { [provider]: model } })} /></label>
         <label className="block text-muted-foreground">Simultanés<input type="number" min={1} className={`${inputClass} mt-1`} defaultValue={settings.concurrency[provider]}
           onBlur={(event) => Number(event.target.value) > 0 && save({ concurrency: { ...settings.concurrency, [provider]: Number(event.target.value) } })} /></label>
       </div>)}

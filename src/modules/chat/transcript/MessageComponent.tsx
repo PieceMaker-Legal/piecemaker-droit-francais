@@ -17,6 +17,8 @@ import MessageSpeakControl from '@/modules/chat/transcript/MessageSpeakControl';
 import { useIsExportingTranscript } from '@/modules/chat/context/TranscriptRenderContext';
 import { MemoryCitations } from '@/modules/chat/transcript/MemoryCitations';
 import { useDismissSideQuestion } from '@/modules/chat/hooks/useSideQuestions';
+import { useTranscriptSessionId } from '@/modules/chat/context/TranscriptSessionContext';
+import { QuotaLimitCard, detectQuotaLimit } from '@/modules/piecemaker-quota';
 
 const AgentChatCard = lazy(async () => ({ default: (await import('@/modules/piecemaker-workspace-tabs')).AgentChatCard }));
 
@@ -93,6 +95,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     },
     [message.content, message.isThinking, message.type, provider]
   );
+  const quotaLimit = useMemo(
+    () => ((message.type === 'assistant' || message.type === 'error') && !message.isToolUse && !message.isThinking && !message.isStreaming
+      ? detectQuotaLimit(String(message.content || ''), new Date(message.timestamp))
+      : null),
+    [message.content, message.isStreaming, message.isThinking, message.isToolUse, message.timestamp, message.type]
+  );
+  const transcriptSessionId = useTranscriptSessionId();
   const assistantCopyContent = message.isToolUse
     ? String(message.displayText || message.content || '')
     : formattedMessageContent;
@@ -440,7 +449,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   </Reasoning>
                 )}
 
-                {(() => {
+                {quotaLimit ? (
+                  <QuotaLimitCard limit={quotaLimit} provider={String(provider)} sessionId={transcriptSessionId} noticeAt={new Date(message.timestamp)} interactive={!isExporting} />
+                ) : (() => {
                   const content = formattedMessageContent;
 
                   // Detect if content is pure JSON (starts with { or [)

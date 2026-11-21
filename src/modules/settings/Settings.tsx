@@ -17,6 +17,7 @@ import { PluginSettingsTab } from '@/modules/plugins';
 import AboutTab from '@/modules/settings/tabs/AboutTab';
 import { DesktopUninstallTab } from '@/piecemaker/desktop/DesktopUninstallTab';
 import { LocalModelsSettingsTab } from '@/piecemaker/local-models/LocalModelsSettingsTab';
+import { QuotaSettingsTab } from '@/modules/piecemaker-quota';
 import { RemoteAccessSettingsTab } from '@/piecemaker/remote/RemoteAccessSettingsTab';
 import { useSettingsController } from '@/modules/settings/hooks/useSettingsController';
 import { useWebPush } from '@/modules/settings/hooks/useWebPush';
@@ -280,6 +281,8 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
               {activeTab === 'voice' && <VoiceSettingsTab />}
 
               {activeTab === 'plugins' && <PluginSettingsTab />}
+
+              {activeTab === 'models' && <QuotaSettingsTab />}
 
               {activeTab === 'localModels' && <LocalModelsSettingsTab />}
 
