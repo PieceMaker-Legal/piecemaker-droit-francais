@@ -1,22 +1,28 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import { acceptChangeById, rejectChangeById } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 
+import { ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
 import DocxDocumentViewer from '@/piecemaker/docx/DocxDocumentViewer';
-import { api, authenticatedFetch } from '@/shared/api';
+import { api, artifactsApi, authenticatedFetch } from '@/shared/api';
 
 const docxSave = vi.hoisted(() => vi.fn<() => Promise<ArrayBuffer>>());
 
 vi.mock('@/shared/api', () => ({
   api: { readFileBlob: vi.fn() },
+  artifactsApi: { creator: vi.fn(), detail: vi.fn() },
   authenticatedFetch: vi.fn(),
   docxReviewRequest: vi.fn(async () => ({ versions: [], annotations: [] })),
 }));
 
+
+vi.mock('@/piecemaker/editor-tabs/SessionTab', () => ({
+  SessionTab: ({ id }: { id: string }) => <p>Session {id}</p>,
+}));
 
 vi.mock('@/shared/context/ThemeContext', () => ({
   useTheme: () => ({ isDarkMode: false }),
@@ -56,6 +62,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
       { save: () => Promise<ArrayBuffer>; getZoom: () => number; getComments: () => []; getEditorRef: () => unknown },
       {
         documentName: string;
+        commentsSidebarOpen?: boolean;
         onChange: () => void;
         onCommentsChange: (comments: { id: number; parentId?: number }[]) => void;
         onCommentsSidebarOpenChange?: (open: boolean) => void;
@@ -78,6 +85,7 @@ vi.mock('@eigenpal/docx-editor-react', async () => {
         <>
           {props.renderLogo()}
           {props.renderTitleBarRight()}
+          {props.commentsSidebarOpen && <aside aria-label="Commentaires Word" />}
           <button type="button" onClick={props.onChange}>{props.documentName}</button>
           <button type="button" onClick={() => props.onCommentsChange([{ id: 1 }, { id: 2 }, { id: 3, parentId: 1 }])}>emit-comments</button>
           <button type="button" onClick={() => props.onCommentReply?.({ id: 2, parentId: 1, content: [] }, { id: 1, content: [] })}>reply-comment</button>
@@ -469,4 +477,43 @@ test('une lecture DOCX lente ne lance pas de chargements concurrents à chaque c
   assert.equal(vi.mocked(api.readFileBlob).mock.calls.length, 1);
   resolveBlob(new Response(new Uint8Array([7, 8, 9]), { status: 200 }));
   await act(async () => { await pendingBlob; await Promise.resolve(); });
+});
+
+test('opens the complete Word viewer beside the source session and flushes an edit on closing the artifact', async () => {
+  const path = 'rapport-fictif.docx';
+  const project = '/dossier-fictif';
+  const projectId = 'projet-fictif';
+  const id = 'rapport-fictif';
+  const title = 'Rapport fictif';
+  const onClose = vi.fn();
+  vi.mocked(artifactsApi.creator).mockResolvedValue({ sessionId: 'session-fictive' });
+  vi.mocked(artifactsApi.detail).mockResolvedValue({
+    id, url: `piecemaker://artifact/${id}`, title, format: 'docx', document_path: path,
+    version: 1, versions: [], description: '', icon: null, pinned: false, updated_at: '', data_stamp: 0,
+  });
+  vi.mocked(authenticatedFetch).mockImplementation(async (url, options) => Response.json(
+    options?.method === 'PUT' ? { version: 2 } : {
+      version: 1,
+      artifact: new URL(url, 'http://localhost').searchParams.get('includeArtifact') === 'true',
+    },
+  ));
+
+  render(<ProjectArtifactDialog project={project} projectId={projectId} artifact={{ id, title }}
+    associatedSessionId={null} onClose={onClose} />);
+  const panel = screen.getByRole('dialog', { name: title });
+  const viewer = within(panel);
+  const editor = await viewer.findByRole('button', { name: path }, { timeout: 5000 });
+  assert.ok(viewer.getByText('Artéfact'));
+  assert.ok(viewer.getByRole('button', { name: 'Table des matières' }));
+  fireEvent.click(viewer.getByRole('button', { name: 'Commentaires' }));
+  assert.ok(viewer.getByRole('complementary', { name: 'Commentaires Word' }));
+  await within(viewer.getByRole('complementary', { name: 'Session de création' })).findByText('Session session-fictive');
+
+  fireEvent.pointerDown(editor);
+  fireEvent.click(editor);
+  await act(async () => { fireEvent.click(viewer.getByRole('button', { name: 'Fermer l’artifact' })); });
+  const writes = vi.mocked(authenticatedFetch).mock.calls.filter(([, options]) => options?.method === 'PUT');
+  assert.equal(writes.length, 1);
+  assert.equal(new URL(writes[0][0], 'http://localhost').searchParams.get('path'), path);
+  assert.equal(onClose.mock.calls.length, 1);
 });

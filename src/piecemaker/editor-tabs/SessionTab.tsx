@@ -41,7 +41,7 @@ function Notice({ children }: { children: string }) {
   return <div role="status" className="flex h-full items-center justify-center bg-background p-6 text-center text-sm text-muted-foreground">{children}</div>;
 }
 
-export function SessionTab({ id }: { id: string }) {
+export function SessionTab({ id, fullHistory = false }: { id: string; fullHistory?: boolean }) {
   const { selectedProject, openSettings } = useProjectMainState();
   const { ws, sendMessage } = useWebSocket();
   const { showRawParameters, showThinking, sendByCtrlEnter } = useUiPreferences();
@@ -59,34 +59,39 @@ export function SessionTab({ id }: { id: string }) {
 
   useLayoutEffect(() => {
     const element = container.current;
-    if (!element || !loaded) return undefined;
+    if (!element || !loaded || fullHistory) return undefined;
     const hide = () => hideRowsBefore(element, loaded.historyEnd);
     hide();
     const observer = new MutationObserver(hide);
     observer.observe(element, { childList: true, subtree: true });
     return () => observer.disconnect();
-  }, [loaded]);
+  }, [fullHistory, loaded]);
 
-  if (loaded === undefined) return null;
-  if (!loaded) return <Notice>Impossible d’ouvrir cette conversation annexe.</Notice>;
+  if (loaded === undefined) return fullHistory ? <Notice>Chargement de la session…</Notice> : null;
+  if (!loaded) return <Notice>{fullHistory ? 'Impossible d’ouvrir cette session.' : 'Impossible d’ouvrir cette conversation annexe.'}</Notice>;
   const { session } = loaded;
-  if (session.__projectId !== selectedProject?.projectId) return <Notice>Cette conversation annexe appartient à un autre dossier.</Notice>;
+  if (session.__projectId !== selectedProject?.projectId) {
+    return <Notice>{fullHistory ? 'Cette session appartient à un autre dossier.' : 'Cette conversation annexe appartient à un autre dossier.'}</Notice>;
+  }
 
   return (
-    <div ref={container} className={`h-full ${HIDE_HISTORY_NOTICES}`} data-side-conversation={id}>
-      <ChatInterface
-        isActive
-        selectedProject={selectedProject}
-        selectedSession={session}
-        ws={ws}
-        sendMessage={sendMessage}
-        onFileOpen={openFile}
-        onNavigateToSession={openSession}
-        onShowSettings={openSettings}
-        showRawParameters={showRawParameters}
-        showThinking={showThinking}
-        sendByCtrlEnter={sendByCtrlEnter}
-      />
+    <div ref={container} className={`flex h-full min-h-0 flex-col ${fullHistory ? '' : HIDE_HISTORY_NOTICES}`} data-side-conversation={id}>
+      {fullHistory && <h2 className="shrink-0 truncate border-b py-3 pl-4 pr-12 text-sm font-medium">{session.summary || 'Session de création'}</h2>}
+      <div className="min-h-0 flex-1">
+        <ChatInterface
+          isActive
+          selectedProject={selectedProject}
+          selectedSession={session}
+          ws={ws}
+          sendMessage={sendMessage}
+          onFileOpen={openFile}
+          onNavigateToSession={openSession}
+          onShowSettings={openSettings}
+          showRawParameters={showRawParameters}
+          showThinking={showThinking}
+          sendByCtrlEnter={sendByCtrlEnter}
+        />
+      </div>
     </div>
   );
 }

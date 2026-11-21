@@ -113,6 +113,7 @@ export function mount(container: HTMLElement, api: Host) {
     };
     const { model, failure, traced, scope } = build(selected);
     if (part?.objectif) model.objective = part.objectif;
+    model.scope = part?.champ;
     steps = model.steps;
     shownScenario = scope;
     const issues = reasoningIssues(model);

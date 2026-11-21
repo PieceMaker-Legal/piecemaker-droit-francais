@@ -1,17 +1,20 @@
-import { File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
 
+import { ModelSelect } from '@/modules/piecemaker-quota';
 import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { AgentScheduled } from '@/modules/piecemaker-workspace-tabs/agent/AgentScheduled';
 import { Section } from '@/modules/piecemaker-workspace-tabs/agent/AgentSection';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
-import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
+import { ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
+
+const ThreadConversation = lazy(() => import('@/modules/piecemaker-workspace-tabs/agent/ThreadConversation'));
+const threadLoading = <p role="status" className="p-4 text-sm">Chargement de la session…</p>;
 
 type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled';
 
@@ -39,8 +42,7 @@ function DeliverableState({ deliverable, act }: { deliverable: AgentDeliverable;
   </select>;
 }
 
-function Threads({ state, act, query, filter }: { state: AgentState; act: AgentActions; query: string; filter: AgentThreadState | 'all' }) {
-  const navigate = useNavigate();
+function Threads({ state, act, query, filter, onOpen }: { state: AgentState; act: AgentActions; query: string; filter: AgentThreadState | 'all'; onOpen: (threadId: string) => void }) {
   const pending = pendingCards(state).count;
   const threads = state.threads
     .filter((thread) => filter === 'all' || thread.state === filter)
@@ -53,7 +55,7 @@ function Threads({ state, act, query, filter }: { state: AgentState; act: AgentA
     const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
     const active = ACTIVE_THREAD_STATES.includes(thread.state);
     return <li key={thread.id} className="group rounded-xl px-2 py-2 hover:bg-accent" data-thread={thread.id}>
-      <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && navigate(`/session/${thread.sessionId}`)}>
+      <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => onOpen(thread.id)}>
         <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm text-foreground">{thread.title}</span>
@@ -150,9 +152,9 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
     {PROVIDER_LABELS[value]}{value !== 'auto' && !connected.has(value as AgentProvider) ? ' (non connecté)' : ''}</option>);
   return <div className="space-y-5 overflow-y-auto px-5 py-4 text-sm">
     <fieldset className="space-y-2">
-      <legend className="text-sm text-foreground">Agent</legend>
-      <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={settings.orchestratorProvider} onChange={(event) => save({ orchestratorProvider: event.target.value as AgentSettings['orchestratorProvider'] })}>{providerOptions}</select></label>
-      <label className="block text-muted-foreground">Modèle initial (vide = modèle par défaut)<input className={`${inputClass} mt-1`} defaultValue={settings.orchestratorModel} onBlur={(event) => event.target.value !== settings.orchestratorModel && save({ orchestratorModel: event.target.value })} /></label>
+      <legend className="text-[15px] text-foreground">Agent</legend>
+      <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={settings.orchestratorProvider} onChange={(event) => save({ orchestratorProvider: event.target.value as AgentSettings['orchestratorProvider'], orchestratorModel: '' })}>{providerOptions}</select></label>
+      <label className="block text-muted-foreground">Modèle<ModelSelect className={`${inputClass} mt-1`} providers={settings.orchestratorProvider === 'auto' ? PROVIDERS.filter((provider) => connected.has(provider)) : [settings.orchestratorProvider]} value={settings.orchestratorModel} onChange={(model) => save({ orchestratorModel: model })} /></label>
       <label className="block text-muted-foreground">Recycler la conversation après (tours)<input type="number" min={1} className={`${inputClass} mt-1`} defaultValue={settings.recycleAfter} onBlur={(event) => Number(event.target.value) > 0 && save({ recycleAfter: Number(event.target.value) })} /></label>
       <button type="button" className={buttonClass} onClick={() => void act('recycle')}>Recycler l’orchestrateur maintenant</button>
     </fieldset>
@@ -160,8 +162,8 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
       <legend className="text-sm text-foreground">Fils de discussion</legend>
       <label className="block text-muted-foreground">Fournisseur par défaut<select className={`${inputClass} mt-1`} value={settings.defaultProvider} onChange={(event) => save({ defaultProvider: event.target.value as AgentSettings['defaultProvider'] })}>{providerOptions}</select></label>
       {PROVIDERS.map((provider) => <div key={provider} className="grid grid-cols-[1fr_6rem] gap-2">
-        <label className="block text-muted-foreground">Modèle {PROVIDER_LABELS[provider]}<input className={`${inputClass} mt-1`} disabled={!connected.has(provider)} defaultValue={settings.defaultModels[provider] ?? ''}
-          onBlur={(event) => event.target.value.trim() && event.target.value !== settings.defaultModels[provider] && save({ defaultModels: { [provider]: event.target.value.trim() } })} /></label>
+        <label className="block text-muted-foreground">Modèle {PROVIDER_LABELS[provider]}<ModelSelect className={`${inputClass} mt-1`} providers={[provider]} disabled={!connected.has(provider)} value={settings.defaultModels[provider] ?? ''}
+          onChange={(model) => model && save({ defaultModels: { [provider]: model } })} /></label>
         <label className="block text-muted-foreground">Simultanés<input type="number" min={1} className={`${inputClass} mt-1`} defaultValue={settings.concurrency[provider]}
           onBlur={(event) => Number(event.target.value) > 0 && save({ concurrency: { ...settings.concurrency, [provider]: Number(event.target.value) } })} /></label>
       </div>)}
@@ -178,13 +180,16 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
   </div>;
 }
 
-export function AgentPanel({ projectPath, panelActions }: { projectPath: string; panelActions?: ReactNode }) {
+export function AgentPanel({ projectPath, projectId, panelActions, onShowSettings }: { projectPath: string; projectId: string; panelActions?: ReactNode; onShowSettings?: () => void }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
   const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<AgentThreadState | 'all'>('all');
+  const [artifact, setArtifact] = useState<{ id: string; title: string; sessionId: string | null } | null>(null);
+  const [openThreadId, setOpenThreadId] = useState<string | null>(null);
+  const openThread = state?.threads.find((thread) => thread.id === openThreadId);
   const onTab = setTab;
 
   function customView() {
@@ -198,36 +203,59 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
   }
 
   const active = state?.threads.filter((thread) => ACTIVE_THREAD_STATES.includes(thread.state)).length ?? 0;
-  const onOpenArtifact = (url: string) => openAgentOutput(projectPath, { kind: 'artifact', ref: url });
+  const onOpenArtifact = (url: string) => {
+    const id = /^piecemaker:\/\/artifact\/([a-z][a-z0-9-]{2,63})$/.exec(url)?.[1];
+    if (!id || !state) return;
+    const entry = state.artifacts.find((item) => item.url === url);
+    if (!entry) return;
+    const deliverable = state.deliverables.find((item) => item.kind === 'artifact' && (item.ref === url || item.ref === id) && item.threadId);
+    const sessionId = state.threads.find((thread) => thread.id === deliverable?.threadId)?.sessionId ?? null;
+    setArtifact({ id, title: entry.title, sessionId });
+  };
 
-  return <div className="pm-agent-panel flex h-full min-w-0 flex-col text-foreground" aria-label="Volet de l’agent">
-    <header className="relative flex h-10 shrink-0 flex-nowrap items-center gap-0.5 overflow-hidden whitespace-nowrap border-b border-border px-2">
-      <nav role="tablist" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+  const panelClass = 'pm-agent-panel flex h-full min-w-0 flex-col text-foreground';
+  if (openThread?.sessionId) return <div className={panelClass} aria-label="Volet de l’agent">
+      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
+        <button type="button" aria-label="Retour aux fils de discussion" title="Retour aux fils de discussion" className="shrink-0 rounded-lg p-2 hover:bg-accent" onClick={() => setOpenThreadId(null)}>
+          <ArrowLeft className="size-4" />
+        </button>
+        <h2 className="min-w-0 flex-1 truncate text-sm font-medium">{openThread.title}</h2>
+        {panelActions && <div className="flex shrink-0 items-center gap-1 [&_button]:p-1 [&_svg]:size-4">{panelActions}</div>}
+      </header>
+      <Suspense fallback={threadLoading}>
+        <ThreadConversation key={openThread.sessionId} sessionId={openThread.sessionId} onShowSettings={onShowSettings} />
+      </Suspense>
+  </div>;
+
+  return <div className={panelClass} aria-label="Volet de l’agent">
+    <header className="relative flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-1">
+      <nav role="tablist" className="flex min-w-0 flex-wrap items-center gap-1">
         {TABS.map(([value, label, name]) => <button key={value} role="tab" type="button" aria-label={name} title={name} aria-selected={tab === value} onClick={() => onTab(value)}
-          className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-sm ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
-          {label}{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
+          className={`flex min-w-0 items-center gap-2 rounded-xl px-3 py-1.5 text-left text-sm font-medium ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
+          <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
         </button>)}
       </nav>
-      <button type="button" aria-label="Ajouter" aria-haspopup="menu" aria-expanded={menu === 'plus'} className="shrink-0 rounded-lg p-1.5 text-foreground/80 hover:bg-accent" onClick={() => setMenu(menu === 'plus' ? null : 'plus')}><Plus className="h-4 w-4" /></button>
-      {menu === 'plus' && <div role="menu" className="absolute right-12 top-11 z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
-        <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-accent" onClick={customView}>Vue personnalisée</button>
+      <button type="button" aria-label="Ajouter" aria-haspopup="menu" aria-expanded={menu === 'plus'} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => setMenu(menu === 'plus' ? null : 'plus')}><Plus className="h-[18px] w-[18px]" /></button>
+      {menu === 'plus' && <div role="menu" className="absolute right-12 top-full z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
+        <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-accent" onClick={customView}>Vue personnalisée</button>
       </div>}
       <button type="button" aria-label="Paramètres" title="Paramètres" aria-pressed={tab === 'settings'} className="shrink-0 rounded-lg p-1.5 hover:bg-accent" onClick={() => { setMenu(null); onTab('settings'); }}><SettingsIcon className="h-4 w-4" /></button>
       <span className="flex-1" />
-      <button type="button" aria-label="Rechercher" aria-pressed={searching} className="shrink-0 rounded-lg p-1.5 text-foreground/80 hover:bg-accent" onClick={() => { setSearching(!searching); onTab('threads'); }}><Search className="h-4 w-4" /></button>
-      <button type="button" aria-label="Filtrer" aria-expanded={menu === 'filter'} className={`shrink-0 rounded-lg p-1.5 hover:bg-accent ${filter !== 'all' ? 'text-blue-500' : 'text-foreground/80'}`} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}><Filter className="h-4 w-4" /></button>
-      {menu === 'filter' && <div role="menu" className="absolute right-2 top-11 z-20 w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
+      <button type="button" aria-label="Rechercher" aria-pressed={searching} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => { setSearching(!searching); onTab('threads'); }}><Search className="h-[18px] w-[18px]" /></button>
+      <button type="button" aria-label="Filtrer" aria-expanded={menu === 'filter'} className={`shrink-0 rounded-lg p-2 hover:bg-accent ${filter !== 'all' ? 'text-blue-500' : 'text-foreground/80'}`} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}><Filter className="h-[18px] w-[18px]" /></button>
+      {menu === 'filter' && <div role="menu" className="absolute right-2 top-full z-20 w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
         {(['all', ...Object.keys(THREAD_STATE_LABELS)] as Array<AgentThreadState | 'all'>).map((value) => <button key={value} role="menuitemradio" aria-checked={filter === value} type="button"
           className="block w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { setFilter(value); setMenu(null); onTab('threads'); }}>{value === 'all' ? 'Tous les états' : THREAD_STATE_LABELS[value]}</button>)}
       </div>}
       {panelActions && <div className="flex shrink-0 items-center gap-1 [&_button]:p-1 [&_svg]:size-4">{panelActions}</div>}
     </header>
+    {artifact && <ProjectArtifactDialog project={projectPath} projectId={projectId} artifact={artifact} associatedSessionId={artifact.sessionId} onClose={() => setArtifact(null)} />}
     {error && <p role="alert" className="px-4 py-2 text-sm">{error}</p>}
     {!state && !error && <p className="px-4 py-8 text-center text-sm">Chargement de PieceMaker Agent…</p>}
     {state && <>
       {searching && tab === 'threads' && <div className="border-b border-border px-4 py-2"><input autoFocus aria-label="Rechercher un fil" className={inputClass} placeholder="Rechercher un fil" value={query} onChange={(event) => setQuery(event.target.value)} /></div>}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} />}
+        {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} onOpen={setOpenThreadId} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
         {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
         {tab === 'scheduled' && <AgentScheduled state={state} act={act} onOpenArtifact={onOpenArtifact} />}
