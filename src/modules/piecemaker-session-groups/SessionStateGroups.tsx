@@ -19,7 +19,7 @@ function SessionStateIcon({ state }: { state: SessionActivityState }) {
   if (state === 'running') {
     return (
       <span className="flex h-3 w-3 flex-shrink-0 items-center justify-center" aria-hidden="true">
-        <span className="pm-session-blink h-2 w-2 rounded-full bg-orange-500" />
+        <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500" />
       </span>
     );
   }

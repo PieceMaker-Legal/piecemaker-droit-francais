@@ -11,7 +11,6 @@ import { PROVIDER_LABELS, createSessionViewModel, formatCompactAge } from '@/mod
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
 import { useProviderSessionIdCopy } from '@/modules/sidebar/hooks/useProviderSessionIdCopy';
 import SessionOptions from '@/modules/sidebar/SessionOptions';
-import { SessionProviderTile } from '@/modules/piecemaker-session-groups';
 
 type SidebarSessionItemProps = {
   project: Project;
@@ -81,9 +80,12 @@ function SidebarSessionItem({
   // Background work takes the recent-activity dot's place: the session is
   // still doing something, which says more than that it was touched lately.
   const showBackgroundIndicator = !showAttentionIndicator && hasBackgroundWork;
+  const showRunningIndicator = !showAttentionIndicator && !showBackgroundIndicator && isProcessing;
   const showRecentIndicator = !showAttentionIndicator && !showBackgroundIndicator && !isProcessing && sessionView.isActive;
   const indicatorLabel = showAttentionIndicator
     ? t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })
+    : showRunningIndicator
+      ? t('tooltips.processingSessionIndicator', 'Processing session')
     : showBackgroundIndicator
       ? t('tooltips.backgroundWorkIndicator', { defaultValue: 'Background work running' })
       : t('tooltips.activeSessionIndicator');
@@ -161,16 +163,19 @@ function SidebarSessionItem({
 
   return (
     <div className="group relative">
-      {(showAttentionIndicator || showBackgroundIndicator || showRecentIndicator) && (
+      {(showAttentionIndicator || showRunningIndicator || showBackgroundIndicator || showRecentIndicator) && (
         <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
           <Tooltip content={indicatorLabel} position="right">
             <div
               role="status"
               aria-label={indicatorLabel}
               className={cn(
-                'h-2 w-2 animate-pulse rounded-full',
+                'h-2 w-2 rounded-full',
+                !showAttentionIndicator && 'animate-pulse',
                 showAttentionIndicator
                   ? 'bg-amber-500'
+                  : showRunningIndicator
+                    ? 'bg-orange-500'
                   : showBackgroundIndicator
                     ? 'bg-purple-500 dark:bg-purple-400'
                     : 'bg-green-500',
@@ -193,7 +198,7 @@ function SidebarSessionItem({
               : 'mx-3 my-0.5 rounded-md bg-card border p-2 active:scale-[0.98] transition-all duration-150 relative',
             isSelected ? 'bg-primary/5 border-primary/20' : '',
             !treeRow && (!isSelected && isProcessing
-              ? 'border-orange-500/30 bg-orange-500/5'
+              ? 'border-border/60 bg-muted/20'
               : !isSelected && sessionView.isActive
                 ? 'border-green-500/30 bg-green-50/5 dark:bg-green-900/5'
                 : 'border-border/30'),
@@ -204,7 +209,14 @@ function SidebarSessionItem({
         >
           <div className={cn('flex items-center', treeRow ? 'gap-1.5' : 'gap-2')}>
             {selectionIcon}
-            <SessionProviderTile provider={session.__provider} isSelected={isSelected} isRunning={isProcessing} className="h-5 w-5" logoClassName="h-3 w-3" />
+            <div
+              className={cn(
+                'w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0',
+                isSelected ? 'bg-primary/10' : 'bg-muted/50',
+              )}
+            >
+              <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
+            </div>
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -435,7 +447,7 @@ function SidebarSessionItem({
             isSelecting ? 'pr-2' : 'pr-11',
             isSelected ? 'border-primary/20 bg-primary/5' : 'border-border/30',
             !treeRow && (!isSelected && isProcessing
-              ? 'border-orange-500/30 bg-orange-500/5 hover:bg-orange-500/10'
+              ? 'border-border/60 bg-muted/20 hover:bg-muted/25'
               : !isSelected && sessionView.isActive
                 ? 'border-green-500/30 bg-green-50/5 hover:bg-green-50/10 dark:bg-green-900/5 dark:hover:bg-green-900/10'
                 : 'hover:bg-accent/50'),
@@ -462,7 +474,14 @@ function SidebarSessionItem({
         >
           <div className={cn('flex w-full min-w-0 items-center', treeRow ? 'gap-1.5' : 'gap-2')}>
             {selectionIcon}
-            <SessionProviderTile provider={session.__provider} isSelected={isSelected} isRunning={isProcessing} className="h-5 w-5" logoClassName="h-3 w-3" />
+            <div
+              className={cn(
+                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md',
+                isSelected ? 'bg-primary/10' : 'bg-muted/50',
+              )}
+            >
+              <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
+            </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <div

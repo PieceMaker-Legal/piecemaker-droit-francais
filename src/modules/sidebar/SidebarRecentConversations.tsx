@@ -3,12 +3,12 @@ import { useEffect, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import type { TFunction } from 'i18next';
 
-import { Button, Tooltip } from '@/shared/ui';
+import { Button, LLMProviderLogo, Tooltip } from '@/shared/ui';
 import { cn } from '@/shared/utils';
 import type { ProjectSession, RecentConversationListItem, SessionRowActions } from '@/shared/types';
 import { formatCompactAge } from '@/modules/sidebar/utils/sidebarProjectFormatting';
 import SessionOptions from '@/modules/sidebar/SessionOptions';
-import { SessionProviderTile, SessionStateGroups, groupSessionsByState, sessionActivityState } from '@/modules/piecemaker-session-groups';
+import { SessionStateGroups, groupSessionsByState, sessionActivityState } from '@/modules/piecemaker-session-groups';
 
 type SidebarRecentConversationsProps = {
   conversations: RecentConversationListItem[];
@@ -206,7 +206,18 @@ export default function SidebarRecentConversations({
                     <div
                       role="status"
                       aria-label={t('tooltips.attentionRequiredIndicator', { defaultValue: 'Session needs attention' })}
-                      className="h-2 w-2 animate-pulse rounded-full bg-amber-500"
+                      className="h-2 w-2 rounded-full bg-amber-500"
+                    />
+                  </Tooltip>
+                </div>
+              )}
+              {!showAttentionIndicator && isProcessing && (
+                <div className="absolute left-0 top-1/2 -translate-x-1 -translate-y-1/2 transform">
+                  <Tooltip content={t('tooltips.processingSessionIndicator', 'Processing session')} position="right">
+                    <div
+                      role="status"
+                      aria-label={t('tooltips.processingSessionIndicator', 'Processing session')}
+                      className="h-2 w-2 animate-pulse rounded-full bg-orange-500"
                     />
                   </Tooltip>
                 </div>
@@ -223,7 +234,12 @@ export default function SidebarRecentConversations({
                     : 'text-foreground hover:bg-accent/60',
                 )}
               >
-                <SessionProviderTile provider={conversation.provider} isSelected={isSelected} isRunning={isProcessing} className="h-7 w-7" logoClassName="h-3.5 w-3.5" />
+                <span className={cn(
+                  'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md',
+                  isSelected ? 'bg-primary/10' : 'bg-muted/60',
+                )}>
+                  <LLMProviderLogo provider={conversation.provider} className="h-3.5 w-3.5" />
+                </span>
 
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-normal leading-4">
