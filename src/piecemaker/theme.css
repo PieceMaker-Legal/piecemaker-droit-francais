@@ -87,10 +87,6 @@ select {
   -webkit-font-smoothing: antialiased;
 }
 
-.font-serif {
-  font-family: var(--piecemaker-font-editorial);
-}
-
 h1.font-serif {
   font-weight: 500;
   letter-spacing: -0.02em;
