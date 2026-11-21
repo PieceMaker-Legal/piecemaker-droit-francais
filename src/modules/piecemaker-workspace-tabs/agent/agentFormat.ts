@@ -41,3 +41,20 @@ export function bytes(value: number): string {
   while (size >= 1000 && unit < units.length - 1) { size /= 1000; unit += 1; }
   return `${size.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ${units[unit]}`;
 }
+
+const WEEKDAYS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+
+export function cronLabel(cron: string): string {
+  const fields = cron.trim().split(/\s+/);
+  if (fields.length !== 5) return cron;
+  const [minute, hour, day, month, weekday] = fields;
+  if (!/^\d+$/.test(minute)) return cron;
+  const at = /^\d+$/.test(hour) ? ` à ${hour.padStart(2, '0')} h ${minute.padStart(2, '0')}` : '';
+  if (hour === '*' && day === '*' && month === '*' && weekday === '*') return minute === '0' ? 'Toutes les heures' : `Toutes les heures à ${minute} min`;
+  if (!at) return cron;
+  if (day === '*' && month === '*' && weekday === '*') return `Tous les jours${at}`;
+  if (day === '*' && month === '*' && weekday === '1-5') return `Du lundi au vendredi${at}`;
+  if (day === '*' && month === '*' && /^[0-7](,[0-7])*$/.test(weekday)) return `Chaque ${weekday.split(',').map((value) => WEEKDAYS[Number(value) % 7]).join(', ')}${at}`;
+  if (/^\d+$/.test(day) && month === '*' && weekday === '*') return `Le ${day === '1' ? '1er' : day} de chaque mois${at}`;
+  return cron;
+}

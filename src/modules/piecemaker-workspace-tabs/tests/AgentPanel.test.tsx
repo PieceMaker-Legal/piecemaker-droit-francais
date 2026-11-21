@@ -95,7 +95,7 @@ afterEach(() => {
 it('liste les fils, les décisions à traiter et ouvre le chat du fil dans le volet sans quitter le coordinateur', async () => {
   render(<MemoryRouter initialEntries={['/session/agent-1']}><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /><Location /></MemoryRouter>);
   expect((await screen.findAllByText('Rédiger la note de synthèse')).length).toBe(2);
-  expect(screen.getByText('Fils de discussion')).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
   expect(screen.getByText('À traiter')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Plan long/ }));
   await act(async () => undefined);
@@ -123,13 +123,13 @@ function Harness({ sessionId }: { sessionId: string }) {
 it('ouvre le volet de l’agent par défaut dans sa session et le replie depuis la barre du haut', async () => {
   calls.agentSession = 'agent-1';
   render(<Harness sessionId="agent-1" />);
-  expect(await screen.findByText('Fils de discussion')).toBeTruthy();
+  expect(await screen.findByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
   const toggle = screen.getByRole('tab', { name: 'tabs.agent' });
   expect(toggle.getAttribute('aria-selected')).toBe('true');
   fireEvent.click(toggle);
-  expect(screen.queryByText('Fils de discussion')).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Fils de discussion' })).toBeNull();
   fireEvent.click(screen.getByRole('tab', { name: 'tabs.agent' }));
-  expect(await screen.findByText('Fils de discussion')).toBeTruthy();
+  expect(await screen.findByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
 });
 
 it('n’affiche ni le volet ni le bouton dans une session ordinaire', async () => {
@@ -137,10 +137,10 @@ it('n’affiche ni le volet ni le bouton dans une session ordinaire', async () =
   render(<Harness sessionId="autre" />);
   await act(async () => undefined);
   expect(screen.queryByRole('tab', { name: 'tabs.agent' })).toBeNull();
-  expect(screen.queryByText('Fils de discussion')).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Fils de discussion' })).toBeNull();
 });
 
-it('réunit les instructions et les réglages et permet d’annuler chaque type de tâche', async () => {
+it('réunit les instructions et les réglages et permet d’arrêter chaque type de tâche', async () => {
   const data = state();
   const at = '2026-01-05T10:00:00Z';
   data.threads = [{ ...thread, reminderAt: at }];
@@ -155,12 +155,58 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
   expect(screen.getAllByRole('tab')).toHaveLength(3);
   fireEvent.click(screen.getByRole('tab', { name: 'Tâches planifiées' }));
   for (const [title, kind, id] of [[thread.title, 'reminder', 'f1'], ['Message fictif', 'once', 's1'], ['Routine fictive', 'cron', 's2']]) {
-    const cancel = screen.getByRole('button', { name: `Annuler : ${title}` });
+    expect(screen.queryByRole('button', { name: `Arrêter : ${title}` })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: title }));
+    const cancel = screen.getByRole('button', { name: `Arrêter : ${title}` });
     expect(cancel.closest('li')?.querySelector('time')?.dateTime).toBe(at);
     fireEvent.click(cancel);
     await act(async () => undefined);
     expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/cancel', body: { project: PROJECT, kind, id }, method: undefined });
   }
+});
+
+it('montre le titre d’une routine et, au clic, son explication, sa répétition et l’artéfact créé', async () => {
+  const data = state();
+  const at = '2026-01-05T08:00:00Z';
+  data.threads = [{ ...thread, id: 'f2', title: 'Veille jurisprudence', replies: [{ at, text: 'Fait.', outputs: [{ kind: 'artifact', ref: 'piecemaker://artifact/veille-1', title: 'Veille du lundi' }] }] }];
+  data.schedules = [{ id: 's3', kind: 'cron', text: '', at: null, nextRunAt: at, cron: '0 8 * * 1', thread: { title: 'Veille jurisprudence', instructions: 'Relever les arrêts récents.', provider: 'claude' }, lastFiredAt: null }];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Tâches planifiées' }));
+  const title = await screen.findByRole('button', { name: 'Veille jurisprudence' });
+  expect(screen.queryByText('Relever les arrêts récents.', { exact: false })).toBeNull();
+  fireEvent.click(title);
+  expect(title.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByText(/Relever les arrêts récents\./)).toBeTruthy();
+  expect(screen.getByText('Chaque lundi à 08 h 00')).toBeTruthy();
+  const card = screen.getByRole('button', { name: 'Ouvrir l’artéfact : Veille du lundi' });
+  const show = vi.fn();
+  window.addEventListener('piecemaker:artifacts-show', show);
+  fireEvent.click(card);
+  window.removeEventListener('piecemaker:artifacts-show', show);
+  expect(show).toHaveBeenCalled();
+  expect((window as unknown as { __piecemakerArtifactsShow: { artifact: string } }).__piecemakerArtifactsShow.artifact).toBe('veille-1');
+});
+
+it('range les tâches arrêtées en Inactif et ne les supprime qu’après confirmation', async () => {
+  const data = state();
+  data.schedules = [
+    { id: 's4', kind: 'cron', text: '', at: null, nextRunAt: '2026-01-05T08:00:00Z', cron: '0 8 * * *', thread: { title: 'Routine active' }, lastFiredAt: null },
+    { id: 's5', kind: 'cron', text: '', at: null, nextRunAt: null, cron: '0 8 * * *', thread: { title: 'Routine arrêtée' }, lastFiredAt: null, stoppedAt: '2026-01-04T08:00:00Z' },
+  ];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Tâches planifiées' }));
+  const inactive = (await screen.findByText('Inactif')).closest('section')!;
+  expect(inactive.textContent).toContain('Routine arrêtée');
+  expect(inactive.textContent).not.toContain('Routine active');
+  fireEvent.click(screen.getByRole('button', { name: /Routine arrêtée/ }));
+  expect(screen.queryByRole('button', { name: 'Arrêter : Routine arrêtée' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Supprimer : Routine arrêtée' }));
+  expect(calls.list.some((call) => call.url.endsWith('/schedule/delete'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/delete', body: { project: PROJECT, kind: 'cron', id: 's5' }, method: undefined });
 });
 
 it('ouvre le document Word à gauche et la session de publication à droite depuis Contexte', async () => {
