@@ -6,6 +6,8 @@ import type { ChatCompletionRequest } from '@mistralai/mistralai/models/componen
 
 import type { NormalizedMessage } from '@/shared/types.js';
 
+export type MistralTokenUsage = { used: number; total: number; inputTokens: number; outputTokens: number; breakdown: { input: number; output: number } };
+
 export function createMistralHistory(home: string) {
   const file = (sessionId: string) => path.join(home, 'mistral-sdk', 'sessions', `${createHash('sha256').update(sessionId).digest('hex')}.json`);
   return {
@@ -16,13 +18,14 @@ export function createMistralHistory(home: string) {
           userId: number;
           messages: ChatCompletionRequest['messages'];
           transcript: NormalizedMessage[];
+          tokenUsage?: MistralTokenUsage;
         };
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
         throw error;
       }
     },
-    async save(sessionId: string, record: { userId: number; messages: ChatCompletionRequest['messages']; transcript: NormalizedMessage[] }) {
+    async save(sessionId: string, record: { userId: number; messages: ChatCompletionRequest['messages']; transcript: NormalizedMessage[]; tokenUsage?: MistralTokenUsage }) {
       const destination = file(sessionId);
       await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
       const temporary = `${destination}.${randomUUID()}.tmp`;

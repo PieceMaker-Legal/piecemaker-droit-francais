@@ -3,5 +3,5 @@ export {
   groupSessionRowsByState,
   groupSessionsByState,
   sessionActivityState,
-} from '@/modules/piecemaker-session-groups/sessionStateGroups';
-export type { SessionActivityState } from '@/modules/piecemaker-session-groups/sessionStateGroups';
+} from '@/modules/piecemaker-session-groups/sessionGrouping';
+export type { SessionActivityState } from '@/modules/piecemaker-session-groups/sessionGrouping';

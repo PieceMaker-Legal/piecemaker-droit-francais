@@ -4,7 +4,7 @@ import { ChevronDown, CircleDashed, Contrast } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/shared/utils';
-import type { SessionActivityState, SessionStateGroup } from '@/modules/piecemaker-session-groups/sessionStateGroups';
+import type { SessionActivityState, SessionStateGroup } from '@/modules/piecemaker-session-groups/sessionGrouping';
 
 const STATE_LABEL_DEFAULTS: Record<SessionActivityState, string> = {
   attention: 'Waiting on you',
