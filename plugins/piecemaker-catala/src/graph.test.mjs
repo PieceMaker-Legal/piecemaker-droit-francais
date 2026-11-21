@@ -205,6 +205,123 @@ test('omits Catala records and the scenario block from the written reasoning', (
   assert.doesNotMatch(document.body.textContent, /Examen\s*Fictif|\{"état"|Dans ce scénario/i);
 });
 
+test('links a condition supplied to a Catala scope to the evidence in its caller', () => {
+  const target = '../../../pieces/rapport.md';
+  const quote = 'Le rapport constate une livraison inachevée.';
+  const file = { ...module, contenu: `\`\`\`catala
+  entrée livraison_constatée contenu booléen
+  définition examen égal à livraison_constatée
+  définition calcul égal à
+    résultat de Examen avec {
+      -- persistance: examen.qualification
+    }
+  entrée persistance contenu booléen
+  définition décision égal à persistance
+\`\`\`
+
+## Pièce 1
+Concerne : livraison_constatée
+[Pièce 1](${target})
+Citation : « ${quote} »
+` };
+  const position = (line, start = 3, end = line, character = 30) => ({ file: file.chemin, start: { line, character: start }, end: { line: end, character }, law_headings: [] });
+  const variable = (name, line, properties = {}, trace = []) => ({ element: { kind: 'scope_var', name, decl_pos: position(line), ...properties }, pos: position(line), value: true, trace });
+  const call = (name, pos, trace) => ({ element: { kind: 'scope_call', name, decl_pos: position(2) }, pos, value: {}, trace });
+  const provenance = {
+    trace: [call('Dossier', position(2), [
+      variable('livraison_constatée', 2, { input: 'only_input' }),
+      variable('examen', 3),
+      variable('calcul', 4, { output: true }, [call('Examen', position(5, 5, 7, 6), [
+        variable('persistance', 8, { input: 'only_input' }),
+        variable('décision', 9, { output: true }),
+      ])]),
+    ])],
+    definitions: [],
+    dependencies: [{ fichier: file.chemin, intra_scopes: {
+      Dossier: { nodes: { 1: 'livraison_constatée', 2: 'examen' }, edges: [{ from: 1, to: 2 }] },
+      Examen: { nodes: { 1: 'persistance', 2: 'décision' }, edges: [{ from: 1, to: 2 }] },
+    } }],
+    issues: [],
+  };
+  const graph = new JSDOM(reasoningGraph(reasoning('', [file], [], undefined, provenance))).window.document;
+  const condition = [...graph.querySelectorAll('[data-node]')].find((node) => node.querySelector('h3').textContent === 'Persistance');
+  assert.equal(condition.querySelector('.pmc-box-kind').textContent, 'Fait');
+  assert.doesNotMatch(condition.textContent, /Pièce à rattacher/);
+  const piece = condition.closest('.pmc-branch').querySelector('.pmc-children [data-kind="piece"][data-open-reference]');
+  assert.equal(piece.dataset.target, target);
+  assert.equal(piece.dataset.quote, quote);
+});
+
+test('shows both outcomes of a shared rule with a single supporting branch', () => {
+  const model = reasoning(`digraph G {
+    x001 [label=<<table><tr><td>état_de_la_résolution</td><td>= Inconnu</td></tr></table>>];
+    x002 [label=<<table><tr><td>résolution_établie</td><td>= false</td></tr></table>>];
+    x003 [label=<<table><tr><td>résolution_encore_possible</td><td>= true</td></tr></table>>];
+    x001 -> x002 [style="solid"];
+    x001 -> x003 [style="solid"];
+  }`);
+  const graph = new JSDOM(reasoningGraph(model)).window.document;
+  const roots = graph.querySelectorAll('.pmc-map > .pmc-branch');
+  assert.equal(roots.length, 1);
+  assert.match(roots[0].querySelector('[data-node="x002"]').textContent, /Non remplie/);
+  assert.match(roots[0].querySelector('.pmc-root').textContent, /Résolution encore possible/);
+  assert.equal(roots[0].dataset.state, 'ok');
+  assert.equal(roots[0].querySelectorAll(':scope > .pmc-children [data-node="x001"]').length, 1);
+});
+
+test('presents each principal state once and keeps independent outputs visible', () => {
+  const file = { ...module, contenu: `\`\`\`catala
+champ d'application Exemple:
+  définition état_principal égal à appréciation
+  définition démontré égal à état_principal = Établi
+  définition non_écarté égal à état_principal != Écarté
+  définition montant_annexe égal à 42
+\`\`\`
+` };
+  const position = (line) => ({ file: file.chemin, start: { line, character: 3 }, end: { line, character: 60 }, law_headings: [] });
+  const output = (name, line, value) => ({ element: { kind: 'scope_var', name, output: true }, pos: position(line), value, trace: [{ element: { kind: 'exception' }, pos: position(line), value }] });
+  for (const [state, established, notExcluded] of [['Établi', true, true], ['Inconnu', false, true], ['Écarté', false, false]]) {
+    const provenance = {
+      trace: [{ element: { kind: 'scope_call', name: 'Exemple' }, pos: position(2), trace: [
+        output('état_principal', 3, state), output('démontré', 4, established),
+        output('non_écarté', 5, notExcluded), output('montant_annexe', 6, 42),
+      ] }],
+      definitions: [], issues: [], dependencies: [{ fichier: file.chemin, intra_scopes: {
+        Exemple: { nodes: { 1: 'état_principal', 2: 'démontré', 3: 'non_écarté' }, edges: [{ from: 1, to: 2 }, { from: 1, to: 3 }] },
+      } }],
+    };
+    const model = reasoning('', [file], [], undefined, provenance);
+    model.scope = 'Exemple';
+    const document = new JSDOM(reasoningGraph(model)).window.document;
+    const roots = [...document.querySelectorAll('.pmc-map > .pmc-branch [data-node]')];
+    assert.deepEqual(roots.map((node) => node.querySelector('h3').textContent), ['État principal', 'Montant annexe']);
+    assert.equal(roots[0].querySelector('.pmc-box-kind').textContent, 'Prétention');
+    assert.equal(roots[0].querySelector('.pmc-value').textContent, state);
+    if (state === 'Écarté') assert.equal(roots[0].dataset.state, 'ko');
+  }
+});
+
+test('shows the definition comment and qualification without printing the structure in either view', () => {
+  const comment = 'Le rapport ne date pas le dernier constat.';
+  const file = { ...module, contenu: `\`\`\`catala
+champ d'application Exemple:
+  ## Apprécier la persistance
+  # ${comment}
+  définition examen égal à ExamenDocumentaire { -- qualification: Inconnu -- éléments: [] }
+\`\`\`
+` };
+  const model = reasoning(`digraph G {
+    x001 [label=<<table><tr><td>examen</td></tr><tr><td>ExamenDocumentaire { -- qualification: Inconnu -- éléments: [] }</td></tr><tr><td>= {&quot;qualification&quot;:&quot;Inconnu&quot;,&quot;éléments&quot;:[true]}</td></tr></table>>, URL="https://catala.local/resolution.catala_fr#L5"];
+  }`, [file]);
+  for (const html of [reasoningGraph(model), reasoningText(model)]) {
+    const document = new JSDOM(html).window.document;
+    const card = document.querySelector('[data-card="x001"]');
+    assert.ok(card.textContent.includes(comment));
+    assert.equal(card.querySelector('.pmc-value').textContent, 'Inconnu');
+    assert.doesNotMatch(card.textContent, /ExamenDocumentaire|éléments:/);
+  }
+});
+
 test('distinguishes statutes, case law and other references without treating a website as legal authority', () => {
   const file = { ...module, contenu: `${module.contenu}\n## Sources\nConcerne : résolution_possible\n[Décision fictive](https://www.legifrance.gouv.fr/juri/id/JURITEXT000000000001)\n[Documentation](https://example.org/explication)\n` };
   const graph = new JSDOM(reasoningGraph(reasoning(dot, [file], citations))).window.document;

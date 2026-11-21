@@ -83,10 +83,10 @@ test('background work shows as the purple dot in place of the green one, with no
   assert.equal(recordedOptionsProps.at(-1)?.isProcessing, false, 'the row is not locked the way a responding one is');
 });
 
-test('a response in flight still spins and shows no dot', () => {
+test('a response in flight still spins and shows the blinking orange dot', () => {
   const { container } = renderRow({ isProcessing: true, hasBackgroundWork: false });
 
-  assert.equal(container.querySelector('[role="status"]'), null);
+  assert.ok(container.querySelector('[role="status"].bg-orange-500.animate-pulse'));
   assert.equal(container.querySelectorAll('.animate-spin').length, 1);
   assert.equal(recordedOptionsProps[0].isProcessing, true);
 });

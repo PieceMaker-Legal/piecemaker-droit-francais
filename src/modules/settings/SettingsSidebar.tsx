@@ -1,4 +1,4 @@
-import { Bell, Bot, Cpu, GitBranch, Key, ListChecks, Mic, MonitorPlay, Palette, Puzzle, Smartphone, Trash2 } from 'lucide-react';
+import { Bell, Bot, Cpu, GitBranch, Key, Layers, ListChecks, Mic, MonitorPlay, Palette, Puzzle, Smartphone, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { hasDesktopUninstall } from '@/piecemaker/desktop/desktopUninstallBridge';
@@ -19,6 +19,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'agents', labelKey: 'mainTabs.agents', icon: Bot },
+  { id: 'models', labelKey: 'mainTabs.models', icon: Layers },
   { id: 'appearance', labelKey: 'mainTabs.appearance', icon: Palette },
   { id: 'git', labelKey: 'mainTabs.git', icon: GitBranch },
   { id: 'api', labelKey: 'mainTabs.apiTokens', icon: Key },

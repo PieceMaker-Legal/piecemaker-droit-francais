@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { ChevronDown, ChevronRight } from 'lucide-react';
@@ -32,6 +33,7 @@ type ComposerModelMenuProps = {
   modelOptions: ProviderModelOption[];
   onSelectModel: (model: string) => void;
   modelsLoading: boolean;
+  renderExtra?: (close: () => void) => ReactNode;
 };
 
 /**
@@ -47,6 +49,7 @@ function ComposerModelMenu({
   modelOptions,
   onSelectModel,
   modelsLoading,
+  renderExtra,
 }: ComposerModelMenuProps) {
   const { t } = useTranslation('chat');
   const [isOpen, setIsOpen] = useState(false);
@@ -186,6 +189,12 @@ function ComposerModelMenu({
                   ))}
                 </>
               )}
+            </>
+          )}
+          {renderExtra && (
+            <>
+              <ComposerMenuSeparator />
+              {renderExtra(close)}
             </>
           )}
         </ComposerMenuSurface>,

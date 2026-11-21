@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useCallback, useMemo, useRef } from 'react';
+import { lazy, memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Bot, GitBranchIcon, PencilIcon, XIcon } from 'lucide-react';
 
@@ -17,6 +17,8 @@ import MessageSpeakControl from '@/modules/chat/transcript/MessageSpeakControl';
 import { useIsExportingTranscript } from '@/modules/chat/context/TranscriptRenderContext';
 import { MemoryCitations } from '@/modules/chat/transcript/MemoryCitations';
 import { useDismissSideQuestion } from '@/modules/chat/hooks/useSideQuestions';
+import { useTranscriptSessionId } from '@/modules/chat/context/TranscriptSessionContext';
+import { QuotaLimitCard, detectQuotaLimit } from '@/modules/piecemaker-quota';
 
 const AgentChatCard = lazy(async () => ({ default: (await import('@/modules/piecemaker-workspace-tabs')).AgentChatCard }));
 
@@ -74,7 +76,6 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
       (prevMessage?.type === 'user') ||
       (prevMessage?.type === 'tool') ||
       (prevMessage?.type === 'error'));
-  const messageRef = useRef<HTMLDivElement | null>(null);
   const dismissSideQuestion = useDismissSideQuestion();
   const handleDismissSideQuestion = useCallback(() => {
     if (!message.sideQuestion) {
@@ -94,6 +95,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     },
     [message.content, message.isThinking, message.type, provider]
   );
+  const quotaLimit = useMemo(
+    () => ((message.type === 'assistant' || message.type === 'error') && !message.isToolUse && !message.isThinking && !message.isStreaming
+      ? detectQuotaLimit(String(message.content || ''), new Date(message.timestamp))
+      : null),
+    [message.content, message.isStreaming, message.isThinking, message.isToolUse, message.timestamp, message.type]
+  );
+  const transcriptSessionId = useTranscriptSessionId();
   const assistantCopyContent = message.isToolUse
     ? String(message.displayText || message.content || '')
     : formattedMessageContent;
@@ -105,15 +113,14 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
   // also pull in browser-only voice state that a document render has no
   // provider for.
   const isExporting = useIsExportingTranscript();
-  const shouldShowUserCopyControl = !isExporting && message.type === 'user' && userCopyContent.trim().length > 0;
-  const shouldShowAssistantCopyControl = !isExporting &&
+  const shouldShowAssistantActions = !isExporting &&
     message.type === 'assistant' &&
     assistantCopyContent.trim().length > 0 &&
     !isCommandOrFileEditToolResponse &&
     !message.isThinking;
 
-
-  const formattedTime = useMemo(() => new Date(message.timestamp).toLocaleTimeString(), [message.timestamp]);
+  const formattedTime = isExporting ? new Date(message.timestamp).toLocaleTimeString() : null;
+  const hasUserMessageActions = Boolean(message.transcriptAnchorId && (onEditMessage || onForkFromMessage));
   const shouldHideThinkingMessage = Boolean(message.isThinking && !showThinking);
 
   if (shouldHideThinkingMessage) {
@@ -131,8 +138,8 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     const isPendingAnswer = isAnswerRow && message.sideQuestion.status === 'running' && !String(message.content || '').trim();
     const railClassName = 'border-l-2 border-l-purple-500 bg-purple-500/5 px-3 dark:border-l-purple-400 dark:bg-purple-400/10';
     return (
-      <div
-        ref={messageRef}
+      <MessageCopyControl
+        content={isExporting ? undefined : isAnswerRow ? formattedMessageContent : userCopyContent}
         data-message-timestamp={message.timestamp || undefined}
         className="chat-message side-question w-full px-3 sm:px-0"
       >
@@ -147,7 +154,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                 </Markdown>
               )}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">{formattedTime}</div>
+            {formattedTime && <div className="mt-1 text-xs text-muted-foreground">{formattedTime}</div>}
           </div>
         ) : (
           <div className={`${railClassName} rounded-t-lg pb-1.5 pt-2`}>
@@ -170,19 +177,24 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
             </div>
           </div>
         )}
-      </div>
+      </MessageCopyControl>
     );
   }
 
+  const copyContent = message.type === 'user' && !isExporting
+    ? userCopyContent
+    : shouldShowAssistantActions && !message.compact && !message.contextCleared && !message.isTaskNotification
+      ? assistantCopyContent
+      : undefined;
   return (
-    <div
-      ref={messageRef}
+    <MessageCopyControl
+      content={copyContent}
       data-message-timestamp={message.timestamp || undefined}
       className={`chat-message ${message.type} ${isGrouped ? 'grouped' : ''} ${message.type === 'user' ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
     >
       {message.type === 'user' ? (
         /* User turn on the right: claude.ai-style attachment cards above the bubble */
-        <div className="flex w-full items-end space-x-0 sm:w-auto sm:max-w-[85%] sm:space-x-3 md:max-w-md lg:max-w-lg xl:max-w-xl">
+        <div className="flex w-full items-end sm:w-auto sm:max-w-[85%] md:max-w-md lg:max-w-lg xl:max-w-xl">
           <div className="flex min-w-0 flex-1 flex-col items-end gap-2 sm:flex-initial">
             {message.images && message.images.length > 0 && (
               <ChatMessageImages
@@ -203,47 +215,40 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                     {message.content}
                   </Markdown>
                 </div>
-                <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
-                  {onEditMessage && message.transcriptAnchorId && (
-                    <button
-                      type="button"
-                      onClick={() => onEditMessage(message)}
-                      title={t('message.editAndResend')}
-                      aria-label={t('message.editAndResend')}
-                      className="rounded p-1 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
-                    >
-                      <PencilIcon className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {onForkFromMessage && message.transcriptAnchorId && (
-                    <button
-                      type="button"
-                      onClick={() => onForkFromMessage(message)}
-                      title={t('message.forkFromHere')}
-                      aria-label={t('message.forkFromHere')}
-                      className="rounded p-1 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
-                    >
-                      <GitBranchIcon className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                  {shouldShowUserCopyControl && (
-                    <MessageCopyControl content={userCopyContent} messageType="user" />
-                  )}
-                  <span>{formattedTime}</span>
-                </div>
+                {(hasUserMessageActions || formattedTime) && (
+                  <div className="mt-1 flex items-center justify-end gap-1 text-xs text-muted-foreground">
+                    {onEditMessage && message.transcriptAnchorId && (
+                      <button
+                        type="button"
+                        onClick={() => onEditMessage(message)}
+                        title={t('message.editAndResend')}
+                        aria-label={t('message.editAndResend')}
+                        className="rounded p-1 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+                      >
+                        <PencilIcon className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {onForkFromMessage && message.transcriptAnchorId && (
+                      <button
+                        type="button"
+                        onClick={() => onForkFromMessage(message)}
+                        title={t('message.forkFromHere')}
+                        aria-label={t('message.forkFromHere')}
+                        className="rounded p-1 opacity-0 transition-opacity hover:bg-muted focus-visible:opacity-100 group-hover:opacity-100"
+                      >
+                        <GitBranchIcon className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {formattedTime && <span>{formattedTime}</span>}
+                  </div>
+                )}
               </div>
-            ) : (
-              /* Attachment-only turn: no text bubble, but the timestamp still shows */
+            ) : formattedTime && (
               <div className="flex items-center justify-end gap-1 text-xs text-muted-foreground">
                 <span>{formattedTime}</span>
               </div>
             )}
           </div>
-          {!isGrouped && (
-            <div className="hidden h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm text-white sm:flex">
-              U
-            </div>
-          )}
         </div>
       ) : message.contextCleared ? (
         /* Where the context was cleared: the model remembers nothing above this line */
@@ -423,14 +428,11 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
               <Reasoning defaultOpen={isExporting}>
                 <ReasoningTrigger />
                 <ReasoningContent>
-                  <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-                    {message.content}
-                  </Markdown>
-                  {!isExporting && (
-                    <div className="mt-3 flex items-center text-[11px]">
-                      <MessageCopyControl content={String(message.content || '')} messageType="assistant" />
-                    </div>
-                  )}
+                  <MessageCopyControl content={isExporting ? undefined : String(message.content || '')}>
+                    <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+                      {message.content}
+                    </Markdown>
+                  </MessageCopyControl>
                 </ReasoningContent>
               </Reasoning>
             ) : (
@@ -447,7 +449,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                   </Reasoning>
                 )}
 
-                {(() => {
+                {quotaLimit ? (
+                  <QuotaLimitCard limit={quotaLimit} provider={String(provider)} sessionId={transcriptSessionId} noticeAt={new Date(message.timestamp)} interactive={!isExporting} />
+                ) : (() => {
                   const content = formattedMessageContent;
 
                   // Detect if content is pure JSON (starts with { or [)
@@ -505,12 +509,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
               <MemoryCitations citations={message.memoryCitations} />
             )}
 
-            {(shouldShowAssistantCopyControl || !isGrouped) && (
+            {(shouldShowAssistantActions || (!isGrouped && (message.model || formattedTime))) && (
               <div className="mt-1 flex w-full items-center gap-2 text-[11px] text-gray-400 dark:text-gray-500">
-                {shouldShowAssistantCopyControl && (
-                  <MessageCopyControl content={assistantCopyContent} messageType="assistant" />
-                )}
-                {shouldShowAssistantCopyControl && (
+                {shouldShowAssistantActions && (
                   <MessageSpeakControl content={assistantCopyContent} />
                 )}
                 {/* Which model actually answered, as the provider recorded it
@@ -518,13 +519,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                     copy and speak it is not gated on the copy control, and an
                     exported transcript keeps it wherever the footer renders. */}
                 <MessageModelLabel model={message.model} />
-                {!isGrouped && <span>{formattedTime}</span>}
+                {!isGrouped && formattedTime && <span>{formattedTime}</span>}
               </div>
             )}
           </div>
         </div>
       )}
-    </div>
+    </MessageCopyControl>
   );
 });
 

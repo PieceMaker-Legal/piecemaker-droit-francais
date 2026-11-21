@@ -232,9 +232,23 @@ test('Annuler un rappel, un message différé et une routine empêche leur exéc
   await f.tick(86400000);
   const state = await f.state();
   assert.equal(state.threads[0].reminderAt, null);
-  assert.equal(state.schedules.length, 0);
+  assert.equal(state.schedules.length, 2);
+  assert.ok(state.schedules.every(item => item.stoppedAt && item.nextRunAt === null));
   assert.equal(state.threads.length, 1);
   assert.ok(!state.orchestrator.pending.some(event => ['reminder', 'send_later', 'routine'].includes(event.type)));
+});
+
+test('Une tâche ne se supprime qu’une fois arrêtée', async ctx => {
+  const f = fixture(ctx);
+  f.user('Planifie');
+  await flush();
+  await f.call('create_routine', { cron: '* * * * *', title: 'Routine fictive', instructions: 'Lire' });
+  const [routine] = (await f.state()).schedules;
+  assert.throws(() => f.service.deleteScheduled(f.root, 'cron', routine.id), { code: 409 });
+  f.service.cancelScheduled(f.root, 'cron', routine.id);
+  assert.deepEqual(await f.call('list_routines', {}), []);
+  f.service.deleteScheduled(f.root, 'cron', routine.id);
+  assert.equal((await f.state()).schedules.length, 0);
 });
 
 for (const trigger of ['tours', 'usage', 'échec', 'manuel', 'fournisseur']) {

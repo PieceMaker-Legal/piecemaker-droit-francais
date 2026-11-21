@@ -17,6 +17,15 @@ export function WorkspaceViewer(props: ComponentProps<typeof EditorSidebar>) {
     register?.(open);
   }, [register, open]);
   useEffect(() => () => registerRef.current?.(false), []);
+  const closeRef = viewer?.closeRef;
+  const onCloseEditor = props.onCloseEditor;
+  useEffect(() => {
+    if (!closeRef || !open) return undefined;
+    closeRef.current = onCloseEditor;
+    return () => {
+      if (closeRef.current === onCloseEditor) closeRef.current = null;
+    };
+  }, [closeRef, open, onCloseEditor]);
 
   if (!viewer) return <EditorSidebar {...props} />;
   if (!props.editingFile || !viewer.target) return null;
