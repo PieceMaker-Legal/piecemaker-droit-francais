@@ -31,6 +31,17 @@ async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promis
   }
 }
 
+test('une session interne reste masquée après indexation de son historique', async () => {
+  await withIsolatedDatabase(() => {
+    sessionsDb.createAppSession('interne', 'codex', '/projet-fictif', 'Coordination interne', true);
+    sessionsDb.assignProviderSessionId('interne', 'session-native');
+    sessionsDb.createSession('session-native', 'codex', '/projet-fictif');
+    assert.ok(sessionsDb.getSessionById('interne'));
+    assert.equal(sessionsDb.getAllSessions().length, 0);
+    assert.equal(sessionsDb.getArchivedSessions().length, 0);
+  });
+});
+
 test('session archive queries hide archived rows from active project views', async () => {
   await withIsolatedDatabase(() => {
     sessionsDb.createSession('session-active', 'claude', '/workspace/demo-project', 'Active Session');

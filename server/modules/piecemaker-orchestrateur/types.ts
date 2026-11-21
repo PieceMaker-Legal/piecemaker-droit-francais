@@ -1,3 +1,5 @@
+import type { ChatAttachmentDescriptor } from '@/shared/image-attachments.js';
+
 export const RUNNABLE_PROVIDERS = ['claude', 'codex', 'mistral'] as const;
 export type RunnableProvider = typeof RUNNABLE_PROVIDERS[number];
 export type ProviderChoice = RunnableProvider | 'auto';
@@ -43,6 +45,8 @@ export type ChatMessage = {
   text: string;
   at: string;
   editedAt?: string;
+  uploads?: ChatAttachmentDescriptor[];
+  posted?: boolean;
   notify?: boolean;
   attachments: Output[];
   decisionIds: string[];
@@ -144,6 +148,11 @@ export type WakeEvent = {
 };
 
 export type OrchestratorState = {
+  chatSessionId: string | null;
+  chatProvider: RunnableProvider | null;
+  recoverPostsFrom?: string;
+  needsRecap: boolean;
+  heldUpdates: WakeEvent[];
   sessionId: string | null;
   key: string;
   provider: RunnableProvider | null;
@@ -182,6 +191,7 @@ export type PermissionRequest = { requestId: string; toolName: string; input: un
 export type TurnResult = { started: boolean; error: string | null };
 
 export type TurnOptions = {
+  attachments?: ChatAttachmentDescriptor[];
   provider: RunnableProvider;
   model: string;
   effort: string | null;
@@ -192,12 +202,16 @@ export type TurnOptions = {
 
 export type OrchestratorDependencies = {
   now(): Date;
+  contextRatio(sessionId: string, provider: RunnableProvider): Promise<number | null>;
+  previousPostIds(sessionId: string): Promise<Set<string>>;
+  chatChanged(sessionId: string): void;
+  changeChatProvider(sessionId: string, provider: RunnableProvider): void;
   sessionModel(sessionId: string): string | null;
   providers(userId: number | null): Promise<ProviderStatus[]>;
   permissions(provider: RunnableProvider, userId: number | null): Promise<Pick<TurnOptions, 'allowedTools' | 'disallowedTools'>>;
   defaultModel(provider: RunnableProvider, purpose?: 'lookup'): Promise<string>;
   models(provider: RunnableProvider): Promise<Array<{ value: string; label: string }>>;
-  openSession(provider: RunnableProvider, projectPath: string, title: string): string;
+  openSession(provider: RunnableProvider, projectPath: string, title: string, hidden?: boolean): string;
   runTurn(sessionId: string, userId: number | null, content: string, options: TurnOptions): Promise<TurnResult>;
   lastAnswer(sessionId: string): Promise<string>;
   history(sessionId: string, limit: number): Promise<Array<{ role: string; text: string }>>;

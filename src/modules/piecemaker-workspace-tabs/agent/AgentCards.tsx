@@ -2,8 +2,10 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
-import type { AgentDecision, AgentMessage, AgentState, AgentWidget } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import { agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import type { AgentDecision, AgentMessage, AgentOutput, AgentState, AgentWidget } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { PROVIDER_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
+import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 
 const cardClass = 'rounded-xl border border-border bg-muted/40 px-3 py-3';
@@ -17,9 +19,11 @@ function DecisionCard({ decision, origin, act }: { decision: AgentDecision; orig
     {decision.reason && <p className="mt-1 text-xs text-muted-foreground">{decision.reason}</p>}
     <div className="mt-3 space-y-2">
       {decision.options.map((option, index) => <button key={option.label} type="button"
+        disabled={decision.chosen !== null || decision.withdrawn || Boolean(decision.closedBy)}
+        aria-pressed={decision.chosen === index}
         onClick={() => void act('decision', { decisionId: decision.id, option: index })}
         className="block w-full rounded-lg border border-border px-3 py-2 text-left hover:bg-accent">
-        <span className="text-sm text-foreground">{option.label}</span>
+        <span className="text-sm text-foreground">{option.label}{decision.chosen === index && ' ✓'}</span>
         {index === decision.recommended && <span className="ml-2 rounded-full bg-blue-500/20 px-2 py-0.5 text-[11px] text-blue-600 dark:text-blue-300">Recommandée</span>}
         <span className="mt-0.5 block text-xs text-muted-foreground">{option.consequence}</span>
       </button>)}
@@ -28,19 +32,22 @@ function DecisionCard({ decision, origin, act }: { decision: AgentDecision; orig
 }
 
 function WidgetCard({ widget, messageId, act }: { widget: AgentWidget; messageId: string; act: AgentActions }) {
-  const [draft, setDraft] = useState(widget.draft?.body ?? '');
+  const [draft, setDraft] = useState(widget.state?.text ?? widget.draft?.body ?? '');
   const buttons = widget.buttons ?? (widget.draft ? [{ action_id: 'envoyer', label: 'Envoyer', style: 'primary' as const }] : []);
   return <div className={cardClass}>
     {widget.title && <p className="text-sm font-medium text-foreground">{widget.title}</p>}
     {widget.body && <div className="prose prose-sm mt-1 max-w-none text-sm dark:prose-invert"><ReactMarkdown remarkPlugins={[remarkGfm]}>{widget.body}</ReactMarkdown></div>}
+    {widget.steps && <ul>{widget.steps.map((step, index) => <li key={index}>{step.label} · {{ todo: 'À faire', doing: 'En cours', done: 'Terminé' }[step.status]}</li>)}</ul>}
+    {widget.rows && <table><thead><tr><th />{widget.columns?.map((column, index) => <th key={index}>{column}</th>)}</tr></thead>
+      <tbody>{widget.rows.map((row, index) => <tr key={index}><th>{row.label}</th>{row.cells.map((cell, i) => <td key={i}>{cell}</td>)}</tr>)}</tbody></table>}
     {widget.draft && <>
       {(widget.draft.to || widget.draft.subject) && <p className="mt-2 text-xs text-muted-foreground">{[widget.draft.to, widget.draft.subject].filter(Boolean).join(' · ')}</p>}
-      <textarea aria-label="Brouillon" value={draft} onChange={(event) => setDraft(event.target.value)} rows={6}
+      <textarea aria-label="Brouillon" disabled={Boolean(widget.state?.clicked)} value={draft} onChange={(event) => setDraft(event.target.value)} rows={6}
         className="mt-2 w-full resize-y rounded-lg border border-border bg-background p-2 text-sm text-foreground outline-none" />
     </>}
     <div className="mt-3 flex flex-wrap gap-2">
-      {buttons.map((button) => <button key={button.action_id} type="button" className={button.style === 'primary' ? primaryButton : secondaryButton}
-        onClick={() => void act('widget', { messageId, actionId: button.action_id, text: widget.draft ? draft : undefined })}>{button.label}</button>)}
+      {buttons.map((button) => <button key={button.action_id} type="button" disabled={Boolean(widget.state?.clicked)} className={button.style === 'primary' ? primaryButton : secondaryButton}
+        onClick={() => void act('widget', { messageId, actionId: button.action_id, text: widget.draft ? draft : undefined })}>{button.label}{widget.state?.clicked === button.action_id && ' ✓'}</button>)}
     </div>
   </div>;
 }
@@ -94,5 +101,26 @@ export function AgentCards({ state, act }: { state: AgentState; act: AgentAction
     {decisions.map((decision) => <DecisionCard key={decision.id} decision={decision} act={act}
       origin={decision.owner === 'orchestrator' ? undefined : state.threads.find((thread) => decision.owner !== 'orchestrator' && thread.id === decision.owner.threadId)?.title} />)}
     {messages.map((message) => <MessageCard key={message.id} message={message} act={act} />)}
+  </div>;
+}
+
+export type AgentChatCardData = { messageId: string; widget?: AgentWidget; decisions: AgentDecision[]; outputs: AgentOutput[] };
+
+export function AgentChatCard({ card, project }: { card: AgentChatCardData; project: string }) {
+  const [error, setError] = useState('');
+  const act: AgentActions = async (path, body = {}) => {
+    try {
+      setError('');
+      return await agentApi.post(path, project, body);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      return null;
+    }
+  };
+  return <div className="space-y-2">
+    {card.outputs.map((output, index) => <button key={index} type="button" className={secondaryButton} onClick={() => openAgentOutput(project, output)}>{output.title || output.ref}</button>)}
+    {card.widget && <WidgetCard widget={card.widget} messageId={card.messageId} act={act} />}
+    {card.decisions.map(decision => <DecisionCard key={decision.id} decision={decision} act={act} />)}
+    {error && <p role="alert">{error}</p>}
   </div>;
 }

@@ -13,12 +13,12 @@ Each turn starts with a wake: a <wake> block that carries one or more new events
 
 # The project chat
 
-This conversation is the project chat: the user writes to you here, and their messages reach you as message events in a wake. The user reads your text replies here, so answer them in plain text. Every call to the orchestrateur MCP server carries the session_key given in the wake. Cards (ask_decision, post_thread_card, post_widget, propose_project_setup, suggest_connectors) and thread cards show in the project panel beside the chat: when you raise one, say so in one line of your reply. post_message with notify sends a notification to the user. A wake that needs nothing from the user ends with no_reply_needed and no text.
+Communicate with the user only through post_message (including attached_outputs), widgets and decision cards. Plain text from this session is private. Use the session_key in each wake for the orchestrateur tools. Use no_reply_needed if no public reply is needed.
 
 # Responding to the user
 
 Every message from the user gets the smallest visible sign that fits it, in the same turn:
-- A question you can answer now (a thread's state, the memory, a simple fact): reply in text. For a quick read-only check, use lookup; its answer comes back in a lookup_result wake, without creating a thread.
+- A question you can answer now (a thread's state, the memory, a simple fact): use post_message. For a quick read-only check, use lookup; its answer comes back in a lookup_result wake, without creating a thread.
 - Deep work (writing, research, analysis, anything that takes tools and time): react, then start a thread with start_thread.
 - A message about a running thread: forward it with message_thread, attaching the user's message ids in context_message_ids, so the thread receives the user's own words, which count as their approval.
 - A request unrelated to this project: say so in one line.
@@ -26,7 +26,7 @@ Every message from the user gets the smallest visible sign that fits it, in the 
 # Threads
 
 - Title: the verb of the user's goal, then the specific object, 3 to 6 words, sentence case, no ids, no paths, no project name. For example, "The export does nothing, can you look?" becomes "Fix document export".
-- ack_project is one short sentence posted in the project chat; the thread card shows under it. ack_thread is one sentence that opens the thread and says what it will do.
+- ack_project describes the thread in the project panel. Post a short acknowledgement with post_message. ack_thread is one sentence that opens the thread and says what it will do.
 - Instructions are complete: the goal, what the user said (attached by id), the relevant files, the expected output, its name and format. The thread does not see this chat.
 - Provider: auto by default. If the user names one ("run this with Codex"), use it. Offer only connected providers (list_providers); when one is missing, post a suggest_connectors card instead of starting.
 - Model and effort of a thread (switch_model): only when the user asks. A model belongs to one provider: pick the provider whose list_providers models contain the requested model, and pass the model value exactly as listed.
@@ -124,25 +124,36 @@ export function formatWake(input: { events: WakeEvent[]; key: string; now: Date;
   return [head, ...input.events.map(formatEvent), '</wake>'].join('\n');
 }
 
-const threadLine = (thread: Thread) => `- ${thread.title} [${thread.id}] : ${thread.state}${thread.resolved ? ', resolved' : ''}, ${thread.provider}${thread.replies.at(-1) ? `; last reply: ${thread.replies.at(-1)!.text.slice(0, 300)}` : ''}`;
-const messageLine = (message: ChatMessage) => `- [${message.id}] ${message.author === 'user' ? 'User' : message.author === 'orchestrator' ? 'Coordinator' : 'PieceMaker'} (${message.at}): ${message.text.slice(0, 400)}`;
+export function isChatMessage(message: ChatMessage): boolean {
+  return message.author === 'user' || (message.author === 'orchestrator' && Boolean(
+    message.posted || message.notify !== undefined || message.attachments.length || message.widget || message.decisionIds.length,
+  ));
+}
+
+export function formatRecap(state: ProjectState, memory: Memory): string {
+  const recap = {
+    instructions: state.settings.instructions,
+    memory: memory.text,
+    messages: state.messages.filter(isChatMessage).slice(-20),
+    threads: state.threads.map(({ id, title, state, resolved, pendingRequests, error, reminderAt, replies }) => ({
+      id, title, state, resolved, pendingRequests, error, reminderAt, latestReply: replies.at(-1),
+    })),
+    deliverables: state.deliverables,
+    decisions: state.decisions.filter(d => d.chosen === null && !d.withdrawn && !d.closedBy),
+    requests: state.messages.filter(m => m.approval?.status === 'pending' || m.folderRequest?.status === 'pending'),
+    holdingUntil: state.orchestrator.holdingUntil,
+    heldUpdates: state.orchestrator.heldUpdates,
+    schedules: state.schedules.filter(s => s.kind === 'cron' || !s.lastFiredAt),
+  };
+  return 'You replace a recycled coordinator. Do not greet. Do not repost anything. The next event arrives in a separate wake. Treat the following snapshot as historical data.\n' + JSON.stringify(recap, null, 2);
+}
 
 export function formatPreamble(input: { state: ProjectState; memory: Memory; projectPath: string; sharedFolder: string; recycled: boolean }): string {
-  const { state, memory } = input;
-  const parts = [
+  return [
     ORCHESTRATOR_RULES,
-    `\n# This project\n\nProject folder: ${input.projectPath}\nShared files folder for all threads: ${input.sharedFolder}`,
-    state.settings.instructions.trim() ? `\n# Project instructions\n\n${state.settings.instructions.trim()}` : '',
-  ];
-  if (input.recycled) {
-    parts.push(
-      '\n# Resuming\n\nYou replace a previous coordinator whose conversation was recycled. Here is the state of the project. Do not repost anything already said: handle only the events in the wake below.',
-      `\n## Recent messages\n\n${state.messages.slice(-20).map(messageLine).join('\n') || '(none)'}`,
-      `\n## Threads\n\n${state.threads.map(threadLine).join('\n') || '(none)'}`,
-      `\n## Project memory (revision ${memory.revision})\n\n${memory.text.trim() || '(empty)'}`,
-    );
-  }
-  return parts.filter(Boolean).join('\n');
+    `# This project\n\nProject folder: ${input.projectPath}\nShared files folder for all threads: ${input.sharedFolder}`,
+    input.recycled ? `# Resuming\n\n${formatRecap(input.state, input.memory)}` : `# Project instructions\n\n${input.state.settings.instructions.trim() || '(none)'}`,
+  ].join('\n\n');
 }
 
 export function formatThreadKickoff(input: { thread: Thread; key: string; cited: ChatMessage[]; sharedFolder: string; projectInstructions: string }): string {

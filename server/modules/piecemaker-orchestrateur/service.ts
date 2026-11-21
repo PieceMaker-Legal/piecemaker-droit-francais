@@ -4,12 +4,14 @@ import path from 'node:path';
 
 import { z } from 'zod/v4';
 
-import { formatPreamble, formatThreadKickoff, formatThreadMessage, formatWake } from './prompt.js';
+import { isImageAttachmentDescriptor } from '@/shared/image-attachments.js';
+
+import { formatPreamble, formatThreadKickoff, formatThreadMessage, formatWake, isChatMessage } from './prompt.js';
 import { openProjectStore } from './store.js';
 import { RUNNABLE_PROVIDERS, THREAD_STATES } from './types.js';
 import type {
   ChatMessage, Decision, Deliverable, OrchestratorDependencies, ProviderChoice, Reaction,
-  Settings, Thread, ThreadReply, TurnOptions, TurnResult, WakeEvent,
+  Settings, Thread, ThreadReply, TurnOptions, WakeEvent,
 } from './types.js';
 
 const SESSION_TITLE = 'PieceMaker Agent';
@@ -119,7 +121,9 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   const decision = (id: unknown) => find(state.decisions, id, 'Décision');
   const active = (t: Thread) => t.state === 'working' || t.state === 'blocked';
   const runs = new Map<string, { reply?: ThreadReply }>();
-  let handled = false;
+  let manualRecycle = false;
+  let initializing = false;
+  let currentBatch: WakeEvent[] = [];
   let generation = 0;
   let retryAt = 0;
   const id = (prefix: string) => prefix + '_' + randomUUID();
@@ -127,9 +131,9 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     const row: ChatMessage = { id: id('msg'), author, text, at: now(), attachments: [], decisionIds: [], reactions: [], ...extra };
     state.messages.push(row);
     if (author === 'orchestrator') {
-      handled = true;
       orch.postsSinceUser++;
       orch.holdingUntil = null;
+      orch.heldUpdates = [];
     }
     return row;
   }
@@ -140,6 +144,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   function wake(type: WakeEvent['type'], trust: WakeEvent['trust'], text: string, extra: Partial<WakeEvent> = {}) {
     orch.pending.push({ type, trust, text, at: now(), ...extra });
     save();
+    if (orch.chatSessionId && ['message', 'decision', 'widget_action'].includes(type)) deps.chatChanged(orch.chatSessionId);
     queueMicrotask(pump);
   }
   async function provider(choice: ProviderChoice) {
@@ -154,70 +159,98 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     return models.find(m => m.value.toLowerCase() === wanted || m.label.toLowerCase() === wanted)?.value
       ?? refuse(400, `Modèle « ${model} » inconnu pour ${p}. Modèles disponibles : ${models.map(m => m.value).join(', ')}.`);
   }
+  let recovery: Promise<void> | undefined;
+  function recoverPreviousPosts() {
+    const sessionId = orch.recoverPostsFrom;
+    if (!sessionId) return;
+    recovery ??= deps.previousPostIds(sessionId).then(ids => {
+      for (const message of state.messages) {
+        if (message.author === 'orchestrator' && ids.has(message.id)) message.posted = true;
+      }
+      delete orch.recoverPostsFrom;
+      save();
+    }).catch(() => {}).finally(() => { recovery = undefined; });
+    return recovery;
+  }
   function resetSession() {
     generation++;
-    Object.assign(orch, { key: randomUUID(), sessionId: null, turns: 0, provider: null, running: false, recaps: orch.recaps + 1 });
+    Object.assign(orch, { key: randomUUID(), sessionId: null, turns: 0, provider: null, running: false, needsRecap: true, recaps: orch.recaps + 1 });
   }
-  function pump() {
-    if (!orch.running && orch.pending.length && deps.now().getTime() >= retryAt) void orchestrate();
+  function ensureChat(p: TurnOptions['provider']) {
+    if (!orch.chatSessionId) {
+      orch.chatSessionId = deps.openSession(p, root, SESSION_TITLE);
+      deps.chatChanged(orch.chatSessionId);
+    }
+    if (orch.chatProvider && orch.chatProvider !== p) deps.changeChatProvider(orch.chatSessionId, p);
+    orch.chatProvider = p;
+    return orch.chatSessionId;
   }
-  async function orchestrate(batch = orch.pending.splice(0), runner?: (content: string, options: TurnOptions) => Promise<TurnResult>) {
-    const token = ++generation;
+  function pump(startRecap = false) {
+    if (!orch.running && (orch.pending.length || (orch.needsRecap && (startRecap || retryAt > 0))) && deps.now().getTime() >= retryAt) void orchestrate();
+  }
+  async function orchestrate() {
+    generation++;
     const initialProvider = state.settings.orchestratorProvider;
+    const recap = orch.needsRecap;
+    const batch = recap ? [] : orch.pending.splice(0);
+    currentBatch = batch;
+    initializing = recap;
     const userMessages = batch.filter(e => e.type === 'message').map(e => message(e.messageId));
     orch.running = true;
-    handled = false;
     for (const row of userMessages) reaction(row, 'system', '👀', true);
     save();
-    let failed = false;
     let launched = false;
+    let rotate = false;
     try {
-      const p = orch.provider ?? await provider(state.settings.orchestratorProvider);
-      const model = (orch.sessionId && deps.sessionModel(orch.sessionId)) || state.settings.orchestratorModel || await deps.defaultModel(p);
+      if (recap) await recoverPreviousPosts();
+      const p = orch.provider ?? await provider(initialProvider);
+      const chatSessionId = ensureChat(p);
+      const model = deps.sessionModel(chatSessionId) || state.settings.orchestratorModel || await deps.defaultModel(p);
       const permissions = await deps.permissions(p, orch.userId);
-      if (generation !== token) return;
-      const fresh = !orch.sessionId || !orch.turns;
+      const fresh = !orch.sessionId;
       orch.provider = p;
-      orch.sessionId ??= deps.openSession(p, root, SESSION_TITLE);
+      orch.sessionId ??= deps.openSession(p, root, 'Coordination interne', true);
       save();
-      const sessionId = orch.sessionId;
-      const preamble = fresh ? formatPreamble({ state, projectPath: root, memory: store.memory(), sharedFolder: store.sharedFolder, recycled: orch.recaps > 0 }) + '\n' : '';
-      const content = preamble + formatWake({ ...orch, events: batch, now: deps.now() });
+      const preamble = fresh || recap ? formatPreamble({ state, projectPath: root, memory: store.memory(), sharedFolder: store.sharedFolder, recycled: recap }) : '';
+      const content = recap ? preamble : [preamble, formatWake({ ...orch, events: batch, now: deps.now() })].filter(Boolean).join('\n');
       launched = true;
-      const result = await (runner ?? ((text, options) => deps.runTurn(sessionId, orch.userId, text, options)))(content, {
+      const result = await deps.runTurn(orch.sessionId, orch.userId, content, {
+        attachments: userMessages.flatMap(row => row.uploads ?? []),
         provider: p, model, effort: null, permissionMode: 'default',
         allowedTools: [...new Set([...permissions.allowedTools.filter(tool => !ORCHESTRATOR_DENIED.includes(tool)), 'mcp__orchestrateur', 'Read', 'Glob', 'Grep', 'WebSearch', 'WebFetch', 'Skill'])],
         disallowedTools: [...new Set([...permissions.disallowedTools.filter(tool => tool !== 'mcp__orchestrateur'), ...ORCHESTRATOR_DENIED])],
       });
-      if (generation !== token) return;
-      if (result.error || !result.started) throw new Error(result.error ?? 'Tour non démarré.');
-      if (!handled) {
-        const answer = await deps.lastAnswer(sessionId);
-        if (generation === token && !handled && answer.trim()) add('orchestrator', answer);
-      }
-    } catch (error) {
-      if (generation !== token) return;
-      failed = launched;
-      if (launched) add('system', String(error));
-      else {
+      if (!result.started) {
         orch.pending.unshift(...batch);
         retryAt = deps.now().getTime() + 10000;
-        const notice = "L'orchestrateur ne peut pas démarrer : " + (error instanceof Error ? error.message : String(error));
-        if (state.messages.at(-1)?.text !== notice) add('system', notice, { connect: { target: state.settings.orchestratorProvider === 'auto' ? 'claude' : state.settings.orchestratorProvider, reconnect: false } });
       }
+      if (result.error || !result.started) throw new Error(result.error ?? 'Tour non démarré.');
+      if (recap) orch.needsRecap = false;
+      else {
+        orch.turns++;
+        const ratio = await deps.contextRatio(orch.sessionId, p).catch(() => null);
+        rotate = orch.turns >= state.settings.recycleAfter || (ratio !== null && ratio > 0.7);
+      }
+    } catch (error) {
+      rotate = launched;
+      if (!launched || recap) retryAt = deps.now().getTime() + 10000;
+      if (!launched) orch.pending.unshift(...batch);
+      const notice = "Échec du coordinateur : " + (error instanceof Error ? error.message : String(error));
+      if (state.messages.at(-1)?.text !== notice) add('system', notice, launched ? {} : { connect: { target: initialProvider === 'auto' ? 'claude' : initialProvider, reconnect: false } });
     } finally {
-      if (generation === token) {
-        for (const row of userMessages) reaction(row, 'system', '👀', false);
-        orch.running = false;
-        if (launched) orch.turns++;
-        if (orch.turns >= state.settings.recycleAfter || failed || initialProvider !== state.settings.orchestratorProvider) resetSession();
-        save();
-        if (launched) pump();
-      }
+      for (const row of userMessages) reaction(row, 'system', '👀', false);
+      orch.running = false;
+      initializing = false;
+      currentBatch = [];
+      if (rotate || manualRecycle || initialProvider !== state.settings.orchestratorProvider) resetSession();
+      manualRecycle = false;
+      save();
+      pump(true);
     }
   }
   function userMessage(text: string, userId: number | null) {
-    const row = add('user', parse(string, text));
+    parse(string, text);
+    const row = add('user', text);
     orch.userId = userId ?? orch.userId;
     if (orch.lastUserAt && deps.now().getTime() - Date.parse(orch.lastUserAt) > 1800000) orch.pending.push({ type: 'catch_up', trust: 'system', text: 'The user is back after more than 30 minutes. Post the results you are holding.', at: now() });
     orch.lastUserAt = row.at;
@@ -377,7 +410,10 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     const settings = state.settings;
     const providerChanged = patch.orchestratorProvider && settings.orchestratorProvider !== patch.orchestratorProvider;
     Object.assign(settings, { ...patch, concurrency: { ...settings.concurrency, ...patch.concurrency }, defaultModels: { ...settings.defaultModels, ...patch.defaultModels } });
-    if (providerChanged && !orch.running) resetSession();
+    if (providerChanged && orch.chatSessionId && !orch.running) {
+      resetSession();
+      queueMicrotask(() => pump(true));
+    }
     save();
     drain();
     return settings;
@@ -397,7 +433,6 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     state.decisions.push(d);
     if (owner === 'orchestrator') {
       add('orchestrator', d.question, { decisionIds: [d.id] });
-      handled = true;
     } else wake('thread_decision', 'relay', d.question, { threadId: owner.threadId, attrs: { decision_id: d.id } });
     return { decision_id: d.id };
   }
@@ -532,11 +567,10 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     const target = () => thread(args.thread_id);
     switch (tool) {
       case 'post_message': {
-        const data = parse(z.object({ text: string, attached_outputs: outputs, decision_ids: contexts, notify: z.boolean().optional() }), args);
+        const data = parse(z.object({ text: z.string().refine(text => Boolean(text.trim())), attached_outputs: outputs, decision_ids: contexts, notify: z.boolean().optional() }), args);
         data.decision_ids.forEach(decision);
-        const row = add('orchestrator', data.text, { attachments: data.attached_outputs, decisionIds: data.decision_ids, notify: data.notify });
-        handled = true;
-        if (row.notify) deps.notify(orch.userId, orch.sessionId, 'Projet', row.text);
+        const row = add('orchestrator', data.text, { posted: true, attachments: data.attached_outputs, decisionIds: data.decision_ids, notify: data.notify });
+        if (row.notify) deps.notify(orch.userId, orch.chatSessionId, 'Projet', row.text);
         return { message_id: row.id };
       }
       case 'edit_message': {
@@ -549,7 +583,6 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       case 'react': case 'unreact': {
         const row = message(args.message_id);
         reaction(row, 'orchestrator', parse(string, args.emoji), tool === 'react');
-        if (tool === 'react') handled = true;
         return { message_id: row.id };
       }
       case 'post_widget': return { message_id: add('orchestrator', '', { widget: parse(widget, args) }).id };
@@ -657,8 +690,10 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       }
       case 'no_reply_needed': {
         const reason = parse(z.enum(['nothing_to_add', 'not_for_me', 'holding_updates']), args.reason);
-        if (reason === 'holding_updates') orch.holdingUntil ??= later(600000);
-        handled = true;
+        if (reason === 'holding_updates') {
+          orch.holdingUntil ??= later(600000);
+          orch.heldUpdates.push(...currentBatch.filter(event => !orch.heldUpdates.includes(event)));
+        }
         return { reason };
       }
       default: return refuse(403, 'Outil interdit pour l’orchestrateur.');
@@ -685,8 +720,9 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       }));
       return structuredClone({ ...state, schedules, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files(), storage: store.storage() });
     },
-    postUserMessage(text: string, userId: number | null) {
+    postUserMessage(text: string, userId: number | null, uploads?: ChatMessage['uploads']) {
       const row = userMessage(text, userId);
+      if (uploads?.length) row.uploads = uploads;
       wake('message', 'principal', row.text, { messageId: row.id });
       return row;
     },
@@ -695,34 +731,39 @@ function projectService(root: string, deps: OrchestratorDependencies) {
         orch.userId = userId;
         save();
       }
-      if (!orch.sessionId) {
+      if (!orch.chatSessionId) {
         const p = await provider(state.settings.orchestratorProvider);
-        if (!orch.sessionId) {
-          Object.assign(orch, { provider: p, sessionId: deps.openSession(p, root, SESSION_TITLE), turns: 0 });
-          save();
-        }
+        if (!orch.chatSessionId) ensureChat(p);
+        save();
       }
-      return { sessionId: orch.sessionId, provider: orch.provider };
+      return { sessionId: orch.chatSessionId, provider: orch.chatProvider };
     },
-    sessionId: () => orch.sessionId,
-    async composerTurn(sessionId: string, text: string, userId: number | null, runner: (content: string, options: TurnOptions) => Promise<TurnResult>) {
-      if (orch.running || !text.trim() || orch.sessionId !== sessionId) return false;
-      const row = userMessage(text, userId);
-      let ran = false;
-      await orchestrate([...orch.pending.splice(0), { type: 'message', trust: 'principal', text: row.text, at: row.at, messageId: row.id }],
-        async (content, options) => { ran = true; return runner(content, options); });
-      return ran;
+    sessionId: () => orch.chatSessionId,
+    async chatHistory() {
+      await recoverPreviousPosts();
+      return state.messages.filter(isChatMessage).map(m => {
+        const decisions = state.decisions.filter(d => m.decisionIds.includes(d.id));
+        const card = m.widget || decisions.length || m.attachments.length ? { widget: m.widget, decisions, outputs: m.attachments, messageId: m.id } : undefined;
+        return {
+          id: m.id, timestamp: m.at, sessionId: orch.chatSessionId!, provider: orch.chatProvider!,
+          role: m.author === 'user' ? 'user' as const : 'assistant' as const, kind: 'text' as const,
+          content: !m.posted && decisions.some(d => d.question === m.text) ? '' : m.text,
+          images: m.uploads?.filter(isImageAttachmentDescriptor), files: m.uploads?.filter(file => !isImageAttachmentDescriptor(file)),
+          agentCard: card,
+        };
+      });
     },
     async call(key: string, tool: string, input: unknown) {
       const threadOwner = state.threads.find(t => t.key === key);
       const token = generation;
       const check = () => {
-        if (orch.key !== key || !orch.running || token !== generation) refuse(403, 'Clé de session invalide ou orchestrateur inactif.');
+        if (initializing || orch.key !== key || !orch.running || token !== generation) refuse(403, 'Clé de session invalide ou orchestrateur inactif.');
       };
       if (!threadOwner) check();
       const args = parse(z.record(z.string(), z.unknown()), input);
       const result = threadOwner ? threadCall(threadOwner, tool, args) : await orchestratorCall(tool, args, check);
       if (!tool.startsWith('list_') && !tool.startsWith('read_') && !tool.startsWith('get_')) save();
+      if (orch.chatSessionId && ['post_message', 'edit_message', 'post_widget', 'update_widget', 'ask_decision', 'post_thread_card', 'close_decision'].includes(tool)) deps.chatChanged(orch.chatSessionId);
       return structuredClone(result);
     },
     chooseDecision: (decisionId: string, option: number) => close(decision(decisionId), option, 'user'),
@@ -800,14 +841,12 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       return summary(t);
     },
     recycle() {
-      const previous = orch.sessionId;
-      const p = orch.provider;
-      for (const row of state.messages) reaction(row, 'system', '👀', false);
-      const running = orch.running;
-      resetSession();
-      save();
-      if (running && previous && p) void deps.abort(p, previous).catch(() => false);
-      pump();
+      if (orch.running) manualRecycle = true;
+      else {
+        resetSession();
+        save();
+        pump(true);
+      }
       return { recycled: true };
     },
   };
@@ -857,15 +896,15 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
       }
       return project(folder).call(sessionKey, tool, args);
     },
-    postUserMessage: (root: string, text: string, userId: number | null = null) => project(root).postUserMessage(text, userId),
+    postUserMessage: (root: string, text: string, userId: number | null = null, uploads?: ChatMessage['uploads']) => project(root).postUserMessage(text, userId, uploads),
     session: (root: string, userId: number | null = null) => project(root).session(userId),
     sessionId(root: string) {
       const folder = canonical(root);
       return projects.has(folder) || existsSync(path.join(folder, '.piecemaker', 'orchestrateur', 'etat.json')) ? project(folder).sessionId() : null;
     },
-    isOrchestratorSession: (sessionId: string) => [...projects.values()].some(current => current.sessionId() === sessionId),
-    composerTurn: (root: string, sessionId: string, text: string, userId: number | null, runner: (content: string, options: TurnOptions) => Promise<TurnResult>) =>
-      project(root).composerTurn(sessionId, text, userId, runner),
+    chatHistory(root: string, sessionId: string) {
+      return this.sessionId(root) === sessionId ? project(root).chatHistory() : null;
+    },
     chooseDecision: (root: string, decisionId: string, option: number) => project(root).chooseDecision(decisionId, option),
     widgetAction: (root: string, messageId: string, actionId: string, text?: string) => project(root).widgetAction(messageId, actionId, text),
     approval: (root: string, messageId: string, allow: boolean) => project(root).approval(messageId, allow),
