@@ -60,7 +60,7 @@ export type AgentThread = {
   error: string | null;
 };
 export type AgentDeliverable = { id: string; kind: 'document' | 'piece' | 'artifact'; ref: string; title: string; state: 'brouillon' | 'a_relire' | 'valide'; threadId: string | null; updatedAt: string };
-export type AgentSchedule = { id: string; kind: 'once' | 'cron'; nextRunAt: string | null; text: string; at: string | null; cron: string | null; thread: { title: string; instructions?: string; provider?: AgentProviderChoice } | null; lastFiredAt: string | null };
+export type AgentSchedule = { id: string; kind: 'once' | 'cron'; nextRunAt: string | null; text: string; at: string | null; cron: string | null; thread: { title: string; instructions?: string; provider?: AgentProviderChoice } | null; lastFiredAt: string | null; stoppedAt?: string | null };
 export type AgentSettings = {
   instructions: string;
   orchestratorProvider: AgentProviderChoice;

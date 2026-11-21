@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
+import { File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -7,6 +7,7 @@ import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { AgentScheduled } from '@/modules/piecemaker-workspace-tabs/agent/AgentScheduled';
+import { Section } from '@/modules/piecemaker-workspace-tabs/agent/AgentSection';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
@@ -19,20 +20,6 @@ const PROVIDERS: AgentProvider[] = ['claude', 'codex', 'mistral'];
 const VIEW_KEY = 'pm-agent-view';
 const inputClass = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring';
 const buttonClass = 'rounded-lg bg-muted px-3 py-1.5 text-sm text-foreground hover:bg-accent disabled:opacity-40';
-
-function Section({ title, count, action, children, initiallyOpen = true }: { title: string; count: number; action?: ReactNode; children: ReactNode; initiallyOpen?: boolean }) {
-  const [open, setOpen] = useState(initiallyOpen);
-  return <section className="py-1">
-    <div className="flex items-center">
-      <button type="button" aria-expanded={open} className="flex flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-accent" onClick={() => setOpen(!open)}>
-        {open ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-        <span className="text-[15px] text-foreground">{title}</span><span className="text-sm text-muted-foreground">{count}</span>
-      </button>
-      {action}
-    </div>
-    {open && <div className="pb-2 pl-8">{children}</div>}
-  </section>;
-}
 
 function Row({ icon, title, detail, trailing, onClick }: { icon: ReactNode; title: string; detail?: string; trailing?: ReactNode; onClick?: () => void }) {
   const content = <>

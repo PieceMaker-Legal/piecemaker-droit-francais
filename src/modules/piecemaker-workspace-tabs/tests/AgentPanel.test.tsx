@@ -112,7 +112,7 @@ it('n’affiche ni le volet ni le bouton dans une session ordinaire', async () =
   expect(screen.queryByText('Fils de discussion')).toBeNull();
 });
 
-it('réunit les instructions et les réglages et permet d’annuler chaque type de tâche', async () => {
+it('réunit les instructions et les réglages et permet d’arrêter chaque type de tâche', async () => {
   const data = state();
   const at = '2026-01-05T10:00:00Z';
   data.threads = [{ ...thread, reminderAt: at }];
@@ -127,9 +127,9 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
   expect(screen.getAllByRole('tab')).toHaveLength(3);
   fireEvent.click(screen.getByRole('tab', { name: 'Tâches planifiées' }));
   for (const [title, kind, id] of [[thread.title, 'reminder', 'f1'], ['Message fictif', 'once', 's1'], ['Routine fictive', 'cron', 's2']]) {
-    expect(screen.queryByRole('button', { name: `Annuler : ${title}` })).toBeNull();
+    expect(screen.queryByRole('button', { name: `Arrêter : ${title}` })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: title }));
-    const cancel = screen.getByRole('button', { name: `Annuler : ${title}` });
+    const cancel = screen.getByRole('button', { name: `Arrêter : ${title}` });
     expect(cancel.closest('li')?.querySelector('time')?.dateTime).toBe(at);
     fireEvent.click(cancel);
     await act(async () => undefined);
@@ -158,4 +158,25 @@ it('montre le titre d’une routine et, au clic, son explication, sa répétitio
   window.removeEventListener('piecemaker:artifacts-show', show);
   expect(show).toHaveBeenCalled();
   expect((window as unknown as { __piecemakerArtifactsShow: { artifact: string } }).__piecemakerArtifactsShow.artifact).toBe('veille-1');
+});
+
+it('range les tâches arrêtées en Inactif et ne les supprime qu’après confirmation', async () => {
+  const data = state();
+  data.schedules = [
+    { id: 's4', kind: 'cron', text: '', at: null, nextRunAt: '2026-01-05T08:00:00Z', cron: '0 8 * * *', thread: { title: 'Routine active' }, lastFiredAt: null },
+    { id: 's5', kind: 'cron', text: '', at: null, nextRunAt: null, cron: '0 8 * * *', thread: { title: 'Routine arrêtée' }, lastFiredAt: null, stoppedAt: '2026-01-04T08:00:00Z' },
+  ];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Tâches planifiées' }));
+  const inactive = (await screen.findByText('Inactif')).closest('section')!;
+  expect(inactive.textContent).toContain('Routine arrêtée');
+  expect(inactive.textContent).not.toContain('Routine active');
+  fireEvent.click(screen.getByRole('button', { name: /Routine arrêtée/ }));
+  expect(screen.queryByRole('button', { name: 'Arrêter : Routine arrêtée' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Supprimer : Routine arrêtée' }));
+  expect(calls.list.some((call) => call.url.endsWith('/schedule/delete'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/delete', body: { project: PROJECT, kind: 'cron', id: 's5' }, method: undefined });
 });
