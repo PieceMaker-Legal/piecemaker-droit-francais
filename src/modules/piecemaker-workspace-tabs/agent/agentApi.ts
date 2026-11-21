@@ -56,11 +56,11 @@ export type AgentThread = {
   createdAt: string;
   updatedAt: string;
   resolved: boolean;
-  replies: Array<{ at: string; text: string }>;
+  replies: Array<{ at: string; text: string; outputs?: AgentOutput[] }>;
   error: string | null;
 };
 export type AgentDeliverable = { id: string; kind: 'document' | 'piece' | 'artifact'; ref: string; title: string; state: 'brouillon' | 'a_relire' | 'valide'; threadId: string | null; updatedAt: string };
-export type AgentSchedule = { id: string; kind: 'once' | 'cron'; nextRunAt: string | null; text: string; at: string | null; cron: string | null; thread: { title: string } | null; lastFiredAt: string | null };
+export type AgentSchedule = { id: string; kind: 'once' | 'cron'; nextRunAt: string | null; text: string; at: string | null; cron: string | null; thread: { title: string; instructions?: string; provider?: AgentProviderChoice } | null; lastFiredAt: string | null };
 export type AgentSettings = {
   instructions: string;
   orchestratorProvider: AgentProviderChoice;

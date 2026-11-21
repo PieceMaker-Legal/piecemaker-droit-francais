@@ -127,10 +127,35 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
   expect(screen.getAllByRole('tab')).toHaveLength(3);
   fireEvent.click(screen.getByRole('tab', { name: 'Tâches planifiées' }));
   for (const [title, kind, id] of [[thread.title, 'reminder', 'f1'], ['Message fictif', 'once', 's1'], ['Routine fictive', 'cron', 's2']]) {
+    expect(screen.queryByRole('button', { name: `Annuler : ${title}` })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: title }));
     const cancel = screen.getByRole('button', { name: `Annuler : ${title}` });
     expect(cancel.closest('li')?.querySelector('time')?.dateTime).toBe(at);
     fireEvent.click(cancel);
     await act(async () => undefined);
     expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/cancel', body: { project: PROJECT, kind, id }, method: undefined });
   }
+});
+
+it('montre le titre d’une routine et, au clic, son explication, sa répétition et l’artéfact créé', async () => {
+  const data = state();
+  const at = '2026-01-05T08:00:00Z';
+  data.threads = [{ ...thread, id: 'f2', title: 'Veille jurisprudence', replies: [{ at, text: 'Fait.', outputs: [{ kind: 'artifact', ref: 'piecemaker://artifact/veille-1', title: 'Veille du lundi' }] }] }];
+  data.schedules = [{ id: 's3', kind: 'cron', text: '', at: null, nextRunAt: at, cron: '0 8 * * 1', thread: { title: 'Veille jurisprudence', instructions: 'Relever les arrêts récents.', provider: 'claude' }, lastFiredAt: null }];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Tâches planifiées' }));
+  const title = await screen.findByRole('button', { name: 'Veille jurisprudence' });
+  expect(screen.queryByText('Relever les arrêts récents.', { exact: false })).toBeNull();
+  fireEvent.click(title);
+  expect(title.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByText(/Relever les arrêts récents\./)).toBeTruthy();
+  expect(screen.getByText('Chaque lundi à 08 h 00')).toBeTruthy();
+  const card = screen.getByRole('button', { name: 'Ouvrir l’artéfact : Veille du lundi' });
+  const show = vi.fn();
+  window.addEventListener('piecemaker:artifacts-show', show);
+  fireEvent.click(card);
+  window.removeEventListener('piecemaker:artifacts-show', show);
+  expect(show).toHaveBeenCalled();
+  expect((window as unknown as { __piecemakerArtifactsShow: { artifact: string } }).__piecemakerArtifactsShow.artifact).toBe('veille-1');
 });

@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
+import { AgentScheduled } from '@/modules/piecemaker-workspace-tabs/agent/AgentScheduled';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
@@ -190,28 +191,6 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
   </div>;
 }
 
-function Scheduled({ state, act }: { state: AgentState; act: AgentActions }) {
-  const items = [
-    ...state.threads.filter(thread => thread.reminderAt).map(thread => ({
-      id: thread.id, kind: 'reminder', label: 'Rappel', title: thread.title, at: thread.reminderAt,
-    })),
-    ...state.schedules.filter(schedule => schedule.kind === 'cron' || !schedule.lastFiredAt).map(schedule => ({
-      id: schedule.id, kind: schedule.kind, label: schedule.kind === 'cron' ? 'Routine' : 'Message différé',
-      title: schedule.thread?.title ?? schedule.text, at: schedule.nextRunAt,
-    })),
-  ].sort((a, b) => (a.at ?? '~').localeCompare(b.at ?? '~'));
-  if (!items.length) return <p className="px-4 py-8 text-center text-sm text-muted-foreground">Aucune tâche planifiée.</p>;
-  return <ul className="px-4 py-3">{items.map(item => <li key={item.id} className="flex items-center gap-2 border-b border-border py-2 text-sm">
-    <div className="min-w-0 flex-1">
-      <span className="block text-foreground">{item.title}</span>
-      <span className="text-muted-foreground">{item.label} · {item.at
-        ? <time dateTime={item.at}>{new Date(item.at).toLocaleString('fr-FR')}</time>
-        : 'Aucune prochaine exécution'}</span>
-    </div>
-    <button type="button" className={buttonClass} aria-label={`Annuler : ${item.title}`} onClick={() => void act('schedule/cancel', { kind: item.kind, id: item.id })}>Annuler</button>
-  </li>)}</ul>;
-}
-
 export function AgentPanel({ projectPath, panelActions }: { projectPath: string; panelActions?: ReactNode }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
@@ -264,7 +243,7 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
         {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
         {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
-        {tab === 'scheduled' && <Scheduled state={state} act={act} />}
+        {tab === 'scheduled' && <AgentScheduled state={state} act={act} onOpenArtifact={onOpenArtifact} />}
       </div>
     </>}
   </div>;
