@@ -12,6 +12,9 @@ type Version = { version: number; label: string | null; published_at: string; fi
 type Detail = Summary & { versions: Version[]; data_stamp: number; format?: 'docx'; document_path?: string | null };
 type Thread = { id: string; anchor: Record<string, unknown> | null; resolved: boolean; messages: Array<{ author: string; text: string; at: string }> };
 type Bridge = { channel?: string; id?: string; op?: string; args?: Record<string, unknown> };
+type TemplateItem = { type_url: string; name: string; title: string; description: string; intent: string; icon: string | null; source: string };
+type TemplateStatus = { repository: string; branch: string; last_sync: string | null; clone: string; cloned: boolean; head: string | null; local_changes: string[]; templates: string[] };
+type GalleryFilter = 'all' | 'pinned' | 'templates';
 
 const TAB = 'plugin:piecemaker-artifacts';
 const SHOW_EVENT = 'piecemaker:artifacts-show';
@@ -36,7 +39,11 @@ export function mount(container: HTMLElement, api: Host) {
 
   let context = api.context;
   let items: Summary[] = [];
-  let filter: 'all' | 'pinned' = 'all';
+  let filter: GalleryFilter = 'all';
+  let templates: TemplateItem[] = [];
+  let templateStatus: TemplateStatus | null = null;
+  let notice = '';
+  let syncing = false;
   let current: Detail | null = null;
   let shownVersion: number | null = null;
   let frame: HTMLIFrameElement | null = null;
@@ -56,6 +63,20 @@ export function mount(container: HTMLElement, api: Host) {
   async function loadList() {
     if (!project()) { items = []; return; }
     items = await call<Summary[]>(`artifacts?${query()}`);
+  }
+
+  async function loadTemplates() {
+    const [list, status] = await Promise.all([
+      call<TemplateItem[]>(`artifact-templates?${query()}`),
+      call<TemplateStatus>(`artifact-templates/status?${query()}`),
+    ]);
+    templates = list;
+    templateStatus = status;
+  }
+
+  async function loadGallery() {
+    if (filter === 'templates') await loadTemplates();
+    else await loadList();
   }
 
   async function open(id: string, version: number | null = null) {
@@ -111,6 +132,31 @@ export function mount(container: HTMLElement, api: Host) {
   };
   window.addEventListener('message', onMessage);
 
+  function templatesHtml() {
+    const status = templateStatus;
+    const cards = templates.map((template) => `
+      <article class="pma-card" data-template="${escape(template.name)}" tabindex="0" title="Copier le lien du template pour le donner à l’assistant">
+        <div class="pma-card-icon" aria-hidden="true">${ICONS[template.icon ?? ''] ?? '◫'}</div>
+        <div class="pma-card-body">
+          <h3>${escape(template.title)}</h3>
+          ${template.description ? `<p>${escape(template.description)}</p>` : ''}
+          <span class="pma-muted">${escape(template.name)} · ${escape(template.intent)} · ${template.source === 'repository' ? 'dépôt GitHub' : 'embarqué'}</span>
+        </div>
+      </article>`).join('');
+    const head = status?.head ? ` · ${escape(status.head.split(' ')[0] ?? '')}` : '';
+    const changes = status?.local_changes.length ? ` · ${status.local_changes.length} modification(s) locale(s)` : '';
+    const git = status ? `
+      <div class="pma-git">
+        <div class="pma-git-info">
+          <span><b>${status.cloned ? 'Dépôt GitHub connecté' : 'Dépôt non cloné'}</b> · ${escape(status.repository)} (${escape(status.branch)})</span>
+          <span class="pma-muted"${status.local_changes.length ? ` title="${escape(status.local_changes.join('\n'))}"` : ''}>${status.last_sync ? `dernière synchro ${escape(date(status.last_sync))}` : 'jamais synchronisé'}${head}${changes}</span>
+        </div>
+        <button data-sync${syncing ? ' disabled' : ''}>${syncing ? 'Synchronisation…' : 'Synchroniser'}</button>
+      </div>` : '';
+    return `${git}
+      ${templates.length ? `<div class="pma-grid">${cards}</div>` : '<p class="pma-empty">Aucun template. Synchronisez le dépôt GitHub pour charger la bibliothèque, les templates embarqués restent disponibles.</p>'}`;
+  }
+
   function galleryHtml() {
     const shown = filter === 'pinned' ? items.filter((item) => item.pinned) : items;
     const cards = shown.map((item) => `
@@ -123,16 +169,23 @@ export function mount(container: HTMLElement, api: Host) {
         </div>
         <button class="pma-pin${item.pinned ? ' on' : ''}" data-pin="${escape(item.id)}" title="${item.pinned ? 'Désépingler' : 'Épingler'}" aria-pressed="${item.pinned}">📌</button>
       </article>`).join('');
+    const body = filter === 'templates'
+      ? templatesHtml()
+      : !project() ? '<p class="pma-empty">Ouvrez un dossier.</p>'
+      : shown.length ? `<div class="pma-grid">${cards}</div>`
+      : `<p class="pma-empty">${filter === 'pinned' ? 'Aucun artifact épinglé.' : 'Aucun artifact. Demandez à l’assistant une page, un tableau de bord, un suivi ou une présentation : il la publie ici.'}</p>`;
     return `
       <header class="pma-bar">
         <h2>Artifacts</h2>
         <div class="pma-tabs" role="tablist">
-          <button role="tab" aria-selected="${filter === 'all'}" data-filter="all">Tous</button>
+          <button role="tab" aria-selected="${filter === 'all'}" data-filter="all">Artefacts</button>
           <button role="tab" aria-selected="${filter === 'pinned'}" data-filter="pinned">Épinglés</button>
+          <button role="tab" aria-selected="${filter === 'templates'}" data-filter="templates">Templates</button>
         </div>
       </header>
       ${error ? `<p class="pma-error">${escape(error)}</p>` : ''}
-      ${!project() ? '<p class="pma-empty">Ouvrez un dossier.</p>' : shown.length ? `<div class="pma-grid">${cards}</div>` : `<p class="pma-empty">${filter === 'pinned' ? 'Aucun artifact épinglé.' : 'Aucun artifact. Demandez à l’assistant une page, un tableau de bord, un suivi ou une présentation : il la publie ici.'}</p>`}`;
+      ${notice ? `<p class="pma-notice">${escape(notice)}</p>` : ''}
+      ${body}`;
   }
 
   function threadsHtml() {
@@ -198,6 +251,7 @@ export function mount(container: HTMLElement, api: Host) {
 
   const act = async (work: () => Promise<void>) => {
     error = '';
+    notice = '';
     try { await work(); } catch (failure) { error = (failure as Error).message; }
     serialized = '';
     parts.head = '';
@@ -218,9 +272,29 @@ export function mount(container: HTMLElement, api: Host) {
       });
       return;
     }
-    if (target.dataset.filter) { filter = target.dataset.filter as typeof filter; render(); return; }
+    if (target.dataset.filter) { filter = target.dataset.filter as GalleryFilter; void act(loadGallery); return; }
     if (target.dataset.open) { void act(() => open(target.dataset.open!)); return; }
-    if (target.hasAttribute('data-back')) { current = null; commentsOpen = false; void act(loadList).then(focus); return; }
+    if (target.hasAttribute('data-back')) { current = null; commentsOpen = false; void act(loadGallery).then(focus); return; }
+    if (target.dataset.template) {
+      const link = `piecemaker://template/${target.dataset.template}`;
+      const show = () => { notice = `Lien copié : ${link} — demandez à l’assistant de créer un artefact à partir de ce template.`; render(); };
+      void navigator.clipboard?.writeText(link).then(show, () => { notice = `Template à donner à l’assistant : ${link}`; render(); });
+      return;
+    }
+    if (target.hasAttribute('data-sync')) {
+      void (async () => {
+        syncing = true;
+        render();
+        await act(async () => {
+          await call(`artifact-templates/sync?${query()}`, {});
+          await loadTemplates();
+          notice = 'Dépôt synchronisé (aucune publication sur GitHub).';
+        });
+        syncing = false;
+        render();
+      })();
+      return;
+    }
     if (!current) return;
     const id = current.id;
     if (target.hasAttribute('data-comments')) { commentsOpen = !commentsOpen; render(); return; }
@@ -270,7 +344,11 @@ export function mount(container: HTMLElement, api: Host) {
   async function poll() {
     if (stopped || document.hidden) return;
     try {
-      if (!current) { await loadList(); render(); return; }
+      if (!current) {
+        if (filter === 'templates') templates = await call<TemplateItem[]>(`artifact-templates?${query()}`);
+        else await loadList();
+        render(); return;
+      }
       const fresh = await call<Detail>(`artifacts/${current.id}?${query()}`);
       const newVersion = fresh.version !== current.version;
       const newData = fresh.data_stamp > dataStamp;
@@ -281,7 +359,7 @@ export function mount(container: HTMLElement, api: Host) {
       if (newVersion && shownVersion === null) await loadFrame();
       else if (newData) postToFrame({ kind: 'data' });
     } catch {
-      if (current) { current = null; await loadList().catch(() => {}); render(); }
+      if (current) { current = null; await loadGallery().catch(() => {}); render(); }
     }
   }
   const timer = window.setInterval(() => void poll(), POLL_MS);
@@ -291,10 +369,10 @@ export function mount(container: HTMLElement, api: Host) {
     context = next;
     root.dataset.theme = next.theme;
     postToFrame({ kind: 'theme', theme: next.theme });
-    if (moved) { current = null; commentsOpen = false; void act(loadList).then(takeShow); }
+    if (moved) { current = null; commentsOpen = false; void act(loadGallery).then(takeShow); }
   });
 
-  void act(loadList).then(() => { takeShow(); focus(); });
+  void act(loadGallery).then(() => { takeShow(); focus(); });
 
   cleanups.set(container, () => {
     stopped = true;

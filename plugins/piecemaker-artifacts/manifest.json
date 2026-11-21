@@ -1,7 +1,7 @@
 {
   "name": "piecemaker-artifacts",
   "displayName": "Artifacts",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Pages publiées par l'assistant pour le dossier : galerie, versions, affichage isolé, base partagée et commentaires.",
   "icon": "icon.svg",
   "type": "module",

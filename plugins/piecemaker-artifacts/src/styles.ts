@@ -19,6 +19,11 @@ export const STYLES = `
 .pma-muted { color: var(--pma-muted); font-size: 12px; }
 .pma-empty, .pma-error { padding: 24px 16px; color: var(--pma-muted); }
 .pma-error { color: var(--pma-danger); padding: 8px 16px; margin: 0; }
+.pma-notice { padding: 8px 16px; margin: 0; color: var(--pma-accent); border-bottom: 1px solid var(--pma-line); font-size: 13px; }
+.pma-git { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 16px 0; padding: 10px 12px; background: var(--pma-card); border: 1px solid var(--pma-line); border-radius: 10px; }
+.pma-git-info { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 2px; font-size: 12px; overflow-wrap: anywhere; }
+.pma-git-info b { color: var(--pma-fg); }
+.pma-git + .pma-grid { padding-top: 12px; }
 .pma-view { flex: 1; display: grid; grid-template-columns: 1fr; min-height: 0; }
 .pma-view.with-comments { grid-template-columns: 1fr 300px; }
 .pma-view iframe { width: 100%; height: 100%; min-height: 480px; border: 0; background: #fff; }
