@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { z } from 'zod/v4';
@@ -872,7 +872,8 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
   function centralRoot() {
     if (!deps.centralRoot) return refuse(404, 'Agent central indisponible.');
     if (!centralKey) {
-      mkdirSync(deps.centralRoot, { recursive: true });
+      mkdirSync(path.join(deps.centralRoot, '.piecemaker'), { recursive: true });
+      writeFileSync(path.join(deps.centralRoot, '.piecemaker', 'agent-central'), '');
       centralKey = canonical(deps.centralRoot);
     }
     return centralKey;

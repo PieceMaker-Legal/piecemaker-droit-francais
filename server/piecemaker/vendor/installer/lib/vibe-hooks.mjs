@@ -15,6 +15,7 @@ export function vibeHooks(repoRoot) {
   const command = (script) => `node ${JSON.stringify(path.join(scripts, 'vibe-hook.mjs'))} ${JSON.stringify(script)}`;
   const plugin = (name) => command(path.join(scripts, name));
   return [
+    { name: 'piecemaker-cloisonnement', type: 'pre_tool', match: tools(`read_file|write_file|edit|search_replace|grep|${SHELL}`), command: plugin('cloisonnement.mjs'), strict: true, timeout: 30, description: 'Une session ne touche qu’à son propre dossier' },
     { name: 'piecemaker-protect-originals', type: 'pre_tool', match: tools(`read_file|grep|${SHELL}`), command: plugin('protect-originals.mjs'), strict: true, timeout: 30, description: 'Protection des pièces originales PieceMaker' },
     { name: 'piecemaker-guard-ontologie', type: 'pre_tool', match: tools(`read_file|write_file|edit|search_replace|grep|${SHELL}`), command: plugin('guard-ontologie.mjs'), strict: true, timeout: 30, description: 'Ontologie, arborescence et fiches OKF : proposition pour l’avocat' },
     { name: 'piecemaker-guard-legal-search', type: 'pre_tool', match: 're:.*legifrance.*Search_.*', command: plugin('guard-legal-search.mjs'), strict: true, timeout: 30, description: 'Recherches Légifrance réservées à research-maker' },

@@ -1,0 +1,54 @@
+const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const test = require('node:test');
+
+const hook = path.join(__dirname, 'cloisonnement.mjs');
+const repositoryRoot = path.resolve(__dirname, '../../../../..');
+fs.mkdirSync(path.join(repositoryRoot, '.tmp'), { recursive: true });
+const sandbox = fs.realpathSync(fs.mkdtempSync(path.join(repositoryRoot, '.tmp', 'cloisonnement-')));
+const home = path.join(sandbox, 'piecemaker-home');
+const dupont = path.join(sandbox, 'Dossier Dupont');
+const exemple = path.join(sandbox, 'Societe Exemple');
+const central = path.join(sandbox, 'PieceMaker Agent');
+const shared = path.join(central, '.piecemaker', 'orchestrateur', 'fichiers');
+for (const folder of [dupont, exemple, shared, home]) fs.mkdirSync(folder, { recursive: true });
+fs.writeFileSync(path.join(central, '.piecemaker', 'agent-central'), '');
+fs.writeFileSync(path.join(shared, 'modele.md'), 'modèle');
+fs.writeFileSync(path.join(exemple, 'contrat.md'), 'contrat fictif');
+fs.writeFileSync(path.join(home, 'projects.json'), JSON.stringify({ version: 1, sources: { test: [dupont, exemple, central] } }));
+test.after(() => fs.rmSync(sandbox, { recursive: true, force: true }));
+
+function decision(tool_name, tool_input, cwd = dupont) {
+  const output = execFileSync(process.execPath, [hook], {
+    input: JSON.stringify({ tool_name, tool_input, cwd, hook_event_name: 'PreToolUse' }),
+    env: { ...process.env, PIECEMAKER_HOME: home },
+    encoding: 'utf8',
+  });
+  return output.trim() ? JSON.parse(output).hookSpecificOutput.permissionDecision : 'allow';
+}
+
+test('une session de dossier ne lit ni n’écrit dans un autre dossier, quel que soit l’outil', () => {
+  assert.equal(decision('Read', { file_path: path.join(exemple, 'contrat.md') }), 'deny');
+  assert.equal(decision('Write', { file_path: path.join(exemple, 'nouveau.md'), content: 'x' }), 'deny');
+  assert.equal(decision('Grep', { pattern: 'x', path: exemple }), 'deny');
+  assert.equal(decision('Glob', { pattern: `${exemple}/**/*.md` }), 'deny');
+  assert.equal(decision('Bash', { command: 'cat ../"Societe Exemple"/contrat.md' }), 'deny');
+  assert.equal(decision('Bash', { command: ['bash', '-lc', `ls ${JSON.stringify(exemple)}`] }), 'deny');
+  assert.equal(decision('Bash', { command: `cp notes.md --target-directory=${JSON.stringify(exemple)}` }), 'deny');
+  assert.equal(decision('apply_patch', { command: `*** Begin Patch\n*** Add File: ${path.join(exemple, 'note.md')}\n+x\n*** End Patch` }), 'deny');
+});
+
+test('son propre dossier, les chemins hors dossiers et le dossier partagé de l’agent central restent ouverts', () => {
+  assert.equal(decision('Read', { file_path: path.join(dupont, 'notes.md') }), 'allow');
+  assert.equal(decision('Bash', { command: 'pandoc notes.md -o note.docx && ls ~/' }), 'allow');
+  assert.equal(decision('Read', { file_path: path.join(shared, 'modele.md') }), 'allow');
+  assert.equal(decision('Read', { file_path: path.join(central, '.piecemaker', 'orchestrateur', 'etat.json') }), 'deny');
+  assert.equal(decision('Read', { file_path: path.join(exemple, 'contrat.md') }, path.join(sandbox, 'ailleurs')), 'allow');
+});
+
+test('l’agent central ne lit pas lui-même les dossiers : il passe par un fil', () => {
+  assert.equal(decision('Read', { file_path: path.join(dupont, 'notes.md') }, central), 'deny');
+  assert.equal(decision('Read', { file_path: path.join(shared, 'modele.md') }, central), 'allow');
+});
