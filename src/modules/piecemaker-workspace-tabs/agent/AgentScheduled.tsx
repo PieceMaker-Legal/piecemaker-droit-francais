@@ -59,8 +59,8 @@ function ScheduledRow({ item, open, onToggle, act, onOpenArtifact }: { item: Sch
   return <li className="rounded-xl px-2 py-2 hover:bg-accent" data-scheduled={item.id}>
     <button type="button" aria-expanded={open} className="flex w-full items-center gap-3 text-left" onClick={() => { setConfirming(false); onToggle(); }}>
       <span className={`h-2 w-2 shrink-0 rounded-full ${inactive ? 'bg-zinc-500' : 'bg-blue-500'}`} />
-      <span className="min-w-0 flex-1 truncate text-[15px] text-foreground">{item.title}</span>
-      <span className="shrink-0 text-sm text-muted-foreground">{age(item.inactiveSince)}</span>
+      <span className="min-w-0 flex-1 truncate text-sm text-foreground">{item.title}</span>
+      <span className="shrink-0 text-xs text-muted-foreground">{age(item.inactiveSince)}</span>
     </button>
     {open && <div className="ml-5 mt-2 flex gap-3">
       {item.artifact && <button type="button" aria-label={`Ouvrir l’artéfact : ${item.artifact.title}`} onClick={() => onOpenArtifact(item.artifact!.ref)}
@@ -91,7 +91,7 @@ function ScheduledRow({ item, open, onToggle, act, onOpenArtifact }: { item: Sch
 export function AgentScheduled({ state, act, onOpenArtifact }: { state: AgentState; act: AgentActions; onOpenArtifact: (url: string) => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const items = scheduledItems(state);
-  if (!items.length) return <p className="px-4 py-8 text-center text-sm text-muted-foreground">Aucune tâche planifiée.</p>;
+  if (!items.length) return <p className="px-4 py-8 text-center text-xs text-muted-foreground">Aucune tâche planifiée.</p>;
   const groups: Array<[string, ScheduledItem[]]> = [['Actives', items.filter((item) => item.inactiveSince === null)], ['Inactif', items.filter((item) => item.inactiveSince !== null).sort((a, b) => b.inactiveSince!.localeCompare(a.inactiveSince!))]];
   return <div className="px-3 py-3">{groups.filter(([, list]) => list.length).map(([title, list]) => <Section key={title} title={title} count={list.length}>
     <ul className="-ml-6">{list.map((item) => <ScheduledRow key={item.id} item={item} open={openId === item.id} onToggle={() => setOpenId(openId === item.id ? null : item.id)} act={act} onOpenArtifact={onOpenArtifact} />)}</ul>

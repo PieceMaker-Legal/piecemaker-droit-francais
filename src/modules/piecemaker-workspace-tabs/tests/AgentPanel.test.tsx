@@ -72,7 +72,7 @@ afterEach(() => {
 it('liste les fils, les décisions à traiter et ouvre un fil comme une session CloudCLI', async () => {
   render(<MemoryRouter><AgentPanel projectPath={PROJECT} /><Location /></MemoryRouter>);
   expect((await screen.findAllByText('Rédiger la note de synthèse')).length).toBe(2);
-  expect(screen.getByText('Fils de discussion')).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
   expect(screen.getByText('À traiter')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Plan long/ }));
   await act(async () => undefined);
@@ -95,13 +95,13 @@ function Harness({ sessionId }: { sessionId: string }) {
 it('ouvre le volet de l’agent par défaut dans sa session et le replie depuis la barre du haut', async () => {
   calls.agentSession = 'agent-1';
   render(<Harness sessionId="agent-1" />);
-  expect(await screen.findByText('Fils de discussion')).toBeTruthy();
+  expect(await screen.findByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
   const toggle = screen.getByRole('tab', { name: 'tabs.agent' });
   expect(toggle.getAttribute('aria-selected')).toBe('true');
   fireEvent.click(toggle);
-  expect(screen.queryByText('Fils de discussion')).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Fils de discussion' })).toBeNull();
   fireEvent.click(screen.getByRole('tab', { name: 'tabs.agent' }));
-  expect(await screen.findByText('Fils de discussion')).toBeTruthy();
+  expect(await screen.findByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
 });
 
 it('n’affiche ni le volet ni le bouton dans une session ordinaire', async () => {
@@ -109,7 +109,7 @@ it('n’affiche ni le volet ni le bouton dans une session ordinaire', async () =
   render(<Harness sessionId="autre" />);
   await act(async () => undefined);
   expect(screen.queryByRole('tab', { name: 'tabs.agent' })).toBeNull();
-  expect(screen.queryByText('Fils de discussion')).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Fils de discussion' })).toBeNull();
 });
 
 it('réunit les instructions et les réglages et permet d’arrêter chaque type de tâche', async () => {

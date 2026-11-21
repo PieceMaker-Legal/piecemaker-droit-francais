@@ -15,7 +15,7 @@ import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/use
 
 type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled';
 
-const TABS: Array<[AgentPanelTab, string]> = [['threads', 'Fils de discussion'], ['context', 'Contexte'], ['scheduled', 'Tâches planifiées']];
+const TABS: Array<[AgentPanelTab, string, string]> = [['threads', 'Fils', 'Fils de discussion'], ['context', 'Contexte', 'Contexte'], ['scheduled', 'Planifiées', 'Tâches planifiées']];
 const PROVIDERS: AgentProvider[] = ['claude', 'codex', 'mistral'];
 const VIEW_KEY = 'pm-agent-view';
 const inputClass = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring';
@@ -24,8 +24,8 @@ const buttonClass = 'rounded-lg bg-muted px-3 py-1.5 text-sm text-foreground hov
 function Row({ icon, title, detail, trailing, onClick }: { icon: ReactNode; title: string; detail?: string; trailing?: ReactNode; onClick?: () => void }) {
   const content = <>
     <span className="shrink-0 text-muted-foreground">{icon}</span>
-    <span className="min-w-0 flex-1 truncate text-[15px] text-foreground">{title}{detail && <span className="ml-2 text-sm text-muted-foreground">{detail}</span>}</span>
-    {trailing && <span className="shrink-0 text-sm text-muted-foreground">{trailing}</span>}
+    <span className="min-w-0 flex-1 truncate text-sm text-foreground">{title}{detail && <span className="ml-2 text-xs text-muted-foreground">{detail}</span>}</span>
+    {trailing && <span className="shrink-0 text-xs text-muted-foreground">{trailing}</span>}
   </>;
   return onClick
     ? <button type="button" className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent" onClick={onClick}>{content}</button>
@@ -48,7 +48,7 @@ function Threads({ state, act, query, filter }: { state: AgentState; act: AgentA
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return <>
     {pending > 0 && <div className="px-3 pt-3"><Section title="À traiter" count={pending}><AgentCards state={state} act={act} /></Section></div>}
-    {!threads.length ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">{state.threads.length ? 'Aucun fil ne correspond.' : 'Aucun fil pour l’instant. Les tâches confiées par l’agent apparaîtront ici.'}</p>
+    {!threads.length ? <p className="px-4 py-8 text-center text-xs text-muted-foreground">{state.threads.length ? 'Aucun fil ne correspond.' : 'Aucun fil pour l’instant. Les tâches confiées par l’agent apparaîtront ici.'}</p>
       : <ul className="px-2 py-2">{threads.map((thread) => {
     const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
     const active = ACTIVE_THREAD_STATES.includes(thread.state);
@@ -56,10 +56,10 @@ function Threads({ state, act, query, filter }: { state: AgentState; act: AgentA
       <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && navigate(`/session/${thread.sessionId}`)}>
         <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] text-foreground">{thread.title}</span>
-          <span className="block truncate text-sm text-muted-foreground">{THREAD_STATE_LABELS[thread.state]} · {PROVIDER_LABELS[thread.provider]}{thread.replies.at(-1) ? ` · ${thread.replies.at(-1)!.text}` : ''}</span>
+          <span className="block truncate text-sm text-foreground">{thread.title}</span>
+          <span className="block truncate text-xs text-muted-foreground">{THREAD_STATE_LABELS[thread.state]} · {PROVIDER_LABELS[thread.provider]}{thread.replies.at(-1) ? ` · ${thread.replies.at(-1)!.text}` : ''}</span>
         </span>
-        <span className="shrink-0 text-sm text-muted-foreground">{age(thread.updatedAt)}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">{age(thread.updatedAt)}</span>
       </button>
       <div className="ml-5 mt-1 hidden gap-2 group-hover:flex">
         <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/resolve', { threadId: thread.id, resolved: !thread.resolved })}>{thread.resolved ? 'Rouvrir' : 'Résoudre'}</button>
@@ -85,12 +85,12 @@ function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: Ag
   }
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-      <div className="px-2 pb-2"><select aria-label="Visibilité" className="rounded-lg bg-transparent text-[15px] text-foreground" defaultValue="me"><option value="me">Vous uniquement</option></select></div>
+      <div className="px-2 pb-2"><select aria-label="Visibilité" className="rounded-lg bg-transparent text-sm text-foreground" defaultValue="me"><option value="me">Vous uniquement</option></select></div>
       <Section title="Instructions" count={state.settings.instructions.trim() ? 1 : 0}>
         <Row icon={<NotebookPen className="h-4 w-4" />} title="Instructions du projet" detail={state.settings.instructions.trim() || 'Aucune pour l’instant'} onClick={() => onTab('settings')} />
       </Section>
       <Section title="Mémoire" count={memoryLines} initiallyOpen={false}>
-        {memoryLines ? <p className="whitespace-pre-wrap px-2 text-sm text-foreground/80">{state.memory.text}</p> : <p className="px-2 text-sm text-muted-foreground">La mémoire du projet est vide.</p>}
+        {memoryLines ? <p className="whitespace-pre-wrap px-2 text-sm text-foreground/80">{state.memory.text}</p> : <p className="px-2 text-xs text-muted-foreground">La mémoire du projet est vide.</p>}
       </Section>
       <Section title="Fichiers" count={folders.length + state.files.length} action={<>
         <button type="button" aria-label="Ajouter un fichier" className="rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => fileRef.current?.click()}><Plus className="h-4 w-4" /></button>
@@ -102,20 +102,20 @@ function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: Ag
       <Section title="Artéfacts" count={state.artifacts.length}>
         {state.artifacts.length ? state.artifacts.map((artifact) => <button key={artifact.url} type="button" onClick={() => onOpenArtifact(artifact.url)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-accent">
           <span className="h-9 w-12 shrink-0 rounded-md border border-border bg-gradient-to-br from-muted to-muted/30" />
-          <span className="min-w-0 flex-1 truncate text-[15px] text-foreground">{artifact.title}</span>
+          <span className="min-w-0 flex-1 truncate text-sm text-foreground">{artifact.title}</span>
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-foreground">V</span>
-          <span className="w-10 shrink-0 text-right text-sm text-muted-foreground">{age(artifact.updated_at)}</span>
-        </button>) : <p className="px-2 text-sm text-muted-foreground">Aucun artéfact.</p>}
+          <span className="w-10 shrink-0 text-right text-xs text-muted-foreground">{age(artifact.updated_at)}</span>
+        </button>) : <p className="px-2 text-xs text-muted-foreground">Aucun artéfact.</p>}
       </Section>
       <Section title="Livrables" count={state.deliverables.length} initiallyOpen={state.deliverables.length > 0}>
         {state.deliverables.length ? state.deliverables.map((deliverable) => <div key={deliverable.id} className="flex items-center gap-3 px-2 py-2">
-          <File className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate text-[15px] text-foreground">{deliverable.title}</span><DeliverableState deliverable={deliverable} act={act} />
-        </div>) : <p className="px-2 text-sm text-muted-foreground">Aucun livrable.</p>}
+          <File className="h-4 w-4 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate text-sm text-foreground">{deliverable.title}</span><DeliverableState deliverable={deliverable} act={act} />
+        </div>) : <p className="px-2 text-xs text-muted-foreground">Aucun livrable.</p>}
       </Section>
     </div>
     <footer className="shrink-0 border-t border-border px-5 py-3">
       <div className="h-1 rounded-full bg-muted"><div className="h-1 rounded-full bg-blue-500" style={{ width: `${Math.max(1, Math.min(100, state.storage.total ? state.storage.used / state.storage.total * 100 : 0))}%` }} /></div>
-      <p className="mt-2 text-sm text-muted-foreground">{bytes(state.storage.used)} sur {bytes(state.storage.total)} utilisés</p>
+      <p className="mt-2 text-xs text-muted-foreground">{bytes(state.storage.used)} sur {bytes(state.storage.total)} utilisés</p>
     </footer>
   </div>;
 }
@@ -127,14 +127,14 @@ function Instructions({ state, act }: { state: AgentState; act: AgentActions }) 
   useEffect(() => setMemory(state.memory.text), [state.memory.revision, state.memory.text]);
   return <div className="space-y-6 overflow-y-auto px-5 py-4">
     <label className="block">
-      <span className="text-[15px] text-foreground">Instructions du projet</span>
-      <span className="mt-1 block text-sm text-muted-foreground">Consignes permanentes données à l’agent au début de chaque conversation.</span>
+      <span className="text-sm text-foreground">Instructions du projet</span>
+      <span className="mt-1 block text-xs text-muted-foreground">Consignes permanentes données à l’agent au début de chaque conversation.</span>
       <textarea rows={10} value={instructions} onChange={(event) => setInstructions(event.target.value)} className={`${inputClass} mt-2`} placeholder="Aucune pour l’instant" />
     </label>
     <button type="button" className={buttonClass} disabled={instructions === state.settings.instructions} onClick={() => void act('settings', { instructions }, 'PUT')}>Enregistrer les instructions</button>
     <label className="block">
-      <span className="text-[15px] text-foreground">Mémoire du projet</span>
-      <span className="mt-1 block text-sm text-muted-foreground">Ce que l’agent garde d’une conversation à l’autre. Révision {state.memory.revision}.</span>
+      <span className="text-sm text-foreground">Mémoire du projet</span>
+      <span className="mt-1 block text-xs text-muted-foreground">Ce que l’agent garde d’une conversation à l’autre. Révision {state.memory.revision}.</span>
       <textarea rows={10} value={memory} onChange={(event) => setMemory(event.target.value)} className={`${inputClass} mt-2`} />
     </label>
     <button type="button" className={buttonClass} disabled={memory === state.memory.text} onClick={() => void act('memory', { text: memory, revision: state.memory.revision }, 'PUT')}>Enregistrer la mémoire</button>
@@ -150,14 +150,14 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
     {PROVIDER_LABELS[value]}{value !== 'auto' && !connected.has(value as AgentProvider) ? ' (non connecté)' : ''}</option>);
   return <div className="space-y-5 overflow-y-auto px-5 py-4 text-sm">
     <fieldset className="space-y-2">
-      <legend className="text-[15px] text-foreground">Agent</legend>
+      <legend className="text-sm text-foreground">Agent</legend>
       <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={settings.orchestratorProvider} onChange={(event) => save({ orchestratorProvider: event.target.value as AgentSettings['orchestratorProvider'] })}>{providerOptions}</select></label>
       <label className="block text-muted-foreground">Modèle initial (vide = modèle par défaut)<input className={`${inputClass} mt-1`} defaultValue={settings.orchestratorModel} onBlur={(event) => event.target.value !== settings.orchestratorModel && save({ orchestratorModel: event.target.value })} /></label>
       <label className="block text-muted-foreground">Recycler la conversation après (tours)<input type="number" min={1} className={`${inputClass} mt-1`} defaultValue={settings.recycleAfter} onBlur={(event) => Number(event.target.value) > 0 && save({ recycleAfter: Number(event.target.value) })} /></label>
       <button type="button" className={buttonClass} onClick={() => void act('recycle')}>Recycler l’orchestrateur maintenant</button>
     </fieldset>
     <fieldset className="space-y-2">
-      <legend className="text-[15px] text-foreground">Fils de discussion</legend>
+      <legend className="text-sm text-foreground">Fils de discussion</legend>
       <label className="block text-muted-foreground">Fournisseur par défaut<select className={`${inputClass} mt-1`} value={settings.defaultProvider} onChange={(event) => save({ defaultProvider: event.target.value as AgentSettings['defaultProvider'] })}>{providerOptions}</select></label>
       {PROVIDERS.map((provider) => <div key={provider} className="grid grid-cols-[1fr_6rem] gap-2">
         <label className="block text-muted-foreground">Modèle {PROVIDER_LABELS[provider]}<input className={`${inputClass} mt-1`} disabled={!connected.has(provider)} defaultValue={settings.defaultModels[provider] ?? ''}
@@ -167,7 +167,7 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
       </div>)}
     </fieldset>
     <fieldset className="space-y-2">
-      <legend className="text-[15px] text-foreground">Dossiers autorisés</legend>
+      <legend className="text-sm text-foreground">Dossiers autorisés</legend>
       {settings.folders.length ? settings.folders.map((item) => <div key={item} className="flex items-center gap-2 text-foreground/80">
         <span className="min-w-0 flex-1 truncate">{item}</span>
         <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => save({ folders: settings.folders.filter((entry) => entry !== item) })}>Retirer</button>
@@ -201,21 +201,21 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
   const onOpenArtifact = (url: string) => openAgentOutput(projectPath, { kind: 'artifact', ref: url });
 
   return <div className="pm-agent-panel flex h-full min-w-0 flex-col text-foreground" aria-label="Volet de l’agent">
-    <header className="relative flex h-12 shrink-0 items-center gap-1 border-b border-border px-3">
+    <header className="relative flex h-10 shrink-0 flex-nowrap items-center gap-0.5 overflow-hidden whitespace-nowrap border-b border-border px-2">
       <nav role="tablist" className="flex min-w-0 items-center gap-1 overflow-x-auto">
-        {TABS.map(([value, label]) => <button key={value} role="tab" type="button" aria-selected={tab === value} onClick={() => onTab(value)}
-          className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-1.5 text-[15px] ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
+        {TABS.map(([value, label, name]) => <button key={value} role="tab" type="button" aria-label={name} title={name} aria-selected={tab === value} onClick={() => onTab(value)}
+          className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-sm ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
           {label}{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
         </button>)}
       </nav>
-      <button type="button" aria-label="Ajouter" aria-haspopup="menu" aria-expanded={menu === 'plus'} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => setMenu(menu === 'plus' ? null : 'plus')}><Plus className="h-[18px] w-[18px]" /></button>
+      <button type="button" aria-label="Ajouter" aria-haspopup="menu" aria-expanded={menu === 'plus'} className="shrink-0 rounded-lg p-1.5 text-foreground/80 hover:bg-accent" onClick={() => setMenu(menu === 'plus' ? null : 'plus')}><Plus className="h-4 w-4" /></button>
       {menu === 'plus' && <div role="menu" className="absolute right-12 top-11 z-20 w-56 rounded-xl border border-border bg-popover p-1 shadow-xl">
-        <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-[15px] hover:bg-accent" onClick={customView}>Vue personnalisée</button>
+        <button role="menuitem" type="button" className="block w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-accent" onClick={customView}>Vue personnalisée</button>
       </div>}
-      <button type="button" aria-label="Paramètres" title="Paramètres" aria-pressed={tab === 'settings'} className="shrink-0 rounded-lg p-2 hover:bg-accent" onClick={() => { setMenu(null); onTab('settings'); }}><SettingsIcon className="h-[18px] w-[18px]" /></button>
+      <button type="button" aria-label="Paramètres" title="Paramètres" aria-pressed={tab === 'settings'} className="shrink-0 rounded-lg p-1.5 hover:bg-accent" onClick={() => { setMenu(null); onTab('settings'); }}><SettingsIcon className="h-4 w-4" /></button>
       <span className="flex-1" />
-      <button type="button" aria-label="Rechercher" aria-pressed={searching} className="shrink-0 rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => { setSearching(!searching); onTab('threads'); }}><Search className="h-[18px] w-[18px]" /></button>
-      <button type="button" aria-label="Filtrer" aria-expanded={menu === 'filter'} className={`shrink-0 rounded-lg p-2 hover:bg-accent ${filter !== 'all' ? 'text-blue-500' : 'text-foreground/80'}`} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}><Filter className="h-[18px] w-[18px]" /></button>
+      <button type="button" aria-label="Rechercher" aria-pressed={searching} className="shrink-0 rounded-lg p-1.5 text-foreground/80 hover:bg-accent" onClick={() => { setSearching(!searching); onTab('threads'); }}><Search className="h-4 w-4" /></button>
+      <button type="button" aria-label="Filtrer" aria-expanded={menu === 'filter'} className={`shrink-0 rounded-lg p-1.5 hover:bg-accent ${filter !== 'all' ? 'text-blue-500' : 'text-foreground/80'}`} onClick={() => setMenu(menu === 'filter' ? null : 'filter')}><Filter className="h-4 w-4" /></button>
       {menu === 'filter' && <div role="menu" className="absolute right-2 top-11 z-20 w-48 rounded-xl border border-border bg-popover p-1 shadow-xl">
         {(['all', ...Object.keys(THREAD_STATE_LABELS)] as Array<AgentThreadState | 'all'>).map((value) => <button key={value} role="menuitemradio" aria-checked={filter === value} type="button"
           className="block w-full rounded-lg px-3 py-1.5 text-left text-sm hover:bg-accent" onClick={() => { setFilter(value); setMenu(null); onTab('threads'); }}>{value === 'all' ? 'Tous les états' : THREAD_STATE_LABELS[value]}</button>)}
