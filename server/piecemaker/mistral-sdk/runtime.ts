@@ -6,12 +6,12 @@ import { randomUUID } from 'node:crypto';
 import type { ChatCompletionRequest, ContentChunk, ToolCall } from '@mistralai/mistralai/models/components';
 
 import type { IProvider, IProviderFork, IProviderRuntime } from '@/shared/interfaces.js';
-import type { AnyRecord, NormalizedMessage, ProviderPermissionDecision, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
+import type { AnyRecord, NormalizedMessage, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
 import { appendFilesInputTag } from '@/shared/index.js';
 import { AppError, buildDefaultProviderCurrentActiveModel, createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
 
 import { mistralSdkAuth } from './auth.service.js';
-import { createMistralHistory } from './history.js';
+import { createMistralHistory, type MistralTokenUsage } from './history.js';
 import { delegateSubagents, mistralModelId } from './subagents.js';
 import { createMistralTools } from './tools.js';
 
@@ -51,6 +51,48 @@ function describeMistralError(error: unknown): string {
   return `Your Mistral credit or budget is exhausted (HTTP 402)${detail ? `: ${detail}` : '.'} Top up your Mistral account, then send the message again.`;
 }
 
+const MISTRAL_DEFAULT_CONTEXT_WINDOW = 128_000;
+const contextWindows = new Map<string, Promise<number>>();
+
+type MistralClient = ReturnType<typeof mistralSdkAuth.createClient>['client'];
+
+function mistralContextWindow(client: MistralClient, model: string): Promise<number> {
+  const known = contextWindows.get(model);
+  if (known) return known;
+  const lookup = Promise.resolve().then(() => client.models.retrieve({ modelId: model }))
+    .then(card => {
+      const window = Number((card as { maxContextLength?: unknown }).maxContextLength);
+      return Number.isFinite(window) && window > 0 ? window : MISTRAL_DEFAULT_CONTEXT_WINDOW;
+    })
+    .catch(() => {
+      contextWindows.delete(model);
+      return MISTRAL_DEFAULT_CONTEXT_WINDOW;
+    });
+  contextWindows.set(model, lookup);
+  return lookup;
+}
+
+export function mistralTokenBudget(usage: { promptTokens?: number; completionTokens?: number }, total: number): MistralTokenUsage {
+  const inputTokens = Number(usage.promptTokens) || 0;
+  const outputTokens = Number(usage.completionTokens) || 0;
+  return { used: inputTokens + outputTokens, total, inputTokens, outputTokens, breakdown: { input: inputTokens, output: outputTokens } };
+}
+
+export function installMistralTokenUsage(
+  service: { getSessionTokenUsage(sessionId: string, currentContextOnly?: boolean): Promise<unknown> },
+  session: (sessionId: string) => { provider: string; provider_session_id?: string | null } | null | undefined,
+  history: ReturnType<typeof createMistralHistory>,
+) {
+  const read = service.getSessionTokenUsage.bind(service);
+  service.getSessionTokenUsage = async (sessionId, currentContextOnly) => {
+    const row = session(sessionId);
+    if (row?.provider !== 'mistral') return read(sessionId, currentContextOnly);
+    const record = await history.load(row.provider_session_id || sessionId);
+    if (!record) return read(sessionId, currentContextOnly);
+    return record.tokenUsage ?? mistralTokenBudget({}, MISTRAL_DEFAULT_CONTEXT_WINDOW);
+  };
+}
+
 export function installMistralSdk(provider: IProvider, home: string) {
   const models = {
     OPTIONS: [
@@ -72,7 +114,7 @@ export function installMistralSdk(provider: IProvider, home: string) {
     const { offset = 0, limit = null } = options;
     const end = Math.max(0, record.transcript.length - offset);
     const start = limit === null ? 0 : Math.max(0, end - limit);
-    return { messages: record.transcript.slice(start, end).map(message => ({ ...message, sessionId })), total: record.transcript.length, hasMore: start > 0, offset, limit };
+    return { messages: record.transcript.slice(start, end).map(message => ({ ...message, sessionId })), total: record.transcript.length, hasMore: start > 0, offset, limit, ...(record.tokenUsage ? { tokenUsage: record.tokenUsage } : {}) };
   };
   const runtime = createMistralSdkRuntime(history, async id => (await legacyHistory(id)).messages, home);
   Object.assign(provider, { runtime, fork: createMistralSdkFork(history) });
@@ -98,16 +140,7 @@ export function createMistralSdkRuntime(
   loadTools = createMistralTools,
 ): IProviderRuntime {
   const active = new Map<string, { controller: AbortController; finished: Promise<void> }>();
-  const pending = new Map<string, { sessionId: string; toolName: string; input: unknown; resolve(decision: ProviderPermissionDecision): void }>();
   return {
-    permissions: {
-      resolve(requestId, decision) { pending.get(requestId)?.resolve(decision); },
-      listPending(sessionId) {
-        return [...pending].filter(([, request]) => request.sessionId === sessionId).map(([requestId, request]) => ({
-          requestId, _sessionId: sessionId, _toolName: request.toolName, _input: request.input, _receivedAt: new Date(),
-        }));
-      },
-    },
     async abort(sessionId) {
       const run = active.get(sessionId);
       if (!run) return false;
@@ -138,31 +171,14 @@ export function createMistralSdkRuntime(
         writer.send(message);
         return message;
       };
-      const save = () => history.save(nativeId, { userId, messages, transcript });
-      const approve = (toolName: string, input: unknown) => new Promise<ProviderPermissionDecision>(resolve => {
-        const requestId = randomUUID();
-        let done = false;
-        const finish = (decision: ProviderPermissionDecision) => {
-          if (done) return;
-          done = true;
-          pending.delete(requestId);
-          signal.removeEventListener('abort', cancel);
-          resolve(decision);
-        };
-        const cancel = () => {
-          emit({ kind: 'permission_cancelled', requestId, reason: 'aborted' });
-          finish({ allow: false, message: 'Demande annulée.' });
-        };
-        pending.set(requestId, { sessionId, toolName, input, resolve: finish });
-        signal.addEventListener('abort', cancel, { once: true });
-        emit({ kind: 'permission_request', requestId, toolName, input });
-        if (signal.aborted) cancel();
-      });
+      let tokenUsage: MistralTokenUsage | undefined;
+      const save = () => history.save(nativeId, { userId, messages, transcript, ...(tokenUsage ? { tokenUsage } : {}) });
       try {
         record = await history.load(nativeId);
         if (record && record.userId !== userId) throw new Error('Cette conversation appartient à un autre utilisateur.');
         transcript.push(...(record?.transcript ?? []));
         messages.push(...(record?.messages ?? []));
+        tokenUsage = record?.tokenUsage;
         connection = authenticate(userId);
         writer.setSessionId?.(nativeId);
         if (!context.resolveProviderSessionId(options.sessionId)) emit({ kind: 'session_created', newSessionId: nativeId });
@@ -175,10 +191,7 @@ export function createMistralSdkRuntime(
         const planning = options.permissionMode === 'plan' || /^\/plan(?:\s|$)/.test(command.trim());
         const authorize = async (tool: { name: string; readOnly: boolean }, input: Record<string, unknown>) => {
           if (planning && !tool.readOnly) throw new Error('Outil indisponible dans ce mode.');
-          if (tool.readOnly || options.permissionMode === 'bypassPermissions' || (options.permissionMode === 'acceptEdits' && ['Write', 'Edit'].includes(tool.name))) return input;
-          const decision = await approve(tool.name, input);
-          if (!decision.allow) throw new Error(decision.message || 'Autorisation refusée.');
-          return decision.updatedInput ? decision.updatedInput as Record<string, unknown> : input;
+          return input;
         };
         toolbox = delegateSubagents(await loadTools(cwd, options.libraryDisabledSkills, signal), { cwd, client: connection.client, fallbackModel: 'mistral-small-latest', signal, authorize });
         const instructions: string[] = [
@@ -216,9 +229,11 @@ export function createMistralSdkRuntime(
           const chunks: ContentChunk[] = [];
           let thinking = '';
           let content = '';
+          let usage: { promptTokens?: number; completionTokens?: number } | undefined;
           try {
             for await (const event of response) {
               signal.throwIfAborted();
+              if (event.data.usage) usage = event.data.usage;
               const delta = event.data.choices[0]?.delta;
               const text = typeof delta?.content === 'string' ? delta.content : delta?.content?.filter(chunk => chunk.type === 'text').map(chunk => chunk.type === 'text' ? chunk.text : '').join('') || '';
               if (text) { content += text; emit({ id: textId, kind: 'stream_delta', content: text }); }
@@ -248,6 +263,10 @@ export function createMistralSdkRuntime(
             }
           } catch (error) {
             if (!signal.aborted) throw error;
+          }
+          if (usage) {
+            tokenUsage = mistralTokenBudget(usage, await mistralContextWindow(connection.client, model));
+            emit({ kind: 'status', text: 'token_budget', tokenBudget: tokenUsage });
           }
           if (thinking) transcript.push(createNormalizedMessage({ id: thinkingId, provider: 'mistral', sessionId: nativeId, kind: 'thinking', content: thinking, model }));
           if (content) {

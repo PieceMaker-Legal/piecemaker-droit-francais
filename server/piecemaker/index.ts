@@ -26,6 +26,7 @@ import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
 import { installCodexPlanRuntime } from './codex-plan.js';
 import { installOrchestratorRuntime } from './orchestrator-runtime.js';
 import { installCodexEventsRuntime } from './codex-events.js';
+import { createProviderLimits, createProviderLimitsRouter } from './provider-limits.js';
 import { createHermesRouter } from './hermes/routes.js';
 import { installHermesPieceMaker } from './hermes/runtime.js';
 import { createCitationStore } from './harness/citation-store.js';
@@ -62,13 +63,14 @@ import { installModelDiscovery } from './model-discovery/index.js';
 import { discoverCodexModels } from './model-discovery/codex-catalog.js';
 import { startProjectRegistry } from './project-registry.js';
 import { createFolderHistory } from './folder-history/history.js';
+import { createQuotaHandoffRouter } from './quota-handoff.js';
 import { createOpenPanelRequestsRouter, createOpenPanelsRouter } from './open-panels.js';
 import { startRemoteAccess } from './remote/index.js';
 import { createTelegramRouter } from './telegram/index.js';
 import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
 import { createOrchestratorProviderStatuses } from './orchestrator-providers.js';
 import { mistralSdkAuth } from './mistral-sdk/auth.service.js';
-import { createMistralSdkAuthRouter, createMistralTabularBridge, installMistralSdk } from './mistral-sdk/index.js';
+import { createMistralHistory, createMistralSdkAuthRouter, createMistralTabularBridge, installMistralSdk, installMistralTokenUsage } from './mistral-sdk/index.js';
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
@@ -156,6 +158,8 @@ const brain = createBrain({
   skills: path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'brain', 'skills'),
 });
 try { brain.ensureConfigured(); } catch (error) { console.warn('[piecemaker] Brain :', error); }
+const providerStatuses = createOrchestratorProviderStatuses(providerAuthService.getProviderAuthStatus, mistralSdkAuth.status);
+const providerLimits = createProviderLimits({ connected: providerStatuses });
 const orchestrator = createOrchestratorService({
   centralRoot: brain.root,
   prepareCentral: brain.prepare,
@@ -173,7 +177,6 @@ const orchestrator = createOrchestratorService({
   },
   now: () => new Date(),
   contextRatio: async (sessionId, provider) => {
-    if (provider === 'mistral') return null;
     const usage = await providerTokenUsageService.getSessionTokenUsage(sessionId, true);
     return usage.total && usage.total > 0 ? usage.used / usage.total : null;
   },
@@ -183,7 +186,7 @@ const orchestrator = createOrchestratorService({
     void broadcastSessionUpserted(sessionId);
   },
   sessionModel: sessionId => sessionsDb.getSessionById(sessionId)?.model ?? null,
-  providers: createOrchestratorProviderStatuses(providerAuthService.getProviderAuthStatus, mistralSdkAuth.status),
+  providers: providerStatuses,
   permissions: async (provider, userId) => {
     const { allowedTools, disallowedTools } = toolPreferences(provider, userId);
     return {
@@ -261,6 +264,7 @@ installCodexPlanRuntime(providerRuntimeService);
 installCodexEventsRuntime(providerRuntimeService, sessionsService);
 const hermes = installHermesPieceMaker(providerRuntimeService, applicationRoot);
 installMistralSdk(providerRegistry.resolveProvider('mistral'), piecemakerHome());
+installMistralTokenUsage(providerTokenUsageService, sessionId => sessionsDb.getSessionById(sessionId), createMistralHistory(piecemakerHome()));
 installChatCitationHarness({ runtime: providerRuntimeService, sessions: sessionsService, store: citations, ensureProxy, folderHistory, pieceTitle: createPieceTitleResolver(getConnection) });
 installLegalCodeHarness({ runtime: providerRuntimeService, sessions: sessionsService, applicationRoot });
 const library = await openLibrary(piecemakerHome(), applicationRoot, () => projectsDb.getProjectPaths().map((row) => row.project_path));
@@ -340,14 +344,33 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(createDocxDocumentRouter());
   router.use(createDocxReviewRouter(projectsDb));
   router.use(createFeatureCommentsRouter(projectsDb));
-  router.use(createArtifactsRouter(projectsDb));
+  router.use(createArtifactsRouter(projectsDb, {
+    getSessionById: (id) => sessionsDb.getSessionById(id),
+    listProjectSessions: (root) => sessionsDb.getSessionsByProjectPathIncludingArchived(root, false),
+    fetchHistory: (id) => sessionsService.fetchHistory(id),
+  }));
   router.use(createFileLinksRouter());
   router.use(createInstitutionalTermsRouter(institutionalTerms));
   router.use(createAgentInstructionsRouter(path.join(piecemakerHome(), 'CLAUDE.md')));
   router.use(createShellEnvironmentRouter(shellEnvironment));
   router.use(createOpenPanelsRouter(piecemakerHome()));
+  router.use(createQuotaHandoffRouter({
+    source: (sessionId) => {
+      const session = sessionsDb.getSessionById(sessionId);
+      return session?.project_path ? { provider: session.provider, projectPath: session.project_path } : null;
+    },
+    history: async (sessionId) => (await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 })).messages.flatMap(({ kind, role, content, parentToolUseId }) =>
+      kind === 'text' && (role === 'user' || role === 'assistant') && typeof content === 'string' && !parentToolUseId ? [{ role, text: content }] : []),
+    openSession: (provider, projectPath, title) => sessionsService.createAppSession(provider, projectPath, title).sessionId,
+    runTurn: ({ sessionId, userId, content, displayContent, provider, model, permissionMode }) => {
+      const toolsSettings = toolPreferences(provider as RunnableProvider, userId);
+      return runDetachedChatTurn({ sessionId, userId, content, displayContent, options: { model, permissionMode, toolsSettings: { ...toolsSettings, permissionMode }, skipPermissions: permissionMode === 'bypassPermissions' } }, { runtime: providerRuntimeService });
+    },
+    announce: (sessionId) => { void broadcastSessionUpserted(sessionId); },
+  }));
   router.use(remoteRouter);
   router.use(createMistralSdkAuthRouter());
+  router.use(createProviderLimitsRouter(providerLimits));
   return router;
 }
 export type { PieceMakerRuntimeStatus };

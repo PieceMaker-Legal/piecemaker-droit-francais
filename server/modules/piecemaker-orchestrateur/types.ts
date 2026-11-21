@@ -118,6 +118,7 @@ export type Schedule = {
   cron: string | null;
   thread: { title: string; instructions: string; provider: ProviderChoice; folder?: string } | null;
   lastFiredAt: string | null;
+  stoppedAt?: string | null;
   createdAt: string;
 };
 

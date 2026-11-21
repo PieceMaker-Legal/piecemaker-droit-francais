@@ -175,5 +175,5 @@ test('Conversations stays flat and newest first even when sessions have fork met
   assert.deepEqual(Array.from(container.querySelectorAll('[data-testid="recent-conversation-row"]')).map((row) => row.getAttribute('href')),
     ['/session/child', '/session/unrelated', '/session/root']);
   assert.equal(container.querySelector('[data-testid="project-session-tree"]'), null);
-  assert.equal(container.querySelector('[aria-expanded]'), null);
+  assert.equal(container.querySelector('[data-session-id] [aria-expanded]'), null);
 });

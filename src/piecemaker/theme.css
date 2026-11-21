@@ -87,10 +87,6 @@ select {
   -webkit-font-smoothing: antialiased;
 }
 
-.font-serif {
-  font-family: var(--piecemaker-font-editorial);
-}
-
 h1.font-serif {
   font-weight: 500;
   letter-spacing: -0.02em;
@@ -587,6 +583,10 @@ div[data-slot="prompt-input-footer"] > div[data-slot="prompt-input-tools"]::-web
 
 div[data-slot="prompt-input-footer"] > div:last-child {
   flex-shrink: 0;
+}
+
+.chat-composer-shell [data-slot="prompt-input-footer"] > .order-last.basis-full {
+  display: none;
 }
 
 .md\:hidden [data-piecemaker-anonymization-slot] > button {

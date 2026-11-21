@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import type { ComponentProps } from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -14,6 +14,7 @@ import type { AppTab, Project, ProjectSession } from '@/shared/types';
 const calls = vi.hoisted(() => ({ list: [] as Array<{ url: string; body?: unknown; method?: string }>, state: null as unknown, agentSession: null as string | null, pair: null as unknown }));
 
 vi.mock('@/shared/authToken', () => ({
+  authenticatedFetch: (url: string, options?: RequestInit) => fetch(url, options),
   requestJson: vi.fn(async (url: string, body?: unknown, method?: string) => {
     calls.list.push({ url, body, method });
     if (url.includes('/state?')) return calls.state;
@@ -23,6 +24,28 @@ vi.mock('@/shared/authToken', () => ({
     if (url.endsWith('/case/about') || url.endsWith('/case/roadmap')) return { ...(calls.pair as object), ...(url.endsWith('/about') ? { about: (body as { text: string }).text } : { roadmap: (body as { roadmap: unknown }).roadmap }) };
     return {};
   }),
+}));
+vi.mock('@/piecemaker/editor-tabs/SessionTab', () => ({
+  SessionTab: ({ id }: { id: string }) => <p>Session {id}</p>,
+}));
+vi.mock(import('@/piecemaker/docx'), async (importOriginal) => ({
+  ...await importOriginal(),
+  DocxDocumentViewer: ({ file }: { file: { path: string } }) => <p>Éditeur Word de {file.path}</p>,
+}));
+vi.mock(import('@/shared/api'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    api: { ...actual.api, sessionDetails: async (id: string) => Response.json({
+      data: { sessionId: id, provider: 'claude', project: { projectId: 'fil', fullPath: '/dossiers/exemple-fil' } },
+    }) },
+  };
+});
+vi.mock('@/shared/context/UiPreferencesContext', () => ({ useUiPreferences: () => ({}) }));
+vi.mock('@/modules/chat', () => ({
+  ChatInterface: ({ selectedSession, selectedProject }: { selectedSession: ProjectSession; selectedProject: Project }) => (
+    <p>Session {selectedSession.id} dans {selectedProject.fullPath}</p>
+  ),
 }));
 vi.mock('@/piecemaker/editor-tabs/editorPanels', () => ({ openInEditor: vi.fn() }));
 const CENTRAL = vi.hoisted(() => '/donnees/PieceMaker Agent');
@@ -77,16 +100,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('liste les fils, les décisions à traiter et ouvre un fil comme une session CloudCLI', async () => {
-  render(<MemoryRouter><AgentPanel projectPath={PROJECT} /><Location /></MemoryRouter>);
+it('liste les fils, les décisions à traiter et ouvre le chat du fil dans le volet sans quitter le coordinateur', async () => {
+  render(<MemoryRouter initialEntries={['/session/agent-1']}><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /><Location /></MemoryRouter>);
   expect((await screen.findAllByText('Rédiger la note de synthèse')).length).toBe(2);
-  expect(screen.getByText('Fils de discussion')).toBeTruthy();
+  expect(screen.getByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
   expect(screen.getByText('À traiter')).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: /Plan long/ }));
   await act(async () => undefined);
   expect(calls.list.some((call) => call.url.endsWith('/decision') && (call.body as { option: number }).option === 1)).toBe(true);
-  fireEvent.click(document.querySelector('[data-thread="f1"] button')!);
-  expect(screen.getByTestId('location').textContent).toBe('/session/s1');
+  fireEvent.click(screen.getByRole('button', { name: /Rédiger la note de synthèse.*En cours/i }));
+  const conversation = await screen.findByText('Session s1 dans /dossiers/exemple-fil');
+  expect(conversation.closest('[aria-label="Volet de l’agent"]')).toBeTruthy();
+  expect(screen.getByTestId('location').textContent).toBe('/session/agent-1');
+  fireEvent.click(screen.getByRole('button', { name: 'Retour aux fils de discussion' }));
+  expect(screen.queryByText('Session s1 dans /dossiers/exemple-fil')).toBeNull();
+  expect(screen.getByText('Fils de discussion')).toBeTruthy();
 });
 
 const Workspace = withWorkspacePanels((props) => <>
@@ -107,13 +135,13 @@ function Harness({ sessionId, project = PROJECT }: { sessionId: string; project?
 it('ouvre le volet de l’agent par défaut dans sa session et le replie depuis la barre du haut', async () => {
   calls.agentSession = 'agent-1';
   render(<Harness sessionId="agent-1" />);
-  expect(await screen.findByText('Fils de discussion')).toBeTruthy();
+  expect(await screen.findByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
   const toggle = screen.getByRole('tab', { name: 'tabs.agent' });
   expect(toggle.getAttribute('aria-selected')).toBe('true');
   fireEvent.click(toggle);
-  expect(screen.queryByText('Fils de discussion')).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Fils de discussion' })).toBeNull();
   fireEvent.click(screen.getByRole('tab', { name: 'tabs.agent' }));
-  expect(await screen.findByText('Fils de discussion')).toBeTruthy();
+  expect(await screen.findByRole('tab', { name: 'Fils de discussion' })).toBeTruthy();
 });
 
 it('n’affiche ni le volet ni le bouton dans une session ordinaire', async () => {
@@ -121,10 +149,10 @@ it('n’affiche ni le volet ni le bouton dans une session ordinaire', async () =
   render(<Harness sessionId="autre" />);
   await act(async () => undefined);
   expect(screen.queryByRole('tab', { name: 'tabs.agent' })).toBeNull();
-  expect(screen.queryByText('Fils de discussion')).toBeNull();
+  expect(screen.queryByRole('tab', { name: 'Fils de discussion' })).toBeNull();
 });
 
-it('réunit les instructions et les réglages et permet d’annuler chaque type de tâche', async () => {
+it('réunit les instructions et les réglages et permet d’arrêter chaque type de tâche', async () => {
   const data = state();
   const at = '2026-01-05T10:00:00Z';
   data.threads = [{ ...thread, reminderAt: at }];
@@ -133,19 +161,22 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
     { id: 's2', kind: 'cron', text: '', at: null, nextRunAt: at, cron: '0 * * * *', thread: { title: 'Routine fictive' }, lastFiredAt: null },
   ];
   calls.state = data;
-  render(<MemoryRouter><AgentPanel projectPath={PROJECT} /></MemoryRouter>);
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
   fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
   expect(await screen.findByRole('textbox', { name: /Instructions du projet/ })).toBeTruthy();
   expect(screen.getAllByRole('tab')).toHaveLength(3);
   fireEvent.click(screen.getByRole('tab', { name: 'Tâches planifiées' }));
   for (const [title, kind, id] of [[thread.title, 'reminder', 'f1'], ['Message fictif', 'once', 's1'], ['Routine fictive', 'cron', 's2']]) {
-    const cancel = screen.getByRole('button', { name: `Annuler : ${title}` });
+    expect(screen.queryByRole('button', { name: `Arrêter : ${title}` })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: title }));
+    const cancel = screen.getByRole('button', { name: `Arrêter : ${title}` });
     expect(cancel.closest('li')?.querySelector('time')?.dateTime).toBe(at);
     fireEvent.click(cancel);
     await act(async () => undefined);
     expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/cancel', body: { project: PROJECT, kind, id }, method: undefined });
   }
 });
+
 
 it('ouvre un fil de l’agent central dans un volet imbriqué, avec son dossier, puis revient au chat principal', async () => {
   const data = state();
@@ -180,7 +211,7 @@ it('range les fils de l’agent central par dossier et coche les dossiers qu’i
   data.dossiers = [{ path: PROJECT, selected: true }, { path: exemple, selected: false }];
   data.threads = [thread, { ...thread, id: 'f2', title: 'Analyser le contrat', projectPath: exemple, sessionId: 's2' }];
   calls.state = data;
-  render(<MemoryRouter><AgentPanel projectPath={central} /></MemoryRouter>);
+  render(<MemoryRouter><AgentPanel projectPath={central} projectId="central" /></MemoryRouter>);
   const dupont = await screen.findByRole('region', { name: 'Dossier Dupont' });
   expect(dupont.textContent).toContain('Rédiger la note de synthèse');
   expect(screen.getByRole('region', { name: 'Dossier Societe Exemple' }).textContent).toContain('Analyser le contrat');
@@ -197,7 +228,7 @@ it('déplace le brain de l’agent central vers le dossier choisi et y rouvre sa
   calls.state = data;
   const assign = vi.fn();
   vi.stubGlobal('location', { ...window.location, assign });
-  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} /></MemoryRouter>);
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
   fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
   const input = await screen.findByRole('textbox', { name: 'Emplacement du brain' });
   expect((input as HTMLInputElement).value).toBe(CENTRAL);
@@ -214,7 +245,7 @@ it('règle le dream de l’agent central dans un onglet des paramètres et le la
   data.decisions = [];
   data.dream = { running: false, lastRunAt: '2026-01-05T02:00:00Z', lastResult: 'Dossier Dupont : feuille de route à jour.', lastError: null };
   calls.state = data;
-  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} /></MemoryRouter>);
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
   fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
   fireEvent.click(await screen.findByRole('tab', { name: 'Dream' }));
   expect(screen.getByText('Dossier Dupont : feuille de route à jour.')).toBeTruthy();
@@ -239,7 +270,7 @@ it('liste les dossiers de l’agent central dans le contexte, en ajoute un et mo
     folder: PROJECT, name: 'Dupont', about: '# Dupont\n', error: null, paths: { about: '/brain/projects/Dupont/About.md', roadmap: '/brain/projects/Dupont/Roadmap.json' },
     roadmap: { synthese: { parties: { etat: 'valide' }, okf: { etat: 'à exécuter : 2 manque(s)' } }, suivis: { 'appel-suivi.json': { echeances: { audience: { intitule: 'Audience de plaidoirie', kind: 'hearing', date: '2026-12-01' } } } } },
   };
-  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} /></MemoryRouter>);
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
   fireEvent.click(await screen.findByRole('tab', { name: 'Contexte' }));
   const dossiers = await screen.findByRole('region', { name: 'Dossiers' });
   fireEvent.click(screen.getByRole('button', { name: 'Ajouter un dossier' }));
@@ -266,4 +297,74 @@ it('liste les dossiers de l’agent central dans le contexte, en ajoute un et mo
     audience: { intitule: 'Audience de renvoi', kind: 'hearing', date: '2026-12-01' },
     'dépôt des conclusions': { intitule: 'Dépôt des conclusions', kind: 'filing', date: '2026-11-30' },
   });
+});
+
+it('montre le titre d’une routine et, au clic, son explication, sa répétition et l’artéfact créé', async () => {
+  const data = state();
+  const at = '2026-01-05T08:00:00Z';
+  data.threads = [{ ...thread, id: 'f2', title: 'Veille jurisprudence', replies: [{ at, text: 'Fait.', outputs: [{ kind: 'artifact', ref: 'piecemaker://artifact/veille-1', title: 'Veille du lundi' }] }] }];
+  data.schedules = [{ id: 's3', kind: 'cron', text: '', at: null, nextRunAt: at, cron: '0 8 * * 1', thread: { title: 'Veille jurisprudence', instructions: 'Relever les arrêts récents.', provider: 'claude' }, lastFiredAt: null }];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Tâches planifiées' }));
+  const title = await screen.findByRole('button', { name: 'Veille jurisprudence' });
+  expect(screen.queryByText('Relever les arrêts récents.', { exact: false })).toBeNull();
+  fireEvent.click(title);
+  expect(title.getAttribute('aria-expanded')).toBe('true');
+  expect(screen.getByText(/Relever les arrêts récents\./)).toBeTruthy();
+  expect(screen.getByText('Chaque lundi à 08 h 00')).toBeTruthy();
+  const card = screen.getByRole('button', { name: 'Ouvrir l’artéfact : Veille du lundi' });
+  const show = vi.fn();
+  window.addEventListener('piecemaker:artifacts-show', show);
+  fireEvent.click(card);
+  window.removeEventListener('piecemaker:artifacts-show', show);
+  expect(show).toHaveBeenCalled();
+  expect((window as unknown as { __piecemakerArtifactsShow: { artifact: string } }).__piecemakerArtifactsShow.artifact).toBe('veille-1');
+});
+
+it('range les tâches arrêtées en Inactif et ne les supprime qu’après confirmation', async () => {
+  const data = state();
+  data.schedules = [
+    { id: 's4', kind: 'cron', text: '', at: null, nextRunAt: '2026-01-05T08:00:00Z', cron: '0 8 * * *', thread: { title: 'Routine active' }, lastFiredAt: null },
+    { id: 's5', kind: 'cron', text: '', at: null, nextRunAt: null, cron: '0 8 * * *', thread: { title: 'Routine arrêtée' }, lastFiredAt: null, stoppedAt: '2026-01-04T08:00:00Z' },
+  ];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Tâches planifiées' }));
+  const inactive = (await screen.findByText('Inactif')).closest('section')!;
+  expect(inactive.textContent).toContain('Routine arrêtée');
+  expect(inactive.textContent).not.toContain('Routine active');
+  fireEvent.click(screen.getByRole('button', { name: /Routine arrêtée/ }));
+  expect(screen.queryByRole('button', { name: 'Arrêter : Routine arrêtée' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Supprimer : Routine arrêtée' }));
+  expect(calls.list.some((call) => call.url.endsWith('/schedule/delete'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Confirmer' }));
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/delete', body: { project: PROJECT, kind: 'cron', id: 's5' }, method: undefined });
+});
+
+it('ouvre le document Word à gauche et la session de publication à droite depuis Contexte', async () => {
+  const id = 'rapport-fictif';
+  const url = `piecemaker://artifact/${id}`;
+  calls.state = {
+    ...state(),
+    artifacts: [{ url, title: 'Rapport fictif' }],
+    deliverables: [{ id: 'livrable-fictif', kind: 'artifact', ref: url, threadId: thread.id }],
+  };
+  vi.stubGlobal('fetch', vi.fn(async (input: string) => {
+    const pathname = new URL(input, 'http://localhost').pathname;
+    if (pathname.endsWith('/creator')) return Response.json({ sessionId: 'fil-createur' });
+    if (pathname.endsWith(`/artifacts/${id}`)) {
+      return Response.json({ id, url, format: 'docx', title: 'Rapport fictif', document_path: 'Artifacts/rapport-fictif.docx' });
+    }
+    return new Response(null, { status: 404 });
+  }));
+  render(<MemoryRouter><AgentPanel projectPath={PROJECT} projectId="projet-fictif" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('tab', { name: 'Contexte' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Rapport fictif/ }));
+  const workspace = screen.getByRole('dialog', { name: 'Rapport fictif' });
+  await within(workspace).findByText('Éditeur Word de Artifacts/rapport-fictif.docx');
+  await within(within(workspace).getByRole('complementary', { name: 'Session de création' })).findByText('Session fil-createur');
+  fireEvent.click(within(workspace).getByRole('button', { name: 'Fermer l’artifact' }));
+  expect(screen.queryByRole('dialog', { name: 'Rapport fictif' })).toBeNull();
 });

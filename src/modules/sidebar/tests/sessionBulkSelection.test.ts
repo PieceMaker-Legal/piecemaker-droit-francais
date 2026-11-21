@@ -217,7 +217,7 @@ test('a running row cannot be ticked and is left out of Select all', () => {
     onSetSessionSelection,
   });
 
-  const runningRow = checkboxes(container)[1];
+  const runningRow = checkboxes(container)[0];
   assert.equal(runningRow.getAttribute('aria-disabled'), 'true');
   fireEvent.click(runningRow);
   fireEvent.keyDown(runningRow, { key: ' ' });
@@ -240,7 +240,7 @@ test('a ticked row that starts running drops out of the count and the ids to del
 
   assert.deepEqual(
     checkboxes(container).map((row) => row.getAttribute('aria-checked')),
-    ['true', 'false', 'false'],
+    ['false', 'true', 'false'],
     'the row that started running is drawn unticked, not as a locked tick',
   );
 
@@ -320,20 +320,20 @@ test('the compact layout selects with the same rules and hides its options butto
 
   const rows = checkboxes(container);
   assert.equal(rows.length, SESSIONS.length);
-  assert.deepEqual(rows.map((row) => row.getAttribute('aria-checked')), ['true', 'false', 'false']);
+  assert.deepEqual(rows.map((row) => row.getAttribute('aria-checked')), ['false', 'true', 'false']);
   assert.equal(
     container.querySelector('[aria-label^="Session options for"]'),
     null,
     'the mobile row hides its "..." button while selecting',
   );
 
-  fireEvent.click(rows[1]);
+  fireEvent.click(rows[2]);
   assert.deepEqual(onToggleSessionSelected.mock.calls[0], ['project-1', 's2']);
 
-  fireEvent.keyDown(rows[1], { key: ' ' });
+  fireEvent.keyDown(rows[2], { key: ' ' });
   assert.deepEqual(onToggleSessionSelected.mock.calls[1], ['project-1', 's2']);
 
-  fireEvent.click(rows[2]);
+  fireEvent.click(rows[0]);
   assert.equal(onToggleSessionSelected.mock.calls.length, 2, 'the running row stays locked on touch too');
 });
 

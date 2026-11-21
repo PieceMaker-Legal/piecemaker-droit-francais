@@ -17,7 +17,7 @@ import type {
 const SESSION_TITLE = 'PieceMaker Agent';
 const ORCHESTRATOR_DENIED = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Bash', 'mcp__fil'];
 
-function refuse(code: 400 | 403 | 404, message: string): never {
+function refuse(code: 400 | 403 | 404 | 409, message: string): never {
   throw Object.assign(new Error(message), { code });
 }
 
@@ -566,6 +566,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       }
     }
     for (const schedule of state.schedules) {
+      if (schedule.stoppedAt) continue;
       if (schedule.kind === 'once' && !schedule.lastFiredAt && schedule.at && schedule.at <= stamp) {
         schedule.lastFiredAt = stamp;
         wake('send_later', 'system', schedule.text);
@@ -723,7 +724,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
         state.schedules.splice(state.schedules.indexOf(routine), 1);
         return { routine_id: routine.id };
       }
-      case 'list_routines': return state.schedules.filter(s => s.kind === 'cron');
+      case 'list_routines': return state.schedules.filter(s => s.kind === 'cron' && !s.stoppedAt);
       case 'lookup': return lookup(parse(string, args.question), check);
       case 'read_memory': return store.memory();
       case 'update_memory': return store.updateMemory(parse(z.string(), args.text), parse(index, args.revision), now());
@@ -775,9 +776,16 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       if (kind === 'reminder') thread(id).reminderAt = null;
       else {
         if (kind !== 'once' && kind !== 'cron') refuse(400, 'Type de tâche inconnu.');
-        const schedule = find(state.schedules.filter(item => item.kind === kind), id, 'Tâche');
-        state.schedules.splice(state.schedules.indexOf(schedule), 1);
+        find(state.schedules.filter(item => item.kind === kind), id, 'Tâche').stoppedAt = now();
       }
+      save();
+      return { ok: true };
+    },
+    deleteScheduled(kind: unknown, id: unknown) {
+      if (kind !== 'once' && kind !== 'cron') refuse(400, 'Type de tâche inconnu.');
+      const schedule = find(state.schedules.filter(item => item.kind === kind), id, 'Tâche');
+      if (!schedule.stoppedAt && !(schedule.kind === 'once' && schedule.lastFiredAt)) refuse(409, 'Arrêtez la tâche avant de la supprimer.');
+      state.schedules.splice(state.schedules.indexOf(schedule), 1);
       save();
       return { ok: true };
     },
@@ -786,7 +794,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       const date = deps.now();
       const schedules = state.schedules.map(schedule => ({
         ...schedule,
-        nextRunAt: schedule.cron ? parseCron(schedule.cron).next(date, schedule.lastFiredAt) : schedule.lastFiredAt ? null : schedule.at,
+        nextRunAt: schedule.stoppedAt ? null : schedule.cron ? parseCron(schedule.cron).next(date, schedule.lastFiredAt) : schedule.lastFiredAt ? null : schedule.at,
       }));
       return structuredClone({ ...state, schedules, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files(), storage: store.storage(),
         central, dossiers: central ? dossiers().map(folder => ({ path: folder, selected: allowed(folder) })) : [] });
@@ -1011,6 +1019,7 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
     updateDeliverable: (root: string, id: string, state: Deliverable['state']) => project(root).updateDeliverable(id, state),
     resolveThread: (root: string, threadId: string, resolved: boolean) => project(root).resolveThread(threadId, resolved),
     cancelScheduled: (root: string, kind: unknown, id: unknown) => project(root).cancelScheduled(kind, id),
+    deleteScheduled: (root: string, kind: unknown, id: unknown) => project(root).deleteScheduled(kind, id),
     stopThread: (root: string, threadId: string) => project(root).stopThread(threadId),
     recycle: (root: string) => project(root).recycle(),
     dream: (root: string) => project(root).dream(),

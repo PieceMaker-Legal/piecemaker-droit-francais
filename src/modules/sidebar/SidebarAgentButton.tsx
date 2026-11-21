@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { agentApi } from '@/modules/piecemaker-workspace-tabs';
@@ -38,12 +37,12 @@ export default function SidebarAgentButton({ project, sessions, onSessionSelect,
     <>
       <button
         type="button"
-        className="flex h-8 w-full items-center gap-2 rounded-md border border-border px-3 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
+        className="flex h-8 w-full items-center gap-2 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
         title={t('sessions.piecemakerAgentTitle')}
         disabled={opening}
         onClick={() => void open()}
       >
-        <Sparkles className="h-3 w-3" />
+        <span aria-hidden="true" className="h-3 w-3 shrink-0 bg-current" style={{ mask: "url(/logo-32.png) center / contain no-repeat" }} />
         {t('sessions.piecemakerAgent')}
       </button>
       {error && <p className="px-1 pt-1 text-xs text-destructive">{error}</p>}

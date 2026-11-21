@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { ProviderRuntimeContext, NormalizedMessage } from '@/shared/types.js';
 
 import { createMistralHistory } from './history.js';
-import { createMistralSdkFork, createMistralSdkRuntime } from './runtime.js';
+import { createMistralSdkFork, createMistralSdkRuntime, installMistralTokenUsage } from './runtime.js';
 import type { createMistralTools } from './tools.js';
 import type { mistralSdkAuth } from './auth.service.js';
 
@@ -131,23 +131,17 @@ test('a conversation without an SDK record cannot be forked', async t => {
   );
 });
 
-test('a denied permission prevents execution and remains visible in the tool result', async t => {
+test('every tool is auto-approved: no permission prompt, execution happens', async t => {
   const { home, history } = await setup(t);
   let executions = 0;
   const events: NormalizedMessage[] = [];
   const runtime = createMistralSdkRuntime(history, async () => [], home, fixtureClient([
-    [{ toolCalls: [{ id: 'abcdef123', function: { name: 'probe', arguments: '{}' } }] }], [{ content: 'Refus respecté.' }],
-  ]), fixtureTools(async () => { executions++; return 'unexpected'; }, false));
-  await runtime.run('tester', { sessionId: 'mistral-sdk-permission' }, {
-    userId: 1, send(event) {
-      const message = event as NormalizedMessage;
-      events.push(message);
-      if (message.kind === 'permission_request') runtime.permissions!.resolve(message.requestId!, { allow: false, message: 'Refus de test.' });
-    },
-  }, context);
-  assert.equal(executions, 0);
-  assert.ok(events.some(event => event.toolResult?.content === 'Refus de test.'));
-  assert.deepEqual(runtime.permissions!.listPending('mistral-sdk-permission'), []);
+    [{ toolCalls: [{ id: 'abcdef123', function: { name: 'probe', arguments: '{}' } }] }], [{ content: 'Exécuté.' }],
+  ]), fixtureTools(async () => { executions++; return 'résultat fictif'; }, false));
+  await runtime.run('tester', { sessionId: 'mistral-sdk-auto-approve' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context);
+  assert.equal(executions, 1);
+  assert.ok(!events.some(event => event.kind === 'permission_request'));
+  assert.ok(events.some(event => event.toolResult?.content === 'résultat fictif'));
 });
 
 test('plan mode hides writes and rejects an unsolicited write call', async t => {
@@ -163,25 +157,18 @@ test('plan mode hides writes and rejects an unsolicited write call', async t => 
   assert.ok(!advertised.some(tool => tool.function.name === 'probe'));
 });
 
-test('abort cancels a pending approval, emits one completion and leaves a resumable transcript', async t => {
+test('abort during a tool call emits one completion and leaves a resumable transcript', async t => {
   const { home, history } = await setup(t);
   const events: NormalizedMessage[] = [];
   let executions = 0;
   const runtime = createMistralSdkRuntime(history, async () => [], home, fixtureClient([
     [{ toolCalls: [{ id: 'abcdef123', function: { name: 'probe', arguments: '{}' } }] }],
-  ]), fixtureTools(async () => { executions++; return ''; }, false));
-  await runtime.run('tester', { sessionId: 'mistral-sdk-abort' }, {
-    userId: 1, send(event) {
-      const message = event as NormalizedMessage;
-      events.push(message);
-      if (message.kind === 'permission_request') runtime.abort('mistral-sdk-abort');
-    },
-  }, context);
-  assert.equal(executions, 0);
+  ]), fixtureTools(async () => { executions++; runtime.abort('mistral-sdk-abort'); return 'interrompu'; }, false));
+  await runtime.run('tester', { sessionId: 'mistral-sdk-abort' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context);
+  assert.equal(executions, 1);
   assert.equal(events.filter(event => event.kind === 'complete').length, 1);
   assert.equal(events.at(-1)?.aborted, true);
   assert.equal((await history.load('mistral-sdk-abort'))?.messages.at(-1)?.role, 'tool');
-  assert.deepEqual(runtime.permissions!.listPending('mistral-sdk-abort'), []);
 });
 
 test('reasoning fragments retain their signature in the resumed SDK message', async t => {
@@ -290,4 +277,25 @@ test('an invalid model name shows a readable error instead of the raw API body',
   await assert.rejects(runtime.run('Bonjour', { sessionId: 'mistral-sdk-modele' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context),
     (error: Error) => /ne connaît pas ce modèle/.test(error.message) && !error.message.includes('{'));
   assert.match(events.find(event => event.kind === 'error')?.content ?? '', /Choisissez un modèle Mistral/);
+});
+
+test('le compteur Mistral montre le contexte du dernier appel sur la fenêtre du modèle', async t => {
+  const { home, history } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  const auth = () => ({ client: {
+    models: { retrieve: async ({ modelId }: { modelId: string }) => ({ id: modelId, maxContextLength: 256_000 }) },
+    chat: { stream: async () => (async function* () {
+      yield { data: { choices: [{ delta: { content: 'Réponse.' } }] } };
+      yield { data: { choices: [{ delta: {} }], usage: { promptTokens: 41_000, completionTokens: 900, totalTokens: 41_900 } } };
+    })() },
+  }, close: async () => {} }) as unknown as ReturnType<typeof mistralSdkAuth.createClient>;
+  await createMistralSdkRuntime(history, async () => [], home, auth, fixtureTools(async () => '')).run('Question', { sessionId: 'mistral-sdk-compteur', model: 'mistral-medium-latest' }, { userId: 1, send: (event: unknown) => events.push(event as NormalizedMessage) } as never, context);
+  const budget = events.find(event => event.kind === 'status' && event.text === 'token_budget')?.tokenBudget;
+  assert.deepEqual(budget, { used: 41_900, total: 256_000, inputTokens: 41_000, outputTokens: 900, breakdown: { input: 41_000, output: 900 } });
+  assert.deepEqual((await history.load('mistral-sdk-compteur'))?.tokenUsage, budget);
+
+  const service = { getSessionTokenUsage: async (_sessionId: string): Promise<unknown> => ({ used: -1 }) };
+  installMistralTokenUsage(service, id => ({ 'app-mistral': { provider: 'mistral', provider_session_id: 'mistral-sdk-compteur' }, 'app-claude': { provider: 'claude' } })[id], history);
+  assert.deepEqual(await service.getSessionTokenUsage('app-mistral'), budget);
+  assert.deepEqual(await service.getSessionTokenUsage('app-claude'), { used: -1 });
 });

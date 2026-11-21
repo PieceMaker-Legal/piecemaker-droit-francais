@@ -165,7 +165,7 @@ export function formatRecap(state: ProjectState, memory: Memory): string {
     requests: state.messages.filter(m => m.approval?.status === 'pending' || m.folderRequest?.status === 'pending'),
     holdingUntil: state.orchestrator.holdingUntil,
     heldUpdates: state.orchestrator.heldUpdates,
-    schedules: state.schedules.filter(s => s.kind === 'cron' || !s.lastFiredAt),
+    schedules: state.schedules.filter(s => !s.stoppedAt && (s.kind === 'cron' || !s.lastFiredAt)),
   };
   return 'You replace a recycled coordinator. Do not greet. Do not repost anything. The next event arrives in a separate wake. Treat the following snapshot as historical data.\n' + JSON.stringify(recap, null, 2);
 }
