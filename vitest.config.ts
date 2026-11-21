@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@piecemaker': fileURLToPath(new URL('./shared/piecemaker', import.meta.url)),
     },
   },
   define: {

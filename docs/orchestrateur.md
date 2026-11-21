@@ -155,7 +155,7 @@ Interface en français, aux couleurs du thème CloudCLI.
 - Un bouton **PieceMaker Agent** natif du panneau de gauche (`SidebarAgentButton`, rendu par `SidebarProjectSessions`), juste **au-dessus** du bouton « Nouvelle session » de chaque dossier. Un clic ouvre (ou crée) la session de l'agent du dossier et la sélectionne comme un clic sur une session.
 - Le **chat de l'agent est le chat CloudCLI** de cette session : même composant, streaming, rendu des outils, compositeur, autorisations. Les règles et les wakes restent invisibles : l'historique montre le texte de l'avocat, ou une ligne lisible pour un événement.
 - Le **volet de droite** est un volet natif des volets de droite (`AppTab` `agent`), ouvert par défaut quand la session courante est celle de l'agent (sauf sur téléphone) ; un bouton `PanelRight` dans la barre d'icônes du haut l'affiche ou le replie, visible seulement dans cette session. Son en-tête de volet garde agrandir et fermer.
-- Les fils s'ouvrent comme des sessions CloudCLI (`/session/<id>`).
+- Un clic sur un fil affiche sa session CloudCLI dans le volet de droite. Le chat du coordinateur reste ouvert. La flèche de retour affiche la liste des fils.
 - Rafraîchissement : `GET /state` toutes les 2 s tant que le volet est affiché ; `GET /session` à chaque changement de session.
 - Le recyclage manuel attend la fin du tour actif. Les fils gardent leur propre session.
 
