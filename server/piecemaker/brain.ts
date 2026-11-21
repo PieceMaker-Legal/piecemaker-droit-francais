@@ -1,4 +1,4 @@
-import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'fs';
+import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import path from 'path';
 
 import { caseOf, syntheseScript, writeRoadmap } from './vendor/piecemaker-plugin/scripts/lib/brain-case.mjs';
@@ -62,6 +62,28 @@ export function createBrain({ home, defaultRoot, skills }: BrainOptions) {
     return { path: target };
   }
 
+  function move(value: unknown) {
+    if (typeof value !== 'string' || !path.isAbsolute(value.trim())) throw Object.assign(new Error('Chemin absolu du brain requis.'), { code: 400 });
+    const from = root();
+    const target = path.resolve(value.trim());
+    if (target === from) return setRoot(target);
+    const nested = (parent: string, child: string) => { const relative = path.relative(parent, child); return Boolean(relative) && !relative.startsWith('..') && !path.isAbsolute(relative); };
+    if (nested(from, target) || nested(target, from)) throw Object.assign(new Error('Le nouvel emplacement ne peut pas être dans l’ancien brain, ni le contenir.'), { code: 400 });
+    const content = existsSync(from) ? readdirSync(from) : [];
+    if (content.length) {
+      if (existsSync(target) && readdirSync(target).length) throw Object.assign(new Error('Le dossier choisi n’est pas vide : choisissez un dossier vide ou nouveau, le brain y sera déplacé avec tout son contenu.'), { code: 400 });
+      mkdirSync(path.dirname(target), { recursive: true });
+      if (existsSync(target)) rmSync(target, { recursive: true });
+      try {
+        renameSync(from, target);
+      } catch {
+        cpSync(from, target, { recursive: true, verbatimSymlinks: true });
+        rmSync(from, { recursive: true, force: true });
+      }
+    }
+    return setRoot(target);
+  }
+
   function prepare(brain: string) {
     mkdirSync(path.join(brain, 'projects'), { recursive: true });
     if (!present(config)) setRoot(brain);
@@ -110,5 +132,5 @@ export function createBrain({ home, defaultRoot, skills }: BrainOptions) {
     return root();
   }
 
-  return { root, setRoot, prepare, prepareCase, ensureConfigured };
+  return { root, setRoot, move, prepare, prepareCase, ensureConfigured };
 }

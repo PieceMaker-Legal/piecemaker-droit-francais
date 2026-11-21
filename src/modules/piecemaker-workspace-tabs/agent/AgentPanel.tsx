@@ -182,7 +182,7 @@ function Brain({ projectPath }: { projectPath: string }) {
   }
   return <fieldset className="space-y-2">
     <legend className="text-[15px] text-foreground">Brain</legend>
-    <p className="text-muted-foreground">Le dossier où l’agent central s’ouvre et tient votre profil (AGENTS.md), puis l’About.md et la Roadmap.json de chaque dossier. Choisissez un dossier à part, jamais un dossier juridique.</p>
+    <p className="text-muted-foreground">Le dossier où l’agent central s’ouvre et tient votre profil (AGENTS.md), puis l’About.md et la Roadmap.json de chaque dossier. Choisissez un dossier vide ou nouveau, jamais un dossier juridique : tout le contenu du brain y est déplacé.</p>
     <div className="flex gap-2"><input aria-label="Emplacement du brain" className={inputClass} value={brain} onChange={(event) => setBrain(event.target.value)} />
       <button type="button" className={buttonClass} disabled={!brain.trim() || brain.trim() === projectPath} onClick={() => void move()}>Déplacer</button></div>
     {error && <p role="alert" className="text-sm">{error}</p>}

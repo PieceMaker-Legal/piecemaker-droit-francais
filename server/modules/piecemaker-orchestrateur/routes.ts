@@ -19,7 +19,7 @@ async function send(response: express.Response, run: () => unknown) {
   }
 }
 
-export function createOrchestratorRouter(service: Service, projects: Projects, brain?: { setRoot(value: unknown): { path: string } }) {
+export function createOrchestratorRouter(service: Service, projects: Projects, brain?: { move(value: unknown): { path: string } }) {
   const router = express.Router();
   router.use(express.json({ limit: '30mb' }));
 
@@ -46,7 +46,7 @@ export function createOrchestratorRouter(service: Service, projects: Projects, b
     if (wanted && projects.getProjectPaths().some(row => path.resolve(row.project_path) === wanted && path.resolve(row.project_path) !== path.resolve(current))) {
       throw Object.assign(new Error('Ce dossier est un dossier juridique : choisissez un dossier à part pour le brain.'), { code: 400 });
     }
-    brain.setRoot(request.body?.path);
+    brain.move(request.body?.path);
     const central = service.central();
     return { ...central, projectId: projectId(central.project) };
   }));

@@ -79,3 +79,27 @@ test('la mémoire native de Claude est coupée sans toucher aux autres réglages
   disableNativeMemory(folder);
   assert.equal(readFileSync(file, 'utf8'), '{ invalide');
 });
+
+test('changer le brain de place y emporte tout son contenu : profil, skills, paires des dossiers et index', t => {
+  const f = fixture();
+  t.after(f.cleanup);
+  const from = path.join(f.base, 'brain');
+  f.brain.setRoot(from);
+  f.brain.prepare(from);
+  mkdirSync(path.join(f.base, 'Dossier Dupont'), { recursive: true });
+  f.brain.prepareCase(from, path.join(f.base, 'Dossier Dupont'));
+  writeFileSync(path.join(from, 'projects', 'Dossier Dupont', 'About.md'), 'Statut : en cours\n');
+  mkdirSync(path.join(f.base, 'Plein'), { recursive: true });
+  writeFileSync(path.join(f.base, 'Plein', 'note.md'), 'x');
+  assert.throws(() => f.brain.move(path.join(f.base, 'Plein')), /pas vide/);
+  assert.throws(() => f.brain.move(path.join(from, 'sous')), /ancien brain/);
+  const target = path.join(f.base, 'Nouveau', 'Brain');
+  f.brain.move(target);
+  assert.equal(f.brain.root(), target);
+  assert.equal(existsSync(from), false);
+  assert.equal(readFileSync(path.join(target, 'projects', 'Dossier Dupont', 'About.md'), 'utf8'), 'Statut : en cours\n');
+  assert.ok(existsSync(path.join(target, 'projects', 'Dossier Dupont', 'Roadmap.json')));
+  assert.ok(existsSync(path.join(target, '.piecemaker', 'dossiers.json')));
+  assert.ok(existsSync(path.join(target, '.claude', 'skills', 'grill-me', 'SKILL.md')));
+  assert.equal(readFileSync(path.join(target, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');
+});
