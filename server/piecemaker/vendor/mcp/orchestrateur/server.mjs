@@ -10,6 +10,7 @@ const provider = z.enum(['auto', 'claude', 'codex', 'mistral']).optional();
 const thread = {
   title: text, instructions: text,
   provider: provider.describe('Avec auto, le serveur choisit un fournisseur connecté.'),
+  folder: optionalText.describe('Dossier de travail du fil, pris dans list_devices. Obligatoire pour l’agent central : un fil, un seul dossier. Un dossier non autorisé exige l’accord de l’avocat.'),
 };
 const reaction = { message_id: text, emoji: text };
 const steps = z.array(z.object({
@@ -60,7 +61,6 @@ export function createServer() {
       context_message_ids: contextIds,
       model: optionalText,
       effort: optionalText.describe('Niveau de raisonnement du modèle.'),
-      folder: optionalText.describe('Dossier de travail du fil. Un dossier non autorisé exige l’accord de l’avocat.'),
     }],
     message_thread: ['Envoie un message au fil. Un fil résolu se rouvre et un fil occupé reçoit le message au prochain tour.', {
       thread_id: text, text, context_message_ids: contextIds,

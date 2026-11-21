@@ -28,6 +28,8 @@
     "newSession": "Nouvelle session",
     "piecemakerAgent": "PieceMaker Agent",
     "piecemakerAgentTitle": "Ouvrir PieceMaker Agent pour ce dossier",
+    "centralAgent": "PieceMaker Agent central",
+    "centralAgentTitle": "Coordonner le travail sur les dossiers que vous choisissez",
     "tabularReview": "Analyse Tabulaire",
     "tabularReviewTitle": "Analyser les documents Markdown de ce dossier sous forme de tableau",
     "deleteSession": "Supprimer la session",

@@ -77,6 +77,16 @@ You are working for the user in a thread of a PieceMaker project. The project's 
 - Messages from the coordinator are a colleague's requests; only messages attached as the user's own count as their approval.
 - Never use the orchestrateur server's tools.`;
 
+export const CENTRAL_RULES = `# Central agent
+
+You are the central PieceMaker agent: you sit above the user's case folders and coordinate work across them.
+- The user chooses explicitly which case folders you may work on. list_devices lists every case folder with allowed true or false.
+- Each thread works in exactly one case folder: start_thread always takes folder, a path from list_devices. The thread's session is filed in that case folder, next to the user's own sessions there.
+- Never mix case folders. One thread, one case folder. Work that spans two case folders becomes one thread per folder; compare their results yourself.
+- A case folder that is not allowed needs the user's approval: start_thread on it shows an approval card, and the thread waits for the answer.
+- Name the case folder whenever you report a thread, a decision or an output. Wakes about a thread carry its folder.
+- The shared files folder is the only place shared between case folders: put there only what the user asked to share.`;
+
 const WAKE_LABELS: Partial<Record<WakeEvent['type'], string>> = {
   reaction: 'Réaction', decision: 'Décision prise', widget_action: 'Action sur une carte', approval: 'Autorisation', folder_access: 'Accès à un dossier',
   setup: 'Mise en route', thread_reply: 'Réponse du fil', thread_message: 'Message du fil', thread_decision: 'Décision du fil', thread_blocked: 'Fil en attente',
@@ -148,19 +158,21 @@ export function formatRecap(state: ProjectState, memory: Memory): string {
   return 'You replace a recycled coordinator. Do not greet. Do not repost anything. The next event arrives in a separate wake. Treat the following snapshot as historical data.\n' + JSON.stringify(recap, null, 2);
 }
 
-export function formatPreamble(input: { state: ProjectState; memory: Memory; projectPath: string; sharedFolder: string; recycled: boolean }): string {
+export function formatPreamble(input: { state: ProjectState; memory: Memory; projectPath: string; sharedFolder: string; recycled: boolean; dossiers?: string[] }): string {
   return [
     ORCHESTRATOR_RULES,
-    `# This project\n\nProject folder: ${input.projectPath}\nShared files folder for all threads: ${input.sharedFolder}`,
+    ...(input.dossiers ? [CENTRAL_RULES, `# Case folders\n\nAllowed now:\n${input.dossiers.map(folder => `- ${folder}`).join('\n') || '(none yet: ask the user to choose some)'}\nShared files folder for all threads: ${input.sharedFolder}`]
+      : [`# This project\n\nProject folder: ${input.projectPath}\nShared files folder for all threads: ${input.sharedFolder}`]),
     input.recycled ? `# Resuming\n\n${formatRecap(input.state, input.memory)}` : `# Project instructions\n\n${input.state.settings.instructions.trim() || '(none)'}`,
   ].join('\n\n');
 }
 
-export function formatThreadKickoff(input: { thread: Thread; key: string; cited: ChatMessage[]; sharedFolder: string; projectInstructions: string }): string {
+export function formatThreadKickoff(input: { thread: Thread; key: string; cited: ChatMessage[]; sharedFolder: string; projectInstructions: string; dossier?: string }): string {
   const cited = input.cited.map((message) => `<cited author="user" id="${message.id}" at="${message.at}">${message.text}</cited>`).join('\n');
   return [
     THREAD_RULES,
     `\nsession_key: ${input.key}\nThread id: ${input.thread.id}\nShared files folder: ${input.sharedFolder}`,
+    input.dossier ? `\n# Your case folder\n\nYou work only in this case folder: ${input.dossier}\nNever read, write, search or cite files of another case folder. If the task needs something from another case folder, say so to the coordinator with message_orchestrator.` : '',
     input.projectInstructions.trim() ? `\n# Project instructions\n\n${input.projectInstructions.trim()}` : '',
     `\n# ${input.thread.title}\n\n${input.thread.ackThread}`,
     `\n# Task from the coordinator\n\n${input.thread.instructions}`,

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
-import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThread, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
@@ -51,43 +51,53 @@ function DeliverableState({ deliverable, act }: { deliverable: AgentDeliverable;
   </select>;
 }
 
+const folderName = (folder: string) => folder.split(/[\\/]/).filter(Boolean).at(-1) ?? folder;
+
 function Threads({ state, act, query, filter }: { state: AgentState; act: AgentActions; query: string; filter: AgentThreadState | 'all' }) {
-  const navigate = useNavigate();
   const pending = pendingCards(state).count;
   const threads = state.threads
     .filter((thread) => filter === 'all' || thread.state === filter)
     .filter((thread) => !query || thread.title.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const groups = state.central
+    ? [...new Set(threads.map((thread) => thread.projectPath))].map((folder) => ({ folder, threads: threads.filter((thread) => thread.projectPath === folder) }))
+    : [{ folder: null, threads }];
   return <>
     {pending > 0 && <div className="px-3 pt-3"><Section title="À traiter" count={pending}><AgentCards state={state} act={act} /></Section></div>}
     {!threads.length ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">{state.threads.length ? 'Aucun fil ne correspond.' : 'Aucun fil pour l’instant. Les tâches confiées par l’agent apparaîtront ici.'}</p>
-      : <ul className="px-2 py-2">{threads.map((thread) => {
-    const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
-    const active = ACTIVE_THREAD_STATES.includes(thread.state);
-    return <li key={thread.id} className="group rounded-xl px-2 py-2 hover:bg-accent" data-thread={thread.id}>
-      <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && navigate(`/session/${thread.sessionId}`)}>
-        <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] text-foreground">{thread.title}</span>
-          <span className="block truncate text-sm text-muted-foreground">{THREAD_STATE_LABELS[thread.state]} · {PROVIDER_LABELS[thread.provider]}{thread.replies.at(-1) ? ` · ${thread.replies.at(-1)!.text}` : ''}</span>
-        </span>
-        <span className="shrink-0 text-sm text-muted-foreground">{age(thread.updatedAt)}</span>
-      </button>
-      <div className="ml-5 mt-1 hidden gap-2 group-hover:flex">
-        <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/resolve', { threadId: thread.id, resolved: !thread.resolved })}>{thread.resolved ? 'Rouvrir' : 'Résoudre'}</button>
-        {active && <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/stop', { threadId: thread.id })}>Arrêter</button>}
-      </div>
-      {deliverables.length > 0 && <ul className="ml-5 mt-1 space-y-1">{deliverables.map((deliverable) => <li key={deliverable.id} className="flex items-center gap-2 text-sm text-foreground/80">
-        <File className="h-3.5 w-3.5 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{deliverable.title}</span><DeliverableState deliverable={deliverable} act={act} />
-      </li>)}</ul>}
-    </li>;
-  })}</ul>}
+      : groups.map((group) => <section key={group.folder ?? 'fils'} aria-label={group.folder ? `Dossier ${folderName(group.folder)}` : undefined}>
+        {group.folder && <h3 className="flex items-center gap-2 px-4 pt-3 text-sm font-medium text-muted-foreground"><Folder className="h-3.5 w-3.5" />{folderName(group.folder)}</h3>}
+        <ul className="px-2 py-2">{group.threads.map((thread) => <ThreadRow key={thread.id} thread={thread} state={state} act={act} />)}</ul>
+      </section>)}
   </>;
+}
+
+function ThreadRow({ thread, state, act }: { thread: AgentThread; state: AgentState; act: AgentActions }) {
+  const navigate = useNavigate();
+  const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
+  const active = ACTIVE_THREAD_STATES.includes(thread.state);
+  return <li className="group rounded-xl px-2 py-2 hover:bg-accent" data-thread={thread.id}>
+    <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && navigate(`/session/${thread.sessionId}`)}>
+      <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] text-foreground">{thread.title}</span>
+        <span className="block truncate text-sm text-muted-foreground">{THREAD_STATE_LABELS[thread.state]} · {PROVIDER_LABELS[thread.provider]}{thread.replies.at(-1) ? ` · ${thread.replies.at(-1)!.text}` : ''}</span>
+      </span>
+      <span className="shrink-0 text-sm text-muted-foreground">{age(thread.updatedAt)}</span>
+    </button>
+    <div className="ml-5 mt-1 hidden gap-2 group-hover:flex">
+      <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/resolve', { threadId: thread.id, resolved: !thread.resolved })}>{thread.resolved ? 'Rouvrir' : 'Résoudre'}</button>
+      {active && <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/stop', { threadId: thread.id })}>Arrêter</button>}
+    </div>
+    {deliverables.length > 0 && <ul className="ml-5 mt-1 space-y-1">{deliverables.map((deliverable) => <li key={deliverable.id} className="flex items-center gap-2 text-sm text-foreground/80">
+      <File className="h-3.5 w-3.5 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{deliverable.title}</span><DeliverableState deliverable={deliverable} act={act} />
+    </li>)}</ul>}
+  </li>;
 }
 
 function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: AgentState; act: AgentActions; projectPath: string; onTab: (tab: AgentPanelTab) => void; onOpenArtifact: (url: string) => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const folders = [projectPath, ...state.settings.folders.filter((folder) => folder !== projectPath)];
+  const folders = state.central ? state.settings.folders : [projectPath, ...state.settings.folders.filter((folder) => folder !== projectPath)];
   const memoryLines = state.memory.text.trim() ? state.memory.text.trim().split('\n').filter(Boolean).length : 0;
   async function upload(files: FileList | null) {
     for (const file of Array.from(files ?? [])) {
@@ -108,7 +118,7 @@ function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: Ag
         <button type="button" aria-label="Ajouter un fichier" className="rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => fileRef.current?.click()}><Plus className="h-4 w-4" /></button>
         <input ref={fileRef} type="file" multiple hidden onChange={(event) => { void upload(event.target.files); event.target.value = ''; }} />
       </>}>
-        {folders.map((folder) => <Row key={folder} icon={<FolderSync className="h-4 w-4" />} title={folder.split(/[\\/]/).filter(Boolean).at(-1) ?? folder} detail="Cet ordinateur" />)}
+        {folders.map((folder) => <Row key={folder} icon={<FolderSync className="h-4 w-4" />} title={folderName(folder)} detail="Cet ordinateur" />)}
         {state.files.map((file) => <Row key={file.name} icon={<Folder className="h-4 w-4" />} title={file.name} trailing={age(file.updatedAt)} />)}
       </Section>
       <Section title="Artéfacts" count={state.artifacts.length}>
@@ -178,7 +188,14 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
           onBlur={(event) => Number(event.target.value) > 0 && save({ concurrency: { ...settings.concurrency, [provider]: Number(event.target.value) } })} /></label>
       </div>)}
     </fieldset>
-    <fieldset className="space-y-2">
+    {state.central ? <fieldset className="space-y-2">
+      <legend className="text-[15px] text-foreground">Dossiers de l’agent central</legend>
+      <p className="text-muted-foreground">Chaque fil travaille dans un seul de ces dossiers, et sa session y est rangée.</p>
+      {state.dossiers.length ? state.dossiers.map((item) => <label key={item.path} className="flex items-center gap-2 text-foreground/80" title={item.path}>
+        <input type="checkbox" checked={item.selected} onChange={() => save({ folders: item.selected ? settings.folders.filter((entry) => entry !== item.path) : [...settings.folders, item.path] })} />
+        <span className="min-w-0 flex-1 truncate">{folderName(item.path)}</span>
+      </label>) : <p className="text-muted-foreground">Aucun dossier pour l’instant.</p>}
+    </fieldset> : <fieldset className="space-y-2">
       <legend className="text-[15px] text-foreground">Dossiers autorisés</legend>
       {settings.folders.length ? settings.folders.map((item) => <div key={item} className="flex items-center gap-2 text-foreground/80">
         <span className="min-w-0 flex-1 truncate">{item}</span>
@@ -186,7 +203,7 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
       </div>) : <p className="text-muted-foreground">Seul le dossier du projet est autorisé.</p>}
       <div className="flex gap-2"><input className={inputClass} placeholder="/chemin/du/dossier" value={folder} onChange={(event) => setFolder(event.target.value)} />
         <button type="button" className={buttonClass} disabled={!folder.trim()} onClick={() => { save({ folders: [...settings.folders, folder.trim()] }); setFolder(''); }}>Ajouter</button></div>
-    </fieldset>
+    </fieldset>}
   </div>;
 }
 

@@ -34,7 +34,7 @@ export type Approval = { threadId: string; requestId: string; toolName: string; 
 export type FolderRequest = { threadId: string | null; folder: string; status: 'pending' | 'allowed' | 'denied' };
 export type SetupProposal = {
   instructions?: string;
-  threads: Array<{ title: string; instructions: string; provider?: ProviderChoice }>;
+  threads: Array<{ title: string; instructions: string; provider?: ProviderChoice; folder?: string }>;
   status: 'pending' | 'accepted' | 'declined';
 };
 
@@ -116,7 +116,7 @@ export type Schedule = {
   text: string;
   at: string | null;
   cron: string | null;
-  thread: { title: string; instructions: string; provider: ProviderChoice } | null;
+  thread: { title: string; instructions: string; provider: ProviderChoice; folder?: string } | null;
   lastFiredAt: string | null;
   createdAt: string;
 };
@@ -224,4 +224,5 @@ export type OrchestratorDependencies = {
   approvedFolders(): string[];
   artifacts(projectPath: string): Array<{ url: string; title: string; updated_at?: string }>;
   connectors(projectPath: string): string[];
+  centralRoot?: string;
 };

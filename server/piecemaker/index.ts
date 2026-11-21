@@ -14,7 +14,7 @@ import { createBoardRouter, createBoardService, createEtapesRouter, createEtapes
 import { providerTokenUsageService, providerModelsService, providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerAuthService } from '@/modules/providers/services/provider-auth.service.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
-import { findApplicationRoot, getModuleDirectory, readObjectRecord } from '@/shared/utils.js';
+import { findApplicationRoot, getApplicationDataRoot, getModuleDirectory, readObjectRecord } from '@/shared/utils.js';
 
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
@@ -140,7 +140,9 @@ function orchestratorTurnOptions(userId: number | null, { provider, permissionMo
 }
 
 const providerHistory = sessionsService.fetchHistory.bind(sessionsService);
+const centralAgentRoot = path.join(getApplicationDataRoot(), 'PieceMaker Agent');
 const orchestrator = createOrchestratorService({
+  centralRoot: centralAgentRoot,
   previousPostIds: async sessionId => {
     const { messages } = await providerHistory(sessionId);
     const calls = new Set(messages.filter(m => m.kind === 'tool_use' && m.toolName === 'mcp__orchestrateur__post_message').map(m => m.toolId).filter(Boolean));
@@ -213,7 +215,7 @@ const orchestrator = createOrchestratorService({
     const event = createNotificationEvent({ provider: provider || 'system', code: 'agent.notification', meta: { sessionName: title, message: text } });
     notifyUserIfEnabled({ userId, event: { ...event, sessionId } });
   },
-  approvedFolders: () => projectsDb.getProjectPaths().map(row => row.project_path),
+  approvedFolders: () => projectsDb.getProjectPaths().map(row => row.project_path).filter(folder => path.resolve(folder) !== path.resolve(centralAgentRoot)),
   artifacts: root => openArtifacts(root).list({ scope: 'mine', limit: 200 }).map(({ url, title, updated_at }: { url: string; title: string; updated_at?: string }) => ({ url, title, updated_at })),
   connectors: root => Object.keys(readObjectRecord(readJson(path.join(root, '.mcp.json')).mcpServers) ?? {}),
 });

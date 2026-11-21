@@ -5,7 +5,7 @@ import express from 'express';
 import type { createOrchestratorService } from './service.js';
 
 type Service = ReturnType<typeof createOrchestratorService>;
-type Projects = { getProjectPaths(): Array<{ project_path: string }> };
+type Projects = { getProjectPaths(): Array<{ project_id: string; project_path: string }> };
 type Request = express.Request & { user?: { id?: number } };
 
 async function send(response: express.Response, run: () => unknown) {
@@ -26,12 +26,22 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
     return (request: Request, response: express.Response) => send(response, () => {
       const project = request.method === 'GET' ? request.query.project : request.body?.project;
       const root = typeof project === 'string' && path.isAbsolute(project)
-        && projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(project))?.project_path;
+        && (projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(project))?.project_path
+          ?? (service.isCentral(project) ? project : null));
       if (!root) throw Object.assign(new Error('Dossier introuvable.'), { code: 404 });
       return run(root, request);
     });
   }
 
+  const projectId = (root: string) => projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(root))?.project_id ?? null;
+  router.get('/central', (_request, response) => send(response, () => {
+    const central = service.central();
+    return { ...central, projectId: projectId(central.project) };
+  }));
+  router.post('/central/session', (request: Request, response) => send(response, async () => {
+    const session = await service.centralSession(request.user?.id ?? null);
+    return { ...session, projectId: projectId(session.project) };
+  }));
   router.get('/state', route((root, { user }) => service.state(root, user?.id ?? null)));
   router.get('/session', route(root => ({ sessionId: service.sessionId(root) })));
   router.post('/session', route((root, { user }) => service.session(root, user?.id ?? null)));

@@ -28,6 +28,8 @@
     "newSession": "New Session",
     "piecemakerAgent": "PieceMaker Agent",
     "piecemakerAgentTitle": "Open PieceMaker Agent for this folder",
+    "centralAgent": "PieceMaker Agent (all folders)",
+    "centralAgentTitle": "Coordinate work across the folders you choose",
     "tabularReview": "Tabular Review",
     "tabularReviewTitle": "Analyze this folder's Markdown documents as a table",
     "deleteSession": "Delete Session",

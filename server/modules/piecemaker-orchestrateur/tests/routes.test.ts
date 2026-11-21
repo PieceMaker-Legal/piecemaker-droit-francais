@@ -37,12 +37,34 @@ test('La route locale transmet les paramètres et renvoie le résultat du servic
 
 test('Un projet inconnu est refusé et le service reçoit seulement le message du projet connu', async () => {
   const postUserMessage = mock.fn(() => { throw Object.assign(new Error('Message refusé'), { code: 400 }); });
-  const service = { postUserMessage } as unknown as Parameters<typeof createOrchestratorRouter>[0];
-  const router = createOrchestratorRouter(service, { getProjectPaths: () => [{ project_path: root }] });
+  const service = { postUserMessage, isCentral: () => false } as unknown as Parameters<typeof createOrchestratorRouter>[0];
+  const router = createOrchestratorRouter(service, { getProjectPaths: () => [{ project_id: 'p1', project_path: root }] });
   assert.equal((await request(router, 'POST', '/message', { project: '/autre-dossier', text: 'Bonjour' })).status, 404);
   assert.deepEqual(await request(router, 'POST', '/message', { project: root, text: 'Bonjour', userId: 15 }), {
     status: 400, value: { error: 'Message refusé' },
   });
   assert.equal(postUserMessage.mock.callCount(), 1);
   assert.deepEqual(postUserMessage.mock.calls[0].arguments, [root, 'Bonjour', 7]);
+});
+
+test('L’agent central est accepté hors des dossiers et sa session renvoie l’identifiant du projet', async () => {
+  const central = '/agent-central-fictif';
+  const state = mock.fn(() => ({ ok: true }));
+  const centralSession = mock.fn(async () => ({ project: central, sessionId: 's1', provider: 'claude' }));
+  const service = { state, centralSession, isCentral: (project: string) => project === central } as unknown as Parameters<typeof createOrchestratorRouter>[0];
+  const rows: Array<{ project_id: string; project_path: string }> = [];
+  const router = createOrchestratorRouter(service, { getProjectPaths: () => rows });
+  const get = (url: string, query: Record<string, string>) => new Promise<{ status: number; value: unknown }>((resolve, reject) => {
+    let status = 200;
+    const req = { method: 'GET', url, query, headers: {}, user: { id: 7 } };
+    const res = { status(code: number) { status = code; return res; }, json(value: unknown) { resolve({ status, value }); } };
+    router(req as unknown as express.Request, res as express.Response, error => reject(error ?? new Error('Route absente.')));
+  });
+  assert.equal((await get('/state?project=' + encodeURIComponent(central), { project: central })).status, 200);
+  assert.equal((await get('/state?project=%2Fautre', { project: '/autre' })).status, 404);
+  rows.push({ project_id: 'p-central', project_path: central });
+  assert.deepEqual(await request(router, 'POST', '/central/session', {}), {
+    status: 200, value: { project: central, sessionId: 's1', provider: 'claude', projectId: 'p-central' },
+  });
+  assert.deepEqual(centralSession.mock.calls[0].arguments, [7]);
 });

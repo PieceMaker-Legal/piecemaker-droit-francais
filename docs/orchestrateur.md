@@ -21,10 +21,23 @@ L'interface est intégrée directement aux composants CloudCLI (choix explicite 
 | `server/piecemaker/vendor/mcp/orchestrateur/client.mjs` | Client commun : appelle `POST /api/piecemaker/local/orchestrateur/call` sur la boucle locale (découverte du port comme `vendor/installer/lib/conversion-client.mjs`). |
 | `server/piecemaker/mcp-declaration.ts` | `orchestrateur` et `fil` ajoutés à `BUNDLED_SERVERS`. |
 | `server/piecemaker/orchestrator-runtime.ts` | Enregistre les messages du compositeur et sert les pages d’historique du chat depuis l’état du dossier. |
+| `src/modules/sidebar/SidebarCentralAgentButton.tsx` | Bouton « PieceMaker Agent central » en tête de la liste des dossiers (`SidebarProjectList`, qui retire de la liste le dossier propre de l'agent central) : `POST /central/session` puis sélection de la session. |
+| `src/modules/piecemaker-workspace-tabs/agent/useCentralAgent.ts` | `GET /central` une fois par page : chemin, projet et session de l'agent central. |
 | `src/modules/sidebar/SidebarAgentButton.tsx` | Bouton natif « PieceMaker Agent » au-dessus de « Nouvelle session » : `POST /session` puis sélection de la session comme un clic du panneau. |
 | `src/modules/sidebar/SidebarTabularReviewButton.tsx` | Bouton natif « Analyse Tabulaire » sous « Nouvelle session » (dossiers protégés, remplace l'injection DOM du plugin). |
 | `src/modules/piecemaker-workspace-tabs/agent/` | Client des routes, état (`GET /state` toutes les 2 s), `useAgentSession` (la session courante est-elle l'agent du dossier ?), `AgentPanel` (onglets) et `AgentCards` (décisions, autorisations, widgets, connexions à traiter). |
 | `src/modules/piecemaker-workspace-tabs/WorkspacePanels.tsx`, `WorkspaceIconTabs.tsx` | Volet `agent` des volets de droite, ouvert par défaut dans la session de l'agent ; bouton `PanelRight` dans la barre d'icônes du haut, visible seulement dans cette session. |
+
+## Agent central (multi-dossiers)
+
+Un agent placé au-dessus des dossiers, sur le modèle exact de Claude Projects : un chat de coordination, des fils lancés et suivis par lui, chaque fil travaillant dans un seul dossier choisi par l'avocat. C'est le même service, la même interface et les mêmes outils que l'agent d'un dossier ; seules changent les règles ci-dessous (`central` dans `projectService`).
+
+- **Dossier propre** : `<CLOUDCLI_HOME>/PieceMaker Agent` (`centralRoot` des dépendances, câblé dans `server/piecemaker/index.ts`). Son état est dans `.piecemaker/orchestrateur/` comme pour un dossier. La session de chat y étant créée, CloudCLI l'enregistre comme projet : il passe ainsi par le proxy d'anonymisation (dictionnaire commun à tous les dossiers), mais il est retiré de la liste des dossiers du panneau gauche et des `approvedFolders` de l'orchestrateur.
+- **Dossiers choisis** : `settings.folders` ne contient que des dossiers CloudCLI (chemin ou nom unique, tout autre est refusé). L'avocat les coche dans Paramètres › « Dossiers de l'agent central » ; l'agent ne peut que demander (`start_thread` sur un dossier non coché → carte d'accès, le fil attend l'accord). Le dossier propre de l'agent n'est jamais un dossier de travail.
+- **Un fil, un dossier** : `start_thread` exige `folder` (pris dans `list_devices`, qui liste les dossiers avec `allowed`). La session du fil est créée dans ce dossier, donc rangée dans son panneau à côté des sessions de l'avocat. Le premier message du fil fixe son dossier et lui interdit les autres ; pour Claude, des règles `Read(//<autre dossier>/**)` et `Edit(//<autre dossier>/**)` sont ajoutées à `disallowedTools` pour chaque autre dossier (Codex et Mistral n'ont que la consigne). Les livrables sont relatifs au dossier du fil.
+- **Wakes** : un événement de fil porte `folder`. Le préambule ajoute `CENTRAL_RULES` (`prompt.ts`) et la liste des dossiers choisis.
+- **Routes** : `GET /central` → `{ project, projectId, sessionId }` ; `POST /central/session` → crée la session si besoin et renvoie aussi `provider`. Les autres routes acceptent `project` = dossier propre de l'agent central.
+- **Volet** : `state.central` et `state.dossiers` ; l'onglet Fils regroupe les fils par dossier.
 
 ## Stockage
 

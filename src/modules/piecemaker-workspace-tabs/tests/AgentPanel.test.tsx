@@ -32,7 +32,7 @@ vi.mock('@/piecemaker/dossier/api', () => ({ pmGet: vi.fn(async () => ({ active:
 const PROJECT = '/dossiers/Dupont';
 
 const thread: AgentThread = {
-  id: 'f1', reminderAt: null, title: 'Rédiger la note de synthèse', provider: 'claude', model: '', sessionId: 's1', ackThread: 'Je rédige la note.',
+  id: 'f1', reminderAt: null, title: 'Rédiger la note de synthèse', provider: 'claude', model: '', projectPath: PROJECT, sessionId: 's1', ackThread: 'Je rédige la note.',
   state: 'working', createdAt: '2026-01-01T10:00:00Z', updatedAt: '2026-01-01T10:00:00Z', resolved: false, replies: [], error: null,
 };
 
@@ -51,6 +51,8 @@ function state(): AgentState {
     artifacts: [],
     files: [],
     storage: { used: 0, total: 0 },
+    central: false,
+    dossiers: [],
   };
 }
 
@@ -133,4 +135,24 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
     await act(async () => undefined);
     expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/schedule/cancel', body: { project: PROJECT, kind, id }, method: undefined });
   }
+});
+
+it('range les fils de l’agent central par dossier et coche les dossiers qu’il peut utiliser', async () => {
+  const central = '/donnees/PieceMaker Agent';
+  const exemple = '/dossiers/Societe Exemple';
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  data.settings.folders = [PROJECT];
+  data.dossiers = [{ path: PROJECT, selected: true }, { path: exemple, selected: false }];
+  data.threads = [thread, { ...thread, id: 'f2', title: 'Analyser le contrat', projectPath: exemple, sessionId: 's2' }];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={central} /></MemoryRouter>);
+  const dupont = await screen.findByRole('region', { name: 'Dossier Dupont' });
+  expect(dupont.textContent).toContain('Rédiger la note de synthèse');
+  expect(screen.getByRole('region', { name: 'Dossier Societe Exemple' }).textContent).toContain('Analyser le contrat');
+  fireEvent.click(screen.getByRole('button', { name: 'Paramètres' }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Societe Exemple' }));
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: central, folders: [PROJECT, exemple] }, method: 'PUT' });
 });

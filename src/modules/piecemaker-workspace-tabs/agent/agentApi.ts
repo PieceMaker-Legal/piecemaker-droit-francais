@@ -49,6 +49,7 @@ export type AgentThread = {
   title: string;
   provider: AgentProvider;
   model: string;
+  projectPath: string;
   sessionId: string | null;
   reminderAt: string | null;
   ackThread: string;
@@ -85,7 +86,10 @@ export type AgentState = {
   artifacts: Array<{ url: string; title: string; updated_at?: string }>;
   files: Array<{ name: string; size: number; updatedAt: string }>;
   storage: { used: number; total: number };
+  central: boolean;
+  dossiers: Array<{ path: string; selected: boolean }>;
 };
+export type CentralAgent = { project: string; projectId: string | null; sessionId: string | null };
 
 const BASE = '/api/piecemaker/orchestrateur';
 
@@ -95,6 +99,8 @@ export const agentApi = {
   state: (project: string) => requestJson<AgentState>(`${BASE}/state?project=${encodeURIComponent(project)}`),
   sessionId: (project: string) => requestJson<{ sessionId: string | null }>(`${BASE}/session?project=${encodeURIComponent(project)}`),
   openSession: (project: string) => requestJson<{ sessionId: string; provider: AgentProvider | null }>(`${BASE}/session`, { project }),
+  central: () => requestJson<CentralAgent>(`${BASE}/central`),
+  openCentral: () => requestJson<CentralAgent & { sessionId: string; provider: AgentProvider | null }>(`${BASE}/central/session`, {}),
   post: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }),
   put: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }, 'PUT'),
 };
