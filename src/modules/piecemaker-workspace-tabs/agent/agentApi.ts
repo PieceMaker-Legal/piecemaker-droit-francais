@@ -101,6 +101,7 @@ export const agentApi = {
   sessionId: (project: string) => requestJson<{ sessionId: string | null }>(`${BASE}/session?project=${encodeURIComponent(project)}`),
   openSession: (project: string) => requestJson<{ sessionId: string; provider: AgentProvider | null }>(`${BASE}/session`, { project }),
   central: () => requestJson<CentralAgent>(`${BASE}/central`),
+  setBrain: (path: string) => requestJson<CentralAgent>(`${BASE}/central/brain`, { path }, 'PUT'),
   openCentral: () => requestJson<CentralAgent & { sessionId: string; provider: AgentProvider | null }>(`${BASE}/central/session`, {}),
   post: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }),
   put: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }, 'PUT'),

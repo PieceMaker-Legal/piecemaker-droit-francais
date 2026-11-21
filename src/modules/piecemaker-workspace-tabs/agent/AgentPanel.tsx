@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import { ACTIVE_THREAD_STATES, agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThread, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
@@ -165,7 +165,29 @@ function Instructions({ state, act }: { state: AgentState; act: AgentActions }) 
   </div>;
 }
 
-function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
+function Brain({ projectPath }: { projectPath: string }) {
+  const [brain, setBrain] = useState(projectPath);
+  const [error, setError] = useState('');
+  async function move() {
+    try {
+      setError('');
+      await agentApi.setBrain(brain.trim());
+      const session = await agentApi.openCentral();
+      window.location.assign(`/session/${session.sessionId}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+  return <fieldset className="space-y-2">
+    <legend className="text-[15px] text-foreground">Brain</legend>
+    <p className="text-muted-foreground">Le dossier où l’agent central s’ouvre et tient votre profil (AGENTS.md), puis l’About.md et la Roadmap.md de chaque dossier. Choisissez un dossier à part, jamais un dossier juridique.</p>
+    <div className="flex gap-2"><input aria-label="Emplacement du brain" className={inputClass} value={brain} onChange={(event) => setBrain(event.target.value)} />
+      <button type="button" className={buttonClass} disabled={!brain.trim() || brain.trim() === projectPath} onClick={() => void move()}>Déplacer</button></div>
+    {error && <p role="alert" className="text-sm">{error}</p>}
+  </fieldset>;
+}
+
+function Settings({ state, act, projectPath }: { state: AgentState; act: AgentActions; projectPath: string }) {
   const settings = state.settings;
   const connected = new Set(state.providers.filter((provider) => provider.authenticated).map((provider) => provider.provider));
   const [folder, setFolder] = useState('');
@@ -190,6 +212,7 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
           onBlur={(event) => Number(event.target.value) > 0 && save({ concurrency: { ...settings.concurrency, [provider]: Number(event.target.value) } })} /></label>
       </div>)}
     </fieldset>
+    {state.central && <Brain projectPath={projectPath} />}
     {state.central ? <fieldset className="space-y-2">
       <legend className="text-[15px] text-foreground">Dossiers de l’agent central</legend>
       <p className="text-muted-foreground">Chaque fil travaille dans un seul de ces dossiers, et sa session y est rangée.</p>
@@ -282,7 +305,7 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
-        {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
+        {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} projectPath={projectPath} /></>}
         {tab === 'scheduled' && <Scheduled state={state} act={act} />}
       </div>
     </>}

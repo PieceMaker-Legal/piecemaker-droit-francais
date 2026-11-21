@@ -66,3 +66,17 @@ test('un usage CLI ordinaire reste entièrement libre : seuls les autres dossier
     assert.equal(decision('Bash', { command }), 'allow', command);
   }
 });
+
+test('le brain de l’agent central tient ses limites de lignes, quel que soit l’outil d’écriture', () => {
+  const lines = (count) => Array.from({ length: count }, (_, index) => `ligne ${index + 1}`).join('\n') + '\n';
+  assert.equal(decision('Write', { file_path: path.join(central, 'AGENTS.md'), content: lines(200) }, central), 'allow');
+  assert.equal(decision('Write', { file_path: path.join(central, 'AGENTS.md'), content: lines(201) }, central), 'deny');
+  assert.equal(decision('Write', { file_path: path.join(central, 'projects', 'Dossier Dupont', 'Roadmap.md'), content: lines(151) }, central), 'deny');
+  const about = path.join(central, 'projects', 'Dossier Dupont', 'About.md');
+  fs.mkdirSync(path.dirname(about), { recursive: true });
+  fs.writeFileSync(about, lines(99));
+  assert.equal(decision('Edit', { file_path: about, old_string: 'ligne 99', new_string: 'ligne 99\nligne 100' }, central), 'allow');
+  assert.equal(decision('Edit', { file_path: about, old_string: 'ligne 99', new_string: 'ligne 99\nligne 100\nligne 101' }, central), 'deny');
+  assert.equal(decision('Write', { file_path: path.join(central, 'notes.md'), content: lines(500) }, central), 'allow');
+  assert.equal(decision('Write', { file_path: path.join(dupont, 'About.md'), content: lines(500) }), 'allow');
+});

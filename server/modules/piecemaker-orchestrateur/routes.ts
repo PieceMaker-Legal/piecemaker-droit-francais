@@ -18,7 +18,7 @@ async function send(response: express.Response, run: () => unknown) {
   }
 }
 
-export function createOrchestratorRouter(service: Service, projects: Projects) {
+export function createOrchestratorRouter(service: Service, projects: Projects, brain?: { setRoot(value: unknown): { path: string } }) {
   const router = express.Router();
   router.use(express.json({ limit: '30mb' }));
 
@@ -35,6 +35,17 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
 
   const projectId = (root: string) => projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(root))?.project_id ?? null;
   router.get('/central', (_request, response) => send(response, () => {
+    const central = service.central();
+    return { ...central, projectId: projectId(central.project) };
+  }));
+  router.put('/central/brain', (request: Request, response) => send(response, () => {
+    if (!brain) throw Object.assign(new Error('Brain indisponible.'), { code: 404 });
+    const wanted = typeof request.body?.path === 'string' ? path.resolve(request.body.path.trim()) : '';
+    const current = service.central().project;
+    if (wanted && projects.getProjectPaths().some(row => path.resolve(row.project_path) === wanted && path.resolve(row.project_path) !== path.resolve(current))) {
+      throw Object.assign(new Error('Ce dossier est un dossier juridique : choisissez un dossier à part pour le brain.'), { code: 400 });
+    }
+    brain.setRoot(request.body?.path);
     const central = service.central();
     return { ...central, projectId: projectId(central.project) };
   }));

@@ -187,3 +187,21 @@ it('range les fils de l’agent central par dossier et coche les dossiers qu’i
   await act(async () => undefined);
   expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: central, folders: [PROJECT, exemple] }, method: 'PUT' });
 });
+
+it('déplace le brain de l’agent central vers le dossier choisi et y rouvre sa session', async () => {
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  calls.state = data;
+  const assign = vi.fn();
+  vi.stubGlobal('location', { ...window.location, assign });
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  const input = await screen.findByRole('textbox', { name: 'Emplacement du brain' });
+  expect((input as HTMLInputElement).value).toBe(CENTRAL);
+  fireEvent.change(input, { target: { value: '/Users/exemple/Brain' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Déplacer' }));
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/central/brain', body: { path: '/Users/exemple/Brain' }, method: 'PUT' });
+  expect(assign).toHaveBeenCalled();
+});

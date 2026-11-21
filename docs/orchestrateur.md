@@ -40,6 +40,15 @@ Un agent placé au-dessus des dossiers, sur le modèle exact de Claude Projects 
 - **Routes** : `GET /central` → `{ project, projectId, sessionId }` ; `POST /central/session` → crée la session si besoin et renvoie aussi `provider`. Les autres routes acceptent `project` = dossier propre de l'agent central.
 - **Volet** : `state.central` et `state.dossiers` ; l'onglet Fils regroupe les fils par dossier.
 
+### Brain
+
+L’agent central s’ouvre dans le brain (`server/piecemaker/brain.ts`). L’avocat en choisit l’emplacement dans Paramètres › Brain (`PUT /central/brain`, enregistré dans `~/.piecemaker/brain.json`, par défaut `<CLOUDCLI_HOME>/PieceMaker Agent`) ; un dossier juridique est refusé. À l’ouverture, le brain reçoit :
+- `AGENTS.md`, lien vers `~/.piecemaker/custom/perso.md` (copie sous Windows si le lien échoue) : le profil reste lu par les agents de dossier comme avant ; `CLAUDE.md` ne contient que `@AGENTS.md` ;
+- `projects/<nom du dossier>/About.md` et `Roadmap.md`, créés pour chaque dossier coché ou visé par un fil, puis tenus par l’agent central seul (`CENTRAL_RULES` › Brain). Les fils n’y ont pas accès : l’agent central leur transmet ce qu’il faut dans leurs instructions ;
+- les skills `grill-me`, `connect-tool`, `skill-manager` et `setup-brain` (`vendor/brain/skills`, adaptés d’ai-maxxing-skills, MIT) dans `.agents/skills`, lus par Claude via le lien `.claude/skills`. Ils ne sont installés nulle part ailleurs ; un skill modifié par l’utilisateur n’est jamais écrasé.
+- Limites : 200 lignes pour `AGENTS.md`, 100 pour `About.md`, 150 pour `Roadmap.md`. Le hook `cloisonnement` refuse un `Write`, `Edit` ou `MultiEdit` qui les dépasserait (limite : un `apply_patch` Codex ou une commande shell n’est pas mesuré).
+- Mémoire native : `autoMemoryEnabled: false` dans `.claude/settings.local.json` du brain et de chaque dossier suivi. Codex n’est pas encore couvert.
+
 ### Fils imbriqués
 
 Réservé à l’agent central. Un clic sur un fil ouvre sa session dans un volet imbriqué (`agent/subagent.tsx`, rendu par `WorkspacePanels`) : chat du fil, onglets et plugins de son dossier en haut. Dès qu’un volet ou un document s’ouvre dans ce fil, il passe en plein écran avec le volet à sa droite. Le bouton retour ferme le fil et rend le chat principal, sans changer de projet. Un lien du chat central vers un fichier d’un dossier, ou une pièce jointe d’un message lié à un fil, ouvre ce fil avec le document à droite. Tant qu’un fil est ouvert, les événements globaux d’ouverture (éditeur, volets) ne visent que lui.

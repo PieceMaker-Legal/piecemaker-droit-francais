@@ -19,6 +19,7 @@ import { findApplicationRoot, getApplicationDataRoot, getModuleDirectory, readOb
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
 import { reconcileClaudeHooks, reconcileCodexHooks, reconcileVibeHooks } from './claude-hooks.js';
+import { createBrain } from './brain.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
@@ -140,9 +141,15 @@ function orchestratorTurnOptions(userId: number | null, { provider, permissionMo
 }
 
 const providerHistory = sessionsService.fetchHistory.bind(sessionsService);
-const centralAgentRoot = path.join(getApplicationDataRoot(), 'PieceMaker Agent');
+const brain = createBrain({
+  home: piecemakerHome(),
+  defaultRoot: path.join(getApplicationDataRoot(), 'PieceMaker Agent'),
+  skills: path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'brain', 'skills'),
+});
 const orchestrator = createOrchestratorService({
-  centralRoot: centralAgentRoot,
+  centralRoot: brain.root,
+  prepareCentral: brain.prepare,
+  prepareDossier: brain.prepareCase,
   previousPostIds: async sessionId => {
     const { messages } = await providerHistory(sessionId);
     const calls = new Set(messages.filter(m => m.kind === 'tool_use' && m.toolName === 'mcp__orchestrateur__post_message').map(m => m.toolId).filter(Boolean));
@@ -215,7 +222,7 @@ const orchestrator = createOrchestratorService({
     const event = createNotificationEvent({ provider: provider || 'system', code: 'agent.notification', meta: { sessionName: title, message: text } });
     notifyUserIfEnabled({ userId, event: { ...event, sessionId } });
   },
-  approvedFolders: () => projectsDb.getProjectPaths().map(row => row.project_path).filter(folder => path.resolve(folder) !== path.resolve(centralAgentRoot)),
+  approvedFolders: () => projectsDb.getProjectPaths().map(row => row.project_path).filter(folder => path.resolve(folder) !== brain.root()),
   artifacts: root => openArtifacts(root).list({ scope: 'mine', limit: 200 }).map(({ url, title, updated_at }: { url: string; title: string; updated_at?: string }) => ({ url, title, updated_at })),
   connectors: root => Object.keys(readObjectRecord(readJson(path.join(root, '.mcp.json')).mcpServers) ?? {}),
 });
@@ -309,7 +316,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   }));
   router.use(timesheet);
   router.use('/catala', createCatalaRouter(catalaScriptPath(applicationRoot), {}, catalaCitations));
-  router.use('/orchestrateur', createOrchestratorRouter(orchestrator, projectsDb));
+  router.use('/orchestrateur', createOrchestratorRouter(orchestrator, projectsDb, brain));
   router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));

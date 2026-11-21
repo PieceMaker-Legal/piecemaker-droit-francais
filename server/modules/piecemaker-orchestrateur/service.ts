@@ -375,6 +375,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       createdAt: now(), updatedAt: now(), reminderAt: null, retries: 0, error: null,
       replies: [], pendingRequests: [], inbox: [], external: false,
     };
+    if (central) deps.prepareDossier?.(root, t.projectPath);
     t.inbox.push(formatThreadKickoff({ thread: t, key: t.key, cited: cited(args.context_message_ids), sharedFolder: store.sharedFolder, projectInstructions, dossier: central ? t.projectPath : undefined }));
     return t;
   }
@@ -419,6 +420,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     if (patch.folders) {
       patch.folders = [...new Set(patch.folders.map(folder => central ? dossier(folder) : canonical(path.resolve(root, folder))))];
       if (!principal && patch.folders.some(folder => !allowed(folder))) refuse(403, "L'accès aux dossiers exige l'accord de l'avocat.");
+      if (central) for (const folder of patch.folders) deps.prepareDossier?.(root, folder);
     }
     const settings = state.settings;
     const providerChanged = patch.orchestratorProvider && settings.orchestratorProvider !== patch.orchestratorProvider;
@@ -869,12 +871,17 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
 export function createOrchestratorService(deps: OrchestratorDependencies) {
   const projects = new Map<string, ReturnType<typeof projectService>>();
   let centralKey: string | null = null;
+  let centralSource: string | null = null;
   function centralRoot() {
     if (!deps.centralRoot) return refuse(404, 'Agent central indisponible.');
-    if (!centralKey) {
-      mkdirSync(path.join(deps.centralRoot, '.piecemaker'), { recursive: true });
-      writeFileSync(path.join(deps.centralRoot, '.piecemaker', 'agent-central'), '');
-      centralKey = canonical(deps.centralRoot);
+    const wanted = typeof deps.centralRoot === 'function' ? deps.centralRoot() : deps.centralRoot;
+    if (!centralKey || wanted !== centralSource) {
+      if (centralKey) projects.delete(centralKey);
+      mkdirSync(path.join(wanted, '.piecemaker'), { recursive: true });
+      writeFileSync(path.join(wanted, '.piecemaker', 'agent-central'), '');
+      centralSource = wanted;
+      centralKey = canonical(wanted);
+      try { deps.prepareCentral?.(centralKey); } catch (error) { console.warn('[piecemaker] Brain :', error); }
     }
     return centralKey;
   }

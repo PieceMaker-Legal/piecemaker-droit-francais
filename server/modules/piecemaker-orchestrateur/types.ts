@@ -224,5 +224,7 @@ export type OrchestratorDependencies = {
   approvedFolders(): string[];
   artifacts(projectPath: string): Array<{ url: string; title: string; updated_at?: string }>;
   connectors(projectPath: string): string[];
-  centralRoot?: string;
+  centralRoot?: string | (() => string);
+  prepareCentral?(root: string): void;
+  prepareDossier?(central: string, folder: string): void;
 };

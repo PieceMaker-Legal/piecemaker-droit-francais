@@ -13,6 +13,7 @@ const CENTRAL_MARKER = path.join('.piecemaker', 'agent-central');
 const CENTRAL_SHARED = path.join('.piecemaker', 'orchestrateur', 'fichiers');
 const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Grep', 'Glob']);
 const MAX_COMMAND_LENGTH = 20_000;
+const BRAIN_LIMITS = { 'AGENTS.md': 200, 'About.md': 100, 'Roadmap.md': 150 };
 
 function inside(root, target) {
   const relative = path.relative(root, target);
@@ -57,7 +58,52 @@ function isCentral(caseRoot) {
   return fs.existsSync(path.join(caseRoot, CENTRAL_MARKER));
 }
 
+function brainRoot(cwd) {
+  for (let dir = path.resolve(cwd); ; dir = path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, CENTRAL_MARKER))) return dir;
+    if (path.dirname(dir) === dir) return null;
+  }
+}
+
+function brainLimit(brain, file) {
+  const parts = path.relative(brain, file).split(path.sep);
+  if (parts.length === 1 && parts[0] === 'AGENTS.md') return BRAIN_LIMITS['AGENTS.md'];
+  if (parts.length === 3 && parts[0] === 'projects' && (parts[2] === 'About.md' || parts[2] === 'Roadmap.md')) return BRAIN_LIMITS[parts[2]];
+  return null;
+}
+
+function replaceText(text, edit) {
+  if (typeof edit?.old_string !== 'string' || typeof edit?.new_string !== 'string') return text;
+  return edit.replace_all ? text.split(edit.old_string).join(edit.new_string) : text.replace(edit.old_string, () => edit.new_string);
+}
+
+function nextText(tool, input, file) {
+  if (tool === 'Write') return typeof input.content === 'string' ? input.content : null;
+  if (tool !== 'Edit' && tool !== 'MultiEdit') return null;
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return null; }
+  return (tool === 'Edit' ? [input] : Array.isArray(input.edits) ? input.edits : []).reduce(replaceText, text);
+}
+
+const lineCount = (text) => text.replace(/\n$/, '').split('\n').length;
+
+export function brainLimitDecision(payload) {
+  const tool = String(payload?.tool_name || '');
+  const input = payload?.tool_input || {};
+  if (typeof input.file_path !== 'string') return null;
+  const brain = brainRoot(payload?.cwd || process.cwd());
+  if (!brain) return null;
+  const file = path.resolve(payload?.cwd || process.cwd(), input.file_path);
+  const limit = brainLimit(brain, file);
+  const text = limit ? nextText(tool, input, file) : null;
+  if (text === null || lineCount(text) <= limit) return null;
+  const reason = `[PieceMaker] ${path.relative(brain, file)} ferait ${lineCount(text)} lignes : la limite du brain est ${limit}. Condensez avant d’écrire, sans perdre une échéance ni une décision.`;
+  return { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason }, systemMessage: reason };
+}
+
 export function cloisonnementDecision(payload) {
+  const limited = brainLimitDecision(payload);
+  if (limited) return limited;
   const cwd = payload?.cwd || process.cwd();
   const own = locateProjectCase(cwd);
   if (!own) return null;
