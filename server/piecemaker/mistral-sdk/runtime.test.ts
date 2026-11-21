@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { ProviderRuntimeContext, NormalizedMessage } from '@/shared/types.js';
 
 import { createMistralHistory } from './history.js';
-import { createMistralSdkFork, createMistralSdkRuntime } from './runtime.js';
+import { createMistralSdkFork, createMistralSdkRuntime, installMistralTokenUsage } from './runtime.js';
 import type { createMistralTools } from './tools.js';
 import type { mistralSdkAuth } from './auth.service.js';
 
@@ -290,4 +290,25 @@ test('an invalid model name shows a readable error instead of the raw API body',
   await assert.rejects(runtime.run('Bonjour', { sessionId: 'mistral-sdk-modele' }, { userId: 1, send: event => events.push(event as NormalizedMessage) }, context),
     (error: Error) => /ne connaît pas ce modèle/.test(error.message) && !error.message.includes('{'));
   assert.match(events.find(event => event.kind === 'error')?.content ?? '', /Choisissez un modèle Mistral/);
+});
+
+test('le compteur Mistral montre le contexte du dernier appel sur la fenêtre du modèle', async t => {
+  const { home, history } = await setup(t);
+  const events: NormalizedMessage[] = [];
+  const auth = () => ({ client: {
+    models: { retrieve: async ({ modelId }: { modelId: string }) => ({ id: modelId, maxContextLength: 256_000 }) },
+    chat: { stream: async () => (async function* () {
+      yield { data: { choices: [{ delta: { content: 'Réponse.' } }] } };
+      yield { data: { choices: [{ delta: {} }], usage: { promptTokens: 41_000, completionTokens: 900, totalTokens: 41_900 } } };
+    })() },
+  }, close: async () => {} }) as unknown as ReturnType<typeof mistralSdkAuth.createClient>;
+  await createMistralSdkRuntime(history, async () => [], home, auth, fixtureTools(async () => '')).run('Question', { sessionId: 'mistral-sdk-compteur', model: 'mistral-medium-latest' }, { userId: 1, send: (event: unknown) => events.push(event as NormalizedMessage) } as never, context);
+  const budget = events.find(event => event.kind === 'status' && event.text === 'token_budget')?.tokenBudget;
+  assert.deepEqual(budget, { used: 41_900, total: 256_000, inputTokens: 41_000, outputTokens: 900, breakdown: { input: 41_000, output: 900 } });
+  assert.deepEqual((await history.load('mistral-sdk-compteur'))?.tokenUsage, budget);
+
+  const service = { getSessionTokenUsage: async (_sessionId: string): Promise<unknown> => ({ used: -1 }) };
+  installMistralTokenUsage(service, id => ({ 'app-mistral': { provider: 'mistral', provider_session_id: 'mistral-sdk-compteur' }, 'app-claude': { provider: 'claude' } })[id], history);
+  assert.deepEqual(await service.getSessionTokenUsage('app-mistral'), budget);
+  assert.deepEqual(await service.getSessionTokenUsage('app-claude'), { used: -1 });
 });

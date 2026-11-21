@@ -32,6 +32,7 @@ import ComposerAttachment from '@/modules/chat/composer/ComposerAttachment';
 import VoiceInputButton from '@/modules/chat/composer/VoiceInputButton';
 import PermissionRequestsBanner from '@/modules/chat/composer/PermissionRequestsBanner';
 import TokenUsageSummary from '@/modules/chat/composer/TokenUsageSummary';
+import { ProviderLimitsButton } from '@/modules/piecemaker-provider-limits';
 import QueuedMessageCard from '@/modules/chat/composer/QueuedMessageCard';
 import SteeredMessageCard from '@/modules/chat/composer/SteeredMessageCard';
 import BackgroundSendDialog from '@/modules/chat/composer/BackgroundSendDialog';
@@ -367,8 +368,9 @@ export default function ChatComposer({
       {/* The question panel replaces the input, but how to answer often depends on
           how much context is left, so the token usage stays reachable below it. */}
       {hasQuestionPanel && (
-        <div className="mx-auto flex max-w-[54.25rem] justify-end">
+        <div className="mx-auto flex max-w-[54.25rem] justify-end gap-1.5">
           <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
+          <ProviderLimitsButton />
         </div>
       )}
 
@@ -496,6 +498,7 @@ export default function ChatComposer({
             )}
 
             <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
+            <ProviderLimitsButton />
 
             {onClearContext && (
               <PromptInputButton
