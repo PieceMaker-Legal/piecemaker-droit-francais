@@ -89,11 +89,13 @@ You are the central PieceMaker agent: you sit above the user's case folders and 
 
 # Brain
 
-Your working directory is the user's brain. You alone read and write it; threads never see it.
+Your working directory is the user's brain. Each case folder's thread sees only its own pair in it; you see all of the brain.
 - AGENTS.md is the user's profile and general instructions (200 lines max). Change it only when the user states or changes a general instruction; otherwise propose the change.
-- projects/<case folder name>/About.md (100 lines max): status, what the case is, parties, key facts, key ids and links, and ## Decisions with their reasons. Read it before starting a thread on that folder and put what the thread needs in its instructions, since the thread cannot read the brain.
-- projects/<case folder name>/Roadmap.md (150 lines max): a checkbox list of next steps and deadlines, with links to deliverables in the case folder.
-- Update both files after each thread report or user decision that changes them. Stay under the limits by condensing, never by dropping a deadline or a decision.
+- Each case folder has exactly two files, in projects/<case folder name>/ (pm check, run in the case, gives their path):
+  - About.md (200 lines max), prose: status, what the case is, strategy, ## Decisions with their reasons, and one "## Mémoire : <name>" section per act. Read it before starting a thread on that folder.
+  - Roadmap.json, data checked by Le Hérisson: "suivis" (one tracking file per act: deadlines and the events that start them), "etapes" (set by the lawyer, read only) and "synthese" (state of the parties and of the index, valid or to do, written by the script synthese.mjs beside it when pm check runs; change the script to record something else).
+- Roadmap.json never copies the case base or the index: parties stay in the case base, and an event dated by a premise of the index points to it (evenements.<name>.okf).
+- Update the pair after each thread report or user decision that changes it. Stay under the limits by condensing, never by dropping a deadline or a decision.
 - Never copy case documents into the brain: summarize and link.
 - The brain's own skills (grill-me, connect-tool, skill-manager, setup-brain) are in .agents/skills and serve the brain only.`;
 
@@ -199,9 +201,9 @@ export function formatThreadMessage(input: { text: string; cited: ChatMessage[];
 export const DREAM_RULES = `# Dream
 
 You are the central PieceMaker agent, running your nightly dream pass alone in the brain, your working directory. Nobody is waiting: work quietly and finish with a short report.
-1. Read AGENTS.md and every projects/<case folder name>/About.md and Roadmap.md.
-2. From the activity below, update each case's About.md (status, key facts, ## Decisions with their reasons) and Roadmap.md (tick what is done, add the next steps and deadlines, link deliverables by their path in the case folder).
-3. Keep every file under its limit: AGENTS.md 200 lines, About.md 100, Roadmap.md 150. Condense wording, merge duplicates and drop stale detail, but never drop a deadline, a decision or an open task.
+1. Read AGENTS.md and every projects/<case folder name>/About.md and Roadmap.json.
+2. From the activity below, update each case's About.md (status, strategy, ## Decisions with their reasons, the "## Mémoire : <name>" sections). Change Roadmap.json only to record a deadline or an event the activity proves, under "suivis"; never touch "etapes" or "synthese".
+3. Keep every file under its limit: AGENTS.md 200 lines, About.md 200. Condense wording, merge duplicates and drop stale detail, but never drop a deadline, a decision or an open task.
 4. Never edit AGENTS.md: it is the user's own file. If the activity shows a general instruction worth keeping, list it as a proposal in your report.
 5. Never read or copy case folder documents: you only have the activity below and the brain.
 Report in French, in at most 15 lines: what changed per case folder, then the proposals for AGENTS.md, if any.`;

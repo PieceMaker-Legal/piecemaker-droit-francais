@@ -25,7 +25,7 @@ Avant d'utiliser une commande, lisez sa référence dans `<cette-skill>/referenc
 | `pm tabular_review` | analyse de pièces, recherche de jurisprudence, modèles | `tabular.md` |
 | `pm bordereau` | tamponner et numéroter les pièces | `bordereau.md` |
 | `pm suivi_dossiers` | verifier le suivi des échéances, lire ou ecrire le tableau | `suivi.md`, `tableau.md` |
-| `pm memoire` | verifier la mémoire d'un projet (`.piecemaker/memoires/<nom>.md`) | `suivi.md` |
+| `pm memoire` | verifier la mémoire d'un projet (section « ## Mémoire : <nom> » de l'About.md du dossier, ou `.piecemaker/memoires/<nom>.md` sans brain) | `suivi.md` |
 | `pm okf` | `verify` l'index OKF du dossier et les éléments manquants du graphe, `link` ou `unlink` pièces, prémisses et parties, `examinee` une pièce lue sans lien, `revue` lie une colonne de revue tabulaire à une prémisse | `okf.md` |
 | `pm catala` | verifier un programme Catala (format, tests, preuve, Catleg) | skill `catala` |
 

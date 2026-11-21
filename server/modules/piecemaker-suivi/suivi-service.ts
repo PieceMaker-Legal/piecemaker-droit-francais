@@ -11,6 +11,7 @@ import type { SuiviDossier, SuiviSnapshot } from '../../../shared/piecemaker-sui
 import { isLegalDate } from './legal-period.js';
 import type { SourceConnectors, SourceInfo } from './sources.js';
 import { describeRappels, localToday } from './suivi-rappels.js';
+import { brainSuiviCode, brainSuiviFiles, roadmapOf } from './case-store.js';
 import { describeSuivi, SUIVI_LEGACY_FILE, SUIVI_NAME, suiviPath, verifySuivi } from './suivi.js';
 import type { SuiviMark } from './suivi.js';
 
@@ -74,12 +75,16 @@ export function createSuiviService(getDatabase: () => Database.Database, connect
   };
   const readOrNull = (file: string) => readFile(file, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error; });
   const files = async (root: string, withDeleted = false) => {
+    const fromBrain = brainSuiviFiles(root, withDeleted);
+    if (fromBrain) return fromBrain.sort((a, b) => Number(b === SUIVI_NAME) - Number(a === SUIVI_NAME) || a.localeCompare(b));
     const entries = await readdir(path.join(root, '.piecemaker')).catch(() => [] as string[]);
     const found = entries.flatMap((entry) => { const match = SUIVI_FILES.exec(entry); return match && (withDeleted || !match[2]) ? [match[1]] : []; });
     if (entries.includes(path.basename(SUIVI_LEGACY_FILE))) found.push(SUIVI_NAME);
     return [...new Set(found)].sort((a, b) => Number(b === SUIVI_NAME) - Number(a === SUIVI_NAME) || a.localeCompare(b));
   };
   const fileOf = async (root: string, fichier: string) => {
+    const fromBrain = brainSuiviCode(root, fichier);
+    if (fromBrain !== undefined) return fromBrain;
     const code = await readOrNull(path.join(root, suiviPath(fichier)));
     if (code !== null) return code;
     if (fichier !== SUIVI_NAME) return null;
@@ -103,7 +108,7 @@ export function createSuiviService(getDatabase: () => Database.Database, connect
     if (fresh) for (const key of sources.keys()) if (key.startsWith(`${root}\0`)) sources.delete(key);
     const code = await fileOf(root, fichier);
     if (code === null) throw new TypeError(MISSING);
-    const result = await verifySuivi({ code, cwd: root, connectors: cached, marks: marks(id, fichier) });
+    const result = await verifySuivi({ code, cwd: root, connectors: cached, marks: marks(id, fichier), premise: connectors.premise ? (title) => connectors.premise!(root, title) : undefined, referenced: Boolean(roadmapOf(root)) });
     const previous = stored(id, fichier);
     const snapshot: SuiviSnapshot = { revision: previous.revision + 1, updatedAt: new Date().toISOString(), code, hash: hashOf(code), ...result };
     database().prepare('INSERT INTO pm_suivi VALUES(?,?,?,?,?) ON CONFLICT(project_id, fichier) DO UPDATE SET revision=excluded.revision, code=excluded.code, snapshot_json=excluded.snapshot_json').run(id, fichier, snapshot.revision, code, JSON.stringify(snapshot));

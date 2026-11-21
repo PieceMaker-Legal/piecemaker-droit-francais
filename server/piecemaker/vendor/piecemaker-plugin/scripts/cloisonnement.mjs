@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { readHookPayload, runHook, noop } from './lib/hook-io.mjs';
+import { brainRoot as configuredBrain, caseDirectory } from './lib/brain-case.mjs';
 
 const require = createRequire(import.meta.url);
 const { locateProjectCase } = require('./lib/case-folders.cjs');
@@ -13,7 +14,7 @@ const CENTRAL_MARKER = path.join('.piecemaker', 'agent-central');
 const CENTRAL_SHARED = path.join('.piecemaker', 'orchestrateur', 'fichiers');
 const FILE_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit', 'Grep', 'Glob']);
 const MAX_COMMAND_LENGTH = 20_000;
-const BRAIN_LIMITS = { 'AGENTS.md': 200, 'About.md': 100, 'Roadmap.md': 150 };
+const BRAIN_LIMITS = { 'AGENTS.md': 200, 'About.md': 200 };
 
 function inside(root, target) {
   const relative = path.relative(root, target);
@@ -68,7 +69,7 @@ function brainRoot(cwd) {
 function brainLimit(brain, file) {
   const parts = path.relative(brain, file).split(path.sep);
   if (parts.length === 1 && parts[0] === 'AGENTS.md') return BRAIN_LIMITS['AGENTS.md'];
-  if (parts.length === 3 && parts[0] === 'projects' && (parts[2] === 'About.md' || parts[2] === 'Roadmap.md')) return BRAIN_LIMITS[parts[2]];
+  if (parts.length === 3 && parts[0] === 'projects' && parts[2] === 'About.md') return BRAIN_LIMITS[parts[2]];
   return null;
 }
 
@@ -85,13 +86,19 @@ function nextText(tool, input, file) {
   return (tool === 'Edit' ? [input] : Array.isArray(input.edits) ? input.edits : []).reduce(replaceText, text);
 }
 
+const safeBrain = () => { try { return configuredBrain(); } catch { return null; } };
+
+function ownBrainCase(caseRoot) {
+  try { return caseDirectory(caseRoot, { create: false })?.directory ?? null; } catch { return null; }
+}
+
 const lineCount = (text) => text.replace(/\n$/, '').split('\n').length;
 
 export function brainLimitDecision(payload) {
   const tool = String(payload?.tool_name || '');
   const input = payload?.tool_input || {};
   if (typeof input.file_path !== 'string') return null;
-  const brain = brainRoot(payload?.cwd || process.cwd());
+  const brain = safeBrain() ?? brainRoot(payload?.cwd || process.cwd());
   if (!brain) return null;
   const file = path.resolve(payload?.cwd || process.cwd(), input.file_path);
   const limit = brainLimit(brain, file);
@@ -111,6 +118,8 @@ export function cloisonnementDecision(payload) {
     const other = locateProjectCase(target);
     if (!other || other.caseRoot === own.caseRoot) continue;
     if (isCentral(other.caseRoot) && inside(path.join(other.caseRoot, CENTRAL_SHARED), other.absolute)) continue;
+    const pair = isCentral(other.caseRoot) ? ownBrainCase(own.caseRoot) : null;
+    if (pair && inside(pair, target)) continue;
     const reason = `[PieceMaker] Cette session travaille dans le dossier « ${own.caseName} » : l’accès au dossier « ${other.caseName} » est fermé, les dossiers ne se mélangent pas. Pour travailler sur « ${other.caseName} », demandez un fil ouvert dans ce dossier.`;
     return {
       hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason },

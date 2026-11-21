@@ -452,3 +452,56 @@ test('les autres documents du board restent dans la base et l’agent y accède'
   assert.equal((db.prepare('SELECT count(*) AS n FROM pm_board_docs').get() as { n: number }).n, 3);
   await assert.rejects(board.write('set', '../sortie', {}), /Chemin invalide/);
 });
+
+test('un événement renvoie à la prémisse OKF qui porte sa date, et les parties restent dans la base du dossier', async () => {
+  const premise = (title: string) => title === 'Signification du jugement'
+    ? { date: '2026-10-14', intitule: 'Signification du jugement', preuve: [{ piece: 'pieces/03_signification.md', citation: 'Acte signifié le 14 octobre 2026' }] }
+    : null;
+  const code = JSON.stringify({
+    matter: { summary: 'Appel du jugement.', parties: [{ name: 'Jean Dupont', role: 'adverse' }] },
+    evenements: { 'signification du jugement': { okf: 'Signification du jugement' }, 'lettre de relance': { okf: 'Prémisse absente' }, 'mise en demeure': { okf: 'Signification du jugement', date: '2026-10-14' } },
+    echeances: { appel: { intitule: 'Former appel', kind: 'filing', de: 'signification du jugement', delai: { mois: 1 }, selon: [{ source: 'LEGIARTI000000000101', citation: 'Le délai pour former appel est d’un mois à compter de la signification du jugement.' }], decompte: { depart: 'exclu', report: 'jour_ouvrable_suivant', selon: [{ source: 'LEGIARTI000000000102', citation: 'est prorogé jusqu’au premier jour ouvrable suivant' }] } } },
+  }, null, 2);
+  const result = await verifySuivi({ code, cwd: '/dossier-fictif', connectors, marks: new Map(), today: '2026-10-26', premise, referenced: true });
+  assert.deepEqual(result.evenements.map((event) => [event.nom, event.date, event.preuve[0]?.piece]), [['signification du jugement', '2026-10-14', 'pieces/03_signification.md']]);
+  assert.equal(result.echeances[0].date, '2026-11-16');
+  const errors = texts(result, 'erreur');
+  assert.ok(errors.some((entry) => entry.startsWith('matter.parties : matter.parties vient de la base du dossier')));
+  assert.ok(errors.some((entry) => entry.startsWith('evenements.lettre de relance.okf : prémisse « Prémisse absente » absente de l’index')));
+  assert.ok(errors.some((entry) => entry.startsWith('evenements.mise en demeure.okf : okf remplace date')));
+  const legacy = await verifySuivi({ code, cwd: '/dossier-fictif', connectors, marks: new Map(), today: '2026-10-26' });
+  assert.ok(!texts(legacy, 'erreur').some((entry) => entry.startsWith('matter.parties')));
+});
+
+test('avec un brain, le suivi vit dans Roadmap.json et le tableau tire les parties de la base du dossier', async (context) => {
+  context.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-26T12:00:00Z') });
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'suivi-brain-')));
+  const root = path.join(base, 'Dossier Dupont');
+  const brain = path.join(base, 'brain');
+  fs.mkdirSync(path.join(root, '.piecemaker'), { recursive: true });
+  fs.mkdirSync(path.join(base, 'home'), { recursive: true });
+  fs.writeFileSync(path.join(base, 'home', 'brain.json'), JSON.stringify({ path: brain }));
+  fs.writeFileSync(path.join(root, '.piecemaker', 'appel-suivi.json'), toJson(CONTENTIEUX));
+  const previous = process.env.PIECEMAKER_HOME;
+  process.env.PIECEMAKER_HOME = path.join(base, 'home');
+  context.after(() => { if (previous === undefined) delete process.env.PIECEMAKER_HOME; else process.env.PIECEMAKER_HOME = previous; fs.rmSync(base, { recursive: true, force: true }); });
+  const db = new Database(':memory:');
+  db.exec("CREATE TABLE projects (project_id TEXT PRIMARY KEY, project_path TEXT UNIQUE, custom_project_name TEXT, isStarred BOOLEAN DEFAULT 0, isArchived BOOLEAN DEFAULT 0); CREATE TABLE sessions (session_id TEXT PRIMARY KEY, project_path TEXT, isArchived BOOLEAN DEFAULT 0, updated_at DATETIME); CREATE TABLE piecemaker_nodes (project_id TEXT, id TEXT, kind TEXT, label TEXT, data_json TEXT)");
+  db.prepare('INSERT INTO projects (project_id, project_path, custom_project_name) VALUES (?,?,?)').run('p1', root, 'Dossier Dupont');
+  db.prepare("INSERT INTO piecemaker_nodes VALUES ('p1', 'entity:1', 'company', 'Société Exemple SAS', '{\"partySide\":\"client\"}'), ('p1', 'entity:2', 'person', 'Jean Dupont', '{\"partySide\":\"adversaire\"}'), ('p1', 'entity:3', 'person', 'Témoin non qualifié', '{}')").run();
+  const service = createSuiviService(() => db, connectors);
+  const board = createBoardService(() => db, service);
+  const snapshot = await service.read(root, 'appel-suivi.json');
+  assert.ok(snapshot.echeances.length > 0);
+  const roadmap = JSON.parse(fs.readFileSync(path.join(brain, 'projects', 'Dossier Dupont', 'Roadmap.json'), 'utf8'));
+  assert.deepEqual(Object.keys(roadmap.suivis), ['appel-suivi.json']);
+  assert.ok(fs.existsSync(path.join(root, '.piecemaker', 'appel-suivi.json.migre')));
+  const matterPath = `projects/cabinet/matters/${dossierMatterId(root, 'appel-suivi.json')}`;
+  const matter = (await board.current()).docs[matterPath] as { client?: string; parties?: Array<Record<string, string>> };
+  assert.equal(matter.client, 'Société Exemple SAS');
+  assert.deepEqual(matter.parties, [{ name: 'Jean Dupont', role: 'adverse', entityType: 'person' }, { name: 'Société Exemple SAS', role: 'client', entityType: 'organisation' }]);
+  await board.write('update', matterPath, { client: 'Autre', summary: 'Appel du jugement.' });
+  const written = JSON.parse(fs.readFileSync(path.join(brain, 'projects', 'Dossier Dupont', 'Roadmap.json'), 'utf8')).suivis['appel-suivi.json'].matter;
+  assert.equal(written.summary, 'Appel du jugement.');
+  assert.equal(written.client, undefined);
+});

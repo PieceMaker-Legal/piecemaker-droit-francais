@@ -47,14 +47,19 @@ test('le brain reprend perso.md comme AGENTS.md, l’importe dans CLAUDE.md et g
   assert.equal(readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), 'Profil de Jean Dupont\n');
 });
 
-test('chaque dossier suivi a son About.md et sa Roadmap.md dans le brain, sans écraser ce que l’agent a écrit', t => {
+test('chaque dossier suivi a seulement son About.md, sa Roadmap.json et le script de synthèse dans le brain, sans écraser ce que l’agent a écrit', t => {
   const f = fixture();
   t.after(f.cleanup);
   const root = path.join(f.base, 'brain');
+  mkdirSync(path.join(f.base, 'Dossier Dupont'), { recursive: true });
   f.brain.prepareCase(root, path.join(f.base, 'Dossier Dupont'));
-  const about = path.join(root, 'projects', 'Dossier Dupont', 'About.md');
+  const directory = path.join(root, 'projects', 'Dossier Dupont');
+  const about = path.join(directory, 'About.md');
   assert.match(readFileSync(about, 'utf8'), /^# Dossier Dupont\n/);
-  assert.match(readFileSync(path.join(root, 'projects', 'Dossier Dupont', 'Roadmap.md'), 'utf8'), /- \[ \] /);
+  assert.equal(readFileSync(path.join(directory, 'Roadmap.json'), 'utf8'), '{}\n');
+  assert.match(readFileSync(path.join(directory, 'synthese.mjs'), 'utf8'), /export default async function synthese/);
+  assert.equal(existsSync(path.join(directory, 'Roadmap.md')), false);
+  assert.deepEqual(JSON.parse(readFileSync(path.join(root, '.piecemaker', 'dossiers.json'), 'utf8')), { [path.join(f.base, 'Dossier Dupont')]: 'Dossier Dupont' });
   writeFileSync(about, 'Statut : en cours\n');
   f.brain.prepareCase(root, path.join(f.base, 'Dossier Dupont'));
   assert.equal(readFileSync(about, 'utf8'), 'Statut : en cours\n');

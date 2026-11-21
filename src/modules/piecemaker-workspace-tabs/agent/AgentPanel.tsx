@@ -180,7 +180,7 @@ function Brain({ projectPath }: { projectPath: string }) {
   }
   return <fieldset className="space-y-2">
     <legend className="text-[15px] text-foreground">Brain</legend>
-    <p className="text-muted-foreground">Le dossier où l’agent central s’ouvre et tient votre profil (AGENTS.md), puis l’About.md et la Roadmap.md de chaque dossier. Choisissez un dossier à part, jamais un dossier juridique.</p>
+    <p className="text-muted-foreground">Le dossier où l’agent central s’ouvre et tient votre profil (AGENTS.md), puis l’About.md et la Roadmap.json de chaque dossier. Choisissez un dossier à part, jamais un dossier juridique.</p>
     <div className="flex gap-2"><input aria-label="Emplacement du brain" className={inputClass} value={brain} onChange={(event) => setBrain(event.target.value)} />
       <button type="button" className={buttonClass} disabled={!brain.trim() || brain.trim() === projectPath} onClick={() => void move()}>Déplacer</button></div>
     {error && <p role="alert" className="text-sm">{error}</p>}
@@ -240,7 +240,7 @@ function Dream({ state, act }: { state: AgentState; act: AgentActions }) {
   const save = (patch: Partial<AgentDreamSettings>) => void act('settings', { dream: patch }, 'PUT');
   const run = state.dream;
   return <div className="space-y-5 overflow-y-auto px-5 py-4 text-sm">
-    <p className="text-muted-foreground">Chaque nuit, l’agent central relit l’activité des fils et met à jour l’About.md et la Roadmap.md de chaque dossier dans le brain, sous leurs limites de lignes. Il ne touche pas à votre AGENTS.md : il vous propose les ajouts dans le chat.</p>
+    <p className="text-muted-foreground">Chaque nuit, l’agent central relit l’activité des fils et met à jour l’About.md et la Roadmap.json de chaque dossier dans le brain, sous leurs limites de lignes. Il ne touche pas à votre AGENTS.md : il vous propose les ajouts dans le chat.</p>
     <label className="flex items-center gap-2 text-foreground"><input type="checkbox" checked={dream.enabled} onChange={(event) => save({ enabled: event.target.checked })} />Activer le dream</label>
     <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={dream.provider} onChange={(event) => save({ provider: event.target.value as AgentDreamSettings['provider'] })}>
       {['auto', ...PROVIDERS].map((value) => <option key={value} value={value} disabled={value !== 'auto' && !connected.has(value as AgentProvider)}>{PROVIDER_LABELS[value]}</option>)}

@@ -71,12 +71,29 @@ test('le brain de l’agent central tient ses limites de lignes, quel que soit l
   const lines = (count) => Array.from({ length: count }, (_, index) => `ligne ${index + 1}`).join('\n') + '\n';
   assert.equal(decision('Write', { file_path: path.join(central, 'AGENTS.md'), content: lines(200) }, central), 'allow');
   assert.equal(decision('Write', { file_path: path.join(central, 'AGENTS.md'), content: lines(201) }, central), 'deny');
-  assert.equal(decision('Write', { file_path: path.join(central, 'projects', 'Dossier Dupont', 'Roadmap.md'), content: lines(151) }, central), 'deny');
+  assert.equal(decision('Write', { file_path: path.join(central, 'projects', 'Dossier Dupont', 'Roadmap.json'), content: lines(500) }, central), 'allow');
   const about = path.join(central, 'projects', 'Dossier Dupont', 'About.md');
   fs.mkdirSync(path.dirname(about), { recursive: true });
-  fs.writeFileSync(about, lines(99));
-  assert.equal(decision('Edit', { file_path: about, old_string: 'ligne 99', new_string: 'ligne 99\nligne 100' }, central), 'allow');
-  assert.equal(decision('Edit', { file_path: about, old_string: 'ligne 99', new_string: 'ligne 99\nligne 100\nligne 101' }, central), 'deny');
+  fs.writeFileSync(about, lines(199));
+  assert.equal(decision('Edit', { file_path: about, old_string: 'ligne 199', new_string: 'ligne 199\nligne 200' }, central), 'allow');
+  assert.equal(decision('Edit', { file_path: about, old_string: 'ligne 199', new_string: 'ligne 199\nligne 200\nligne 201' }, central), 'deny');
   assert.equal(decision('Write', { file_path: path.join(central, 'notes.md'), content: lines(500) }, central), 'allow');
   assert.equal(decision('Write', { file_path: path.join(dupont, 'About.md'), content: lines(500) }), 'allow');
+});
+
+test('une session de dossier n’ouvre dans le brain que sa propre paire About.md et Roadmap.json', () => {
+  fs.writeFileSync(path.join(home, 'brain.json'), JSON.stringify({ path: central }));
+  fs.mkdirSync(path.join(central, '.piecemaker'), { recursive: true });
+  fs.writeFileSync(path.join(central, '.piecemaker', 'dossiers.json'), JSON.stringify({ [dupont]: 'Dossier Dupont', [exemple]: 'Societe Exemple' }));
+  const own = path.join(central, 'projects', 'Dossier Dupont');
+  const other = path.join(central, 'projects', 'Societe Exemple');
+  try {
+    assert.equal(decision('Read', { file_path: path.join(own, 'Roadmap.json') }), 'allow');
+    assert.equal(decision('Write', { file_path: path.join(own, 'About.md'), content: 'Statut : en cours\n' }), 'allow');
+    assert.equal(decision('Read', { file_path: path.join(other, 'Roadmap.json') }), 'deny');
+    assert.equal(decision('Read', { file_path: path.join(central, 'AGENTS.md') }), 'deny');
+    assert.equal(decision('Write', { file_path: path.join(own, 'About.md'), content: Array.from({ length: 201 }, () => 'x').join('\n') }), 'deny');
+  } finally {
+    fs.rmSync(path.join(home, 'brain.json'), { force: true });
+  }
 });

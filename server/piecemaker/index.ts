@@ -45,6 +45,7 @@ import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
 import { createSourceConnectors } from './source-connectors.js';
 import { createCatalaCitation } from './catala-citation.js';
+import { premiseDate } from './okf/premise-date.js';
 import { catalaScriptPath, createCatalaCitationCheck, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
@@ -110,7 +111,7 @@ const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 const sourceConnectors = createSourceConnectors();
-const suivi = createSuiviService(getConnection, sourceConnectors);
+const suivi = createSuiviService(getConnection, { ...sourceConnectors, premise: premiseDate });
 const board = createBoardService(getConnection, suivi);
 const pmScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')).href;
 async function lastSessionAnswer(sessionId: string) {
@@ -146,6 +147,7 @@ const brain = createBrain({
   defaultRoot: path.join(getApplicationDataRoot(), 'PieceMaker Agent'),
   skills: path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'brain', 'skills'),
 });
+try { brain.ensureConfigured(); } catch (error) { console.warn('[piecemaker] Brain :', error); }
 const orchestrator = createOrchestratorService({
   centralRoot: brain.root,
   prepareCentral: brain.prepare,

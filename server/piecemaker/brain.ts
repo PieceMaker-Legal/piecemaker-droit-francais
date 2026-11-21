@@ -1,7 +1,9 @@
 import { copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'fs';
 import path from 'path';
 
-export const BRAIN_LIMITS: Record<string, number> = { 'AGENTS.md': 200, 'About.md': 100, 'Roadmap.md': 150 };
+import { caseOf, syntheseScript, writeRoadmap } from './vendor/piecemaker-plugin/scripts/lib/brain-case.mjs';
+
+export const BRAIN_LIMITS: Record<string, number> = { 'AGENTS.md': 200, 'About.md': 200 };
 
 const PERSO_HEADER = 'Pour remplir ce document, lire @cold-start-interview.md\n';
 
@@ -62,6 +64,7 @@ export function createBrain({ home, defaultRoot, skills }: BrainOptions) {
 
   function prepare(brain: string) {
     mkdirSync(path.join(brain, 'projects'), { recursive: true });
+    if (!present(config)) setRoot(brain);
     const agents = path.join(brain, 'AGENTS.md');
     if (!present(agents)) {
       const perso = path.join(home, 'custom', 'perso.md');
@@ -89,19 +92,23 @@ export function createBrain({ home, defaultRoot, skills }: BrainOptions) {
   function prepareCase(brain: string, folder: string) {
     try {
       disableNativeMemory(folder);
-      const name = caseFolderName(folder);
-      const target = path.join(brain, 'projects', name);
-      mkdirSync(target, { recursive: true });
-      const about = path.join(target, 'About.md');
-      if (!present(about)) {
-        writeFileSync(about, `# ${name}\n\nStatut : à compléter\nDossier : ${path.resolve(folder)}\n\n## Ce que c'est\n\nÀ compléter\n\n## Faits clés\n\n## Décisions\n`);
+      if (root() !== path.resolve(brain)) setRoot(brain);
+      const target = caseOf(folder, { home });
+      if (!target) return;
+      if (!present(target.about)) {
+        writeFileSync(target.about, `# ${target.name}\n\nStatut : à compléter\nDossier : ${path.resolve(folder)}\n\n## Ce que c'est\n\nÀ compléter\n\n## Stratégie\n\n## Décisions\n`);
       }
-      const roadmap = path.join(target, 'Roadmap.md');
-      if (!present(roadmap)) writeFileSync(roadmap, `# ${name} : feuille de route\n\n- [ ] À compléter\n`);
+      if (!present(target.roadmap)) writeRoadmap(target.roadmap, {});
+      syntheseScript(target.directory);
     } catch (error) {
       console.warn('[piecemaker] Brain :', error);
     }
   }
 
-  return { root, setRoot, prepare, prepareCase };
+  function ensureConfigured() {
+    if (!present(config)) setRoot(root());
+    return root();
+  }
+
+  return { root, setRoot, prepare, prepareCase, ensureConfigured };
 }
