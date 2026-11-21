@@ -11,6 +11,7 @@ import { PROVIDER_LABELS, createSessionViewModel, formatCompactAge } from '@/mod
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
 import { useProviderSessionIdCopy } from '@/modules/sidebar/hooks/useProviderSessionIdCopy';
 import SessionOptions from '@/modules/sidebar/SessionOptions';
+import { SessionProviderTile } from '@/modules/piecemaker-session-groups';
 
 type SidebarSessionItemProps = {
   project: Project;
@@ -192,7 +193,7 @@ function SidebarSessionItem({
               : 'mx-3 my-0.5 rounded-md bg-card border p-2 active:scale-[0.98] transition-all duration-150 relative',
             isSelected ? 'bg-primary/5 border-primary/20' : '',
             !treeRow && (!isSelected && isProcessing
-              ? 'border-border/60 bg-muted/20'
+              ? 'border-orange-500/30 bg-orange-500/5'
               : !isSelected && sessionView.isActive
                 ? 'border-green-500/30 bg-green-50/5 dark:bg-green-900/5'
                 : 'border-border/30'),
@@ -203,14 +204,7 @@ function SidebarSessionItem({
         >
           <div className={cn('flex items-center', treeRow ? 'gap-1.5' : 'gap-2')}>
             {selectionIcon}
-            <div
-              className={cn(
-                'w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0',
-                isSelected ? 'bg-primary/10' : 'bg-muted/50',
-              )}
-            >
-              <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
-            </div>
+            <SessionProviderTile provider={session.__provider} isSelected={isSelected} isRunning={isProcessing} className="h-5 w-5" logoClassName="h-3 w-3" />
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -441,7 +435,7 @@ function SidebarSessionItem({
             isSelecting ? 'pr-2' : 'pr-11',
             isSelected ? 'border-primary/20 bg-primary/5' : 'border-border/30',
             !treeRow && (!isSelected && isProcessing
-              ? 'border-border/60 bg-muted/20 hover:bg-muted/25'
+              ? 'border-orange-500/30 bg-orange-500/5 hover:bg-orange-500/10'
               : !isSelected && sessionView.isActive
                 ? 'border-green-500/30 bg-green-50/5 hover:bg-green-50/10 dark:bg-green-900/5 dark:hover:bg-green-900/10'
                 : 'hover:bg-accent/50'),
@@ -468,14 +462,7 @@ function SidebarSessionItem({
         >
           <div className={cn('flex w-full min-w-0 items-center', treeRow ? 'gap-1.5' : 'gap-2')}>
             {selectionIcon}
-            <div
-              className={cn(
-                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md',
-                isSelected ? 'bg-primary/10' : 'bg-muted/50',
-              )}
-            >
-              <LLMProviderLogo provider={session.__provider} className="h-3 w-3" />
-            </div>
+            <SessionProviderTile provider={session.__provider} isSelected={isSelected} isRunning={isProcessing} className="h-5 w-5" logoClassName="h-3 w-3" />
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <div

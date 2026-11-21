@@ -11,6 +11,7 @@ import SidebarTabularReviewButton from '@/modules/sidebar/SidebarTabularReviewBu
 import { useCompactSidebar } from '@/modules/sidebar/hooks/useCompactSidebar';
 import { LegalCodeButton } from '@/piecemaker/legal-code';
 import { buildProjectSessionTree } from '@/modules/sidebar/utils/projectSessionTree';
+import { SessionStateGroups, groupSessionRowsByState, sessionActivityState } from '@/modules/piecemaker-session-groups';
 
 const FORK_INDENT_PX = 12;
 const MAX_FORK_INDENT_DEPTH = 4;
@@ -283,8 +284,17 @@ export default function SidebarProjectSessions({
         </div>
       ) : (
         <>
-          <div className={cn(!hasForks && 'space-y-1')} data-testid="project-session-tree">
-            {visibleRows.map(({ session, parentId, depth, hasChildren, isLastSibling, continuationDepths }) => (
+          <SessionStateGroups
+            testId="project-session-tree"
+            headerClassName={cn(isCompact && 'px-4')}
+            groups={groupSessionRowsByState(visibleRows, treeRows, ({ session }) => sessionActivityState({
+              needsAttention: attentionSessionIds.has(session.id),
+              isRunning: isSessionRunning(session),
+              hasBackgroundWork: backgroundSessionIds.has(session.id),
+            }))}
+            rowKey={({ session }) => session.id}
+            rowsClassName={cn(!hasForks && 'space-y-1')}
+            renderRow={({ session, parentId, depth, hasChildren, isLastSibling, continuationDepths }) => (
               <div
                 key={session.id}
                 data-session-id={session.id}
@@ -370,8 +380,8 @@ export default function SidebarProjectSessions({
                   />
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          />
 
           {hasMoreSessions && (
             <Button

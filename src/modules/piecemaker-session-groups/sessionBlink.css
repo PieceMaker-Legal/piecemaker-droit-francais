@@ -1,0 +1,15 @@
+@keyframes pm-session-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+.pm-session-blink {
+  animation: pm-session-blink 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-session-blink {
+    animation: none;
+    opacity: 0.6;
+  }
+}
