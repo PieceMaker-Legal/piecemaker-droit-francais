@@ -8,6 +8,7 @@ import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentT
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
+import { useSubagent } from '@/modules/piecemaker-workspace-tabs/agent/subagent';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 
@@ -74,10 +75,11 @@ function Threads({ state, act, query, filter }: { state: AgentState; act: AgentA
 
 function ThreadRow({ thread, state, act }: { thread: AgentThread; state: AgentState; act: AgentActions }) {
   const navigate = useNavigate();
+  const subagent = useSubagent();
   const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
   const active = ACTIVE_THREAD_STATES.includes(thread.state);
   return <li className="group rounded-xl px-2 py-2 hover:bg-accent" data-thread={thread.id}>
-    <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && navigate(`/session/${thread.sessionId}`)}>
+    <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && !subagent?.open(thread) && navigate(`/session/${thread.sessionId}`)}>
       <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15px] text-foreground">{thread.title}</span>

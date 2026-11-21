@@ -1,4 +1,4 @@
-import { Maximize2, Minimize2, X } from 'lucide-react';
+import { ArrowLeft, Maximize2, Minimize2, X } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { ComponentType, Dispatch, PointerEvent, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,8 @@ import { GitPanel } from '@/modules/git-panel';
 import { PluginTabContent, usePlugins } from '@/modules/plugins';
 import { ArtifactsPanel } from '@/modules/piecemaker-artifacts';
 import { AgentPanel } from '@/modules/piecemaker-workspace-tabs/agent/AgentPanel';
+import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
+import { NestedWorkspaceContext, SubagentContext, useSubagentHost } from '@/modules/piecemaker-workspace-tabs/agent/subagent';
 import { useAgentSession } from '@/modules/piecemaker-workspace-tabs/agent/useAgentSession';
 import { PanelAnonymizationButton } from '@/modules/piecemaker-workspace-tabs/PanelAnonymizationButton';
 import { PanelPickButton } from '@/modules/piecemaker-workspace-tabs/PanelPickButton';
@@ -35,6 +37,11 @@ type WorkspaceProps = {
   onMenuClick?: () => void;
 };
 
+type NestedProps = {
+  nested?: boolean;
+  onPanelsChange?: (open: boolean) => void;
+};
+
 type WorkspaceColumn = {
   id: AppTab | 'viewer';
   tabs: AppTab[];
@@ -43,7 +50,7 @@ type WorkspaceColumn = {
 };
 
 export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: ComponentType<Props>) {
-  return function WorkspacePanels(props: Props) {
+  return function WorkspacePanels(props: Props & NestedProps) {
     const { activeTab, setActiveTab } = props;
     const { t } = useTranslation();
     const { plugins } = usePlugins();
@@ -61,6 +68,9 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
     const dockRef = useRef<HTMLElement>(null);
     const dividerCoordinateRef = useRef(0);
     const columnRefs = useRef(new Map<AppTab | 'viewer', HTMLDivElement>());
+    const subagent = useSubagentHost(props.selectedProject?.fullPath ?? null, !props.nested);
+    const [subagentTab, setSubagentTab] = useState<AppTab>('chat');
+    const [subagentFull, setSubagentFull] = useState(false);
     const isAgentSession = useAgentSession(props.selectedProject?.fullPath ?? null, props.selectedSession?.id ?? null);
     const enabledColumns = columns.map((column) => ({ ...column, tabs: column.tabs.filter((tab) => tab === 'tasks' ? false
       : tab === 'agent' ? isAgentSession
@@ -150,6 +160,22 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
 
     useAutoPanel(props.selectedSession?.id ?? null, props.selectedProject?.fullPath ?? null, open, close);
 
+    const { onPanelsChange } = props;
+    const panelsOpen = enabledPanels.length > 0 || viewerOpen;
+    useEffect(() => onPanelsChange?.(panelsOpen), [onPanelsChange, panelsOpen]);
+    const subagentThread = subagent.current?.thread.id ?? null;
+    useEffect(() => {
+      setSubagentTab('chat');
+      setSubagentFull(false);
+    }, [subagentThread]);
+    const subagentOpening = subagent.current?.open ?? null;
+    const subagentFolder = subagent.current?.project.fullPath ?? null;
+    useEffect(() => {
+      if (!subagentOpening || !subagentFolder) return;
+      const timer = window.setTimeout(() => openAgentOutput(subagentFolder, subagentOpening), 0);
+      return () => window.clearTimeout(timer);
+    }, [subagentOpening, subagentFolder]);
+
     useEffect(() => {
       setColumns([]);
       setExpanded(null);
@@ -220,6 +246,7 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
       <WorkspacePanelsContext.Provider value={enabledPanels}>
       <CloseWorkspacePanelContext.Provider value={close}>
       <AgentSessionContext.Provider value={isAgentSession}>
+      <SubagentContext.Provider value={subagent.api}>
         <div ref={containerRef} className="piecemaker-workspace-panels">
           <div className="piecemaker-workspace-primary" hidden={Boolean(expandedTab)}>
             <Workspace {...props} activeTab={mainTab} setActiveTab={select} />
@@ -277,7 +304,30 @@ export function withWorkspacePanels<Props extends WorkspaceProps>(Workspace: Com
               </Fragment>)}
             </aside>
           </>}
+          {subagent.current && <section className={`pm-subagent ${subagentFull ? 'is-full' : ''}`} style={{ width: subagentFull || props.isMobile ? '100%' : `${dockWidth}%` }} aria-label={`Fil ${subagent.current.thread.title}`}>
+            <header className="pm-subagent-bar">
+              <button type="button" aria-label="Revenir à l’agent central" title="Revenir à l’agent central" onClick={subagent.close}><ArrowLeft /></button>
+              <span className="pm-subagent-title">{subagent.current.thread.title}</span>
+              <span className="pm-subagent-folder">{subagent.current.project.displayName}</span>
+            </header>
+            <div className="pm-subagent-body">
+              <NestedWorkspaceContext.Provider value={true}>
+                <WorkspacePanels key={subagent.current.thread.id} {...({
+                  ...props,
+                  nested: true,
+                  selectedProject: subagent.current.project,
+                  selectedSession: subagent.current.session,
+                  activeTab: subagentTab,
+                  setActiveTab: setSubagentTab,
+                  onMenuClick: () => undefined,
+                  onNavigateToSession: subagent.followSession,
+                  onPanelsChange: setSubagentFull,
+                } as Props & NestedProps)} />
+              </NestedWorkspaceContext.Provider>
+            </div>
+          </section>}
         </div>
+      </SubagentContext.Provider>
       </AgentSessionContext.Provider>
       </CloseWorkspacePanelContext.Provider>
       </WorkspacePanelsContext.Provider>

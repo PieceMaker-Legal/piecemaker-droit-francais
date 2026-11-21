@@ -40,6 +40,10 @@ Un agent placé au-dessus des dossiers, sur le modèle exact de Claude Projects 
 - **Routes** : `GET /central` → `{ project, projectId, sessionId }` ; `POST /central/session` → crée la session si besoin et renvoie aussi `provider`. Les autres routes acceptent `project` = dossier propre de l'agent central.
 - **Volet** : `state.central` et `state.dossiers` ; l'onglet Fils regroupe les fils par dossier.
 
+### Fils imbriqués
+
+Réservé à l’agent central. Un clic sur un fil ouvre sa session dans un volet imbriqué (`agent/subagent.tsx`, rendu par `WorkspacePanels`) : chat du fil, onglets et plugins de son dossier en haut. Dès qu’un volet ou un document s’ouvre dans ce fil, il passe en plein écran avec le volet à sa droite. Le bouton retour ferme le fil et rend le chat principal, sans changer de projet. Un lien du chat central vers un fichier d’un dossier, ou une pièce jointe d’un message lié à un fil, ouvre ce fil avec le document à droite. Tant qu’un fil est ouvert, les événements globaux d’ouverture (éditeur, volets) ne visent que lui.
+
 ## Stockage
 
 Par dossier, dans `<dossier>/.piecemaker/orchestrateur/` :

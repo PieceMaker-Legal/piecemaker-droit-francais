@@ -5,7 +5,9 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 import { withWorkspacePanels, WorkspaceIconTabs } from '@/modules/piecemaker-workspace-tabs';
+import { AgentChatCard } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { AgentPanel } from '@/modules/piecemaker-workspace-tabs/agent/AgentPanel';
+import { openInEditor } from '@/piecemaker/editor-tabs/editorPanels';
 import type { AgentState, AgentThread } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AppTab, Project, ProjectSession } from '@/shared/types';
 
@@ -16,10 +18,12 @@ vi.mock('@/shared/authToken', () => ({
     calls.list.push({ url, body, method });
     if (url.includes('/state?')) return calls.state;
     if (url.includes('/session?')) return { sessionId: calls.agentSession };
+    if (url.endsWith('/central')) return { project: CENTRAL, projectId: 'central', sessionId: 'agent-1' };
     return {};
   }),
 }));
 vi.mock('@/piecemaker/editor-tabs/editorPanels', () => ({ openInEditor: vi.fn() }));
+const CENTRAL = vi.hoisted(() => '/donnees/PieceMaker Agent');
 vi.mock('@/modules/piecemaker-workspace-tabs/WorkspaceViewer', () => ({ WorkspaceViewer: vi.fn() }));
 vi.mock('@/shared/context/WebSocketContext', () => ({ useWebSocket: () => ({ subscribe: () => () => undefined }) }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
@@ -83,15 +87,19 @@ it('liste les fils, les décisions à traiter et ouvre un fil comme une session 
   expect(screen.getByTestId('location').textContent).toBe('/session/s1');
 });
 
-const Workspace = withWorkspacePanels((props) => <WorkspaceIconTabs activeTab={props.activeTab} setActiveTab={props.setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />);
+const Workspace = withWorkspacePanels((props) => <>
+  <output data-testid={`main ${props.selectedProject?.fullPath}`}>{props.selectedSession?.id}</output>
+  <WorkspaceIconTabs activeTab={props.activeTab} setActiveTab={props.setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />
+  {props.selectedProject?.fullPath === CENTRAL && <AgentChatCard card={{ messageId: 'm1', decisions: [], outputs: [{ kind: 'file', ref: `${PROJECT}/note.docx`, title: 'Note Dupont' }] }} project={CENTRAL} />}
+</>);
 
-function Harness({ sessionId }: { sessionId: string }) {
+function Harness({ sessionId, project = PROJECT }: { sessionId: string; project?: string }) {
   const [activeTab, setActiveTab] = useState<AppTab>('chat');
   const props: ComponentProps<typeof Workspace> = {
-    activeTab, setActiveTab, selectedProject: { projectId: 'dupont', fullPath: PROJECT } as Project, selectedSession: { id: sessionId } as ProjectSession,
+    activeTab, setActiveTab, selectedProject: { projectId: 'dupont', fullPath: project } as Project, selectedSession: { id: sessionId } as ProjectSession,
     isMobile: false, isLoading: false, onShowSettings: vi.fn(), onProjectSelect: vi.fn(), onProjectsRefresh: vi.fn(),
   };
-  return <MemoryRouter><Workspace {...props} /></MemoryRouter>;
+  return <MemoryRouter><Workspace {...props} /><Location /></MemoryRouter>;
 }
 
 it('ouvre le volet de l’agent par défaut dans sa session et le replie depuis la barre du haut', async () => {
@@ -137,8 +145,31 @@ it('réunit les instructions et les réglages et permet d’annuler chaque type 
   }
 });
 
+it('ouvre un fil de l’agent central dans un volet imbriqué, avec son dossier, puis revient au chat principal', async () => {
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  data.dossiers = [{ path: PROJECT, selected: true }];
+  data.projectIds = { [PROJECT]: 'dupont' };
+  calls.state = data;
+  calls.agentSession = 'agent-1';
+  render(<Harness sessionId="agent-1" project={CENTRAL} />);
+  fireEvent.click(await screen.findByRole('button', { name: /Rédiger la note de synthèse/ }));
+  const nested = await screen.findByRole('region', { name: 'Fil Rédiger la note de synthèse' });
+  expect(nested.querySelector(`[data-testid="main ${PROJECT}"]`)?.textContent).toBe('s1');
+  expect(nested.textContent).toContain('Dupont');
+  expect(screen.getByTestId('location').textContent).toBe('/');
+  fireEvent.click(screen.getByRole('button', { name: 'Revenir à l’agent central' }));
+  expect(screen.queryByRole('region', { name: 'Fil Rédiger la note de synthèse' })).toBeNull();
+  vi.mocked(openInEditor).mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Note Dupont' }));
+  expect(await screen.findByRole('region', { name: 'Fil Rédiger la note de synthèse' })).toBeTruthy();
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 5)); });
+  expect(openInEditor).toHaveBeenCalledWith(`${PROJECT}/note.docx`);
+});
+
 it('range les fils de l’agent central par dossier et coche les dossiers qu’il peut utiliser', async () => {
-  const central = '/donnees/PieceMaker Agent';
+  const central = CENTRAL;
   const exemple = '/dossiers/Societe Exemple';
   const data = state();
   data.central = true;

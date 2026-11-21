@@ -88,6 +88,7 @@ export type AgentState = {
   storage: { used: number; total: number };
   central: boolean;
   dossiers: Array<{ path: string; selected: boolean }>;
+  projectIds?: Record<string, string | null>;
 };
 export type CentralAgent = { project: string; projectId: string | null; sessionId: string | null };
 

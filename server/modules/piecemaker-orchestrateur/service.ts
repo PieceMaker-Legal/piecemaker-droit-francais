@@ -757,7 +757,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       await recoverPreviousPosts();
       return state.messages.filter(isChatMessage).map(m => {
         const decisions = state.decisions.filter(d => m.decisionIds.includes(d.id));
-        const card = m.widget || decisions.length || m.attachments.length ? { widget: m.widget, decisions, outputs: m.attachments, messageId: m.id } : undefined;
+        const card = m.widget || decisions.length || m.attachments.length ? { widget: m.widget, decisions, outputs: m.attachments, messageId: m.id, ...(m.threadId ? { threadId: m.threadId } : {}) } : undefined;
         return {
           id: m.id, timestamp: m.at, sessionId: orch.chatSessionId!, provider: orch.chatProvider!,
           role: m.author === 'user' ? 'user' as const : 'assistant' as const, kind: 'text' as const,

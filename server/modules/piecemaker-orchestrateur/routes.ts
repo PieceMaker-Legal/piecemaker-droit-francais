@@ -42,7 +42,10 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
     const session = await service.centralSession(request.user?.id ?? null);
     return { ...session, projectId: projectId(session.project) };
   }));
-  router.get('/state', route((root, { user }) => service.state(root, user?.id ?? null)));
+  router.get('/state', route(async (root, { user }) => {
+    const state = await service.state(root, user?.id ?? null);
+    return state.central ? { ...state, projectIds: Object.fromEntries(state.dossiers.map(dossier => [dossier.path, projectId(dossier.path)])) } : state;
+  }));
   router.get('/session', route(root => ({ sessionId: service.sessionId(root) })));
   router.post('/session', route((root, { user }) => service.session(root, user?.id ?? null)));
   router.post('/message', route((root, { body, user }) => service.postUserMessage(root, body.text, user?.id ?? null)));

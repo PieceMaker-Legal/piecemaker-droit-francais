@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { readWorkspaceContext } from '@/modules/piecemaker-context-suggestions';
+import { useWorkspaceListening } from '@/modules/piecemaker-workspace-tabs/agent/subagent';
 import { OPEN_PANEL_EVENT } from '@/modules/piecemaker-workspace-tabs/requestWorkspacePanel';
 import { artifactFromResult, autoPanelTarget, draftFromResult, isArtifactPublish, panelShowDecision } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
 import type { AutoPanelTarget } from '@/modules/piecemaker-workspace-tabs/autoPanelRules';
@@ -64,6 +65,7 @@ function show(target: AutoPanelTarget, state: AutoPanelState, toolId: string) {
 
 export function useAutoPanel(sessionId: string | null, projectPath: string | null, openTab: (tab: AppTab) => void, closeTab: (tab: AppTab) => void) {
   const { subscribe } = useWebSocket();
+  const listening = useWorkspaceListening();
   const state = useRef<AutoPanelState>({ sessionId, projectPath, openTab, closeTab });
 
   useLayoutEffect(() => {
@@ -72,12 +74,13 @@ export function useAutoPanel(sessionId: string | null, projectPath: string | nul
 
   useEffect(() => {
     const open = (event: Event) => {
+      if (!listening()) return;
       const tab = (event as CustomEvent<{ tab?: unknown }>).detail?.tab;
       if (typeof tab === 'string') state.current.openTab(tab as AppTab);
     };
     window.addEventListener(OPEN_PANEL_EVENT, open);
     return () => window.removeEventListener(OPEN_PANEL_EVENT, open);
-  }, []);
+  }, [listening]);
 
   useEffect(() => {
     const seen = new Set<string>();

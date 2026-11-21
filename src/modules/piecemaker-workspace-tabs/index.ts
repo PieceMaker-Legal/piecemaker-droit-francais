@@ -6,3 +6,4 @@ export { useOpenWorkspacePanels } from '@/modules/piecemaker-workspace-tabs/cont
 export { agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 export { useCentralAgent } from '@/modules/piecemaker-workspace-tabs/agent/useCentralAgent';
 export { AgentChatCard, type AgentChatCardData } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
+export { useSubagentFileOpen, useWorkspaceListening } from '@/modules/piecemaker-workspace-tabs/agent/subagent';
