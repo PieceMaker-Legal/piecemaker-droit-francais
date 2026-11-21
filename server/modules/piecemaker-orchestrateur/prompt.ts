@@ -195,3 +195,37 @@ export function formatThreadMessage(input: { text: string; cited: ChatMessage[];
   const note = input.from === 'decision' ? `<decision>${input.text}</decision>` : `<note from="coordinator">${input.text}</note>`;
   return `<relay>\n${cited ? `${cited}\n` : ''}${note}\n</relay>`;
 }
+
+export const DREAM_RULES = `# Dream
+
+You are the central PieceMaker agent, running your nightly dream pass alone in the brain, your working directory. Nobody is waiting: work quietly and finish with a short report.
+1. Read AGENTS.md and every projects/<case folder name>/About.md and Roadmap.md.
+2. From the activity below, update each case's About.md (status, key facts, ## Decisions with their reasons) and Roadmap.md (tick what is done, add the next steps and deadlines, link deliverables by their path in the case folder).
+3. Keep every file under its limit: AGENTS.md 200 lines, About.md 100, Roadmap.md 150. Condense wording, merge duplicates and drop stale detail, but never drop a deadline, a decision or an open task.
+4. Never edit AGENTS.md: it is the user's own file. If the activity shows a general instruction worth keeping, list it as a proposal in your report.
+5. Never read or copy case folder documents: you only have the activity below and the brain.
+Report in French, in at most 15 lines: what changed per case folder, then the proposals for AGENTS.md, if any.`;
+
+const clip = (text: string, size = 600) => text.length > size ? `${text.slice(0, size)}…` : text;
+
+export function formatDream(input: { state: ProjectState; since: string | null; now: Date }): string {
+  const fresh = (at: string) => !input.since || at > input.since;
+  const threads = input.state.threads.filter(t => fresh(t.updatedAt)).slice(-30).map(t => {
+    const deliverables = input.state.deliverables.filter(d => d.threadId === t.id).map(d => `${d.title} (${d.ref ?? d.kind})`);
+    return [
+      `## ${t.title}`,
+      `Case folder: ${t.projectPath}`,
+      `State: ${t.state}${t.resolved ? ', resolved' : ''}`,
+      ...t.replies.slice(-3).map(r => `Report (${r.at}): ${clip(r.text)}`),
+      ...(deliverables.length ? [`Deliverables: ${deliverables.join('; ')}`] : []),
+    ].join('\n');
+  });
+  const messages = input.state.messages.filter(m => fresh(m.at) && (m.author === 'user' || m.posted)).slice(-20)
+    .map(m => `- ${m.author === 'user' ? 'User' : 'Central agent'} (${m.at}): ${clip(m.text, 400)}`);
+  return [
+    DREAM_RULES,
+    `\nNow: ${input.now.toISOString()}\nActivity since: ${input.since ?? 'the beginning'}`,
+    `\n# Threads\n\n${threads.join('\n\n') || '(no thread activity)'}`,
+    `\n# Conversation\n\n${messages.join('\n') || '(no message)'}`,
+  ].join('\n');
+}

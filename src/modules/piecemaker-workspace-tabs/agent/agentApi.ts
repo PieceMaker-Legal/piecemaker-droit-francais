@@ -71,10 +71,13 @@ export type AgentSettings = {
   concurrency: Record<AgentProvider, number>;
   folders: string[];
   recycleAfter: number;
+  dream?: AgentDreamSettings;
 };
+export type AgentDreamSettings = { enabled: boolean; provider: AgentProviderChoice; model: string; hour: number };
 export type AgentState = {
   revision: number;
   settings: AgentSettings;
+  dream?: { running: boolean; lastRunAt: string | null; lastResult: string | null; lastError: string | null };
   messages: AgentMessage[];
   decisions: AgentDecision[];
   threads: AgentThread[];

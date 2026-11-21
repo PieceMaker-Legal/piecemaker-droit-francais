@@ -6,7 +6,7 @@ import { z } from 'zod/v4';
 
 import { isImageAttachmentDescriptor } from '@/shared/image-attachments.js';
 
-import { formatPreamble, formatThreadKickoff, formatThreadMessage, formatWake, isChatMessage } from './prompt.js';
+import { formatDream, formatPreamble, formatThreadKickoff, formatThreadMessage, formatWake, isChatMessage } from './prompt.js';
 import { openProjectStore } from './store.js';
 import { RUNNABLE_PROVIDERS, THREAD_STATES } from './types.js';
 import type {
@@ -43,7 +43,10 @@ const settingsInput = z.strictObject({
   defaultModels: z.partialRecord(z.enum(RUNNABLE_PROVIDERS), string),
   concurrency: z.partialRecord(z.enum(RUNNABLE_PROVIDERS), z.number().int().positive()),
   folders: z.array(string), recycleAfter: z.number().int().positive(),
+  dream: z.strictObject({ enabled: z.boolean(), provider: choice, model: z.string().trim(), hour: z.number().int().min(0).max(23) }).partial(),
 }).partial();
+const DREAM_DEFAULTS = { enabled: false, provider: 'auto' as const, model: '', hour: 3 };
+const DREAM_DENIED = ['Bash', 'WebFetch', 'WebSearch', 'mcp__fil', 'mcp__orchestrateur', 'AskUserQuestion', 'ExitPlanMode'];
 const deliverableInput = z.object({
   deliverable_id: string.optional(), thread_id: string.optional(), title: string.optional(),
   kind: z.enum(['document', 'piece', 'artifact']).optional(), ref: string.optional(),
@@ -112,6 +115,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
   const store = openProjectStore(root);
   const { state, save } = store;
   const orch = state.orchestrator;
+  if (state.dream?.running) state.dream.running = false;
   const now = () => deps.now().toISOString();
   const later = (ms: number) => new Date(deps.now().getTime() + ms).toISOString();
   const find = <T extends { id: string }>(list: T[], value: unknown, name: string) =>
@@ -422,7 +426,9 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       if (!principal && patch.folders.some(folder => !allowed(folder))) refuse(403, "L'accès aux dossiers exige l'accord de l'avocat.");
       if (central) for (const folder of patch.folders) deps.prepareDossier?.(root, folder);
     }
+    if (patch.dream && !central) refuse(400, 'Le dream est réservé à l’agent central.');
     const settings = state.settings;
+    if (patch.dream) patch.dream = { ...DREAM_DEFAULTS, ...settings.dream, ...patch.dream };
     const providerChanged = patch.orchestratorProvider && settings.orchestratorProvider !== patch.orchestratorProvider;
     Object.assign(settings, { ...patch, concurrency: { ...settings.concurrency, ...patch.concurrency }, defaultModels: { ...settings.defaultModels, ...patch.defaultModels } });
     if (providerChanged && orch.chatSessionId && !orch.running) {
@@ -479,6 +485,49 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     t.pendingRequests = ids;
     save();
   }
+  function dreamRun() {
+    state.dream ??= { running: false, lastRunAt: null, lastResult: null, lastError: null };
+    return state.dream;
+  }
+  function dreamDue(date: Date) {
+    const settings = state.settings.dream;
+    const last = state.dream?.lastRunAt;
+    return Boolean(settings?.enabled && !state.dream?.running && date.getHours() === settings.hour
+      && (!last || new Date(last).toDateString() !== date.toDateString()));
+  }
+  async function dream() {
+    if (!central) refuse(400, 'Le dream est réservé à l’agent central.');
+    const run = dreamRun();
+    if (run.running) return { started: false };
+    const settings = { ...DREAM_DEFAULTS, ...state.settings.dream };
+    run.running = true;
+    run.lastRunAt = now();
+    run.lastError = null;
+    save();
+    try {
+      const p = await provider(settings.provider);
+      const model = settings.model ? await knownModel(p, settings.model) : await deps.defaultModel(p);
+      const permissions = await deps.permissions(p, orch.userId);
+      const sessionId = deps.openSession(p, root, 'Dream', true);
+      const since = state.messages.filter(m => m.author === 'orchestrator' && m.text.startsWith('Dream du ')).at(-1)?.at ?? null;
+      const result = await deps.runTurn(sessionId, orch.userId, formatDream({ state, since, now: deps.now() }), {
+        provider: p, model, effort: null, permissionMode: 'acceptEdits',
+        allowedTools: ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'MultiEdit', 'Skill'],
+        disallowedTools: [...new Set([...permissions.disallowedTools, ...DREAM_DENIED])],
+      });
+      if (!result.started || result.error) throw new Error(result.error || 'Tour non démarré.');
+      const answer = (await deps.lastAnswer(sessionId)).trim() || 'Rien à mettre à jour.';
+      run.lastResult = answer;
+      add('orchestrator', `Dream du ${deps.now().toLocaleDateString('fr-FR')} :\n\n${answer}`, { posted: true });
+      if (orch.chatSessionId) deps.chatChanged(orch.chatSessionId);
+    } catch (error) {
+      run.lastError = error instanceof Error ? error.message : String(error);
+    } finally {
+      run.running = false;
+      save();
+    }
+    return { started: true, error: run.lastError };
+  }
   function tick() {
     const date = deps.now();
     const stamp = date.toISOString();
@@ -526,6 +575,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
           .catch(error => wake('routine', 'system', String(error)));
       }
     }
+    if (central && dreamDue(date)) void dream().catch(error => console.warn('[piecemaker] Dream :', error));
     drain();
     pump();
   }
@@ -856,6 +906,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       drain();
       return summary(t);
     },
+    dream,
     recycle() {
       if (orch.running) manualRecycle = true;
       else {
@@ -957,5 +1008,6 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
     cancelScheduled: (root: string, kind: unknown, id: unknown) => project(root).cancelScheduled(kind, id),
     stopThread: (root: string, threadId: string) => project(root).stopThread(threadId),
     recycle: (root: string) => project(root).recycle(),
+    dream: (root: string) => project(root).dream(),
   };
 }

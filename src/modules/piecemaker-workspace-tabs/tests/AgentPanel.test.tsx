@@ -205,3 +205,22 @@ it('déplace le brain de l’agent central vers le dossier choisi et y rouvre sa
   expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/central/brain', body: { path: '/Users/exemple/Brain' }, method: 'PUT' });
   expect(assign).toHaveBeenCalled();
 });
+
+it('règle le dream de l’agent central dans un onglet des paramètres et le lance à la demande', async () => {
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  data.dream = { running: false, lastRunAt: '2026-01-05T02:00:00Z', lastResult: 'Dossier Dupont : feuille de route à jour.', lastError: null };
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Dream' }));
+  expect(screen.getByText('Dossier Dupont : feuille de route à jour.')).toBeTruthy();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Activer le dream' }));
+  fireEvent.change(screen.getByRole('combobox', { name: 'Heure' }), { target: { value: '4' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Lancer maintenant' }));
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, dream: { enabled: true } }, method: 'PUT' });
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, dream: { hour: 4 } }, method: 'PUT' });
+  expect(calls.list.some((call) => call.url.endsWith('/dream'))).toBe(true);
+});

@@ -130,7 +130,12 @@ export type Settings = {
   concurrency: Record<RunnableProvider, number>;
   folders: string[];
   recycleAfter: number;
+  dream?: DreamSettings;
 };
+
+export type DreamSettings = { enabled: boolean; provider: ProviderChoice; model: string; hour: number };
+
+export type DreamRun = { running: boolean; lastRunAt: string | null; lastResult: string | null; lastError: string | null };
 
 export type WakeEventType =
   | 'message' | 'reaction' | 'decision' | 'widget_action' | 'approval' | 'folder_access' | 'setup'
@@ -179,6 +184,7 @@ export type ProjectState = {
   deliverables: Deliverable[];
   schedules: Schedule[];
   lookups: Lookup[];
+  dream?: DreamRun;
   orchestrator: OrchestratorState;
 };
 

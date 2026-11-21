@@ -74,6 +74,7 @@ export function createOrchestratorRouter(service: Service, projects: Projects, b
   router.post('/thread/stop', route((root, { body }) => service.stopThread(root, body.threadId)));
   router.post('/schedule/cancel', route((root, { body }) => service.cancelScheduled(root, body.kind, body.id)));
   router.post('/recycle', route(root => service.recycle(root)));
+  router.post('/dream', route(root => service.dream(root)));
   return router;
 }
 

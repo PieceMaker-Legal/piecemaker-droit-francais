@@ -49,6 +49,10 @@ L’agent central s’ouvre dans le brain (`server/piecemaker/brain.ts`). L’av
 - Limites : 200 lignes pour `AGENTS.md`, 100 pour `About.md`, 150 pour `Roadmap.md`. Le hook `cloisonnement` refuse un `Write`, `Edit` ou `MultiEdit` qui les dépasserait (limite : un `apply_patch` Codex ou une commande shell n’est pas mesuré).
 - Mémoire native : `autoMemoryEnabled: false` dans `.claude/settings.local.json` du brain et de chaque dossier suivi. Codex n’est pas encore couvert.
 
+### Dream
+
+Réservé à l’agent central (Paramètres › Dream : activation, fournisseur, modèle, heure, « Lancer maintenant » via `POST /dream`). Une fois par nuit à l’heure choisie (heure locale, `tick`), une session cachée « Dream » s’ouvre dans le brain avec `formatDream` (`prompt.ts`) : l’activité des fils et du chat depuis le dernier dream. Elle peut lire et éditer le brain (`acceptEdits`, ni shell ni web), met à jour About.md et Roadmap.md sous leurs limites, ne touche pas à AGENTS.md et rend un compte rendu, publié dans le chat central (« Dream du … ») et gardé dans `state.dream`.
+
 ### Fils imbriqués
 
 Réservé à l’agent central. Un clic sur un fil ouvre sa session dans un volet imbriqué (`agent/subagent.tsx`, rendu par `WorkspacePanels`) : chat du fil, onglets et plugins de son dossier en haut. Dès qu’un volet ou un document s’ouvre dans ce fil, il passe en plein écran avec le volet à sa droite. Le bouton retour ferme le fil et rend le chat principal, sans changer de projet. Un lien du chat central vers un fichier d’un dossier, ou une pièce jointe d’un message lié à un fil, ouvre ce fil avec le document à droite. Tant qu’un fil est ouvert, les événements globaux d’ouverture (éditeur, volets) ne visent que lui.

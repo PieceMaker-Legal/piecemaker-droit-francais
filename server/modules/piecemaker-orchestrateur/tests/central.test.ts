@@ -103,3 +103,27 @@ test('Un dossier non choisi exige l’accord de l’avocat avant que le fil part
   assert.equal(s.threads[0].state, 'working');
   assert.equal(f.opened.at(-1)!.root, f.autre);
 });
+
+test('Le dream de l’agent central passe une fois par nuit à l’heure choisie et rend compte dans le chat', async ctx => {
+  const f = fixture(ctx);
+  await f.state();
+  f.service.updateSettings(f.central, { dream: { enabled: true, hour: 12 } });
+  assert.deepEqual((await f.state()).settings.dream, { enabled: true, provider: 'auto', model: '', hour: 12 });
+  ctx.mock.timers.tick(3000);
+  for (let i = 0; i < 5; i++) await flush();
+  const run = f.turns.at(-1)!;
+  assert.ok(run.content.startsWith('# Dream'));
+  assert.equal(run.options.permissionMode, 'acceptEdits');
+  assert.ok(run.options.disallowedTools.includes('Bash'));
+  assert.deepEqual(f.opened.at(-1), { title: 'Dream', root: f.central, hidden: true });
+  run.end();
+  for (let i = 0; i < 5; i++) await flush();
+  const s = await f.state();
+  assert.equal(s.dream?.lastResult, 'Réponse');
+  assert.ok(s.messages.some(m => m.text.startsWith('Dream du ') && m.text.endsWith('Réponse')));
+  const count = f.turns.length;
+  ctx.mock.timers.tick(3000);
+  for (let i = 0; i < 5; i++) await flush();
+  assert.equal(f.turns.length, count);
+  assert.throws(() => f.service.updateSettings(f.dupont, { dream: { enabled: true } }), /réservé/);
+});

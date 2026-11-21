@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ACTIVE_THREAD_STATES, agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
-import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThread, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import type { AgentDeliverable, AgentDreamSettings, AgentProvider, AgentSettings, AgentState, AgentThread, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
@@ -232,6 +232,29 @@ function Settings({ state, act, projectPath }: { state: AgentState; act: AgentAc
   </div>;
 }
 
+const DREAM_DEFAULTS: AgentDreamSettings = { enabled: false, provider: 'auto', model: '', hour: 3 };
+
+function Dream({ state, act }: { state: AgentState; act: AgentActions }) {
+  const dream = { ...DREAM_DEFAULTS, ...state.settings.dream };
+  const connected = new Set(state.providers.filter((provider) => provider.authenticated).map((provider) => provider.provider));
+  const save = (patch: Partial<AgentDreamSettings>) => void act('settings', { dream: patch }, 'PUT');
+  const run = state.dream;
+  return <div className="space-y-5 overflow-y-auto px-5 py-4 text-sm">
+    <p className="text-muted-foreground">Chaque nuit, l’agent central relit l’activité des fils et met à jour l’About.md et la Roadmap.md de chaque dossier dans le brain, sous leurs limites de lignes. Il ne touche pas à votre AGENTS.md : il vous propose les ajouts dans le chat.</p>
+    <label className="flex items-center gap-2 text-foreground"><input type="checkbox" checked={dream.enabled} onChange={(event) => save({ enabled: event.target.checked })} />Activer le dream</label>
+    <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={dream.provider} onChange={(event) => save({ provider: event.target.value as AgentDreamSettings['provider'] })}>
+      {['auto', ...PROVIDERS].map((value) => <option key={value} value={value} disabled={value !== 'auto' && !connected.has(value as AgentProvider)}>{PROVIDER_LABELS[value]}</option>)}
+    </select></label>
+    <label className="block text-muted-foreground">Modèle (vide = modèle par défaut)<input className={`${inputClass} mt-1`} defaultValue={dream.model} onBlur={(event) => event.target.value.trim() !== dream.model && save({ model: event.target.value.trim() })} /></label>
+    <label className="block text-muted-foreground">Heure<select className={`${inputClass} mt-1`} value={dream.hour} onChange={(event) => save({ hour: Number(event.target.value) })}>
+      {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{String(hour).padStart(2, '0')} h</option>)}
+    </select></label>
+    <button type="button" className={buttonClass} disabled={run?.running} onClick={() => void act('dream')}>{run?.running ? 'Dream en cours…' : 'Lancer maintenant'}</button>
+    {run?.lastRunAt && <p className="text-muted-foreground">Dernier passage : <time dateTime={run.lastRunAt}>{new Date(run.lastRunAt).toLocaleString('fr-FR')}</time>{run.lastError ? ` · échec : ${run.lastError}` : ''}</p>}
+    {run?.lastResult && !run.lastError && <p className="whitespace-pre-wrap text-foreground/80">{run.lastResult}</p>}
+  </div>;
+}
+
 function Scheduled({ state, act }: { state: AgentState; act: AgentActions }) {
   const items = [
     ...state.threads.filter(thread => thread.reminderAt).map(thread => ({
@@ -257,6 +280,7 @@ function Scheduled({ state, act }: { state: AgentState; act: AgentActions }) {
 export function AgentPanel({ projectPath, panelActions }: { projectPath: string; panelActions?: ReactNode }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
+  const [settingsTab, setSettingsTab] = useState<'general' | 'dream'>('general');
   const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -305,7 +329,13 @@ export function AgentPanel({ projectPath, panelActions }: { projectPath: string;
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
-        {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} projectPath={projectPath} /></>}
+        {tab === 'settings' && <>
+          {state.central && <nav role="tablist" aria-label="Paramètres de l’agent" className="flex gap-1 border-b border-border px-4 py-2">
+            {([['general', 'Réglages'], ['dream', 'Dream']] as const).map(([value, label]) => <button key={value} role="tab" type="button" aria-selected={settingsTab === value} onClick={() => setSettingsTab(value)}
+              className={`rounded-lg px-3 py-1 text-sm ${settingsTab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>{label}</button>)}
+          </nav>}
+          {state.central && settingsTab === 'dream' ? <Dream state={state} act={act} /> : <><Instructions state={state} act={act} /><Settings state={state} act={act} projectPath={projectPath} /></>}
+        </>}
         {tab === 'scheduled' && <Scheduled state={state} act={act} />}
       </div>
     </>}
