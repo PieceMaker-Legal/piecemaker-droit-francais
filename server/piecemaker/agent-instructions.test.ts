@@ -93,14 +93,16 @@ test('replaces the old project memory rule, which kept deadlines and stage in a 
   assert.equal(await read(root, 'AGENTS.md'), `Ma règle\r\n${rule}\r\n`);
 }));
 
+const SKILL_MEMORY_RULE = '4° Suivi projets: Pour chaque projet demandé par l’utilisateur, crée puis maintiens sa mémoire, .piecemaker/memoires/<nom>.md. Un projet correspond à un acte précis et identifié : jeu de conclusions, contrat, etc. ; <nom> est celui de son raisonnement et de son suivi. La mémoire garde le récit en Markdown, sans frontmatter : décisions, consignes de l’avocat, travail fait et à faire. Les échéances vont dans le suivi (5°). L’étape en cours et le document à produire sont réglés par l’avocat sur le tableau de l’onglet Suivi des dossiers ; lis-les avec pm check. Une mémoire tenue ailleurs : déplace son récit ici et ses échéances dans le suivi. pm memoire verifier la contrôle (voir la skill piecemaker).';
+const SKILL_SUIVI_RULE = '5° Suivi dossiers: Les échéances et les dates qui les font courir vont dans un suivi, .piecemaker/<nom>-suivi.json (un fichier par acte ou procédure suivi), vérifié par pm suivi_dossiers verifier (voir la skill piecemaker) ; l’avocat les voit pour tous ses dossiers dans le Matter board de l’onglet Suivi des dossiers, qui donne une carte par fichier : un dossier sans suivi n’y figure pas.';
 const SKILL_TREE_RULE = '3° Arborescence: Respecte l’arborescence du dossier, enregistrée dans .piecemaker/arborescence.json : l’avocat la règle dans l’index du dossier, tu la lis dans ce fichier ; pour proposer un changement, modifie ce fichier avec l’outil Edit ou Write, jamais par le shell : le hook en fait une proposition, seul l’avocat l’accepte (voir la skill piecemaker). Un « / » dans un nom crée un sous-dossier. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
 
 test('points rule 6° of a previous template to the Feature tool', () => withProject(async (root) => {
   const template = agentInstructionsTemplate();
   const previous = template
     .replace(/^3° .*$/m, () => SKILL_TREE_RULE)
-    .replace('pm memoire verifier la contrôle.', 'pm memoire verifier la contrôle (voir la skill piecemaker).')
-    .replace('pm suivi_dossiers verifier ;', 'pm suivi_dossiers verifier (voir la skill piecemaker) ;')
+    .replace(/^4° .*$/m, () => SKILL_MEMORY_RULE)
+    .replace(/^5° .*$/m, () => SKILL_SUIVI_RULE)
     .replace('échéances → outil Feature : quickstart, puis lis les pages qu’il indique', 'échéances, raisonnement → skill piecemaker');
   assert.equal(previous.split('(voir la skill piecemaker)').length, 4);
   await writeFile(path.join(root, 'AGENTS.md'), `${previous}\n`);

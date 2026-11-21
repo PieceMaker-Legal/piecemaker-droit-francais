@@ -44,7 +44,8 @@ export const suiviPath = (fichier: unknown) => {
 type Proof = { piece: string; citation: string };
 type Source = { source: string; citation: string };
 type Count = { depart?: 'exclu' | 'inclus'; report?: 'jour_ouvrable_suivant' | 'jour_ouvrable_precedent' | 'aucun'; selon: Source[] };
-type Event = { nom: string; intitule: string; date: string; hypothese: boolean; preuve: Proof[]; selon: Source[] };
+type Event = { nom: string; intitule: string; date: string; hypothese: boolean; preuve: Proof[]; selon: Source[]; okf?: string };
+export type PremiseDate = { date: string; intitule: string; preuve: Proof[] };
 type Deadline = {
   nom: string; intitule: string; kind?: string; date?: string; preuve: Proof[]; de?: string; avant?: string; delai?: Duration;
   prolongation?: { delai: Duration; selon: Source[] }; selon: Source[]; decompte?: Count; fait?: { date: string; preuve: Proof[] };
@@ -55,7 +56,8 @@ const UNITS = ['jours', 'jours_ouvres', 'mois', 'ans'] as const;
 const UNIT_LABEL: Record<Duration['unite'], string> = { jours: 'jours', jours_ouvres: 'jours ouvrés', mois: 'mois', ans: 'ans' };
 const ROOT_KEYS = ['matter', 'evenements', 'echeances'];
 const KINDS = ['limitation', 'hearing', 'filing', 'other'];
-const EVENT_KEYS = ['intitule', 'date', 'preuve', 'hypothese', 'selon'];
+const EVENT_KEYS = ['intitule', 'date', 'preuve', 'hypothese', 'selon', 'okf'];
+const DUPLICATED_MATTER = ['client', 'parties'];
 const DEADLINE_KEYS = ['intitule', 'kind', 'date', 'preuve', 'de', 'avant', 'delai', 'prolongation', 'selon', 'decompte', 'fait'];
 const COUNT_KEYS = ['depart', 'report', 'selon'];
 const DEPARTS = ['exclu', 'inclus'];
@@ -113,7 +115,7 @@ export function parseSuiviFile(code: string) {
   return { value, lines };
 }
 
-export function readSuivi(value: unknown) {
+export function readSuivi(value: unknown, premise?: (title: string) => PremiseDate | null, referenced = false) {
   const problems: Array<{ path: string; text: string }> = [];
   const problem = (at: string, message: string) => { problems.push({ path: at, text: message }); };
   const events = new Map<string, Event>();
@@ -150,6 +152,7 @@ export function readSuivi(value: unknown) {
   };
   const date = (raw: unknown, at: string) => { if (isLegalDate(raw)) return raw; problem(at, 'date AAAA-MM-JJ attendue'); return undefined; };
   if (value.matter !== undefined && !isObject(value.matter)) problem('matter', 'matter : objet { name, client, practiceArea, stage, summary, parties, nextStep }');
+  if (referenced && isObject(value.matter)) for (const key of DUPLICATED_MATTER) if (value.matter[key] !== undefined) problem(`matter.${key}`, `matter.${key} vient de la base du dossier (parties qualifiées dans l’onglet Dossier) : retire-le du suivi`);
   const named = (raw: unknown, at: string, shape: string) => {
     if (raw === undefined) return true;
     if (!isObject(raw)) { problem(at, shape); return false; }
@@ -164,6 +167,14 @@ export function readSuivi(value: unknown) {
       keys(raw, at, EVENT_KEYS);
       if (raw.intitule !== undefined && !text(raw.intitule)) problem(`${at}.intitule`, 'intitule : texte');
       if (raw.hypothese !== undefined && typeof raw.hypothese !== 'boolean') problem(`${at}.hypothese`, 'hypothese : true ou false');
+      if (raw.okf !== undefined) {
+        if (!text(raw.okf)) { problem(`${at}.okf`, 'okf : titre de la prémisse de l’index qui porte la date'); continue; }
+        if (raw.date !== undefined || raw.preuve !== undefined || raw.hypothese !== undefined) { problem(`${at}.okf`, 'okf remplace date, preuve et hypothese : la date et sa preuve viennent de la prémisse, ne les recopie pas'); continue; }
+        const found = premise?.(raw.okf.trim()) ?? null;
+        if (!found) { problem(`${at}.okf`, `prémisse « ${raw.okf.trim()} » absente de l’index ou sans date : relie la pièce avec pm okf link <pièce> states "${raw.okf.trim()}" --citation "…" --value AAAA-MM-JJ`); continue; }
+        events.set(nom, { nom, intitule: text(raw.intitule) ? raw.intitule : found.intitule || human(nom), date: found.date, hypothese: false, preuve: found.preuve, selon: sources(raw.selon, `${at}.selon`), okf: raw.okf.trim() });
+        continue;
+      }
       const when = date(raw.date, `${at}.date`);
       if (!when) continue;
       events.set(nom, { nom, intitule: text(raw.intitule) ? raw.intitule : human(nom), date: when, hypothese: raw.hypothese === true, preuve: proofs(raw.preuve, `${at}.preuve`), selon: sources(raw.selon, `${at}.selon`) });
@@ -230,6 +241,8 @@ export async function verifySuivi(input: {
   connectors: SourceConnectors;
   marks: Map<string, SuiviMark>;
   today?: string;
+  premise?: (title: string) => PremiseDate | null;
+  referenced?: boolean;
 }): Promise<SuiviVerification> {
   const { connectors, cwd } = input;
   const today = input.today ?? new Date().toISOString().slice(0, 10);
@@ -248,7 +261,7 @@ export async function verifySuivi(input: {
     return { evenements: [], echeances: [], issues: [{ id: issueId('erreur', '', error.message), kind: 'erreur', path: '', line: error.line, text: error.message }] };
   }
   lines = parsed.lines;
-  const { events, deadlines, problems } = readSuivi(parsed.value);
+  const { events, deadlines, problems } = readSuivi(parsed.value, input.premise, input.referenced === true);
   for (const problem of problems) add('erreur', problem.path, problem.text);
 
   const used = new Set<string>();

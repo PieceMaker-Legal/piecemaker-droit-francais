@@ -7,6 +7,7 @@ import express from 'express';
 
 import type { SuiviDeadline, SuiviEvent, SuiviSnapshot } from '../../../shared/piecemaker-suivi.js';
 
+import { brainSuiviWrite, roadmapOf } from './case-store.js';
 import { SUIVI_NAME, suiviDateId, suiviPath } from './suivi.js';
 import type { createSuiviService } from './suivi-service.js';
 
@@ -17,6 +18,7 @@ const BOARD = 'cabinet';
 const BOARD_NAME = 'Dossiers';
 const MATTERS = `projects/${BOARD}/matters/`;
 const DELETED_SUFFIX = '.supprime';
+const PARTY_ROLES: Record<string, string> = { client: 'client', adversaire: 'adverse', tiers: 'related' };
 const KEPT_DATE_FIELDS = ['confirmed', 'phase', 'page', 'docId'];
 
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -100,9 +102,23 @@ export function createBoardService(getDatabase: () => Database.Database, suivi: 
     return null;
   };
 
+  const partiesOf = (root: string): Json => {
+    if (!roadmapOf(root)) return {};
+    try {
+      const project = database.prepare('SELECT project_id FROM projects WHERE project_path=?').get(root) as { project_id: string } | undefined;
+      if (!project) return {};
+      const rows = database.prepare("SELECT kind, label, json_extract(data_json, '$.partySide') AS side FROM piecemaker_nodes WHERE project_id=? AND kind IN ('person','company') AND json_extract(data_json, '$.partySide') IS NOT NULL ORDER BY label").all(project.project_id) as Array<{ kind: string; label: string; side: string }>;
+      const parties = rows.map((row) => ({ name: row.label, role: PARTY_ROLES[row.side] ?? 'related', entityType: row.kind === 'person' ? 'person' : 'organisation' }));
+      const client = parties.find((party) => party.role === 'client')?.name;
+      return { parties, ...(client ? { client } : {}) };
+    } catch {
+      return {};
+    }
+  };
+
   const build = async () => {
     const docs: Record<string, Json> = Object.fromEntries(Object.entries(central()).filter(([docPath]) => !isMatterDoc(docPath)));
-    for (const dossier of await suivi.all()) { const id = dossierMatterId(dossier.projectPath, dossier.fichier); docs[`${MATTERS}${id}`] = projectMatter(id, dossier.nom, dossier.snapshot); }
+    for (const dossier of await suivi.all()) { const id = dossierMatterId(dossier.projectPath, dossier.fichier); docs[`${MATTERS}${id}`] = { ...projectMatter(id, dossier.nom, dossier.snapshot), ...partiesOf(dossier.projectPath) }; }
     return { rev: sha(JSON.stringify(docs)), docs };
   };
   let building: ReturnType<typeof build> | null = null;
@@ -113,6 +129,25 @@ export function createBoardService(getDatabase: () => Database.Database, suivi: 
     await rename(`${file}.tmp`, file);
   };
   const writeMatter = async ({ root, fichier }: { root: string; fichier: string }, op: string, data: Json | undefined, base: unknown[] | undefined) => {
+    if (roadmapOf(root)) {
+      const snapshot = op === 'delete' ? null : await suivi.read(root, fichier).catch(() => null);
+      const marks: Array<{ echeance: string } & Json> = [];
+      brainSuiviWrite(root, fichier, op === 'delete' ? 'delete' : op === 'set' ? 'set' : 'update', (current) => {
+        const raw: Json = current ?? {};
+        raw.evenements = isObject(raw.evenements) ? raw.evenements : {};
+        raw.echeances = isObject(raw.echeances) ? raw.echeances : {};
+        const { _id: _ignored, client: _client, parties: _parties, ...fields } = data ?? {};
+        const matter: Json = op === 'set' ? fields : merge(isObject(raw.matter) ? raw.matter : {}, fields);
+        if (Array.isArray(fields.keyDates) && snapshot) {
+          const result = reconcileDates(raw, snapshot, (fields.keyDates as unknown[]).filter(isObject), base, new Date().toISOString().slice(0, 10));
+          matter.keyDates = result.kept;
+          marks.push(...result.marks);
+        }
+        return { matter, evenements: raw.evenements, echeances: raw.echeances };
+      });
+      for (const { echeance, ...mark } of marks) await suivi.mark(root, echeance, mark, fichier).catch(() => undefined);
+      return;
+    }
     const file = path.join(root, suiviPath(fichier));
     if (op === 'delete') { await rename(file, `${file}${DELETED_SUFFIX}`); return; }
     if (op === 'set') await rename(`${file}${DELETED_SUFFIX}`, file).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') throw error; });

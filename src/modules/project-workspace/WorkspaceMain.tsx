@@ -20,6 +20,7 @@ import WorkspaceHeader from '@/modules/project-workspace/WorkspaceHeader';
 import WorkspaceStateView from '@/modules/project-workspace/WorkspaceStateView';
 import WorkspaceErrorBoundary from '@/modules/project-workspace/WorkspaceErrorBoundary';
 import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
+import { useSubagentFileOpen } from '@/modules/piecemaker-workspace-tabs';
 
 type WorkspaceMainProps = {
   selectedProject: Project | null;
@@ -102,6 +103,7 @@ function WorkspaceMain({
   // Resolves bare/partial file references (e.g. links inside chat messages) to
   // real project files before opening them in the in-app editor.
   const resolvedFileOpen = useFileOpenResolver(selectedProject, handleFileOpen);
+  const chatFileOpen = useSubagentFileOpen(handleFileOpen);
   usePiecemakerEditorBridge(handleFileOpen);
   usePiecemakerSettingsBridge();
 
@@ -182,7 +184,7 @@ function WorkspaceMain({
                 selectedSession={selectedSession}
                 ws={ws}
                 sendMessage={sendMessage}
-                onFileOpen={handleFileOpen}
+                onFileOpen={chatFileOpen}
                 onNavigateToSession={onNavigateToSession}
                 onSessionEstablished={onSessionEstablished}
                 onShowSettings={onShowSettings}

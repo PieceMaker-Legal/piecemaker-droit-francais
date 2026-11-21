@@ -49,6 +49,7 @@ export type AgentThread = {
   title: string;
   provider: AgentProvider;
   model: string;
+  projectPath: string;
   sessionId: string | null;
   reminderAt: string | null;
   ackThread: string;
@@ -70,10 +71,13 @@ export type AgentSettings = {
   concurrency: Record<AgentProvider, number>;
   folders: string[];
   recycleAfter: number;
+  dream?: AgentDreamSettings;
 };
+export type AgentDreamSettings = { enabled: boolean; provider: AgentProviderChoice; model: string; hour: number };
 export type AgentState = {
   revision: number;
   settings: AgentSettings;
+  dream?: { running: boolean; lastRunAt: string | null; lastResult: string | null; lastError: string | null };
   messages: AgentMessage[];
   decisions: AgentDecision[];
   threads: AgentThread[];
@@ -85,7 +89,15 @@ export type AgentState = {
   artifacts: Array<{ url: string; title: string; updated_at?: string }>;
   files: Array<{ name: string; size: number; updatedAt: string }>;
   storage: { used: number; total: number };
+  central: boolean;
+  dossiers: Array<{ path: string; selected: boolean }>;
+  projectIds?: Record<string, string | null>;
 };
+export type CentralAgent = { project: string; projectId: string | null; sessionId: string | null };
+export type CaseRoadmapLine = { intitule?: string; kind?: string; date?: string; okf?: string; de?: string; avant?: string; delai?: Record<string, number>; [key: string]: unknown };
+export type CaseSuivi = { matter?: Record<string, unknown>; evenements?: Record<string, CaseRoadmapLine>; echeances?: Record<string, CaseRoadmapLine> };
+export type CaseRoadmap = { synthese?: Record<string, unknown>; etapes?: unknown; suivis?: Record<string, CaseSuivi>; suivisSupprimes?: Record<string, CaseSuivi>; [key: string]: unknown };
+export type CasePair = { folder: string; name: string; about: string; roadmap: CaseRoadmap; error: string | null; paths: { about: string; roadmap: string } };
 
 const BASE = '/api/piecemaker/orchestrateur';
 
@@ -95,6 +107,12 @@ export const agentApi = {
   state: (project: string) => requestJson<AgentState>(`${BASE}/state?project=${encodeURIComponent(project)}`),
   sessionId: (project: string) => requestJson<{ sessionId: string | null }>(`${BASE}/session?project=${encodeURIComponent(project)}`),
   openSession: (project: string) => requestJson<{ sessionId: string; provider: AgentProvider | null }>(`${BASE}/session`, { project }),
+  central: () => requestJson<CentralAgent>(`${BASE}/central`),
+  setBrain: (path: string) => requestJson<CentralAgent>(`${BASE}/central/brain`, { path }, 'PUT'),
+  openCentral: () => requestJson<CentralAgent & { sessionId: string; provider: AgentProvider | null }>(`${BASE}/central/session`, {}),
   post: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }),
   put: (path: string, project: string, body: Record<string, unknown>) => requestJson<unknown>(`${BASE}/${path}`, { project, ...body }, 'PUT'),
+  casePair: (project: string, folder: string) => requestJson<CasePair>(`${BASE}/case?project=${encodeURIComponent(project)}&folder=${encodeURIComponent(folder)}`),
+  saveAbout: (project: string, folder: string, text: string) => requestJson<CasePair>(`${BASE}/case/about`, { project, folder, text }, 'PUT'),
+  saveRoadmap: (project: string, folder: string, roadmap: CaseRoadmap) => requestJson<CasePair>(`${BASE}/case/roadmap`, { project, folder, roadmap }, 'PUT'),
 };

@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 
 import type { SidebarProjectListProps } from '@/shared/types';
 import { getPageTitle } from '@/shared/utils';
+import { useCentralAgent } from '@/modules/piecemaker-workspace-tabs';
+import SidebarCentralAgentButton from '@/modules/sidebar/SidebarCentralAgentButton';
 import SidebarProjectItem from '@/modules/sidebar/SidebarProjectItem';
 import SidebarProjectsState from '@/modules/sidebar/SidebarProjectsState';
 
@@ -52,6 +54,8 @@ export default function SidebarProjectList({
   onDeleteSelectedSessions,
   t,
 }: SidebarProjectListProps) {
+  const central = useCentralAgent();
+  const folderProjects = central ? filteredProjects.filter((project) => project.projectId !== central.projectId && project.fullPath !== central.project) : filteredProjects;
   const pageTitle = getPageTitle(selectedProject, selectedSession);
   const state = (
     <SidebarProjectsState
@@ -71,9 +75,10 @@ export default function SidebarProjectList({
 
   return (
       <div className="pb-safe-area-inset-bottom md:space-y-1">
+        {central && <SidebarCentralAgentButton onSessionSelect={onSessionSelect} t={t} />}
         {!showProjects
           ? state
-          : filteredProjects.map((project) => {
+          : folderProjects.map((project) => {
               // Both renames are resolved here rather than inside the row, so
               // every other row is handed the same scalars on each keystroke and
               // its memo boundary holds.

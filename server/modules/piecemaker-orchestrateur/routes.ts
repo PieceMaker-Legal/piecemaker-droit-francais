@@ -2,10 +2,11 @@ import path from 'node:path';
 
 import express from 'express';
 
+import { readCasePair, writeCaseAbout, writeCaseRoadmap } from './case-pair.js';
 import type { createOrchestratorService } from './service.js';
 
 type Service = ReturnType<typeof createOrchestratorService>;
-type Projects = { getProjectPaths(): Array<{ project_path: string }> };
+type Projects = { getProjectPaths(): Array<{ project_id: string; project_path: string }> };
 type Request = express.Request & { user?: { id?: number } };
 
 async function send(response: express.Response, run: () => unknown) {
@@ -18,7 +19,7 @@ async function send(response: express.Response, run: () => unknown) {
   }
 }
 
-export function createOrchestratorRouter(service: Service, projects: Projects) {
+export function createOrchestratorRouter(service: Service, projects: Projects, brain?: { move(value: unknown): { path: string } }) {
   const router = express.Router();
   router.use(express.json({ limit: '30mb' }));
 
@@ -26,13 +27,37 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
     return (request: Request, response: express.Response) => send(response, () => {
       const project = request.method === 'GET' ? request.query.project : request.body?.project;
       const root = typeof project === 'string' && path.isAbsolute(project)
-        && projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(project))?.project_path;
+        && (projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(project))?.project_path
+          ?? (service.isCentral(project) ? project : null));
       if (!root) throw Object.assign(new Error('Dossier introuvable.'), { code: 404 });
       return run(root, request);
     });
   }
 
-  router.get('/state', route((root, { user }) => service.state(root, user?.id ?? null)));
+  const projectId = (root: string) => projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(root))?.project_id ?? null;
+  router.get('/central', (_request, response) => send(response, () => {
+    const central = service.central();
+    return { ...central, projectId: projectId(central.project) };
+  }));
+  router.put('/central/brain', (request: Request, response) => send(response, () => {
+    if (!brain) throw Object.assign(new Error('Brain indisponible.'), { code: 404 });
+    const wanted = typeof request.body?.path === 'string' ? path.resolve(request.body.path.trim()) : '';
+    const current = service.central().project;
+    if (wanted && projects.getProjectPaths().some(row => path.resolve(row.project_path) === wanted && path.resolve(row.project_path) !== path.resolve(current))) {
+      throw Object.assign(new Error('Ce dossier est un dossier juridique : choisissez un dossier à part pour le brain.'), { code: 400 });
+    }
+    brain.move(request.body?.path);
+    const central = service.central();
+    return { ...central, projectId: projectId(central.project) };
+  }));
+  router.post('/central/session', (request: Request, response) => send(response, async () => {
+    const session = await service.centralSession(request.user?.id ?? null);
+    return { ...session, projectId: projectId(session.project) };
+  }));
+  router.get('/state', route(async (root, { user }) => {
+    const state = await service.state(root, user?.id ?? null);
+    return state.central ? { ...state, projectIds: Object.fromEntries(state.dossiers.map(dossier => [dossier.path, projectId(dossier.path)])) } : state;
+  }));
   router.get('/session', route(root => ({ sessionId: service.sessionId(root) })));
   router.post('/session', route((root, { user }) => service.session(root, user?.id ?? null)));
   router.post('/message', route((root, { body, user }) => service.postUserMessage(root, body.text, user?.id ?? null)));
@@ -51,6 +76,16 @@ export function createOrchestratorRouter(service: Service, projects: Projects) {
   router.post('/schedule/cancel', route((root, { body }) => service.cancelScheduled(root, body.kind, body.id)));
   router.post('/schedule/delete', route((root, { body }) => service.deleteScheduled(root, body.kind, body.id)));
   router.post('/recycle', route(root => service.recycle(root)));
+  router.post('/dream', route(root => service.dream(root)));
+  const caseFolder = (root: string, folder: unknown) => {
+    if (!service.isCentral(root)) throw Object.assign(new Error('Réservé à l’agent central.'), { code: 403 });
+    const found = typeof folder === 'string' && path.isAbsolute(folder) ? projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(folder) && !service.isCentral(row.project_path)) : undefined;
+    if (!found) throw Object.assign(new Error('Dossier introuvable.'), { code: 404 });
+    return found.project_path;
+  };
+  router.get('/case', route((root, { query }) => readCasePair(caseFolder(root, query.folder))));
+  router.put('/case/about', route((root, { body }) => writeCaseAbout(caseFolder(root, body.folder), body.text)));
+  router.put('/case/roadmap', route((root, { body }) => writeCaseRoadmap(caseFolder(root, body.folder), body.roadmap)));
   return router;
 }
 

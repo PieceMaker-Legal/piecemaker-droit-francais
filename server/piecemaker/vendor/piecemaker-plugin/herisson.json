@@ -65,6 +65,26 @@
       "format": "memoire"
     },
     {
+      "nom": "roadmap",
+      "cible": "^(?!)",
+      "brain": "Roadmap.json",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["suivi_dossiers", "verifier"],
+      "erreur": "\\d+ erreur\\(s\\), \\d+ manque\\(s\\)\\.",
+      "delai": 120,
+      "format": "roadmap"
+    },
+    {
+      "nom": "about",
+      "cible": "^(?!)",
+      "brain": "About.md",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["memoire", "verifier"],
+      "delai": 10
+    },
+    {
       "nom": "catala",
       "cible": "^catala/(?<nom>[^/]+)/[^/]+\\.(catala_fr|toml)$",
       "ecriture": "agent",

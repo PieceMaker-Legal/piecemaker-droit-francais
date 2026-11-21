@@ -6,6 +6,7 @@ import { agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import type { AgentDecision, AgentMessage, AgentOutput, AgentState, AgentWidget } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { PROVIDER_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { openAgentOutput } from '@/modules/piecemaker-workspace-tabs/agent/openAgentOutput';
+import { useSubagent } from '@/modules/piecemaker-workspace-tabs/agent/subagent';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 
 const cardClass = 'rounded-xl border border-border bg-muted/40 px-3 py-3';
@@ -104,10 +105,11 @@ export function AgentCards({ state, act }: { state: AgentState; act: AgentAction
   </div>;
 }
 
-export type AgentChatCardData = { messageId: string; widget?: AgentWidget; decisions: AgentDecision[]; outputs: AgentOutput[] };
+export type AgentChatCardData = { messageId: string; threadId?: string; widget?: AgentWidget; decisions: AgentDecision[]; outputs: AgentOutput[] };
 
 export function AgentChatCard({ card, project }: { card: AgentChatCardData; project: string }) {
   const [error, setError] = useState('');
+  const subagent = useSubagent();
   const act: AgentActions = async (path, body = {}) => {
     try {
       setError('');
@@ -118,7 +120,7 @@ export function AgentChatCard({ card, project }: { card: AgentChatCardData; proj
     }
   };
   return <div className="space-y-2">
-    {card.outputs.map((output, index) => <button key={index} type="button" className={secondaryButton} onClick={() => openAgentOutput(project, output)}>{output.title || output.ref}</button>)}
+    {card.outputs.map((output, index) => <button key={index} type="button" className={secondaryButton} onClick={() => subagent?.openOutput(output, card.threadId) || openAgentOutput(project, output)}>{output.title || output.ref}</button>)}
     {card.widget && <WidgetCard widget={card.widget} messageId={card.messageId} act={act} />}
     {card.decisions.map(decision => <DecisionCard key={decision.id} decision={decision} act={act} />)}
     {error && <p role="alert">{error}</p>}

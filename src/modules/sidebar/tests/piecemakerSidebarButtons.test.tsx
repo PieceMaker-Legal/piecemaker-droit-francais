@@ -3,12 +3,13 @@ import type { TFunction } from 'i18next';
 import { expect, it, vi } from 'vitest';
 
 import SidebarAgentButton from '@/modules/sidebar/SidebarAgentButton';
+import SidebarCentralAgentButton from '@/modules/sidebar/SidebarCentralAgentButton';
 import SidebarTabularReviewButton from '@/modules/sidebar/SidebarTabularReviewButton';
 import type { Project } from '@/shared/types';
 
-const mocks = vi.hoisted(() => ({ openSession: vi.fn(), requestWorkspacePanel: vi.fn(), rpc: vi.fn() }));
+const mocks = vi.hoisted(() => ({ openSession: vi.fn(), openCentral: vi.fn(), requestWorkspacePanel: vi.fn(), rpc: vi.fn() }));
 
-vi.mock('@/modules/piecemaker-workspace-tabs', () => ({ agentApi: { openSession: mocks.openSession }, requestWorkspacePanel: mocks.requestWorkspacePanel }));
+vi.mock('@/modules/piecemaker-workspace-tabs', () => ({ agentApi: { openSession: mocks.openSession, openCentral: mocks.openCentral }, requestWorkspacePanel: mocks.requestWorkspacePanel }));
 vi.mock('@/shared/api', () => ({ api: { plugins: { rpc: mocks.rpc } } }));
 
 const t = ((key: string) => key) as unknown as TFunction;
@@ -38,4 +39,13 @@ it('montre Analyse Tabulaire pour un dossier protégé et ouvre son onglet sur u
   expect(onNewSession).toHaveBeenCalledWith(project);
   expect((window as unknown as Record<string, unknown>).__piecemakerTabularReviewTarget).toBe('/dossiers/Dupont');
   expect(mocks.requestWorkspacePanel).toHaveBeenCalledWith('plugin:piecemaker-tabular-review');
+});
+
+it('ouvre l’agent central dans son propre projet, au-dessus des dossiers', async () => {
+  mocks.openCentral.mockResolvedValue({ project: '/donnees/PieceMaker Agent', projectId: 'central', sessionId: 'agent-central', provider: 'claude' });
+  const onSessionSelect = vi.fn();
+  render(<SidebarCentralAgentButton onSessionSelect={onSessionSelect} t={t} />);
+  fireEvent.click(screen.getByRole('button', { name: 'sessions.centralAgent' }));
+  await act(async () => undefined);
+  expect(onSessionSelect).toHaveBeenCalledWith(expect.objectContaining({ id: 'agent-central', __provider: 'claude', __projectId: 'central' }), 'central');
 });

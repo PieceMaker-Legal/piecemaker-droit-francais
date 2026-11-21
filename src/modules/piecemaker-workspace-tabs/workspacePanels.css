@@ -387,3 +387,64 @@
   overflow-y: auto;
   padding: 4px 16px 24px;
 }
+
+.pm-subagent {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-left: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+}
+
+.pm-subagent.is-full {
+  border-left: 0;
+}
+
+.pm-subagent-bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.5rem;
+  height: 2.5rem;
+  padding: 0 0.5rem;
+  border-bottom: 1px solid hsl(var(--border));
+  font-size: 0.875rem;
+}
+
+.pm-subagent-bar button {
+  display: flex;
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+}
+
+.pm-subagent-bar button:hover {
+  background: hsl(var(--accent));
+}
+
+.pm-subagent-bar svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.pm-subagent-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.pm-subagent-folder {
+  flex-shrink: 0;
+  color: hsl(var(--muted-foreground));
+}
+
+.pm-subagent-body {
+  min-height: 0;
+  flex: 1;
+}

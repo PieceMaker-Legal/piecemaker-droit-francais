@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import express from 'express';
 
+import { brainSuiviCopy, readEtapesOf, writeEtapesOf } from './case-store.js';
 import { SUIVI_NAME, suiviPath } from './suivi.js';
 import { dossierMatterId } from './suivi-board.js';
 import type { createSuiviService } from './suivi-service.js';
@@ -106,7 +107,7 @@ export function createEtapesService(deps: EtapesDependencies) {
     return Object.values(state.files ?? {}).map((entry) => entry.scanned?.updatedAt ?? '').sort().at(-1) ?? '';
   };
   const read = async (root: string) => {
-    const etapes = await readJson<Etapes>(path.join(root, ETAPES_FILE), {});
+    const etapes = await readEtapesOf<Etapes>(root, {});
     if (etapes.mappingValide && new Date(await lastScan(root)) > new Date(etapes.mappingValide)) delete etapes.mappingValide;
     return etapes;
   };
@@ -118,7 +119,7 @@ export function createEtapesService(deps: EtapesDependencies) {
   const change = <T>(root: string, run: (etapes: Etapes) => T | Promise<T>) => serialiser(root, async () => {
     const etapes = await read(root);
     const result = await run(etapes);
-    await writeJson(path.join(root, ETAPES_FILE), etapes);
+    await writeEtapesOf(root, etapes, writeJson);
     return result;
   });
   const project = (projectPath: unknown) => {
@@ -353,7 +354,8 @@ export function createEtapesService(deps: EtapesDependencies) {
       const stem = precedent.replace(VERSION, '');
       const names = await listPrograms(root);
       let version = Number(VERSION.exec(precedent)?.[1] ?? 1) + 1;
-      while (names.includes(`${stem}-v${version}`) || await exists(path.join(root, suiviPath(`${stem}-v${version}-${SUIVI_NAME}`)))) version += 1;
+      const known = await deps.suivi.files(root, true).catch(() => [] as string[]);
+      while (names.includes(`${stem}-v${version}`) || known.includes(`${stem}-v${version}-${SUIVI_NAME}`) || await exists(path.join(root, suiviPath(`${stem}-v${version}-${SUIVI_NAME}`)))) version += 1;
       const next = `${stem}-v${version}`;
       const copies: string[] = [];
       try {
@@ -362,14 +364,14 @@ export function createEtapesService(deps: EtapesDependencies) {
         await cp(source, destination, { recursive: true, errorOnExist: true, force: false, filter: (file) => path.relative(source, file) !== 'resultats' });
         copies.push(destination);
         const fichier = await suiviOf(root, precedent);
-        if (fichier && fichier !== SUIVI_NAME) {
+        if (fichier && fichier !== SUIVI_NAME && !brainSuiviCopy(root, fichier, `${next}-${SUIVI_NAME}`)) {
           const destinationSuivi = path.join(root, suiviPath(`${next}-${SUIVI_NAME}`));
           await copyFile(path.join(root, suiviPath(fichier)), destinationSuivi, constants.COPYFILE_EXCL);
           copies.push(destinationSuivi);
         }
         suite(etapes, precedent).remplacePar = next;
         etapes.raisonnements![next] = { etape: 'raisonnement', precedent };
-        await writeJson(path.join(root, ETAPES_FILE), etapes);
+        await writeEtapesOf(root, etapes, writeJson);
         return { raisonnement: next };
       } catch (error) {
         await Promise.all(copies.map((file) => rm(file, { recursive: true, force: true })));

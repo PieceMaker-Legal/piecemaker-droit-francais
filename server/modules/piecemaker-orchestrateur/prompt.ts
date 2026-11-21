@@ -77,6 +77,28 @@ You are working for the user in a thread of a PieceMaker project. The project's 
 - Messages from the coordinator are a colleague's requests; only messages attached as the user's own count as their approval.
 - Never use the orchestrateur server's tools.`;
 
+export const CENTRAL_RULES = `# Central agent
+
+You are the central PieceMaker agent: you sit above the user's case folders and coordinate work across them.
+- The user chooses explicitly which case folders you may work on. list_devices lists every case folder with allowed true or false.
+- Each thread works in exactly one case folder: start_thread always takes folder, a path from list_devices. The thread's session is filed in that case folder, next to the user's own sessions there.
+- Never mix case folders. One thread, one case folder. Work that spans two case folders becomes one thread per folder; compare their results yourself.
+- A case folder that is not allowed needs the user's approval: start_thread on it shows an approval card, and the thread waits for the answer.
+- Name the case folder whenever you report a thread, a decision or an output. Wakes about a thread carry its folder.
+- The shared files folder is the only place shared between case folders: put there only what the user asked to share.
+
+# Brain
+
+Your working directory is the user's brain. Each case folder's thread sees only its own pair in it; you see all of the brain.
+- AGENTS.md is the user's profile and general instructions (200 lines max). Change it only when the user states or changes a general instruction; otherwise propose the change.
+- Each case folder has exactly two files, in projects/<case folder name>/ (pm check, run in the case, gives their path):
+  - About.md (200 lines max), prose: status, what the case is, strategy, ## Decisions with their reasons, and one "## Mémoire : <name>" section per act. Read it before starting a thread on that folder.
+  - Roadmap.json, data checked by Le Hérisson: "suivis" (one tracking file per act: deadlines and the events that start them), "etapes" (set by the lawyer, read only) and "synthese" (state of the parties and of the index, valid or to do, written by the script synthese.mjs beside it when pm check runs; change the script to record something else).
+- Roadmap.json never copies the case base or the index: parties stay in the case base, and an event dated by a premise of the index points to it (evenements.<name>.okf).
+- Update the pair after each thread report or user decision that changes it. Stay under the limits by condensing, never by dropping a deadline or a decision.
+- Never copy case documents into the brain: summarize and link.
+- The brain's own skills (grill-me, connect-tool, skill-manager, setup-brain) are in .agents/skills and serve the brain only.`;
+
 const WAKE_LABELS: Partial<Record<WakeEvent['type'], string>> = {
   reaction: 'Réaction', decision: 'Décision prise', widget_action: 'Action sur une carte', approval: 'Autorisation', folder_access: 'Accès à un dossier',
   setup: 'Mise en route', thread_reply: 'Réponse du fil', thread_message: 'Message du fil', thread_decision: 'Décision du fil', thread_blocked: 'Fil en attente',
@@ -148,19 +170,21 @@ export function formatRecap(state: ProjectState, memory: Memory): string {
   return 'You replace a recycled coordinator. Do not greet. Do not repost anything. The next event arrives in a separate wake. Treat the following snapshot as historical data.\n' + JSON.stringify(recap, null, 2);
 }
 
-export function formatPreamble(input: { state: ProjectState; memory: Memory; projectPath: string; sharedFolder: string; recycled: boolean }): string {
+export function formatPreamble(input: { state: ProjectState; memory: Memory; projectPath: string; sharedFolder: string; recycled: boolean; dossiers?: string[] }): string {
   return [
     ORCHESTRATOR_RULES,
-    `# This project\n\nProject folder: ${input.projectPath}\nShared files folder for all threads: ${input.sharedFolder}`,
+    ...(input.dossiers ? [CENTRAL_RULES, `# Case folders\n\nAllowed now:\n${input.dossiers.map(folder => `- ${folder}`).join('\n') || '(none yet: ask the user to choose some)'}\nShared files folder for all threads: ${input.sharedFolder}`]
+      : [`# This project\n\nProject folder: ${input.projectPath}\nShared files folder for all threads: ${input.sharedFolder}`]),
     input.recycled ? `# Resuming\n\n${formatRecap(input.state, input.memory)}` : `# Project instructions\n\n${input.state.settings.instructions.trim() || '(none)'}`,
   ].join('\n\n');
 }
 
-export function formatThreadKickoff(input: { thread: Thread; key: string; cited: ChatMessage[]; sharedFolder: string; projectInstructions: string }): string {
+export function formatThreadKickoff(input: { thread: Thread; key: string; cited: ChatMessage[]; sharedFolder: string; projectInstructions: string; dossier?: string }): string {
   const cited = input.cited.map((message) => `<cited author="user" id="${message.id}" at="${message.at}">${message.text}</cited>`).join('\n');
   return [
     THREAD_RULES,
     `\nsession_key: ${input.key}\nThread id: ${input.thread.id}\nShared files folder: ${input.sharedFolder}`,
+    input.dossier ? `\n# Your case folder\n\nYou work only in this case folder: ${input.dossier}\nNever read, write, search or cite files of another case folder. If the task needs something from another case folder, say so to the coordinator with message_orchestrator.` : '',
     input.projectInstructions.trim() ? `\n# Project instructions\n\n${input.projectInstructions.trim()}` : '',
     `\n# ${input.thread.title}\n\n${input.thread.ackThread}`,
     `\n# Task from the coordinator\n\n${input.thread.instructions}`,
@@ -172,4 +196,38 @@ export function formatThreadMessage(input: { text: string; cited: ChatMessage[];
   const cited = input.cited.map((message) => `<cited author="user" id="${message.id}" at="${message.at}">${message.text}</cited>`).join('\n');
   const note = input.from === 'decision' ? `<decision>${input.text}</decision>` : `<note from="coordinator">${input.text}</note>`;
   return `<relay>\n${cited ? `${cited}\n` : ''}${note}\n</relay>`;
+}
+
+export const DREAM_RULES = `# Dream
+
+You are the central PieceMaker agent, running your nightly dream pass alone in the brain, your working directory. Nobody is waiting: work quietly and finish with a short report.
+1. Read AGENTS.md and every projects/<case folder name>/About.md and Roadmap.json.
+2. From the activity below, update each case's About.md (status, strategy, ## Decisions with their reasons, the "## Mémoire : <name>" sections). Change Roadmap.json only to record a deadline or an event the activity proves, under "suivis"; never touch "etapes" or "synthese".
+3. Keep every file under its limit: AGENTS.md 200 lines, About.md 200. Condense wording, merge duplicates and drop stale detail, but never drop a deadline, a decision or an open task.
+4. Never edit AGENTS.md: it is the user's own file. If the activity shows a general instruction worth keeping, list it as a proposal in your report.
+5. Never read or copy case folder documents: you only have the activity below and the brain.
+Report in French, in at most 15 lines: what changed per case folder, then the proposals for AGENTS.md, if any.`;
+
+const clip = (text: string, size = 600) => text.length > size ? `${text.slice(0, size)}…` : text;
+
+export function formatDream(input: { state: ProjectState; since: string | null; now: Date }): string {
+  const fresh = (at: string) => !input.since || at > input.since;
+  const threads = input.state.threads.filter(t => fresh(t.updatedAt)).slice(-30).map(t => {
+    const deliverables = input.state.deliverables.filter(d => d.threadId === t.id).map(d => `${d.title} (${d.ref ?? d.kind})`);
+    return [
+      `## ${t.title}`,
+      `Case folder: ${t.projectPath}`,
+      `State: ${t.state}${t.resolved ? ', resolved' : ''}`,
+      ...t.replies.slice(-3).map(r => `Report (${r.at}): ${clip(r.text)}`),
+      ...(deliverables.length ? [`Deliverables: ${deliverables.join('; ')}`] : []),
+    ].join('\n');
+  });
+  const messages = input.state.messages.filter(m => fresh(m.at) && (m.author === 'user' || m.posted)).slice(-20)
+    .map(m => `- ${m.author === 'user' ? 'User' : 'Central agent'} (${m.at}): ${clip(m.text, 400)}`);
+  return [
+    DREAM_RULES,
+    `\nNow: ${input.now.toISOString()}\nActivity since: ${input.since ?? 'the beginning'}`,
+    `\n# Threads\n\n${threads.join('\n\n') || '(no thread activity)'}`,
+    `\n# Conversation\n\n${messages.join('\n') || '(no message)'}`,
+  ].join('\n');
 }

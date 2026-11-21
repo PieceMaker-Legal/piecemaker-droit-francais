@@ -34,7 +34,7 @@ export type Approval = { threadId: string; requestId: string; toolName: string; 
 export type FolderRequest = { threadId: string | null; folder: string; status: 'pending' | 'allowed' | 'denied' };
 export type SetupProposal = {
   instructions?: string;
-  threads: Array<{ title: string; instructions: string; provider?: ProviderChoice }>;
+  threads: Array<{ title: string; instructions: string; provider?: ProviderChoice; folder?: string }>;
   status: 'pending' | 'accepted' | 'declined';
 };
 
@@ -116,7 +116,7 @@ export type Schedule = {
   text: string;
   at: string | null;
   cron: string | null;
-  thread: { title: string; instructions: string; provider: ProviderChoice } | null;
+  thread: { title: string; instructions: string; provider: ProviderChoice; folder?: string } | null;
   lastFiredAt: string | null;
   stoppedAt?: string | null;
   createdAt: string;
@@ -131,7 +131,12 @@ export type Settings = {
   concurrency: Record<RunnableProvider, number>;
   folders: string[];
   recycleAfter: number;
+  dream?: DreamSettings;
 };
+
+export type DreamSettings = { enabled: boolean; provider: ProviderChoice; model: string; hour: number };
+
+export type DreamRun = { running: boolean; lastRunAt: string | null; lastResult: string | null; lastError: string | null };
 
 export type WakeEventType =
   | 'message' | 'reaction' | 'decision' | 'widget_action' | 'approval' | 'folder_access' | 'setup'
@@ -180,6 +185,7 @@ export type ProjectState = {
   deliverables: Deliverable[];
   schedules: Schedule[];
   lookups: Lookup[];
+  dream?: DreamRun;
   orchestrator: OrchestratorState;
 };
 
@@ -215,6 +221,7 @@ export type OrchestratorDependencies = {
   openSession(provider: RunnableProvider, projectPath: string, title: string, hidden?: boolean): string;
   runTurn(sessionId: string, userId: number | null, content: string, options: TurnOptions): Promise<TurnResult>;
   lastAnswer(sessionId: string): Promise<string>;
+  herissonReport?(sessionId: string, projectPath: string, since: string): Promise<string | null>;
   history(sessionId: string, limit: number): Promise<Array<{ role: string; text: string }>>;
   wasAborted(sessionId: string): boolean;
   isProcessing(sessionId: string): boolean;
@@ -225,4 +232,7 @@ export type OrchestratorDependencies = {
   approvedFolders(): string[];
   artifacts(projectPath: string): Array<{ url: string; title: string; updated_at?: string }>;
   connectors(projectPath: string): string[];
+  centralRoot?: string | (() => string);
+  prepareCentral?(root: string): void;
+  prepareDossier?(central: string, folder: string): void;
 };

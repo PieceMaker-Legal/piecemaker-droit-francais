@@ -8,4 +8,5 @@ export type SourceConnectors = {
   match(text: string, excerpt: string): string | null;
   registry(query: { siren: string | null; name: string | null }): Promise<{ found: boolean; status: string }>;
   bodacc(siren: string): Promise<string[]>;
+  premise?(cwd: string, title: string): { date: string; intitule: string; preuve: Array<{ piece: string; citation: string }> } | null;
 };

@@ -28,6 +28,35 @@ const MEMOIRES_DIR = '.piecemaker/memoires';
 const ETAPE_LABELS = { preparation: 'préparation', raisonnement: 'raisonnement', redaction: 'rédaction', finalisation: 'finalisation', attente: 'en attente de tiers', clos: 'clos' };
 const URGENT_DEADLINE = /— (DÉPASSÉE|AUJOURD’HUI|date à établir)/;
 
+const brainLib = await import('../../../piecemaker-plugin/scripts/lib/brain-case.mjs').catch(() => null);
+const brainCase = (folder) => { try { return brainLib?.caseOf(folder) ?? null; } catch { return null; } };
+const roadmapOf = (folder) => { const target = brainCase(folder); if (!target) return null; try { return brainLib.readRoadmap(target.roadmap); } catch { return {}; } };
+
+function etapesOf(folder) {
+  const roadmap = roadmapOf(folder);
+  if (roadmap) return roadmap.etapes ?? {};
+  try { return JSON.parse(fs.readFileSync(path.join(folder, '.piecemaker', 'etapes.json'), 'utf8')); } catch { return {}; }
+}
+
+function suivisOf(folder) {
+  const roadmap = roadmapOf(folder);
+  if (roadmap) return Object.keys(roadmap.suivis ?? {}).filter((entry) => SUIVI_FILES.test(entry)).sort();
+  try { return fs.readdirSync(path.join(folder, '.piecemaker')).filter((entry) => SUIVI_FILES.test(entry)).sort(); } catch { return []; }
+}
+
+function memoiresOf(folder) {
+  const target = brainCase(folder);
+  if (target) {
+    let text = '';
+    try { text = fs.readFileSync(target.about, 'utf8'); } catch {}
+    return { lieu: target.about, notes: Object.fromEntries(brainLib.sections(text).map((section) => [section.name, section.body])) };
+  }
+  const directory = path.join(folder, MEMOIRES_DIR);
+  let noms = [];
+  try { noms = fs.readdirSync(directory).filter((entry) => entry.endsWith('.md')).map((entry) => entry.slice(0, -3)); } catch {}
+  return { lieu: null, notes: Object.fromEntries(noms.flatMap((nom) => { try { return [[nom, fs.readFileSync(path.join(directory, `${nom}.md`), 'utf8')]]; } catch { return []; } })) };
+}
+
 export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossier PATH])
 
   check
@@ -311,7 +340,7 @@ async function defaultDeps(cwd) {
     },
     mappingValidated: (dir) => {
       const read = (file) => { try { return JSON.parse(fs.readFileSync(path.join(dir, '.piecemaker', file), 'utf8')); } catch { return {}; } };
-      const validated = read('etapes.json').mappingValide;
+      const validated = etapesOf(dir).mappingValide;
       const scanned = Object.values(read('anonymization-state.json').files ?? {}).map((entry) => entry?.scanned?.updatedAt ?? '').sort().at(-1);
       return Boolean(validated) && !(scanned && new Date(scanned) > new Date(validated));
     },
@@ -649,13 +678,11 @@ function documentState(folder, document) {
 }
 
 async function reasoningPoints(api, folder, manques) {
-  let etapes = {};
-  try { etapes = JSON.parse(fs.readFileSync(path.join(folder, '.piecemaker', 'etapes.json'), 'utf8')); } catch {}
+  const etapes = etapesOf(folder);
   const suites = Object.fromEntries(Object.entries(etapes.raisonnements ?? {}).filter(([, suite]) => !suite.remplacePar));
   const superseded = new Set(Object.keys(etapes.raisonnements ?? {}).filter((nom) => !suites[nom]));
   const programs = listPrograms(folder);
-  let suivis = [];
-  try { suivis = fs.readdirSync(path.join(folder, '.piecemaker')).filter((entry) => SUIVI_FILES.test(entry)).sort(); } catch {}
+  const suivis = suivisOf(folder);
   const suiviOf = (nom) => suivis.find((entry) => SUIVI_FILES.exec(entry)[1] === nom);
   const names = [...new Set([...Object.keys(suites), ...programs, ...suivis.map((entry) => SUIVI_FILES.exec(entry)[1]).filter(Boolean)])]
     .filter((nom) => !superseded.has(nom)).sort();
@@ -712,10 +739,30 @@ async function check(api, folder) {
   const tail = [...research, ...suivis].map((entry, index) => ({ ...entry, numero: `${6 + index}°`, depth: 0 }));
   const all = [...preparation, indexPoint(okfResult), ...points, ...tail];
   const failing = all.filter((entry) => !entry.titre && !entry.ok).length;
+  const note = await synthese(api, folder, all);
   return [
     failing ? `Dossier : ${failing} point(s) à traiter.` : 'Dossier : valide.',
     ...all.map((entry) => `${'  '.repeat(entry.depth)}${entry.numero} ${entry.texte}`),
+    ...(note ? [note] : []),
+    ...pairLines(folder),
   ].join('\n');
+}
+
+function pairLines(folder) {
+  const target = brainCase(folder);
+  return target ? [`Suivis : ${target.roadmap} (clé suivis) ; mémoires et stratégie : ${target.about} (sections « ## ${brainLib.MEMOIRE_PREFIX}<nom> ») ; synthèse : ${path.join(target.directory, brainLib.SYNTHESE)}.`] : [];
+}
+
+async function synthese(api, folder, points) {
+  let lib;
+  try { lib = await import('../../../piecemaker-plugin/scripts/lib/brain-case.mjs'); } catch { return ''; }
+  try {
+    await lib.runSynthese(folder, { points, pm: (...argv) => run([...argv, '--dossier', folder], { cwd: folder, deps: api }) });
+    return '';
+  } catch (error) {
+    const target = lib.caseOf(folder, { create: false });
+    return `Synthèse du dossier : le script ${target ? path.join(target.directory, lib.SYNTHESE) : lib.SYNTHESE} a échoué (${error instanceof Error ? error.message : String(error)}) : corrige-le.`;
+  }
 }
 
 export async function etatDossier(project, { deps } = {}) {
@@ -858,7 +905,12 @@ async function suiviDossiers(api, positional, flags, resolved) {
   const cwd = path.resolve(resolved);
   if (commande === 'verifier') {
     if (flags.suivi === true) usage('Indiquez une valeur pour --suivi.');
-    return api.suiviFn({ commande, cwd, ...(flags.suivi ? { suivi: String(flags.suivi) } : {}) });
+    if (flags.suivi) return api.suiviFn({ commande, cwd, suivi: String(flags.suivi) });
+    const tous = suivisOf(cwd);
+    if (tous.length < 2) return api.suiviFn({ commande, cwd, ...(tous.length ? { suivi: tous[0] } : {}) });
+    const textes = [];
+    for (const suivi of tous) textes.push(`${suivi}\n${await api.suiviFn({ commande, cwd, suivi })}`);
+    return textes.join('\n\n');
   }
   if (!chemin) usage(`suivi_dossiers ${commande} attend un chemin.`);
   if (commande === 'lire') return api.suiviFn({ commande, chemin, cwd });
@@ -872,18 +924,17 @@ function memoire(positional, flags, resolved) {
   if (positional[1] !== 'verifier') usage('memoire attend verifier.');
   if (flags.memoire === true) usage('Indiquez une valeur pour --memoire.');
   const folder = path.resolve(resolved);
-  const directory = path.join(folder, MEMOIRES_DIR);
-  let noms = flags.memoire ? [String(flags.memoire)] : [];
-  if (!flags.memoire) { try { noms = fs.readdirSync(directory).filter((entry) => entry.endsWith('.md')).map((entry) => entry.slice(0, -3)).sort(); } catch {} }
-  let etapes = {};
-  try { etapes = JSON.parse(fs.readFileSync(path.join(folder, '.piecemaker', 'etapes.json'), 'utf8')); } catch {}
-  const acte = (nom) => Boolean(etapes.raisonnements?.[nom]) || [`catala/${nom}`, `${nom}-suivi.json`].some((relative) => fs.existsSync(path.join(folder, '.piecemaker', relative)));
+  const { lieu, notes } = memoiresOf(folder);
+  const noms = flags.memoire ? [String(flags.memoire)] : Object.keys(notes).sort();
+  const etapes = etapesOf(folder);
+  const suivis = new Set(suivisOf(folder));
+  const acte = (nom) => Boolean(etapes.raisonnements?.[nom]) || suivis.has(`${nom}-suivi.json`) || fs.existsSync(path.join(folder, '.piecemaker', 'catala', nom));
   return noms.flatMap((nom) => {
-    const fichier = `${MEMOIRES_DIR}/${nom}.md`;
-    let texte;
-    try { texte = fs.readFileSync(path.join(directory, `${nom}.md`), 'utf8'); } catch { return [`${fichier} : introuvable.`]; }
+    const fichier = lieu ? `${lieu}, section « ## ${brainLib.MEMOIRE_PREFIX}${nom} »` : `${MEMOIRES_DIR}/${nom}.md`;
+    const texte = notes[nom];
+    if (texte === undefined) return [`${fichier} : introuvable.`];
     return [
-      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans .piecemaker/${nom}-suivi.json ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
+      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans ${lieu ? `le suivi ${nom}-suivi.json de Roadmap.json` : `.piecemaker/${nom}-suivi.json`} ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
       ...(acte(nom) ? [] : [`${fichier} : manque : aucun programme Catala, suivi ni carte du tableau ne s’appelle ${nom}. Nommez la mémoire comme son acte.`]),
     ];
   }).join('\n');

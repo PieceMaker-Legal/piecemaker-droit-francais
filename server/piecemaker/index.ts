@@ -14,11 +14,12 @@ import { createBoardRouter, createBoardService, createEtapesRouter, createEtapes
 import { providerTokenUsageService, providerModelsService, providerRuntimeService, providerSkillsService, sessionsService } from '@/modules/providers/index.js';
 import { providerAuthService } from '@/modules/providers/services/provider-auth.service.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
-import { findApplicationRoot, getModuleDirectory, readObjectRecord } from '@/shared/utils.js';
+import { findApplicationRoot, getApplicationDataRoot, getModuleDirectory, readObjectRecord } from '@/shared/utils.js';
 
 
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
 import { reconcileClaudeHooks, reconcileCodexHooks, reconcileVibeHooks } from './claude-hooks.js';
+import { createBrain } from './brain.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
@@ -45,6 +46,7 @@ import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
 import { createSourceConnectors } from './source-connectors.js';
 import { createCatalaCitation } from './catala-citation.js';
+import { premiseDate } from './okf/premise-date.js';
 import { catalaScriptPath, createCatalaCitationCheck, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
@@ -111,9 +113,17 @@ const anonymizer = createAnonymizerService({ homeDir: piecemakerHome() });
 const ensureProxy = await startRequiredAnonymizer(anonymizer);
 const citations = createCitationStore(piecemakerHome());
 const sourceConnectors = createSourceConnectors();
-const suivi = createSuiviService(getConnection, sourceConnectors);
+const suivi = createSuiviService(getConnection, { ...sourceConnectors, premise: premiseDate });
 const board = createBoardService(getConnection, suivi);
 const pmScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'Skill-PieceMaker', 'scripts', 'pm.mjs')).href;
+const herissonScript = pathToFileURL(path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'piecemaker-plugin', 'scripts', 'herisson.mjs')).href;
+async function herissonReport(sessionId: string, projectPath: string, since: string) {
+  const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
+  const calls = history.messages.filter(message => message.kind === 'tool_use' && message.toolName && message.timestamp >= since).map(message => ({ tool_name: message.toolName, tool_input: message.toolInput }));
+  if (!calls.length) return null;
+  const { workReport } = await import(herissonScript) as { workReport(root: string, calls: unknown[]): Promise<string | null> };
+  return workReport(projectPath, calls);
+}
 async function lastSessionAnswer(sessionId: string) {
   const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
   return history.messages.filter(message => message.kind === 'text' && message.role === 'assistant' && !message.parentToolUseId).at(-1)?.content ?? '';
@@ -142,9 +152,18 @@ function orchestratorTurnOptions(userId: number | null, { provider, permissionMo
 }
 
 const providerHistory = sessionsService.fetchHistory.bind(sessionsService);
+const brain = createBrain({
+  home: piecemakerHome(),
+  defaultRoot: path.join(getApplicationDataRoot(), 'PieceMaker Agent'),
+  skills: path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'brain', 'skills'),
+});
+try { brain.ensureConfigured(); } catch (error) { console.warn('[piecemaker] Brain :', error); }
 const providerStatuses = createOrchestratorProviderStatuses(providerAuthService.getProviderAuthStatus, mistralSdkAuth.status);
 const providerLimits = createProviderLimits({ connected: providerStatuses });
 const orchestrator = createOrchestratorService({
+  centralRoot: brain.root,
+  prepareCentral: brain.prepare,
+  prepareDossier: brain.prepareCase,
   previousPostIds: async sessionId => {
     const { messages } = await providerHistory(sessionId);
     const calls = new Set(messages.filter(m => m.kind === 'tool_use' && m.toolName === 'mcp__orchestrateur__post_message').map(m => m.toolId).filter(Boolean));
@@ -194,6 +213,7 @@ const orchestrator = createOrchestratorService({
     return result.started && !result.error && complete?.success === false ? { ...result, error: 'Tour interrompu.' } : result;
   },
   lastAnswer: lastSessionAnswer,
+  herissonReport,
   history: async (sessionId, limit) => {
     const history = await sessionsService.fetchHistory(sessionId, { limit: null, offset: 0 });
     return history.messages.flatMap(({ kind, role, content, parentToolUseId }) =>
@@ -216,7 +236,7 @@ const orchestrator = createOrchestratorService({
     const event = createNotificationEvent({ provider: provider || 'system', code: 'agent.notification', meta: { sessionName: title, message: text } });
     notifyUserIfEnabled({ userId, event: { ...event, sessionId } });
   },
-  approvedFolders: () => projectsDb.getProjectPaths().map(row => row.project_path),
+  approvedFolders: () => projectsDb.getProjectPaths().map(row => row.project_path).filter(folder => path.resolve(folder) !== brain.root()),
   artifacts: root => openArtifacts(root).list({ scope: 'mine', limit: 200 }).map(({ url, title, updated_at }: { url: string; title: string; updated_at?: string }) => ({ url, title, updated_at })),
   connectors: root => Object.keys(readObjectRecord(readJson(path.join(root, '.mcp.json')).mcpServers) ?? {}),
 });
@@ -311,7 +331,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   }));
   router.use(timesheet);
   router.use('/catala', createCatalaRouter(catalaScriptPath(applicationRoot), {}, catalaCitations));
-  router.use('/orchestrateur', createOrchestratorRouter(orchestrator, projectsDb));
+  router.use('/orchestrateur', createOrchestratorRouter(orchestrator, projectsDb, brain));
   router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));

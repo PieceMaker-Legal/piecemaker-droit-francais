@@ -78,6 +78,26 @@ export function commandChecks(payload) {
     .flatMap((feature) => (feature.cite ? citingPrograms(root, feature.cite) : ['']).map((nom) => ({ feature, root, nom })));
 }
 
+export async function workReport(root, calls, { run = runPm } = {}) {
+  const checks = new Map();
+  for (const call of calls) {
+    const payload = { tool_name: call.tool_name, tool_input: call.tool_input ?? {}, cwd: root };
+    const found = touchedFiles(payload).map((file) => featureOf(file)).filter((entry) => entry?.feature.ecriture === 'agent' && entry.feature.verifier);
+    for (const entry of [...found, ...commandChecks(payload)]) {
+      const args = verifierArgs(entry);
+      checks.set(`${entry.root}\0${args.join(' ')}`, { found: entry, args });
+    }
+  }
+  if (!checks.size) return null;
+  const sections = [];
+  for (const { found, args } of checks.values()) {
+    const check = { feature: found.feature.nom, args, root: found.root, delai: found.feature.delai };
+    const output = await verified(check, run);
+    sections.push(failing(found.feature, output) ? [title(check), ...capped(units(output).join('\n').split('\n'))].join('\n') : `${title(check)}: valid`);
+  }
+  return [`Rapport hérisson (${checks.size} check(s) on the work of this thread):`, ...sections].join('\n\n');
+}
+
 export async function featureReport(payload, { run = runPm } = {}) {
   const checks = new Map();
   const found = touchedFiles(payload).map((file) => featureOf(file)).filter((entry) => entry?.feature.ecriture === 'agent' && entry.feature.verifier);

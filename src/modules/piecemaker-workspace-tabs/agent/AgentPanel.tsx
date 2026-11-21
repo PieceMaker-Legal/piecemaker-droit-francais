@@ -1,15 +1,18 @@
 import { ArrowLeft, File, Filter, Folder, FolderSync, NotebookPen, Plus, Search, Settings as SettingsIcon } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { ModelSelect } from '@/modules/piecemaker-quota';
-import { ACTIVE_THREAD_STATES } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
-import type { AgentDeliverable, AgentProvider, AgentSettings, AgentState, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import { ACTIVE_THREAD_STATES, agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import type { AgentDeliverable, AgentDreamSettings, AgentProvider, AgentSettings, AgentState, AgentThread, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { AgentScheduled } from '@/modules/piecemaker-workspace-tabs/agent/AgentScheduled';
+import { CaseFolders } from '@/modules/piecemaker-workspace-tabs/agent/CaseFolders';
 import { Section } from '@/modules/piecemaker-workspace-tabs/agent/AgentSection';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
+import { useSubagent } from '@/modules/piecemaker-workspace-tabs/agent/subagent';
 import { useAgentState } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/useAgentState';
 
@@ -42,42 +45,53 @@ function DeliverableState({ deliverable, act }: { deliverable: AgentDeliverable;
   </select>;
 }
 
+const folderName = (folder: string) => folder.split(/[\\/]/).filter(Boolean).at(-1) ?? folder;
 function Threads({ state, act, query, filter, onOpen }: { state: AgentState; act: AgentActions; query: string; filter: AgentThreadState | 'all'; onOpen: (threadId: string) => void }) {
   const pending = pendingCards(state).count;
   const threads = state.threads
     .filter((thread) => filter === 'all' || thread.state === filter)
     .filter((thread) => !query || thread.title.toLowerCase().includes(query.toLowerCase()))
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const groups = state.central
+    ? [...new Set(threads.map((thread) => thread.projectPath))].map((folder) => ({ folder, threads: threads.filter((thread) => thread.projectPath === folder) }))
+    : [{ folder: null, threads }];
   return <>
     {pending > 0 && <div className="px-3 pt-3"><Section title="À traiter" count={pending}><AgentCards state={state} act={act} /></Section></div>}
-    {!threads.length ? <p className="px-4 py-8 text-center text-xs text-muted-foreground">{state.threads.length ? 'Aucun fil ne correspond.' : 'Aucun fil pour l’instant. Les tâches confiées par l’agent apparaîtront ici.'}</p>
-      : <ul className="px-2 py-2">{threads.map((thread) => {
-    const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
-    const active = ACTIVE_THREAD_STATES.includes(thread.state);
-    return <li key={thread.id} className="group rounded-xl px-2 py-2 hover:bg-accent" data-thread={thread.id}>
-      <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => onOpen(thread.id)}>
-        <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm text-foreground">{thread.title}</span>
-          <span className="block truncate text-xs text-muted-foreground">{THREAD_STATE_LABELS[thread.state]} · {PROVIDER_LABELS[thread.provider]}{thread.replies.at(-1) ? ` · ${thread.replies.at(-1)!.text}` : ''}</span>
-        </span>
-        <span className="shrink-0 text-xs text-muted-foreground">{age(thread.updatedAt)}</span>
-      </button>
-      <div className="ml-5 mt-1 hidden gap-2 group-hover:flex">
-        <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/resolve', { threadId: thread.id, resolved: !thread.resolved })}>{thread.resolved ? 'Rouvrir' : 'Résoudre'}</button>
-        {active && <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/stop', { threadId: thread.id })}>Arrêter</button>}
-      </div>
-      {deliverables.length > 0 && <ul className="ml-5 mt-1 space-y-1">{deliverables.map((deliverable) => <li key={deliverable.id} className="flex items-center gap-2 text-sm text-foreground/80">
-        <File className="h-3.5 w-3.5 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{deliverable.title}</span><DeliverableState deliverable={deliverable} act={act} />
-      </li>)}</ul>}
-    </li>;
-  })}</ul>}
+    {!threads.length ? <p className="px-4 py-8 text-center text-sm text-muted-foreground">{state.threads.length ? 'Aucun fil ne correspond.' : 'Aucun fil pour l’instant. Les tâches confiées par l’agent apparaîtront ici.'}</p>
+      : groups.map((group) => <section key={group.folder ?? 'fils'} aria-label={group.folder ? `Dossier ${folderName(group.folder)}` : undefined}>
+        {group.folder && <h3 className="flex items-center gap-2 px-4 pt-3 text-sm font-medium text-muted-foreground"><Folder className="h-3.5 w-3.5" />{folderName(group.folder)}</h3>}
+        <ul className="px-2 py-2">{group.threads.map((thread) => <ThreadRow key={thread.id} thread={thread} state={state} act={act} onOpen={onOpen} />)}</ul>
+      </section>)}
   </>;
+}
+
+function ThreadRow({ thread, state, act, onOpen }: { thread: AgentThread; state: AgentState; act: AgentActions; onOpen?: (threadId: string) => void }) {
+  const navigate = useNavigate();
+  const subagent = useSubagent();
+  const deliverables = state.deliverables.filter((deliverable) => deliverable.threadId === thread.id);
+  const active = ACTIVE_THREAD_STATES.includes(thread.state);
+  return <li className="group rounded-xl px-2 py-2 hover:bg-accent" data-thread={thread.id}>
+    <button type="button" className="flex w-full items-center gap-3 text-left" disabled={!thread.sessionId} onClick={() => thread.sessionId && !subagent?.open(thread) && (onOpen ? onOpen(thread.id) : navigate(`/session/${thread.sessionId}`))}>
+      <span className={`h-2 w-2 shrink-0 rounded-full ${THREAD_STATE_COLORS[thread.state]}`} />
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[15px] text-foreground">{thread.title}</span>
+        <span className="block truncate text-sm text-muted-foreground">{THREAD_STATE_LABELS[thread.state]} · {PROVIDER_LABELS[thread.provider]}{thread.replies.at(-1) ? ` · ${thread.replies.at(-1)!.text}` : ''}</span>
+      </span>
+      <span className="shrink-0 text-sm text-muted-foreground">{age(thread.updatedAt)}</span>
+    </button>
+    <div className="ml-5 mt-1 hidden gap-2 group-hover:flex">
+      <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/resolve', { threadId: thread.id, resolved: !thread.resolved })}>{thread.resolved ? 'Rouvrir' : 'Résoudre'}</button>
+      {active && <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => void act('thread/stop', { threadId: thread.id })}>Arrêter</button>}
+    </div>
+    {deliverables.length > 0 && <ul className="ml-5 mt-1 space-y-1">{deliverables.map((deliverable) => <li key={deliverable.id} className="flex items-center gap-2 text-sm text-foreground/80">
+      <File className="h-3.5 w-3.5 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{deliverable.title}</span><DeliverableState deliverable={deliverable} act={act} />
+    </li>)}</ul>}
+  </li>;
 }
 
 function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: AgentState; act: AgentActions; projectPath: string; onTab: (tab: AgentPanelTab) => void; onOpenArtifact: (url: string) => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const folders = [projectPath, ...state.settings.folders.filter((folder) => folder !== projectPath)];
+  const folders = state.central ? state.settings.folders : [projectPath, ...state.settings.folders.filter((folder) => folder !== projectPath)];
   const memoryLines = state.memory.text.trim() ? state.memory.text.trim().split('\n').filter(Boolean).length : 0;
   async function upload(files: FileList | null) {
     for (const file of Array.from(files ?? [])) {
@@ -87,7 +101,8 @@ function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: Ag
   }
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-      <div className="px-2 pb-2"><select aria-label="Visibilité" className="rounded-lg bg-transparent text-sm text-foreground" defaultValue="me"><option value="me">Vous uniquement</option></select></div>
+      <div className="px-2 pb-2"><select aria-label="Visibilité" className="rounded-lg bg-transparent text-[15px] text-foreground" defaultValue="me"><option value="me">Vous uniquement</option></select></div>
+      {state.central && <CaseFolders state={state} projectPath={projectPath} save={(patch) => void act('settings', patch, 'PUT')} />}
       <Section title="Instructions" count={state.settings.instructions.trim() ? 1 : 0}>
         <Row icon={<NotebookPen className="h-4 w-4" />} title="Instructions du projet" detail={state.settings.instructions.trim() || 'Aucune pour l’instant'} onClick={() => onTab('settings')} />
       </Section>
@@ -98,7 +113,7 @@ function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: Ag
         <button type="button" aria-label="Ajouter un fichier" className="rounded-lg p-2 text-foreground/80 hover:bg-accent" onClick={() => fileRef.current?.click()}><Plus className="h-4 w-4" /></button>
         <input ref={fileRef} type="file" multiple hidden onChange={(event) => { void upload(event.target.files); event.target.value = ''; }} />
       </>}>
-        {folders.map((folder) => <Row key={folder} icon={<FolderSync className="h-4 w-4" />} title={folder.split(/[\\/]/).filter(Boolean).at(-1) ?? folder} detail="Cet ordinateur" />)}
+        {folders.map((folder) => <Row key={folder} icon={<FolderSync className="h-4 w-4" />} title={folderName(folder)} detail="Cet ordinateur" />)}
         {state.files.map((file) => <Row key={file.name} icon={<Folder className="h-4 w-4" />} title={file.name} trailing={age(file.updatedAt)} />)}
       </Section>
       <Section title="Artéfacts" count={state.artifacts.length}>
@@ -143,7 +158,29 @@ function Instructions({ state, act }: { state: AgentState; act: AgentActions }) 
   </div>;
 }
 
-function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
+function Brain({ projectPath }: { projectPath: string }) {
+  const [brain, setBrain] = useState(projectPath);
+  const [error, setError] = useState('');
+  async function move() {
+    try {
+      setError('');
+      await agentApi.setBrain(brain.trim());
+      const session = await agentApi.openCentral();
+      window.location.assign(`/session/${session.sessionId}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  }
+  return <fieldset className="space-y-2">
+    <legend className="text-[15px] text-foreground">Brain</legend>
+    <p className="text-muted-foreground">Le dossier où l’agent central s’ouvre et tient votre profil (AGENTS.md), puis l’About.md et la Roadmap.json de chaque dossier. Choisissez un dossier vide ou nouveau, jamais un dossier juridique : tout le contenu du brain y est déplacé.</p>
+    <div className="flex gap-2"><input aria-label="Emplacement du brain" className={inputClass} value={brain} onChange={(event) => setBrain(event.target.value)} />
+      <button type="button" className={buttonClass} disabled={!brain.trim() || brain.trim() === projectPath} onClick={() => void move()}>Déplacer</button></div>
+    {error && <p role="alert" className="text-sm">{error}</p>}
+  </fieldset>;
+}
+
+function Settings({ state, act, projectPath }: { state: AgentState; act: AgentActions; projectPath: string }) {
   const settings = state.settings;
   const connected = new Set(state.providers.filter((provider) => provider.authenticated).map((provider) => provider.provider));
   const [folder, setFolder] = useState('');
@@ -168,21 +205,53 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
           onBlur={(event) => Number(event.target.value) > 0 && save({ concurrency: { ...settings.concurrency, [provider]: Number(event.target.value) } })} /></label>
       </div>)}
     </fieldset>
-    <fieldset className="space-y-2">
-      <legend className="text-sm text-foreground">Dossiers autorisés</legend>
+    {state.central && <Brain projectPath={projectPath} />}
+    {state.central ? <fieldset className="space-y-2">
+      <legend className="text-[15px] text-foreground">Dossiers de l’agent central</legend>
+      <p className="text-muted-foreground">Chaque fil travaille dans un seul de ces dossiers, et sa session y est rangée.</p>
+      {state.dossiers.length ? state.dossiers.map((item) => <label key={item.path} className="flex items-center gap-2 text-foreground/80" title={item.path}>
+        <input type="checkbox" checked={item.selected} onChange={() => save({ folders: item.selected ? settings.folders.filter((entry) => entry !== item.path) : [...settings.folders, item.path] })} />
+        <span className="min-w-0 flex-1 truncate">{folderName(item.path)}</span>
+      </label>) : <p className="text-muted-foreground">Aucun dossier pour l’instant.</p>}
+    </fieldset> : <fieldset className="space-y-2">
+      <legend className="text-[15px] text-foreground">Dossiers autorisés</legend>
       {settings.folders.length ? settings.folders.map((item) => <div key={item} className="flex items-center gap-2 text-foreground/80">
         <span className="min-w-0 flex-1 truncate">{item}</span>
         <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => save({ folders: settings.folders.filter((entry) => entry !== item) })}>Retirer</button>
       </div>) : <p className="text-muted-foreground">Seul le dossier du projet est autorisé.</p>}
       <div className="flex gap-2"><input className={inputClass} placeholder="/chemin/du/dossier" value={folder} onChange={(event) => setFolder(event.target.value)} />
         <button type="button" className={buttonClass} disabled={!folder.trim()} onClick={() => { save({ folders: [...settings.folders, folder.trim()] }); setFolder(''); }}>Ajouter</button></div>
-    </fieldset>
+    </fieldset>}
+  </div>;
+}
+
+const DREAM_DEFAULTS: AgentDreamSettings = { enabled: false, provider: 'auto', model: '', hour: 3 };
+
+function Dream({ state, act }: { state: AgentState; act: AgentActions }) {
+  const dream = { ...DREAM_DEFAULTS, ...state.settings.dream };
+  const connected = new Set(state.providers.filter((provider) => provider.authenticated).map((provider) => provider.provider));
+  const save = (patch: Partial<AgentDreamSettings>) => void act('settings', { dream: patch }, 'PUT');
+  const run = state.dream;
+  return <div className="space-y-5 overflow-y-auto px-5 py-4 text-sm">
+    <p className="text-muted-foreground">Chaque nuit, l’agent central relit l’activité des fils et met à jour l’About.md et la Roadmap.json de chaque dossier dans le brain, sous leurs limites de lignes. Il ne touche pas à votre AGENTS.md : il vous propose les ajouts dans le chat.</p>
+    <label className="flex items-center gap-2 text-foreground"><input type="checkbox" checked={dream.enabled} onChange={(event) => save({ enabled: event.target.checked })} />Activer le dream</label>
+    <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={dream.provider} onChange={(event) => save({ provider: event.target.value as AgentDreamSettings['provider'] })}>
+      {['auto', ...PROVIDERS].map((value) => <option key={value} value={value} disabled={value !== 'auto' && !connected.has(value as AgentProvider)}>{PROVIDER_LABELS[value]}</option>)}
+    </select></label>
+    <label className="block text-muted-foreground">Modèle (vide = modèle par défaut)<input className={`${inputClass} mt-1`} defaultValue={dream.model} onBlur={(event) => event.target.value.trim() !== dream.model && save({ model: event.target.value.trim() })} /></label>
+    <label className="block text-muted-foreground">Heure<select className={`${inputClass} mt-1`} value={dream.hour} onChange={(event) => save({ hour: Number(event.target.value) })}>
+      {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{String(hour).padStart(2, '0')} h</option>)}
+    </select></label>
+    <button type="button" className={buttonClass} disabled={run?.running} onClick={() => void act('dream')}>{run?.running ? 'Dream en cours…' : 'Lancer maintenant'}</button>
+    {run?.lastRunAt && <p className="text-muted-foreground">Dernier passage : <time dateTime={run.lastRunAt}>{new Date(run.lastRunAt).toLocaleString('fr-FR')}</time>{run.lastError ? ` · échec : ${run.lastError}` : ''}</p>}
+    {run?.lastResult && !run.lastError && <p className="whitespace-pre-wrap text-foreground/80">{run.lastResult}</p>}
   </div>;
 }
 
 export function AgentPanel({ projectPath, projectId, panelActions, onShowSettings }: { projectPath: string; projectId: string; panelActions?: ReactNode; onShowSettings?: () => void }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
+  const [settingsTab, setSettingsTab] = useState<'general' | 'dream'>('general');
   const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -257,7 +326,13 @@ export function AgentPanel({ projectPath, projectId, panelActions, onShowSetting
       <div className="min-h-0 flex-1 overflow-y-auto">
         {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} onOpen={setOpenThreadId} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
-        {tab === 'settings' && <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
+        {tab === 'settings' && <>
+          {state.central && <nav role="tablist" aria-label="Paramètres de l’agent" className="flex gap-1 border-b border-border px-4 py-2">
+            {([['general', 'Réglages'], ['dream', 'Dream']] as const).map(([value, label]) => <button key={value} role="tab" type="button" aria-selected={settingsTab === value} onClick={() => setSettingsTab(value)}
+              className={`rounded-lg px-3 py-1 text-sm ${settingsTab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>{label}</button>)}
+          </nav>}
+          {state.central && settingsTab === 'dream' ? <Dream state={state} act={act} /> : <><Instructions state={state} act={act} /><Settings state={state} act={act} projectPath={projectPath} /></>}
+        </>}
         {tab === 'scheduled' && <AgentScheduled state={state} act={act} onOpenArtifact={onOpenArtifact} />}
       </div>
     </>}

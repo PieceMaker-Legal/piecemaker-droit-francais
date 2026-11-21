@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { z } from 'zod/v4';
 
 import { isImageAttachmentDescriptor } from '@/shared/image-attachments.js';
 
-import { formatPreamble, formatThreadKickoff, formatThreadMessage, formatWake, isChatMessage } from './prompt.js';
+import { formatDream, formatPreamble, formatThreadKickoff, formatThreadMessage, formatWake, isChatMessage } from './prompt.js';
 import { openProjectStore } from './store.js';
 import { RUNNABLE_PROVIDERS, THREAD_STATES } from './types.js';
 import type {
@@ -25,7 +25,7 @@ const string = z.string().trim().min(1);
 const choice = z.enum(['auto', ...RUNNABLE_PROVIDERS]);
 const index = z.number().int().nonnegative();
 const outputs = z.array(z.object({ kind: z.enum(['file', 'artifact', 'link']), ref: string, title: string.optional() })).default([]);
-const threadInput = z.object({ title: string, instructions: string, provider: choice.optional() });
+const threadInput = z.object({ title: string, instructions: string, provider: choice.optional(), folder: string.optional() });
 const contexts = z.array(string).default([]);
 const widget = z.object({
   type: z.enum(['buttons', 'draft', 'comparison', 'steps']), title: string.optional(), body: z.string().optional(),
@@ -43,7 +43,10 @@ const settingsInput = z.strictObject({
   defaultModels: z.partialRecord(z.enum(RUNNABLE_PROVIDERS), string),
   concurrency: z.partialRecord(z.enum(RUNNABLE_PROVIDERS), z.number().int().positive()),
   folders: z.array(string), recycleAfter: z.number().int().positive(),
+  dream: z.strictObject({ enabled: z.boolean(), provider: choice, model: z.string().trim(), hour: z.number().int().min(0).max(23) }).partial(),
 }).partial();
+const DREAM_DEFAULTS = { enabled: false, provider: 'auto' as const, model: '', hour: 3 };
+const DREAM_DENIED = ['Bash', 'WebFetch', 'WebSearch', 'mcp__fil', 'mcp__orchestrateur', 'AskUserQuestion', 'ExitPlanMode'];
 const deliverableInput = z.object({
   deliverable_id: string.optional(), thread_id: string.optional(), title: string.optional(),
   kind: z.enum(['document', 'piece', 'artifact']).optional(), ref: string.optional(),
@@ -108,10 +111,11 @@ function parseCron(expression: string) {
   };
 }
 
-function projectService(root: string, deps: OrchestratorDependencies) {
+function projectService(root: string, deps: OrchestratorDependencies, central: boolean) {
   const store = openProjectStore(root);
   const { state, save } = store;
   const orch = state.orchestrator;
+  if (state.dream?.running) state.dream.running = false;
   const now = () => deps.now().toISOString();
   const later = (ms: number) => new Date(deps.now().getTime() + ms).toISOString();
   const find = <T extends { id: string }>(list: T[], value: unknown, name: string) =>
@@ -120,13 +124,24 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   const thread = (id: unknown) => find(state.threads, id, 'Fil');
   const decision = (id: unknown) => find(state.decisions, id, 'Décision');
   const active = (t: Thread) => t.state === 'working' || t.state === 'blocked';
-  const runs = new Map<string, { reply?: ThreadReply }>();
+  const runs = new Map<string, { reply?: ThreadReply; startedAt?: string }>();
   let manualRecycle = false;
   let initializing = false;
   let currentBatch: WakeEvent[] = [];
   let generation = 0;
   let retryAt = 0;
   const id = (prefix: string) => prefix + '_' + randomUUID();
+  const dossiers = () => [...new Set(deps.approvedFolders().map(canonical))].filter(folder => folder !== root);
+  function dossier(folder: string | undefined) {
+    if (!folder) return refuse(400, 'Dossier requis : chaque fil travaille dans un seul dossier, choisi dans list_devices.');
+    const wanted = path.isAbsolute(folder) ? canonical(folder) : null;
+    const matches = dossiers().filter(known => known === wanted || (!wanted && path.basename(known) === folder));
+    return matches.length === 1 ? matches[0] : refuse(400, `Dossier « ${folder} » inconnu ou ambigu. Choisissez un dossier de list_devices, par son chemin.`);
+  }
+  function fence(own: string) {
+    return dossiers().filter(other => other.startsWith('/') && other !== own && !own.startsWith(other + path.sep))
+      .flatMap(other => [`Read(/${other}/**)`, `Edit(/${other}/**)`]);
+  }
   function add(author: ChatMessage['author'], text: string, extra: Partial<ChatMessage> = {}) {
     const row: ChatMessage = { id: id('msg'), author, text, at: now(), attachments: [], decisionIds: [], reactions: [], ...extra };
     state.messages.push(row);
@@ -211,7 +226,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       orch.provider = p;
       orch.sessionId ??= deps.openSession(p, root, 'Coordination interne', true);
       save();
-      const preamble = fresh || recap ? formatPreamble({ state, projectPath: root, memory: store.memory(), sharedFolder: store.sharedFolder, recycled: recap }) : '';
+      const preamble = fresh || recap ? formatPreamble({ state, projectPath: root, memory: store.memory(), sharedFolder: store.sharedFolder, recycled: recap, dossiers: central ? state.settings.folders : undefined }) : '';
       const content = recap ? preamble : [preamble, formatWake({ ...orch, events: batch, now: deps.now() })].filter(Boolean).join('\n');
       launched = true;
       const result = await deps.runTurn(orch.sessionId, orch.userId, content, {
@@ -260,7 +275,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     return row;
   }
   function threadWake(t: Thread, type: WakeEvent['type'], trust: WakeEvent['trust'], text: string) {
-    wake(type, trust, text, { threadId: t.id, attrs: { title: t.title, state: t.state } });
+    wake(type, trust, text, { threadId: t.id, attrs: { title: t.title, state: t.state, ...(t.projectPath !== root ? { folder: t.projectPath } : {}) } });
   }
   function clearApprovals(t: Thread) {
     t.pendingRequests = [];
@@ -280,12 +295,16 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     Object.assign(t, { state: 'stopped', updatedAt: now(), external: false });
     threadWake(t, 'thread_stopped', 'system', 'Thread stopped.');
   }
-  async function finish(t: Thread, run: { reply?: ThreadReply }, error: string | null) {
+  async function finish(t: Thread, run: { reply?: ThreadReply; startedAt?: string }, error: string | null) {
     if (runs.get(t.id) !== run) return;
     let answer = '';
+    let report: string | null = null;
     try {
       if (t.sessionId && !error && !run.reply && !deps.wasAborted(t.sessionId)) answer = await deps.lastAnswer(t.sessionId);
     } catch (cause) { error = String(cause); }
+    if (central && t.sessionId && !error && run.startedAt && deps.herissonReport) {
+      try { report = await deps.herissonReport(t.sessionId, t.projectPath, run.startedAt); } catch { report = null; }
+    }
     if (runs.get(t.id) !== run) return;
     runs.delete(t.id);
     t.updatedAt = now();
@@ -298,7 +317,8 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       if (!t.retries && !invalidModel(error)) retry(t);
       else threadWake(t, 'thread_failed', 'system', error);
     } else {
-      const reply = run.reply ?? { at: now(), text: answer, outputs: [] };
+      const base = run.reply ?? { at: now(), text: answer, outputs: [] };
+      const reply = report ? { ...base, text: `${base.text}\n\n<system-report>\n${report}\n</system-report>` } : base;
       t.replies.push(reply);
       t.error = null;
       t.state = t.resolved ? 'done' : 'review_ready';
@@ -309,7 +329,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     drain();
   }
   async function launch(t: Thread) {
-    const run = {};
+    const run = { startedAt: now() };
     runs.set(t.id, run);
     t.state = 'working';
     t.updatedAt = now();
@@ -325,7 +345,8 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       const options: TurnOptions = {
         provider: t.provider, model: t.model, effort: t.effort, permissionMode: 'bypassPermissions',
         allowedTools: [...permissions.allowedTools.filter(v => v !== 'mcp__orchestrateur'), 'mcp__fil'],
-        disallowedTools: [...permissions.disallowedTools.filter(v => v !== 'mcp__fil'), 'mcp__orchestrateur', 'AskUserQuestion', 'ExitPlanMode'],
+        disallowedTools: [...permissions.disallowedTools.filter(v => v !== 'mcp__fil'), 'mcp__orchestrateur', 'AskUserQuestion', 'ExitPlanMode',
+          ...(central && t.provider === 'claude' ? fence(t.projectPath) : [])],
       };
       const result = await deps.runTurn(t.sessionId, orch.userId, content, options);
       error = result.error || (!result.started ? 'Tour non démarré.' : null);
@@ -333,7 +354,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     await finish(t, run, error);
   }
   function allowed(folder: string) {
-    return [root, ...state.settings.folders].some(f => f === canonical(folder));
+    return [...(central ? [] : [root]), ...state.settings.folders].some(f => f === canonical(folder));
   }
   function drain() {
     for (const t of state.threads.filter(t => t.state === 'queued').sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))) {
@@ -350,7 +371,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   }
   const startInput = threadInput.extend({
     ack_project: string, ack_thread: string, context_message_ids: contexts, model: string.optional(),
-    effort: string.optional(), folder: string.optional(),
+    effort: string.optional(),
   });
   async function prepareThread(input: z.input<typeof startInput>, projectInstructions = state.settings.instructions) {
     const args = parse(startInput, input);
@@ -358,12 +379,13 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     const model = args.model ? await knownModel(p, args.model) : state.settings.defaultModels[p] ?? await deps.defaultModel(p);
     const t: Thread = {
       id: id('thr'), key: randomUUID(), sessionId: null, title: args.title, instructions: args.instructions,
-      projectPath: canonical(path.resolve(root, args.folder ?? '.')), provider: p, model, effort: args.effort ?? null,
+      projectPath: central ? dossier(args.folder) : canonical(path.resolve(root, args.folder ?? '.')), provider: p, model, effort: args.effort ?? null,
       ackProject: args.ack_project, ackThread: args.ack_thread, state: 'queued', resolved: false,
       createdAt: now(), updatedAt: now(), reminderAt: null, retries: 0, error: null,
       replies: [], pendingRequests: [], inbox: [], external: false,
     };
-    t.inbox.push(formatThreadKickoff({ thread: t, key: t.key, cited: cited(args.context_message_ids), sharedFolder: store.sharedFolder, projectInstructions }));
+    if (central) deps.prepareDossier?.(root, t.projectPath);
+    t.inbox.push(formatThreadKickoff({ thread: t, key: t.key, cited: cited(args.context_message_ids), sharedFolder: store.sharedFolder, projectInstructions, dossier: central ? t.projectPath : undefined }));
     return t;
   }
   function addThread(t: Thread) {
@@ -393,8 +415,9 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     const previous = args.deliverable_id ? find(state.deliverables, args.deliverable_id, 'Livrable') : undefined;
     const ref = args.ref ?? previous?.ref ?? refuse(400, 'Référence du livrable requise.');
     const kind = args.kind ?? previous?.kind ?? 'document';
-    if (kind !== 'artifact' && (path.isAbsolute(ref) || path.relative(root, canonical(path.resolve(root, ref))).split(path.sep)[0] === '..')) refuse(400, 'Chemin relatif au dossier requis.');
-    if (args.thread_id) thread(args.thread_id);
+    const owner = args.thread_id ?? previous?.threadId;
+    const base = central && owner ? thread(owner).projectPath : root;
+    if (kind !== 'artifact' && (path.isAbsolute(ref) || path.relative(base, canonical(path.resolve(base, ref))).split(path.sep)[0] === '..')) refuse(400, 'Chemin relatif au dossier requis.');
     const row: Deliverable = {
       id: previous?.id ?? id('liv'), ref, kind, title: args.title ?? previous?.title ?? path.basename(ref),
       threadId: args.thread_id ?? previous?.threadId ?? null, state: args.state ?? previous?.state ?? 'brouillon', updatedAt: now(),
@@ -404,10 +427,13 @@ function projectService(root: string, deps: OrchestratorDependencies) {
   function applySettings(input: unknown, principal: boolean) {
     const patch = parse(settingsInput, input);
     if (patch.folders) {
-      patch.folders = [...new Set(patch.folders.map(folder => canonical(path.resolve(root, folder))))];
+      patch.folders = [...new Set(patch.folders.map(folder => central ? dossier(folder) : canonical(path.resolve(root, folder))))];
       if (!principal && patch.folders.some(folder => !allowed(folder))) refuse(403, "L'accès aux dossiers exige l'accord de l'avocat.");
+      if (central) for (const folder of patch.folders) deps.prepareDossier?.(root, folder);
     }
+    if (patch.dream && !central) refuse(400, 'Le dream est réservé à l’agent central.');
     const settings = state.settings;
+    if (patch.dream) patch.dream = { ...DREAM_DEFAULTS, ...settings.dream, ...patch.dream };
     const providerChanged = patch.orchestratorProvider && settings.orchestratorProvider !== patch.orchestratorProvider;
     Object.assign(settings, { ...patch, concurrency: { ...settings.concurrency, ...patch.concurrency }, defaultModels: { ...settings.defaultModels, ...patch.defaultModels } });
     if (providerChanged && orch.chatSessionId && !orch.running) {
@@ -464,6 +490,49 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     t.pendingRequests = ids;
     save();
   }
+  function dreamRun() {
+    state.dream ??= { running: false, lastRunAt: null, lastResult: null, lastError: null };
+    return state.dream;
+  }
+  function dreamDue(date: Date) {
+    const settings = state.settings.dream;
+    const last = state.dream?.lastRunAt;
+    return Boolean(settings?.enabled && !state.dream?.running && date.getHours() === settings.hour
+      && (!last || new Date(last).toDateString() !== date.toDateString()));
+  }
+  async function dream() {
+    if (!central) refuse(400, 'Le dream est réservé à l’agent central.');
+    const run = dreamRun();
+    if (run.running) return { started: false };
+    const settings = { ...DREAM_DEFAULTS, ...state.settings.dream };
+    run.running = true;
+    run.lastRunAt = now();
+    run.lastError = null;
+    save();
+    try {
+      const p = await provider(settings.provider);
+      const model = settings.model ? await knownModel(p, settings.model) : await deps.defaultModel(p);
+      const permissions = await deps.permissions(p, orch.userId);
+      const sessionId = deps.openSession(p, root, 'Dream', true);
+      const since = state.messages.filter(m => m.author === 'orchestrator' && m.text.startsWith('Dream du ')).at(-1)?.at ?? null;
+      const result = await deps.runTurn(sessionId, orch.userId, formatDream({ state, since, now: deps.now() }), {
+        provider: p, model, effort: null, permissionMode: 'acceptEdits',
+        allowedTools: ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'MultiEdit', 'Skill'],
+        disallowedTools: [...new Set([...permissions.disallowedTools, ...DREAM_DENIED])],
+      });
+      if (!result.started || result.error) throw new Error(result.error || 'Tour non démarré.');
+      const answer = (await deps.lastAnswer(sessionId)).trim() || 'Rien à mettre à jour.';
+      run.lastResult = answer;
+      add('orchestrator', `Dream du ${deps.now().toLocaleDateString('fr-FR')} :\n\n${answer}`, { posted: true });
+      if (orch.chatSessionId) deps.chatChanged(orch.chatSessionId);
+    } catch (error) {
+      run.lastError = error instanceof Error ? error.message : String(error);
+    } finally {
+      run.running = false;
+      save();
+    }
+    return { started: true, error: run.lastError };
+  }
   function tick() {
     const date = deps.now();
     const stamp = date.toISOString();
@@ -512,6 +581,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
           .catch(error => wake('routine', 'system', String(error)));
       }
     }
+    if (central && dreamDue(date)) void dream().catch(error => console.warn('[piecemaker] Dream :', error));
     drain();
     pump();
   }
@@ -561,7 +631,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
     }
   }
   function summary(t: Thread) {
-    return { thread_id: t.id, title: t.title, state: t.state, provider: t.provider, model: t.model, effort: t.effort,
+    return { thread_id: t.id, title: t.title, folder: t.projectPath, state: t.state, provider: t.provider, model: t.model, effort: t.effort,
       updated_at: t.updatedAt, resolved: t.resolved, deliverables: state.deliverables.filter(d => d.threadId === t.id) };
   }
   async function orchestratorCall(tool: string, args: Record<string, unknown>, check: () => void) {
@@ -666,7 +736,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       case 'list_providers': return Promise.all((await deps.providers(orch.userId)).map(async status => ({
         ...status, models: (await deps.models(status.provider)).map(m => m.value), defaultModel: state.settings.defaultModels[status.provider] ?? await deps.defaultModel(status.provider),
       })));
-      case 'list_devices': return [...new Set([root, ...state.settings.folders, ...deps.approvedFolders()].map(canonical))].map(folder => ({ folder, allowed: allowed(folder) }));
+      case 'list_devices': return (central ? dossiers() : [...new Set([root, ...state.settings.folders, ...deps.approvedFolders()].map(canonical))]).map(folder => ({ folder, allowed: allowed(folder) }));
       case 'suggest_connectors': {
         const connect = parse(z.object({ target: string, reconnect: z.boolean().default(false), reason: string.optional() }), args);
         return { message_id: add('orchestrator', connect.reason ?? '', { connect }).id };
@@ -726,7 +796,8 @@ function projectService(root: string, deps: OrchestratorDependencies) {
         ...schedule,
         nextRunAt: schedule.stoppedAt ? null : schedule.cron ? parseCron(schedule.cron).next(date, schedule.lastFiredAt) : schedule.lastFiredAt ? null : schedule.at,
       }));
-      return structuredClone({ ...state, schedules, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files(), storage: store.storage() });
+      return structuredClone({ ...state, schedules, providers, memory: store.memory(), artifacts: deps.artifacts(root), files: store.files(), storage: store.storage(),
+        central, dossiers: central ? dossiers().map(folder => ({ path: folder, selected: allowed(folder) })) : [] });
     },
     postUserMessage(text: string, userId: number | null, uploads?: ChatMessage['uploads']) {
       const row = userMessage(text, userId);
@@ -751,7 +822,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       await recoverPreviousPosts();
       return state.messages.filter(isChatMessage).map(m => {
         const decisions = state.decisions.filter(d => m.decisionIds.includes(d.id));
-        const card = m.widget || decisions.length || m.attachments.length ? { widget: m.widget, decisions, outputs: m.attachments, messageId: m.id } : undefined;
+        const card = m.widget || decisions.length || m.attachments.length ? { widget: m.widget, decisions, outputs: m.attachments, messageId: m.id, ...(m.threadId ? { threadId: m.threadId } : {}) } : undefined;
         return {
           id: m.id, timestamp: m.at, sessionId: orch.chatSessionId!, provider: orch.chatProvider!,
           role: m.author === 'user' ? 'user' as const : 'assistant' as const, kind: 'text' as const,
@@ -848,6 +919,7 @@ function projectService(root: string, deps: OrchestratorDependencies) {
       drain();
       return summary(t);
     },
+    dream,
     recycle() {
       if (orch.running) manualRecycle = true;
       else {
@@ -862,11 +934,26 @@ function projectService(root: string, deps: OrchestratorDependencies) {
 
 export function createOrchestratorService(deps: OrchestratorDependencies) {
   const projects = new Map<string, ReturnType<typeof projectService>>();
+  let centralKey: string | null = null;
+  let centralSource: string | null = null;
+  function centralRoot() {
+    if (!deps.centralRoot) return refuse(404, 'Agent central indisponible.');
+    const wanted = typeof deps.centralRoot === 'function' ? deps.centralRoot() : deps.centralRoot;
+    if (!centralKey || wanted !== centralSource) {
+      if (centralKey) projects.delete(centralKey);
+      mkdirSync(path.join(wanted, '.piecemaker'), { recursive: true });
+      writeFileSync(path.join(wanted, '.piecemaker', 'agent-central'), '');
+      centralSource = wanted;
+      centralKey = canonical(wanted);
+      try { deps.prepareCentral?.(centralKey); } catch (error) { console.warn('[piecemaker] Brain :', error); }
+    }
+    return centralKey;
+  }
   function project(root: string) {
     const key = canonical(root);
     let current = projects.get(key);
     if (!current) {
-      current = projectService(key, deps);
+      current = projectService(key, deps, Boolean(deps.centralRoot) && key === centralRoot());
       projects.set(key, current);
     }
     return current;
@@ -878,7 +965,7 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
       let loaded = false;
       const load = () => {
         try {
-          for (const folder of deps.approvedFolders()) {
+          for (const folder of [...deps.approvedFolders(), ...(deps.centralRoot ? [centralRoot()] : [])]) {
             if (existsSync(path.join(folder, '.piecemaker', 'orchestrateur', 'etat.json'))) project(folder);
           }
           loaded = true;
@@ -896,6 +983,13 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
       timer.unref();
     },
     stop() { clearInterval(timer); timer = undefined; },
+    centralRoot,
+    isCentral: (root: string) => Boolean(deps.centralRoot) && canonical(root) === centralRoot(),
+    central: () => ({ project: centralRoot(), sessionId: project(centralRoot()).sessionId() }),
+    async centralSession(userId: number | null = null) {
+      const root = centralRoot();
+      return { project: root, ...await project(root).session(userId) };
+    },
     state: (root: string, userId: number | null = null) => project(root).state(userId),
     async call(root: string, sessionKey: string, tool: string, args: unknown = {}) {
       const folder = canonical(root);
@@ -928,5 +1022,6 @@ export function createOrchestratorService(deps: OrchestratorDependencies) {
     deleteScheduled: (root: string, kind: unknown, id: unknown) => project(root).deleteScheduled(kind, id),
     stopThread: (root: string, threadId: string) => project(root).stopThread(threadId),
     recycle: (root: string) => project(root).recycle(),
+    dream: (root: string) => project(root).dream(),
   };
 }

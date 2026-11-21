@@ -281,3 +281,53 @@ test('la garde refuse d’écrire les étapes, la protection et une proposition 
   assert.match(await reason('Write', { file_path: '.piecemaker/ontologie.proposition.json', content: '{}' }), /ontologie/);
   assert.equal(await reason('Bash', { command: 'cat .piecemaker/etapes.json' }), null);
 });
+
+test('Roadmap.json et About.md du brain se vérifient dans leur dossier, et l’agent ne touche ni aux étapes ni à la synthèse', async () => {
+  const fs = require('node:fs');
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-brain-')));
+  const home = path.join(base, 'home');
+  const brain = path.join(base, 'brain');
+  const dossier = path.join(base, 'Dossier Dupont');
+  fs.mkdirSync(path.join(brain, '.piecemaker'), { recursive: true });
+  fs.mkdirSync(path.join(brain, 'projects', 'Dossier Dupont'), { recursive: true });
+  fs.mkdirSync(home, { recursive: true });
+  fs.writeFileSync(path.join(home, 'brain.json'), JSON.stringify({ path: brain }));
+  fs.writeFileSync(path.join(brain, '.piecemaker', 'dossiers.json'), JSON.stringify({ [dossier]: 'Dossier Dupont' }));
+  const roadmap = path.join(brain, 'projects', 'Dossier Dupont', 'Roadmap.json');
+  fs.writeFileSync(roadmap, JSON.stringify({ synthese: { okf: { etat: 'valide' } }, etapes: { mappingValide: '2026-01-01' } }, null, 2));
+  const previous = process.env.PIECEMAKER_HOME;
+  process.env.PIECEMAKER_HOME = home;
+  try {
+    const { featureOf, formatErrors } = await loadFeatures();
+    assert.deepEqual([featureOf(roadmap).feature.nom, featureOf(roadmap).root], ['roadmap', dossier]);
+    assert.equal(featureOf(path.join(brain, 'projects', 'Dossier Dupont', 'About.md')).feature.nom, 'about');
+    assert.equal(featureOf(path.join(brain, 'AGENTS.md')), null);
+    const write = (value) => formatErrors('Write', { file_path: roadmap, content: JSON.stringify(value, null, 2) }, dossier);
+    const kept = { synthese: { okf: { etat: 'valide' } }, etapes: { mappingValide: '2026-01-01' } };
+    assert.equal(await write({ ...kept, suivis: { 'appel-suivi.json': { echeances: {} } } }), null);
+    assert.match(await write({ ...kept, etapes: {} }), /"etapes" cannot be changed by the agent/);
+    assert.match(await write({ ...kept, synthese: { okf: { etat: 'à exécuter' } } }), /synthese\.mjs/);
+    assert.match(await write({ ...kept, notes: 'x' }), /unknown key "notes"/);
+    assert.match(await write({ ...kept, suivis: { 'appel.json': {}, 'bail-suivi.json': { faits: {} } } }), /appel\.json[\s\S]*unknown key "faits"/);
+  } finally {
+    if (previous === undefined) delete process.env.PIECEMAKER_HOME; else process.env.PIECEMAKER_HOME = previous;
+    fs.rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test('le rapport d’un fil vérifie, selon les outils qu’il a utilisés, le travail rendu à l’agent central', async () => {
+  const { workReport } = await load();
+  const pm = fakePm('Suivi appel-suivi.json : 1 erreur(s), 0 manque(s).\nechéances.appel : délai non justifié');
+  const calls = [
+    { tool_name: 'Read', tool_input: { file_path: path.join(root, 'pieces', 'a.md') } },
+    { tool_name: 'Write', tool_input: { file_path: '.piecemaker/appel-suivi.json', content: '{}' } },
+    { tool_name: 'Edit', tool_input: { file_path: path.join(root, '.piecemaker', 'appel-suivi.json'), old_string: 'x', new_string: 'y' } },
+  ];
+  const report = await workReport(root, calls, { run: pm.run });
+  assert.equal(pm.calls.length, 1);
+  assert.equal(pm.calls[0].args, `suivi_dossiers verifier --suivi appel-suivi.json --dossier ${root}`);
+  assert.match(report, /^Rapport hérisson \(1 check\(s\)/);
+  assert.match(report, /délai non justifié/);
+  assert.equal(await workReport(root, calls.slice(0, 1), { run: pm.run }), null);
+  assert.match(await workReport(root, calls.slice(1, 2), { run: fakePm('').run }), /: valid$/);
+});

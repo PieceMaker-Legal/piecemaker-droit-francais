@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { caseOfBrainFile, ROADMAP_KEYS, SUIVI_FILE } from './brain-case.mjs';
 
 const REGISTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'herisson.json');
 
@@ -43,6 +44,12 @@ export function pmArgv(featureName, commandName, args = {}) {
 }
 
 export function featureOf(absolute) {
+  let brainCase = null;
+  try { brainCase = caseOfBrainFile(String(absolute)); } catch {}
+  if (brainCase?.folder) {
+    const feature = FEATURES.find((entry) => entry.brain && entry.brain === brainCase.rest);
+    if (feature) return { feature, root: brainCase.folder, nom: '' };
+  }
   const parts = String(absolute).replace(/\\/g, '/').split('/.piecemaker/');
   if (parts.length < 2) return null;
   const relative = parts.pop();
@@ -79,6 +86,33 @@ function suiviErrors(content) {
   return errors;
 }
 
+const ROADMAP_OWNED = { etapes: 'the case steps (etapes) are set by the lawyer on the board of the Suivi des dossiers tab', synthese: 'the synthesis (synthese) is written by the script synthese.mjs next to Roadmap.json, run by pm check; change the script to change what it records' };
+
+export function roadmapErrors(file, content) {
+  let value;
+  try { value = content.trim() ? JSON.parse(content) : {}; } catch (error) {
+    const position = /position (\d+)/.exec(error.message);
+    return [{ line: position ? lineOf(content, Number(position[1])) : 1, message: `invalid JSON: ${error.message.replace(/ in JSON at position.*$/, '')}. Write valid JSON: double quotes, no trailing comma, no comment.` }];
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [{ line: 1, message: `Roadmap.json must be an object { ${ROADMAP_KEYS.map((key) => `"${key}": {…}`).join(', ')} }.` }];
+  let before = {};
+  try { before = JSON.parse(current(file) || '{}') ?? {}; } catch {}
+  const errors = [];
+  const at = (key) => lineOf(content, content.indexOf(JSON.stringify(key)));
+  for (const key of Object.keys(value)) if (!ROADMAP_KEYS.includes(key)) errors.push({ line: at(key), message: `unknown key "${key}" at the root of Roadmap.json. Permitted keys: ${ROADMAP_KEYS.join(', ')}. The reasoning, decisions and memories go in About.md.` });
+  for (const [key, reason] of Object.entries(ROADMAP_OWNED)) if (JSON.stringify(value[key] ?? null) !== JSON.stringify(before?.[key] ?? null)) errors.push({ line: value[key] === undefined ? 1 : at(key), message: `"${key}" cannot be changed by the agent: ${reason}. Keep it as it is.` });
+  for (const group of ['suivis', 'suivisSupprimes']) {
+    if (value[group] === undefined) continue;
+    if (!value[group] || typeof value[group] !== 'object' || Array.isArray(value[group])) { errors.push({ line: at(group), message: `"${group}" must be an object { "<nom>-suivi.json": { "matter": …, "evenements": …, "echeances": … } }.` }); continue; }
+    for (const [name, suivi] of Object.entries(value[group])) {
+      const line = at(name);
+      if (!SUIVI_FILE.test(name)) errors.push({ line, message: `tracking name "${name}" must be "<nom>-suivi.json", <nom> being the act it follows.` });
+      for (const error of suiviErrors(JSON.stringify(suivi))) errors.push({ line, message: `${name}: ${error.message}` });
+    }
+  }
+  return errors;
+}
+
 function memoireErrors(content) {
   return /^---\r?\n/.test(content) ? [{ line: 1, message: 'frontmatter is not permitted: the memory starts with a block between two "---" lines. Remove this block. Deadlines go in .piecemaker/<name>-suivi.json. The lawyer sets the current step and the document to produce on the board of the Suivi des dossiers tab: read them with pm check.' }] : [];
 }
@@ -98,10 +132,12 @@ const REFUSALS = {
   catala: ['the program does not follow the Catala format or does not compile. Nothing was written.', 'Correct only the lines shown, keep the rest of the file, then write again. Start from the model of references/format.md (Feature read catala path=catala/references/format.md), which compiles; its table "Fautes fréquentes" gives the fix of common errors.'],
   suivi: ['the tracking file does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Full model: Feature read deadlines path=piecemaker/references/suivi.md.'],
   memoire: ['the project memory does not have the expected structure. Nothing was written.', 'Correct the memory, then write it again: plain Markdown, no frontmatter.'],
+  roadmap: ['Roadmap.json does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Each tracking file follows Feature read deadlines path=piecemaker/references/suivi.md, under "suivis".'],
 };
 const FORMATS = {
   suivi: async (file, content) => suiviErrors(content),
   memoire: async (file, content) => memoireErrors(content),
+  roadmap: async (file, content) => roadmapErrors(file, content),
   catala: async (file, content) => [
     ...programNameErrors(file, content),
     ...(file.endsWith('.catala_fr') ? (await import('../../../skills/Skill-PieceMaker/scripts/catala-documentation.mjs')).catalaDocumentation(content, { test: /^test_/.test(path.basename(file)) }).errors : []),
