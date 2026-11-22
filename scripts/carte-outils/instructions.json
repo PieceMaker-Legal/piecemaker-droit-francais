@@ -546,7 +546,7 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/herisson.mjs",
       "guillemet": "`",
-      "ancre": "End of turn halted by Le Hérisson: ${causes.join('"
+      "ancre": "End of turn stopped by Le Hérisson"
     },
     {
       "id": "stop-herisson--cause-de-blocage-erreurs-dans-les-fichiers-ecrit",

@@ -206,14 +206,19 @@ function showFile(root, rev, file) {
 function committedTexts(root) {
   const files = new Map();
   const result = new Map();
-  for (const entry of entries(root, 'HEAD')) {
-    if (!entry.fichier) continue;
-    if (!files.has(entry.fichier)) files.set(entry.fichier, showFile(root, 'HEAD', entry.fichier));
-    const text = files.get(entry.fichier);
-    if (text === null) continue;
-    try {
-      result.set(entry.id, { entry, lu: readInstruction(text, entry.fichier, entry).view.lu });
-    } catch {}
+  const current = new Map(entries(root).map((e) => [e.id, e]));
+  const headEntries = new Map(entries(root, 'HEAD').map((e) => [e.id, e]));
+  for (const id of new Set([...headEntries.keys(), ...current.keys()])) {
+    const candidates = [headEntries.get(id), current.get(id)].filter((e) => e?.fichier);
+    for (const entry of candidates) {
+      if (!files.has(entry.fichier)) files.set(entry.fichier, showFile(root, 'HEAD', entry.fichier));
+      const text = files.get(entry.fichier);
+      if (text === null) continue;
+      try {
+        result.set(id, { entry, lu: readInstruction(text, entry.fichier, entry).view.lu });
+        break;
+      } catch {}
+    }
   }
   return result;
 }
