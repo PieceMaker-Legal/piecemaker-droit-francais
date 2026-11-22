@@ -411,7 +411,11 @@ function trackedFiles(root) {
 
 export function status(root = ROOT) {
   const files = trackedFiles(root);
-  const changed = (gitSafe(root, ['status', '--porcelain', '--', ...files]) || '').split('\n').filter(Boolean).map((l) => l.slice(3));
+  let raw = '';
+  try {
+    raw = execFileSync('git', ['status', '--porcelain', '-z', '--', ...files], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch {}
+  const changed = raw.split('\0').filter(Boolean).map((l) => l.slice(3));
   return { branch: gitSafe(root, ['rev-parse', '--abbrev-ref', 'HEAD']), changed };
 }
 

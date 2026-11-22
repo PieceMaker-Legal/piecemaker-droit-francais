@@ -262,16 +262,16 @@
     },
     {
       "id": "research-maker",
-      "label": "Sous-agent research-maker",
+      "label": "research-maker",
       "type": "agent",
-      "sub": "haiku · legifrance",
+      "sub": "sous-agent · haiku",
       "col": 3
     },
     {
       "id": "sous-agent",
       "label": "Autres sous-agents",
       "type": "agent",
-      "sub": "Mistral",
+      "sub": "sous-agents Mistral",
       "col": 3
     },
     {
