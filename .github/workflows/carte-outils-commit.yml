@@ -7,13 +7,13 @@ on:
         description: 'Tableau JSON [{"id","lu","expected"}] envoyé par la Carte des outils'
         required: true
         type: string
-  issues:
-    types: [opened]
+  push:
+    paths:
+      - 'scripts/carte-outils/demandes/**'
 
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 concurrency:
   group: carte-outils-commit
@@ -21,12 +21,11 @@ concurrency:
 
 jobs:
   appliquer:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (startsWith(github.event.issue.title, '[carte-outils]') &&
-       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
+    if: github.event_name == 'workflow_dispatch' || github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      BASE: ${{ github.event.repository.default_branch }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -40,60 +39,80 @@ jobs:
         run: npm install --prefix "$RUNNER_TEMP/ts" --no-audit --no-fund typescript@5.9.3
 
       - name: Lire les modifications
+        id: lire
         env:
           MODIFICATIONS: ${{ inputs.modifications }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-        run: node scripts/carte-outils/lire-modifications.mjs > "$RUNNER_TEMP/modifications.json"
+          BEFORE: ${{ github.event.before }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/demandes"
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+              range="origin/$BASE...$GITHUB_SHA"
+            else
+              range="$BEFORE..$GITHUB_SHA"
+            fi
+            git diff --name-only --diff-filter=A "$range" -- 'scripts/carte-outils/demandes/*.json' > "$RUNNER_TEMP/fichiers.txt"
+            : > "$RUNNER_TEMP/liste.txt"
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
+              copie="$RUNNER_TEMP/demandes/$(basename "$f")"
+              git show "$GITHUB_SHA:$f" > "$copie"
+              echo "$copie" >> "$RUNNER_TEMP/liste.txt"
+            done < "$RUNNER_TEMP/fichiers.txt"
+            if [ ! -s "$RUNNER_TEMP/liste.txt" ]; then echo "Aucune nouvelle demande."; echo "vide=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+            DEMANDES="$(cat "$RUNNER_TEMP/liste.txt")" node scripts/carte-outils/lire-modifications.mjs > "$RUNNER_TEMP/modifications.json"
+          else
+            node scripts/carte-outils/lire-modifications.mjs > "$RUNNER_TEMP/modifications.json"
+          fi
 
       - name: Appliquer les modifications
         id: appliquer
+        if: steps.lire.outputs.vide != 'true'
         env:
           NODE_PATH: ${{ runner.temp }}/ts/node_modules
+          REF: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          branch="carte-outils/${GITHUB_RUN_ID}"
-          git checkout -b "$branch"
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$REF" != "$BASE" ]; then
+            branch="$REF"
+            git checkout -B "$branch" "$GITHUB_SHA"
+          else
+            branch="carte-outils/${GITHUB_RUN_ID}"
+            git checkout -B "$branch" "origin/$BASE"
+          fi
           node scripts/carte-outils/appliquer.mjs "$RUNNER_TEMP/modifications.json" "chore(carte-outils): modifier des instructions depuis la carte" > "$RUNNER_TEMP/resultat.json"
           git add docs/carte-outils.html
           git diff --cached --quiet || git commit -m "chore(carte-outils): instantané à jour"
+          if [ -n "$(git ls-files scripts/carte-outils/demandes)" ]; then
+            git rm -rq scripts/carte-outils/demandes
+            git commit -m "chore(carte-outils): retirer les demandes traitées"
+          fi
           node scripts/carte-outils/resume-commit.mjs "$RUNNER_TEMP/resultat.json" > "$RUNNER_TEMP/pr.md"
-          cat "$RUNNER_TEMP/pr.md" >> "$GITHUB_STEP_SUMMARY"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "committed=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).commit.committed" "$RUNNER_TEMP/resultat.json")" >> "$GITHUB_OUTPUT"
 
-      - name: Ouvrir la PR
-        id: pr
+      - name: Pousser et proposer la PR
         if: steps.appliquer.outputs.committed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ steps.appliquer.outputs.branch }}
-          BASE: ${{ github.event.repository.default_branch }}
         run: |
-          git push origin "$BRANCH"
-          url=$(gh pr create --base "$BASE" --head "$BRANCH" \
-            --title "chore(carte-outils): modifier des instructions depuis la carte" \
-            --body-file "$RUNNER_TEMP/pr.md")
-          echo "url=$url" >> "$GITHUB_OUTPUT"
-
-      - name: Répondre sur le ticket
-        if: always() && github.event_name == 'issues'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ISSUE: ${{ github.event.issue.number }}
-          PR_URL: ${{ steps.pr.outputs.url }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if [ -n "$PR_URL" ]; then
-            { echo "PR ouverte : $PR_URL"; echo; cat "$RUNNER_TEMP/pr.md"; } > "$RUNNER_TEMP/reponse.md"
+          git push origin "HEAD:refs/heads/$BRANCH"
+          compare="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$BASE...$BRANCH?expand=1"
+          existante=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url')
+          if [ -n "$existante" ]; then
+            echo "PR mise à jour : $existante" >> "$GITHUB_STEP_SUMMARY"
+          elif url=$(gh pr create --base "$BASE" --head "$BRANCH" --title "chore(carte-outils): modifier des instructions depuis la carte" --body-file "$RUNNER_TEMP/pr.md" 2>/dev/null); then
+            echo "PR ouverte : $url" >> "$GITHUB_STEP_SUMMARY"
           else
-            { echo "Aucune modification appliquée. Détail : $RUN_URL"; echo; cat "$RUNNER_TEMP/pr.md" 2>/dev/null || true; } > "$RUNNER_TEMP/reponse.md"
+            echo "Branche prête : ouvrez la PR ici : $compare" >> "$GITHUB_STEP_SUMMARY"
           fi
-          gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/reponse.md"
-          gh issue close "$ISSUE"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/pr.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Signaler un commit vide
-        if: steps.appliquer.outputs.committed != 'true'
+        if: steps.lire.outputs.vide != 'true' && steps.appliquer.outputs.committed != 'true'
         run: |
           echo "::error::Aucune modification appliquée : voir le résumé de l'exécution."
           exit 1
