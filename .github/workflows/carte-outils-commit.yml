@@ -70,48 +70,46 @@ jobs:
         if: steps.lire.outputs.vide != 'true'
         env:
           NODE_PATH: ${{ runner.temp }}/ts/node_modules
+          REF: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          branch="carte-outils/${GITHUB_RUN_ID}"
-          git checkout -B "$branch" "origin/$BASE"
+          if [ "$GITHUB_EVENT_NAME" = "push" ] && [ "$REF" != "$BASE" ]; then
+            branch="$REF"
+            git checkout -B "$branch" "$GITHUB_SHA"
+          else
+            branch="carte-outils/${GITHUB_RUN_ID}"
+            git checkout -B "$branch" "origin/$BASE"
+          fi
           node scripts/carte-outils/appliquer.mjs "$RUNNER_TEMP/modifications.json" "chore(carte-outils): modifier des instructions depuis la carte" > "$RUNNER_TEMP/resultat.json"
           git add docs/carte-outils.html
           git diff --cached --quiet || git commit -m "chore(carte-outils): instantané à jour"
-          if [ -d scripts/carte-outils/demandes ] && [ -n "$(ls -A scripts/carte-outils/demandes 2>/dev/null)" ]; then
+          if [ -n "$(git ls-files scripts/carte-outils/demandes)" ]; then
             git rm -rq scripts/carte-outils/demandes
             git commit -m "chore(carte-outils): retirer les demandes traitées"
           fi
           node scripts/carte-outils/resume-commit.mjs "$RUNNER_TEMP/resultat.json" > "$RUNNER_TEMP/pr.md"
-          cat "$RUNNER_TEMP/pr.md" >> "$GITHUB_STEP_SUMMARY"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "committed=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).commit.committed" "$RUNNER_TEMP/resultat.json")" >> "$GITHUB_OUTPUT"
 
-      - name: Ouvrir la PR
+      - name: Pousser et proposer la PR
         if: steps.appliquer.outputs.committed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ steps.appliquer.outputs.branch }}
         run: |
-          git push origin "$BRANCH"
-          gh pr create --base "$BASE" --head "$BRANCH" \
-            --title "chore(carte-outils): modifier des instructions depuis la carte" \
-            --body-file "$RUNNER_TEMP/pr.md"
-
-      - name: Nettoyer la branche de la demande
-        if: always() && github.event_name == 'push' && github.ref_name != github.event.repository.default_branch && startsWith(github.ref_name, 'carte-outils/') == false
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REF: ${{ github.ref_name }}
-        run: |
-          if git diff --name-only "origin/$BASE...$GITHUB_SHA" | grep -qv '^scripts/carte-outils/demandes/'; then
-            echo "La branche $REF contient d'autres changements : elle est conservée."
-            exit 0
+          git push origin "HEAD:refs/heads/$BRANCH"
+          compare="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/compare/$BASE...$BRANCH?expand=1"
+          existante=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url')
+          if [ -n "$existante" ]; then
+            echo "PR mise à jour : $existante" >> "$GITHUB_STEP_SUMMARY"
+          elif url=$(gh pr create --base "$BASE" --head "$BRANCH" --title "chore(carte-outils): modifier des instructions depuis la carte" --body-file "$RUNNER_TEMP/pr.md" 2>/dev/null); then
+            echo "PR ouverte : $url" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Branche prête : ouvrez la PR ici : $compare" >> "$GITHUB_STEP_SUMMARY"
           fi
-          for pr in $(gh pr list --head "$REF" --state open --json number --jq '.[].number'); do
-            gh pr close "$pr" --comment "Demande traitée par le workflow « Carte des outils : commit »." || true
-          done
-          git push origin --delete "$REF" || true
+          echo >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/pr.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Signaler un commit vide
         if: steps.lire.outputs.vide != 'true' && steps.appliquer.outputs.committed != 'true'

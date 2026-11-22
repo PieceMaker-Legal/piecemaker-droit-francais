@@ -945,7 +945,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       $('ig-gh-text').value = t.corps;
       $('ig-gh-copy').hidden = false;
     } else $('ig-dlg').classList.remove('open');
-    marquerEnvoye(lot, 'ticket').then(() => toast('Sur GitHub, cliquez sur « Commit changes » : la PR s’ouvre une minute après.'));
+    marquerEnvoye(lot, 'ticket').then(() => toast('Sur GitHub : Commit changes, nouvelle branche, puis Create pull request.'));
   });
 
   $('ig-commit').addEventListener('click', async () => {
@@ -961,7 +961,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     $('ig-do-commit').hidden = cloudOn() && !cloud.mcp;
     $('ig-do-commit').textContent = cloudOn() ? 'Via le connecteur GitHub' : 'Commiter';
     $('ig-do-commit').className = cloudOn() ? 'btn ghost' : 'btn primary';
-    if (cloudOn()) $('ig-dnote').textContent = '« Commiter sur GitHub » ouvre sur GitHub un petit fichier de demande déjà rempli : cliquez sur « Commit changes… » puis confirmez. Le workflow « Carte des outils : commit » écrit alors ces instructions dans le code, vérifie la syntaxe, ouvre une PR vers main et supprime la demande. Rien d’autre n’est modifié.';
+    if (cloudOn()) $('ig-dnote').textContent = '« Commiter sur GitHub » ouvre sur GitHub un petit fichier de demande déjà rempli. Cliquez sur « Commit changes… », choisissez « Create a new branch for this commit and start a pull request », puis « Propose changes » et « Create pull request ». Une minute après, le workflow « Carte des outils : commit » remplace dans cette PR la demande par les instructions modifiées, après avoir vérifié la syntaxe. Rien d’autre n’est modifié.';
     $('ig-dlg').classList.add('open');
     (cloudOn() ? $('ig-gh-issue') : $('ig-cmsg')).focus();
   });
