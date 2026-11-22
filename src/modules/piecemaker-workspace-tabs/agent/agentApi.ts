@@ -66,7 +66,7 @@ export type AgentSettings = {
   instructions: string;
   orchestratorProvider: AgentProviderChoice;
   orchestratorModel: string;
-  defaultProvider: AgentProviderChoice;
+  defaultProvider: AgentProvider | 'chat';
   defaultModels: Partial<Record<AgentProvider, string>>;
   concurrency: Record<AgentProvider, number>;
   folders: string[];

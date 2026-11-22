@@ -116,6 +116,7 @@ Un wake est un message envoyé à la session de l'orchestrateur, au format :
 
 États : `queued` (attend une place), `working`, `blocked` (autorisation en attente), `review_ready` (a répondu), `done` (résolu), `failed`, `stopped` (tour interrompu).
 
+- **Fournisseur** : `start_thread` sans fournisseur (ou `auto`) prend `settings.defaultProvider`, réglé dans Paramètres › Général › « Fournisseur par défaut ». Sa valeur par défaut, `chat` (« Comme le chat principal »), reprend le fournisseur du chat de l'agent (`orchestrator.chatProvider`, sinon `orchestratorProvider`). Un ancien `auto` enregistré est lu comme `chat`.
 - **Concurrence** : au plus `settings.concurrency[provider]` fils `working` ou `blocked` par provider (défaut 3). Au-delà : `queued`, contenu gardé ; une place libérée lance le plus ancien.
 - **Fin d'un tour** : si `wasAborted(sessionId)` → `stopped` + événement `thread_stopped` ; si erreur → voir relance ; sinon la réponse = dernier `reply` appelé pendant le tour, sinon `lastAnswer` ; `replies.push`, état `review_ready` (sauf si résolu), événement `thread_reply` (relay). Puis la boîte `inbox` (messages reçus pendant le tour) part en un seul tour.
 - **Relance** : un fil en échec avec `retries === 0` est relancé une fois automatiquement (« Le tour précédent s'est interrompu : <erreur>. Reprends là où tu t'es arrêté. »), `retries = 1`, événement `thread_retry` (system). Second échec : `failed` + événement `thread_failed`. Un fil `stopped` n'est jamais relancé automatiquement.

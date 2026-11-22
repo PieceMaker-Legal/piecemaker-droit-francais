@@ -3,6 +3,7 @@ import type { ChatAttachmentDescriptor } from '@/shared/image-attachments.js';
 export const RUNNABLE_PROVIDERS = ['claude', 'codex', 'mistral'] as const;
 export type RunnableProvider = typeof RUNNABLE_PROVIDERS[number];
 export type ProviderChoice = RunnableProvider | 'auto';
+export type ThreadProviderChoice = RunnableProvider | 'chat';
 
 export type ThreadState = 'queued' | 'working' | 'blocked' | 'review_ready' | 'done' | 'failed' | 'stopped';
 export const THREAD_STATES: ThreadState[] = ['queued', 'working', 'blocked', 'review_ready', 'done', 'failed', 'stopped'];
@@ -126,7 +127,7 @@ export type Settings = {
   instructions: string;
   orchestratorProvider: ProviderChoice;
   orchestratorModel: string;
-  defaultProvider: ProviderChoice;
+  defaultProvider: ThreadProviderChoice;
   defaultModels: Partial<Record<RunnableProvider, string>>;
   concurrency: Record<RunnableProvider, number>;
   folders: string[];

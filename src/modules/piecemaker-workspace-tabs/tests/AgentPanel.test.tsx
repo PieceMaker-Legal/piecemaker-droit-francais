@@ -68,7 +68,7 @@ const thread: AgentThread = {
 function state(): AgentState {
   return {
     revision: 1,
-    settings: { instructions: '', orchestratorProvider: 'auto', orchestratorModel: '', defaultProvider: 'auto', defaultModels: {}, concurrency: { claude: 2, codex: 2, mistral: 2 }, folders: [], recycleAfter: 50 },
+    settings: { instructions: '', orchestratorProvider: 'auto', orchestratorModel: '', defaultProvider: 'chat', defaultModels: {}, concurrency: { claude: 2, codex: 2, mistral: 2 }, folders: [], recycleAfter: 50 },
     messages: [],
     decisions: [{ id: 'd1', question: 'Quel plan retenir ?', options: [{ label: 'Plan court', consequence: 'Deux parties.' }, { label: 'Plan long', consequence: 'Quatre parties.' }], recommended: 0, chosen: null, closedBy: null, withdrawn: false, owner: { threadId: 'f1' } }],
     threads: [thread],
@@ -405,4 +405,19 @@ it('ouvre le document Word à gauche et la session de publication à droite depu
   await within(within(workspace).getByRole('complementary', { name: 'Session de création' })).findByText('Session fil-createur');
   fireEvent.click(within(workspace).getByRole('button', { name: 'Fermer l’artifact' }));
   expect(screen.queryByRole('dialog', { name: 'Rapport fictif' })).toBeNull();
+});
+
+it('règle le fournisseur par défaut des fils, qui suit le chat principal tant qu’on ne le change pas', async () => {
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  const select = await screen.findByRole('combobox', { name: 'Fournisseur par défaut' });
+  expect((select as HTMLSelectElement).value).toBe('chat');
+  expect(screen.getByRole('option', { name: 'Comme le chat principal' })).toBeTruthy();
+  fireEvent.change(select, { target: { value: 'claude' } });
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, defaultProvider: 'claude' }, method: 'PUT' });
 });

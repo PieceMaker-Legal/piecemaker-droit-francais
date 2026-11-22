@@ -199,7 +199,9 @@ function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
     </fieldset>
     <fieldset className="space-y-2">
       <legend className="text-sm text-foreground">Fils de discussion</legend>
-      <label className="block text-muted-foreground">Fournisseur par défaut<select className={`${inputClass} mt-1`} value={settings.defaultProvider} onChange={(event) => save({ defaultProvider: event.target.value as AgentSettings['defaultProvider'] })}>{providerOptions}</select></label>
+      <label className="block text-muted-foreground">Fournisseur par défaut<select className={`${inputClass} mt-1`} value={settings.defaultProvider} onChange={(event) => save({ defaultProvider: event.target.value as AgentSettings['defaultProvider'] })}>
+        {['chat', ...PROVIDERS].map((value) => <option key={value} value={value} disabled={value !== 'chat' && !connected.has(value as AgentProvider)}>
+          {PROVIDER_LABELS[value]}{value !== 'chat' && !connected.has(value as AgentProvider) ? ' (non connecté)' : ''}</option>)}</select></label>
       {PROVIDERS.map((provider) => <div key={provider} className="grid grid-cols-[1fr_6rem] gap-2">
         <label className="block text-muted-foreground">Modèle {PROVIDER_LABELS[provider]}<ModelSelect className={`${inputClass} mt-1`} providers={[provider]} disabled={!connected.has(provider)} value={settings.defaultModels[provider] ?? ''}
           onChange={(model) => model && save({ defaultModels: { [provider]: model } })} /></label>
