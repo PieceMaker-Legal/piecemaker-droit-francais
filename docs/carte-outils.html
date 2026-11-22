@@ -135,6 +135,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 .it .lu.old { border-left-color: var(--subtle); color: var(--body); }
 .it .lu .var { display: inline-block; font: 500 12px/1.35 var(--mono); color: var(--bg); background: var(--warn); border-radius: 6px; padding: 0 6px; margin: 0 1px; max-width: 100%; overflow-wrap: anywhere; vertical-align: 1px; cursor: help; }
 .it .luwrap { display: grid; gap: 6px; }
+.it .t .badge.err { color: var(--err); border-color: rgba(248,113,113,.5); }
+.chip.cloud .dot { background: var(--ok); }
+.chip a { color: inherit; }
 .it .badge.agent { color: var(--agent); border-color: rgba(183,148,255,.5); }
 .it details.code { border-top: 1px solid var(--border); padding-top: 8px; }
 .it details.code > summary { cursor: pointer; color: var(--muted); font: 400 12px var(--mono); overflow-wrap: anywhere; }
@@ -164,6 +167,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <h2>Graphe des instructions envoyées à l’agent</h2>
       <span class="chip snap" id="ig-mode"><span class="dot"></span><span>Instantané</span></span>
       <span class="chip" id="ig-count">…</span>
+      <span class="chip" id="ig-etat" hidden></span>
     </div>
     <p class="ig-note" id="ig-help">Chaque arête relie deux fonctionnalités et porte les instructions qui passent de l’une à l’autre : descriptions MCP, refus et contextes des hooks, motifs du hérisson, injections de contexte et stop turn (les skills n’y sont pas). Cliquez sur une arête pour lire ses instructions, sur un nœud pour voir toutes ses arêtes.</p>
     <div class="ig-bar">
@@ -189,7 +193,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   <div class="ig-dlg" id="ig-dlg" role="dialog" aria-modal="true" aria-labelledby="ig-dtitle">
     <div class="box">
       <h3 id="ig-dtitle">Commiter mes changements</h3>
-      <p class="ig-note">Seules ces instructions sont commitées, sur la branche <code id="ig-branch"></code>. Le reste des fichiers, même modifié, n’est pas touché.</p>
+      <p class="ig-note" id="ig-dnote">Seules ces instructions sont commitées, sur la branche <code id="ig-branch"></code>. Le reste des fichiers, même modifié, n’est pas touché.</p>
       <ul id="ig-files"></ul>
       <input id="ig-cmsg" type="text" placeholder="chore(instructions): …" aria-label="Message de commit">
       <div class="ig-bar"><span style="margin-right:auto"></span><button class="btn ghost" id="ig-cancel" type="button">Annuler</button><button class="btn primary" id="ig-do-commit" type="button">Commiter</button></div>
@@ -455,6 +459,15 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   let current = null; // { kind: 'edge'|'node'|'search', id }
   const drafts = new Map(); // id d'instruction -> texte en cours d'édition
   const openItems = new Set();
+  const TRIGGER = 'trig_01QDMDVdzaTyD9M9sXhua9i2';
+  const REMOTE = 'Claude Code Remote';
+  const cloud = { db: null, mcp: null, can: false, pending: new Map(), etat: null };
+  const cloudOn = () => mode !== 'live' && !!cloud.db && cloud.can;
+  const docKey = (id) => id.replace(/[^A-Za-z0-9_\-.~@+]/g, '_').slice(0, 200);
+  const enAttente = () => [...cloud.pending.values()].filter((p) => p.statut === 'en_attente');
+  const etatActif = () => cloud.etat && ['lance', 'en_cours'].includes(cloud.etat.statut) && Date.now() - Date.parse(cloud.etat.at || 0) < 20 * 60e3;
+  const textParts = (text) => text.split(/(⟦[^⟦⟧]*⟧)/).filter(Boolean).map((t) => (/^⟦[^⟦⟧]*⟧$/.test(t) ? { type: 'code', label: t.slice(1, -1).trim() } : { type: 'texte', value: t }));
+  const varLabels = (parts) => parts.filter((p) => p.type === 'code').map((p) => p.label).sort();
 
   const el = (tag, attrs = {}, ...kids) => {
     const svg = ['svg', 'g', 'rect', 'path', 'text', 'line', 'circle'].includes(tag);
@@ -514,12 +527,27 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       : mode === 'read' ? 'En direct (lecture seule)'
       : `Instantané${graph?.commit ? ` du commit ${graph.commit}` : ''}${when ? ` · ${when}` : ''}`;
     $('ig-open-local').hidden = mode === 'live';
-    const changed = graph?.status?.modifiees || [];
+    const changed = cloudOn() ? enAttente().map((p) => p.id) : graph?.status?.modifiees || [];
     const btn = $('ig-commit');
-    btn.disabled = mode !== 'live' || !changed.length;
+    btn.disabled = cloudOn() ? !changed.length || !cloud.mcp || etatActif() : mode !== 'live' || !changed.length;
     btn.textContent = changed.length ? `Commiter mes changements (${changed.length} instruction${changed.length > 1 ? 's' : ''})` : 'Commiter mes changements';
-    btn.title = mode === 'live' ? '' : 'Lancez npm run carte-outils pour modifier et commiter.';
-    if (mode !== 'live') {
+    btn.title = mode === 'live' ? '' : cloudOn() ? (cloud.mcp ? (etatActif() ? 'Un commit est déjà en cours.' : '') : 'Le connecteur Claude Code Remote est nécessaire pour commiter depuis cette page.') : 'Lancez npm run carte-outils pour modifier et commiter.';
+    if (cloudOn()) chip.lastChild.textContent += ' · modifiable ici';
+    const etat = $('ig-etat');
+    const e = cloudOn() ? cloud.etat : null;
+    etat.hidden = !e;
+    if (e) {
+      etat.replaceChildren();
+      if (etatActif()) etat.textContent = 'Commit en cours : une session Claude applique vos modifications…';
+      else if (e.statut === 'termine') {
+        etat.append(`Dernier commit : ${e.appliquees ?? 0} appliquée(s)${e.refusees ? `, ${e.refusees} refusée(s)` : ''}`);
+        if (typeof e.pr === 'string' && /^https:\/\/github\.com\//.test(e.pr)) etat.append(' · ', el('a', { href: e.pr, target: '_blank', rel: 'noopener', text: 'voir la PR' }));
+      } else if (e.statut === 'echec') etat.textContent = `Dernier commit en échec : ${e.erreur || 'erreur inconnue'}`;
+      else etat.hidden = true;
+    }
+    if (cloudOn()) {
+      $('ig-help').textContent = 'Chaque arête relie deux fonctionnalités et porte les instructions qui passent de l’une à l’autre : descriptions MCP, refus et contextes des hooks, motifs du hérisson, injections de contexte et stop turn (les skills n’y sont pas). Cliquez sur une arête pour lire et modifier ses instructions. Vos modifications sont gardées dans cette page ; « Commiter » lance une session Claude qui les écrit dans le code et ouvre une PR.';
+    } else if (mode !== 'live') {
       $('ig-help').textContent = 'Chaque arête relie deux fonctionnalités et porte les instructions qui passent de l’une à l’autre : descriptions MCP, refus et contextes des hooks, motifs du hérisson, injections de contexte et stop turn (les skills n’y sont pas). Cliquez sur une arête pour lire ses instructions. Pour les modifier dans le code et commiter, lancez npm run carte-outils dans le dépôt : la carte s’ouvre en local, branchée sur vos fichiers.';
     }
   }
@@ -718,7 +746,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     const details = el('details', { class: `it${item.erreur ? ' error' : ''}${config ? ' config' : ''}`, open: openItems.has(item.id) || drafts.has(item.id),
       ontoggle: (ev) => (ev.target.open ? openItems.add(item.id) : openItems.delete(item.id)) });
     const edge = withEdge ? graph.edges.find((e) => e.items.includes(item.id)) : null;
-    const badge = item.modifie ? ['mod', 'modifiée, à commiter'] : config ? ['', 'réglage, non lu par l’agent'] : item.lu === undefined ? ['', 'sans texte'] : ['agent', 'lu par l’agent'];
+    const pend = cloudOn() && !config ? cloud.pending.get(item.id) : null;
+    const badge = pend?.statut === 'refusee' ? ['err', 'refusée au commit'] : pend ? ['mod', 'modifiée, à commiter'] : item.modifie ? ['mod', 'modifiée, à commiter'] : config ? ['', 'réglage, non lu par l’agent'] : item.lu === undefined ? ['', 'sans texte'] : ['agent', 'lu par l’agent'];
     details.append(el('summary', {},
       el('div', { class: 't' }, el('span', { text: item.titre || item.id }), el('span', { class: `badge ${badge[0]}`, text: badge[1] })),
       item.quand ? el('div', { class: 'q', text: item.quand }) : null,
@@ -728,14 +757,14 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       return details;
     }
     if (item.lu === undefined) return details;
-    details.append(el('div', { class: 'pre', text: item.lu }));
+    details.append(el('div', { class: 'pre', text: pend ? pend.lu : item.lu }));
     const body = el('div', { class: 'ed' });
     details.append(body);
-    const editable = mode === 'live' && !config;
+    const editable = (mode === 'live' || cloudOn()) && !config;
     const msg = el('div', { class: 'msg' });
     const view = el('div', { class: 'luwrap' },
       el('div', { class: 'lul', text: config ? 'Motif de déclenchement (réglage du hook)' : 'Ce que lit l’agent' }),
-      renderLu(item.parts));
+      renderLu(pend ? textParts(pend.lu) : item.parts));
     const codeBlock = item.code ? el('details', { class: 'code' },
       el('summary', { text: `Voir dans le code · ${where}` }),
       el('pre', {}, ...item.code.lignes.map((l, i) => el('span', { class: 'cl' }, el('span', { class: 'ln', text: String(item.code.debut + i) }), document.createTextNode(`${l}\n`)))),
@@ -745,9 +774,12 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       body.replaceChildren(view);
       const acts = el('div', { class: 'acts' });
       if (editable) acts.append(el('button', { class: 'btn', type: 'button', text: 'Modifier ce texte', onclick: showEditor }));
-      if (editable && item.modifie) acts.append(el('button', { class: 'btn ghost', type: 'button', text: 'Revenir à la version commitée', onclick: () => save(item.luCommit) }));
+      if (editable && pend) acts.append(el('button', { class: 'btn ghost', type: 'button', text: 'Annuler ma modification', onclick: () => save(item.lu) }));
+      else if (editable && item.modifie && mode === 'live') acts.append(el('button', { class: 'btn ghost', type: 'button', text: 'Revenir à la version commitée', onclick: () => save(item.luCommit) }));
       if (acts.childNodes.length) body.append(acts);
-      if (item.modifie && item.luCommit !== undefined) body.append(el('details', { class: 'code' }, el('summary', { text: 'Version commitée' }), el('div', { class: 'lu old', text: item.luCommit })));
+      if (pend?.statut === 'refusee') body.append(el('div', { class: 'msg err', text: `Refusée au dernier commit : ${pend.erreur || 'erreur inconnue'}` }));
+      if (pend) body.append(el('details', { class: 'code' }, el('summary', { text: 'Version actuelle du code' }), el('div', { class: 'lu old', text: item.lu })));
+      else if (item.modifie && item.luCommit !== undefined) body.append(el('details', { class: 'code' }, el('summary', { text: 'Version commitée' }), el('div', { class: 'lu old', text: item.luCommit })));
       if (!editable && !config) body.append(el('div', { class: 'hint', text: mode === 'live' ? '' : 'Lecture seule. Pour modifier, lancez npm run carte-outils dans le dépôt.' }));
       if (config) body.append(el('div', { class: 'hint', text: 'Ce motif choisit les outils qui déclenchent le hook ; l’agent ne le lit pas, il n’est donc pas modifiable ici.' }));
       body.append(msg);
@@ -756,6 +788,28 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     const save = async (lu) => {
       msg.className = 'msg'; msg.textContent = 'Écriture…';
+      if (cloudOn()) {
+        try {
+          const ref = cloud.db.doc(`modifications/${docKey(item.id)}`);
+          if (lu === item.lu) {
+            if (pend) await ref.delete();
+            drafts.delete(item.id);
+            toast(pend ? 'Modification annulée.' : 'Aucun changement.');
+          } else {
+            const want = varLabels(item.parts || []).join('\u0000');
+            const got = varLabels(textParts(lu)).join('\u0000');
+            if (want !== got) throw new Error('Les ⟦…⟧ sont insérés par le programme : gardez-les tous, sans les modifier (vous pouvez les déplacer).');
+            await ref.set({ id: item.id, titre: item.titre || item.id, fichier: item.fichier || '', lu, expected: item.lu, statut: 'en_attente', at: new Date().toISOString() });
+            drafts.delete(item.id);
+            toast('Modification gardée. Cliquez sur « Commiter » pour l’écrire dans le code.');
+          }
+          openItems.add(item.id);
+          render();
+        } catch (error) {
+          msg.className = 'msg err'; msg.textContent = error.message || 'Écriture refusée.';
+        }
+        return;
+      }
       try {
         const r = await api('/api/instruction', { id: item.id, lu, expected: item.lu });
         drafts.delete(item.id);
@@ -769,9 +823,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
     function showEditor() {
       const ta = el('textarea', { spellcheck: 'true', lang: 'fr', 'aria-label': `Texte lu par l’agent : ${item.titre || ''}` });
-      ta.value = drafts.get(item.id) ?? item.lu;
+      ta.value = drafts.get(item.id) ?? pend?.lu ?? item.lu;
       const fit = () => { ta.style.height = 'auto'; ta.style.height = `${Math.min(Math.max(ta.scrollHeight + 4, 120), 560)}px`; };
-      const ok = el('button', { class: 'btn primary', type: 'button', text: 'Enregistrer dans le code' });
+      const ok = el('button', { class: 'btn primary', type: 'button', text: cloudOn() ? 'Garder cette modification' : 'Enregistrer dans le code' });
       const cancel = el('button', { class: 'btn ghost', type: 'button', text: 'Annuler' });
       ta.addEventListener('input', () => { ta.value === item.lu ? drafts.delete(item.id) : drafts.set(item.id, ta.value); fit(); });
       cancel.addEventListener('click', () => { drafts.delete(item.id); msg.textContent = ''; showView(); });
@@ -790,16 +844,33 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   }
 
   $('ig-commit').addEventListener('click', () => {
-    const ids = graph.status?.modifiees || [];
-    $('ig-branch').textContent = graph.status?.branch || '';
+    const ids = cloudOn() ? enAttente().map((p) => p.id) : graph.status?.modifiees || [];
+    $('ig-cmsg').hidden = cloudOn();
+    if (cloudOn()) $('ig-dnote').textContent = 'Une session Claude va écrire ces instructions dans le code, vérifier la syntaxe, commiter sur une nouvelle branche et ouvrir une PR. Comptez une à deux minutes ; rien d’autre n’est modifié.';
+    else { $('ig-dnote').replaceChildren('Seules ces instructions sont commitées, sur la branche ', el('code', { id: 'ig-branch' }), '. Le reste des fichiers, même modifié, n’est pas touché.'); }
+    if (!cloudOn()) $('ig-branch').textContent = graph.status?.branch || '';
     $('ig-files').replaceChildren(...ids.map((id) => el('li', { text: graph.items[id]?.titre || id })));
     $('ig-cmsg').value = '';
     $('ig-dlg').classList.add('open');
-    $('ig-cmsg').focus();
+    (cloudOn() ? $('ig-do-commit') : $('ig-cmsg')).focus();
   });
   $('ig-cancel').addEventListener('click', () => $('ig-dlg').classList.remove('open'));
   $('ig-dlg').addEventListener('click', (ev) => { if (ev.target === $('ig-dlg')) $('ig-dlg').classList.remove('open'); });
   $('ig-do-commit').addEventListener('click', async () => {
+    if (cloudOn()) {
+      const btn = $('ig-do-commit');
+      btn.disabled = true;
+      try {
+        await cloud.mcp.callTool(REMOTE, 'fire_trigger', { trigger_id: TRIGGER });
+        $('ig-dlg').classList.remove('open');
+        await cloud.db.doc('etat/commit').set({ statut: 'lance', at: new Date().toISOString() }).catch(() => {});
+        toast('Commit lancé : une session Claude écrit vos modifications et ouvre une PR.');
+      } catch (error) {
+        const why = { server_not_connected: 'Ajoutez le connecteur Claude Code Remote dans les réglages de claude.ai.', needs_reauth: 'Reconnectez Claude Code Remote dans les réglages de claude.ai.', not_granted: 'Autorisation refusée pour Claude Code Remote.' }[error?.code];
+        toast(why || `Échec du lancement : ${error?.message || error}`);
+      } finally { btn.disabled = false; }
+      return;
+    }
     try {
       const r = await api('/api/commit', { message: $('ig-cmsg').value });
       $('ig-dlg').classList.remove('open');
@@ -824,6 +895,23 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   document.addEventListener('visibilitychange', poll);
   setInterval(poll, 5000);
 
-  load(true).catch((error) => { console.error(error); render(); });
+  async function initCloud() {
+    if (token || !window.claude?.use) return;
+    const use = (name) => Promise.resolve(window.claude.use(name)).catch(() => null);
+    const [db, user, mcp] = await Promise.all([use('db'), use('user'), use('mcp')]);
+    if (!db || !user) return;
+    cloud.can = await user.canEdit().catch(() => false);
+    if (!cloud.can) return;
+    cloud.db = db; cloud.mcp = mcp;
+    const refresh = () => (drafts.size ? setMode() : render());
+    db.collection('modifications').onSnapshot((snap) => {
+      cloud.pending = new Map(snap.docs.map((d) => d.data()).filter((d) => d && typeof d.id === 'string' && typeof d.lu === 'string').map((d) => [d.id, d]));
+      refresh();
+    }, () => toast('Modifications enregistrées illisibles pour le moment.'));
+    db.doc('etat/commit').onSnapshot((snap) => { cloud.etat = snap.data() || null; setMode(); }, () => {});
+    refresh();
+  }
+
+  load(true).catch((error) => { console.error(error); render(); }).finally(() => initCloud().catch(() => {}));
 })();
 </script>
