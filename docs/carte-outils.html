@@ -540,7 +540,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       if (e.statut === 'envoye') {
         const when = e.at ? new Date(e.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '';
         etat.append(`Dernier commit envoyé à GitHub${when ? ` le ${when}` : ''} (${e.n ?? '?'} instruction${e.n > 1 ? 's' : ''}) · `, el('a', { href: RUNS, target: '_blank', rel: 'noopener', text: 'suivre l’exécution et la PR' }));
-      } else etat.hidden = true;
+      } else if (e.statut === 'echec') etat.textContent = `Dernier commit en échec : ${e.erreur || 'erreur inconnue'}`;
+      else etat.hidden = true;
     }
     if (cloudOn()) {
       $('ig-help').textContent = 'Chaque arête relie deux fonctionnalités et porte les instructions qui passent de l’une à l’autre : descriptions MCP, refus et contextes des hooks, motifs du hérisson, injections de contexte et stop turn (les skills n’y sont pas). Cliquez sur une arête pour lire et modifier ses instructions. Vos modifications sont gardées dans cette page ; « Commiter » lance un script GitHub Actions qui les écrit dans le code, vérifie la syntaxe et ouvre une PR.';
@@ -869,7 +870,10 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         toast('Commit envoyé à GitHub : la PR s’ouvre dans une minute environ.');
       } catch (error) {
         const why = { server_not_connected: 'Ajoutez le connecteur GitHub dans les réglages de claude.ai.', needs_reauth: 'Reconnectez le connecteur GitHub dans les réglages de claude.ai.', not_granted: 'Autorisation refusée pour le connecteur GitHub.' }[error?.code];
-        toast(why || `Échec du lancement : ${error?.message || error}`);
+        const raw = `${error?.message || ''} ${JSON.stringify(error?.result || '')}`;
+        const msg = why || (/404|not found|does not exist/i.test(raw) ? 'GitHub ne trouve pas le workflow carte-outils-commit.yml sur main : la PR qui l’ajoute doit être mergée.' : `Échec du lancement : ${error?.message || error}`);
+        await cloud.db.doc('etat/commit').set({ statut: 'echec', erreur: msg, code: String(error?.code || ''), at: new Date().toISOString() }).catch(() => {});
+        toast(msg);
       } finally { btn.disabled = false; }
       return;
     }
