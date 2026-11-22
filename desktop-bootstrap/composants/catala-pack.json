@@ -125,8 +125,48 @@
   },
   "archive": {
     "repository": "PieceMaker-Legal/piecemaker-droit-francais",
-    "tag": null,
-    "macos": null,
-    "windows": null
+    "tag": "catala-pack-v1.3.0",
+    "macos": {
+      "asset": "piecemaker-catala-macos.tar.gz",
+      "sha256": "c2891c488587f6955270cad2dac9d92d8f126f387f18c6ba8fd6c326f7eab9d7",
+      "size": 37920034,
+      "verification": {
+        "platform": "macos",
+        "sha256": "c2891c488587f6955270cad2dac9d92d8f126f387f18c6ba8fd6c326f7eab9d7",
+        "buildFingerprint": "c45a0b392c0786386374ffa61aaf2603896fe96c6603e5a3c31a607e9165027b",
+        "checks": {
+          "version": "1.3.0",
+          "typecheck": "ok",
+          "interpret": "│            -- montant: 300,00 € │          } └─",
+          "clerkTest": "assertion vraie acceptée, assertion fausse refusée",
+          "python": "ok",
+          "format": "ok",
+          "proof": "programme valide et conflit détecté",
+          "lsp": "initialize ok",
+          "dap": "initialize ok"
+        }
+      }
+    },
+    "windows": {
+      "asset": "piecemaker-catala-windows.tar.gz",
+      "sha256": "5ff12a0bbcb0245c823845bde2346d073934c9f03d118845105d276f77cbbf18",
+      "size": 55823788,
+      "verification": {
+        "platform": "windows",
+        "sha256": "5ff12a0bbcb0245c823845bde2346d073934c9f03d118845105d276f77cbbf18",
+        "buildFingerprint": "c45a0b392c0786386374ffa61aaf2603896fe96c6603e5a3c31a607e9165027b",
+        "checks": {
+          "version": "1.3.0",
+          "typecheck": "ok",
+          "interpret": "│            -- montant: 300,00 €\r │          }\r └─",
+          "clerkTest": "assertion vraie acceptée, assertion fausse refusée",
+          "python": "ok",
+          "format": "ok",
+          "proof": "programme valide et conflit détecté",
+          "lsp": "initialize ok",
+          "dap": "initialize ok"
+        }
+      }
+    }
   }
 }
