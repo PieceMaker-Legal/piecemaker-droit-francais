@@ -115,6 +115,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 .it .t { color: var(--fg); font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: baseline; }
 .it .t .badge { font: 500 11px var(--sans); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; margin-left: auto; white-space: nowrap; }
 .it .t .badge.mod { color: var(--warn); border-color: rgba(251,191,36,.5); }
+.it .t .badge.ok { color: var(--ok); border-color: rgba(74,222,128,.5); }
 .it .q { color: var(--muted); font-size: 12.5px; }
 .it .loc { font: 400 11.5px var(--mono); color: var(--subtle); overflow-wrap: anywhere; }
 .it .pre { margin: 0 12px 10px; color: var(--body); font: 400 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 4.6em; overflow: hidden; }
@@ -184,7 +185,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
   <aside class="ig-panel" id="ig-panel" aria-label="Instructions de l’arête" aria-hidden="true">
     <div class="ig-ph">
-      <div class="row"><h3 id="ig-ptitle"></h3><button class="btn ghost" id="ig-close" type="button" aria-label="Fermer">Fermer</button></div>
+      <div class="row"><button class="btn ghost" id="ig-back" type="button" aria-label="Revenir au panneau précédent" hidden>← Retour</button><h3 id="ig-ptitle"></h3><button class="btn ghost" id="ig-close" type="button" aria-label="Fermer">Fermer</button></div>
       <p id="ig-psub"></p>
     </div>
     <div class="ig-pb" id="ig-pbody"></div>
@@ -196,7 +197,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <p class="ig-note" id="ig-dnote">Seules ces instructions sont commitées, sur la branche <code id="ig-branch"></code>. Le reste des fichiers, même modifié, n’est pas touché.</p>
       <ul id="ig-files"></ul>
       <input id="ig-cmsg" type="text" placeholder="chore(instructions): …" aria-label="Message de commit">
-      <div class="ig-bar"><span style="margin-right:auto"></span><button class="btn ghost" id="ig-cancel" type="button">Annuler</button><button class="btn primary" id="ig-do-commit" type="button">Commiter</button></div>
+      <div class="ig-bar"><span style="margin-right:auto"></span><button class="btn ghost" id="ig-cancel" type="button">Annuler</button><button class="btn primary" id="ig-do-commit" type="button">Commiter</button><a class="btn primary" id="ig-gh-issue" target="_blank" rel="noopener" hidden>Commiter sur GitHub</a></div>
+      <div id="ig-gh-copy" hidden><p class="ig-note">Le texte est trop long pour passer dans le lien : il a été copié. Collez-le comme description du ticket GitHub qui s’ouvre. S’il n’a pas été copié, sélectionnez-le ici :</p><textarea id="ig-gh-text" readonly rows="5" style="width:100%"></textarea></div>
     </div>
   </div>
   <div class="ig-toast" id="ig-toast" role="status"></div>
@@ -461,10 +463,15 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   const openItems = new Set();
   const GH = { server: 'GitHub', owner: 'PieceMaker-Legal', repo: 'piecemaker-droit-francais', workflow: 'carte-outils-commit.yml', ref: 'main' };
   const RUNS = `https://github.com/${GH.owner}/${GH.repo}/actions/workflows/${GH.workflow}`;
-  const cloud = { db: null, mcp: null, can: false, pending: new Map(), etat: null };
+  const cloud = { db: null, mcp: null, can: false, pending: new Map(), verifs: new Map(), etat: null };
   const cloudOn = () => mode !== 'live' && !!cloud.db && cloud.can;
   const docKey = (id) => id.replace(/[^A-Za-z0-9_\-.~@+]/g, '_').slice(0, 200);
   const enAttente = () => [...cloud.pending.values()].filter((p) => p.statut === 'en_attente');
+  const localVerifs = new Map();
+  try { for (const v of Object.values(JSON.parse(localStorage.getItem('carte-outils-verifs') || '{}'))) if (v && typeof v.id === 'string') localVerifs.set(v.id, v); } catch {}
+  const saveLocalVerifs = () => { try { localStorage.setItem('carte-outils-verifs', JSON.stringify(Object.fromEntries(localVerifs))); } catch {} };
+  const texteAffiche = (item) => cloud.pending.get(item.id)?.lu ?? item.lu;
+  const verifMap = () => (cloudOn() ? cloud.verifs : localVerifs);
   const textParts = (text) => text.split(/(⟦[^⟦⟧]*⟧)/).filter(Boolean).map((t) => (/^⟦[^⟦⟧]*⟧$/.test(t) ? { type: 'code', label: t.slice(1, -1).trim() } : { type: 'texte', value: t }));
   const varLabels = (parts) => parts.filter((p) => p.type === 'code').map((p) => p.label).sort();
 
@@ -528,9 +535,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     $('ig-open-local').hidden = mode === 'live';
     const changed = cloudOn() ? enAttente().map((p) => p.id) : graph?.status?.modifiees || [];
     const btn = $('ig-commit');
-    btn.disabled = cloudOn() ? !changed.length || !cloud.mcp : mode !== 'live' || !changed.length;
+    btn.disabled = cloudOn() ? !changed.length : mode !== 'live' || !changed.length;
     btn.textContent = changed.length ? `Commiter mes changements (${changed.length} instruction${changed.length > 1 ? 's' : ''})` : 'Commiter mes changements';
-    btn.title = mode === 'live' ? '' : cloudOn() ? (cloud.mcp ? '' : 'Le connecteur GitHub de claude.ai est nécessaire pour commiter depuis cette page.') : 'Lancez npm run carte-outils pour modifier et commiter.';
+    btn.title = mode === 'live' ? '' : cloudOn() ? '' : 'Lancez npm run carte-outils pour modifier et commiter.';
     if (cloudOn()) chip.lastChild.textContent += ' · modifiable ici';
     const etat = $('ig-etat');
     const e = cloudOn() ? cloud.etat : null;
@@ -619,7 +626,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     }
     const nItems = Object.keys(graph.items).length;
     const nErr = Object.values(graph.items).filter((i) => i.erreur).length;
-    $('ig-count').textContent = `${graph.edges.length} arêtes · ${nItems} instructions${nErr ? ` · ${nErr} introuvables` : ''}`;
+    const avecTexte = Object.values(graph.items).filter((i) => i.lu !== undefined && !i.erreur);
+    const nVerifs = avecTexte.filter((i) => verifStatut(i) === 'ok').length;
+    $('ig-count').textContent = `${graph.edges.length} arêtes · ${nItems} instructions${nErr ? ` · ${nErr} introuvables` : ''} · ${nVerifs}/${avecTexte.length} vérifiées`;
     geo = layout();
     svg.setAttribute('viewBox', `0 0 ${geo.width} ${geo.height}`);
     svg.setAttribute('width', geo.width); svg.setAttribute('height', geo.height);
@@ -636,10 +645,13 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         el('title', {}, label), el('path', { class: 'hit', d }), el('path', { class: 'vis', d, stroke: color }));
       gEdges.append(g);
       if (e.items.length) {
-        const txt = String(e.items.length);
+        const ver = edgeVerif(e);
+        const tout = ver.total > 0 && ver.ok === ver.total;
+        const txt = `${e.items.length}${tout ? ' ✓' : ver.ok ? ` · ${ver.ok}/${ver.total} ✓` : ''}`;
         const pw = 10 + txt.length * 7;
         const modified = e.items.some((id) => graph.items[id]?.modifie);
-        gPills.append(el('g', { class: 'ig-edge pill', style: `color:${modified ? '#fbbf24' : color}`, 'data-edge': e.id, onclick: () => openEdge(e.id) },
+        const pillColor = modified ? '#fbbf24' : tout ? '#4ade80' : color;
+        gPills.append(el('g', { class: 'ig-edge pill', style: `color:${pillColor}`, 'data-edge': e.id, onclick: () => openEdge(e.id) },
           el('title', {}, label),
           el('rect', { x: mx - pw / 2, y: my - 9, width: pw, height: 18, rx: 9 }),
           el('text', { x: mx, y: my + 4, 'text-anchor': 'middle', text: txt })));
@@ -673,6 +685,29 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   const matches = (item, q) => item && [item.titre, item.quand, item.lu, item.fichier].some((v) => (v || '').toLowerCase().includes(q));
 
+  const verifStatut = (item) => {
+    const doc = verifMap().get(item.id);
+    return !doc ? 'non' : doc.lu === texteAffiche(item) ? 'ok' : 'revoir';
+  };
+  const edgeVerif = (edge) => {
+    const items = edge.items.map((id) => graph.items[id]).filter((i) => i && i.lu !== undefined && !i.erreur);
+    return { ok: items.filter((i) => verifStatut(i) === 'ok').length, total: items.length };
+  };
+  async function setVerif(item, on, lot) {
+    try {
+      if (cloudOn()) {
+        const ref = cloud.db.doc(`verifications/${docKey(item.id)}`);
+        if (on) await ref.set({ id: item.id, lu: texteAffiche(item), at: new Date().toISOString() });
+        else await ref.delete();
+        return;
+      }
+      if (on) localVerifs.set(item.id, { id: item.id, lu: texteAffiche(item), at: new Date().toISOString() });
+      else localVerifs.delete(item.id);
+      saveLocalVerifs();
+      if (!lot) render();
+    } catch (error) { toast(error.message || 'Vérification non enregistrée.'); }
+  }
+
   function focusNode(id) {
     const svg = $('ig-svg');
     svg.querySelectorAll('.ig-edge[data-from]').forEach((g) => g.classList.toggle('dim', !!id && g.dataset.from !== id && g.dataset.to !== id));
@@ -683,9 +718,23 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     svg.querySelectorAll('.ig-edge.pill').forEach((g) => g.classList.toggle('dim', !edgesOn.has(g.dataset.edge)));
   }
 
-  function openEdge(id) { current = { kind: 'edge', id }; openPanel(); }
-  function openNode(id) { current = { kind: 'node', id }; openPanel(); }
+  const panelHistory = [];
+  function go(next) {
+    if (current && $('ig-panel').classList.contains('open') && !(current.kind === next.kind && current.id === next.id)) panelHistory.push(current);
+    current = next;
+    openPanel();
+  }
+  function openEdge(id) { go({ kind: 'edge', id }); }
+  function openNode(id) { go({ kind: 'node', id }); }
+  function goBack() {
+    const prev = panelHistory.pop();
+    if (!prev) return closePanel();
+    current = prev;
+    if (prev.kind === 'search') $('ig-search').value = prev.id;
+    openPanel();
+  }
   function openPanel() {
+    $('ig-back').hidden = !panelHistory.length;
     $('ig-panel').classList.add('open');
     $('ig-panel').setAttribute('aria-hidden', 'false');
     refreshPanel();
@@ -695,6 +744,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     $('ig-panel').classList.remove('open');
     $('ig-panel').setAttribute('aria-hidden', 'true');
     current = null;
+    panelHistory.length = 0;
+    $('ig-back').hidden = true;
     $('ig-svg').querySelectorAll('.ig-edge.on').forEach((g) => g.classList.remove('on'));
   }
 
@@ -709,6 +760,17 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       if (!e) return closePanel();
       $('ig-ptitle').textContent = `${label(e.from)} → ${label(e.to)}`;
       $('ig-psub').textContent = [e.note, `${e.items.length} instruction(s)`].filter(Boolean).join(' · ');
+      const ver = edgeVerif(e);
+      if (ver.total) {
+        const tout = ver.ok === ver.total;
+        body.append(el('button', { class: 'btn ghost', type: 'button', text: tout ? 'Tout retirer' : 'Tout marquer vérifié', onclick: async (ev) => {
+          ev.currentTarget.disabled = true;
+          const lot = e.items.map((id) => graph.items[id]).filter((i) => i && i.lu !== undefined && !i.erreur && (verifStatut(i) === 'ok') === tout);
+          for (const i of lot) await setVerif(i, !tout, true);
+          render();
+          toast(`${lot.length} instruction(s) ${tout ? 'retirée(s)' : 'marquée(s) vérifiée(s)'}.`);
+        } }));
+      }
       if (!e.items.length) body.append(el('p', { class: 'ig-note', text: 'Ce lien n’envoie pas de texte par lui-même : il déclenche ou alimente la fonctionnalité suivante. Ouvrez l’arête suivante pour lire les instructions.' }));
       e.items.forEach((id) => body.append(itemCard(graph.items[id])));
     } else if (current.kind === 'node') {
@@ -745,9 +807,11 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       ontoggle: (ev) => (ev.target.open ? openItems.add(item.id) : openItems.delete(item.id)) });
     const edge = withEdge ? graph.edges.find((e) => e.items.includes(item.id)) : null;
     const pend = cloudOn() && !config ? cloud.pending.get(item.id) : null;
+    const vs = item.lu === undefined ? 'non' : verifStatut(item);
+    const vbadge = vs === 'non' ? null : el('span', { class: vs === 'ok' ? 'badge ok' : 'badge mod', style: 'margin-left:0', text: vs === 'ok' ? 'vérifiée' : 'à revérifier' });
     const badge = pend?.statut === 'envoyee' ? ['mod', 'envoyée en PR'] : pend ? ['mod', 'modifiée, à commiter'] : item.modifie ? ['mod', 'modifiée, à commiter'] : config ? ['', 'réglage, non lu par l’agent'] : item.lu === undefined ? ['', 'sans texte'] : ['agent', 'lu par l’agent'];
     details.append(el('summary', {},
-      el('div', { class: 't' }, el('span', { text: item.titre || item.id }), el('span', { class: `badge ${badge[0]}`, text: badge[1] })),
+      el('div', { class: 't' }, el('span', { text: item.titre || item.id }), el('span', { class: `badge ${badge[0]}`, text: badge[1] }), vbadge),
       item.quand ? el('div', { class: 'q', text: item.quand }) : null,
       edge ? el('div', { class: 'q', text: `${label(edge.from)} → ${label(edge.to)}` }) : null));
     if (item.erreur) {
@@ -774,6 +838,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       if (editable) acts.append(el('button', { class: 'btn', type: 'button', text: 'Modifier ce texte', onclick: showEditor }));
       if (editable && pend) acts.append(el('button', { class: 'btn ghost', type: 'button', text: 'Annuler ma modification', onclick: () => save(item.lu) }));
       else if (editable && item.modifie && mode === 'live') acts.append(el('button', { class: 'btn ghost', type: 'button', text: 'Revenir à la version commitée', onclick: () => save(item.luCommit) }));
+      acts.append(el('button', { class: 'btn ghost', type: 'button', text: vs === 'ok' ? 'Retirer la vérification' : 'Marquer vérifiée', onclick: () => setVerif(item, vs !== 'ok') }));
       if (acts.childNodes.length) body.append(acts);
       if (pend?.statut === 'envoyee') body.append(el('div', { class: 'hint' }, 'Envoyée à GitHub : elle sera dans la carte une fois la PR mergée et la carte republiée. ', el('a', { href: RUNS, target: '_blank', rel: 'noopener', text: 'Suivre l’exécution' })));
       if (pend) body.append(el('details', { class: 'code' }, el('summary', { text: 'Version actuelle du code' }), el('div', { class: 'lu old', text: item.lu })));
@@ -841,16 +906,66 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     return details;
   }
 
-  $('ig-commit').addEventListener('click', () => {
+  async function accesGitHub() {
+    const perms = await Promise.resolve(window.claude?.use?.('permissions')).catch(() => null);
+    if (!perms) return true;
+    const name = `mcp:${GH.server}`;
+    let st = await perms.state(name).catch(() => 'prompt');
+    if (st === 'prompt') st = (await perms.request([name]).catch(() => ({})))[name] || 'prompt';
+    if (st === 'granted' || st === 'prompt') return true;
+    if (st === 'denied') {
+      toast('Accès au connecteur GitHub refusé pour cette carte : autorisez-le dans le menu Permissions qui s’ouvre.');
+      await perms.manage().catch(() => {});
+      return (await perms.state(name).catch(() => 'denied')) === 'granted';
+    }
+    toast('Connecteur GitHub introuvable dans claude.ai : utilisez « Commiter sur GitHub ».');
+    return false;
+  }
+
+  function ticketGitHub(lot) {
+    const json = JSON.stringify(lot.map((p) => ({ id: p.id, lu: p.lu, expected: p.expected })), null, 1);
+    const titre = `[carte-outils] ${lot.length} instruction${lot.length > 1 ? 's' : ''} modifiée${lot.length > 1 ? 's' : ''}`;
+    const intro = `Envoyé depuis la Carte des outils. En créant ce ticket, le workflow « Carte des outils : commit » applique ces modifications et ouvre une PR.\n\n${lot.map((p) => `- ${p.titre || p.id}`).join('\n')}\n\n`;
+    const corps = `${intro}\`\`\`json\n${json}\n\`\`\``;
+    const base = `https://github.com/${GH.owner}/${GH.repo}/issues/new?title=${encodeURIComponent(titre)}&body=`;
+    const url = base + encodeURIComponent(corps);
+    if (url.length <= 7500) return { url, corps, long: false };
+    return { url: base + encodeURIComponent('Collez ici le texte copié depuis la Carte des outils.'), corps, long: true };
+  }
+
+  async function marquerEnvoye(lot, via) {
+    const at = new Date().toISOString();
+    for (const p of lot) await cloud.db.doc(`modifications/${docKey(p.id)}`).set({ ...p, statut: 'envoyee', envoyeeLe: at }).catch(() => {});
+    await cloud.db.doc('etat/commit').set({ statut: 'envoye', via, n: lot.length, at }).catch(() => {});
+  }
+
+  $('ig-gh-issue').addEventListener('click', () => {
+    const lot = enAttente();
+    const t = ticketGitHub(lot);
+    if (t.long) {
+      try { navigator.clipboard?.writeText(t.corps).catch(() => {}); } catch {}
+      $('ig-gh-text').value = t.corps;
+      $('ig-gh-copy').hidden = false;
+    } else $('ig-dlg').classList.remove('open');
+    marquerEnvoye(lot, 'ticket').then(() => toast('Créez le ticket sur GitHub : la PR s’ouvre une minute après.'));
+  });
+
+  $('ig-commit').addEventListener('click', async () => {
     const ids = cloudOn() ? enAttente().map((p) => p.id) : graph.status?.modifiees || [];
     $('ig-cmsg').hidden = cloudOn();
-    if (cloudOn()) $('ig-dnote').textContent = 'Le script GitHub Actions « Carte des outils : commit » va écrire ces instructions dans le code, vérifier la syntaxe, commiter sur une nouvelle branche et ouvrir une PR vers main. Rien d’autre n’est modifié.';
-    else { $('ig-dnote').replaceChildren('Seules ces instructions sont commitées, sur la branche ', el('code', { id: 'ig-branch' }), '. Le reste des fichiers, même modifié, n’est pas touché.'); }
+    if (!cloudOn()) { $('ig-dnote').replaceChildren('Seules ces instructions sont commitées, sur la branche ', el('code', { id: 'ig-branch' }), '. Le reste des fichiers, même modifié, n’est pas touché.'); }
     if (!cloudOn()) $('ig-branch').textContent = graph.status?.branch || '';
     $('ig-files').replaceChildren(...ids.map((id) => el('li', { text: graph.items[id]?.titre || id })));
     $('ig-cmsg').value = '';
+    $('ig-gh-copy').hidden = true;
+    $('ig-gh-issue').hidden = !cloudOn();
+    if (cloudOn()) $('ig-gh-issue').href = ticketGitHub(enAttente()).url;
+    $('ig-do-commit').hidden = cloudOn() && !cloud.mcp;
+    $('ig-do-commit').textContent = cloudOn() ? 'Via le connecteur GitHub' : 'Commiter';
+    $('ig-do-commit').className = cloudOn() ? 'btn ghost' : 'btn primary';
+    if (cloudOn()) $('ig-dnote').textContent = '« Commiter sur GitHub » ouvre un ticket prérempli sur GitHub : cliquez sur « Create » (ou « Submit new issue ») et le workflow « Carte des outils : commit » écrit ces instructions dans le code, vérifie la syntaxe et ouvre une PR vers main. Rien d’autre n’est modifié.';
     $('ig-dlg').classList.add('open');
-    (cloudOn() ? $('ig-do-commit') : $('ig-cmsg')).focus();
+    (cloudOn() ? $('ig-gh-issue') : $('ig-cmsg')).focus();
   });
   $('ig-cancel').addEventListener('click', () => $('ig-dlg').classList.remove('open'));
   $('ig-dlg').addEventListener('click', (ev) => { if (ev.target === $('ig-dlg')) $('ig-dlg').classList.remove('open'); });
@@ -858,18 +973,18 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     if (cloudOn()) {
       const btn = $('ig-do-commit');
       btn.disabled = true;
+      if (!(await accesGitHub())) { btn.disabled = false; return; }
       try {
         const lot = enAttente();
         const modifications = JSON.stringify(lot.map((p) => ({ id: p.id, lu: p.lu, expected: p.expected })));
         if (modifications.length > 60000) throw new Error('Trop de texte pour un seul commit : commitez en plusieurs fois.');
-        await cloud.mcp.callTool(GH.server, 'actions_run_trigger', { method: 'run_workflow', owner: GH.owner, repo: GH.repo, workflow_id: GH.workflow, ref: GH.ref, inputs: { modifications } });
         $('ig-dlg').classList.remove('open');
-        const at = new Date().toISOString();
-        for (const p of lot) await cloud.db.doc(`modifications/${docKey(p.id)}`).set({ ...p, statut: 'envoyee', envoyeeLe: at }).catch(() => {});
-        await cloud.db.doc('etat/commit').set({ statut: 'envoye', n: lot.length, at }).catch(() => {});
+        toast('Envoi à GitHub… Si claude.ai demande d’autoriser le connecteur GitHub, acceptez.');
+        await cloud.mcp.callTool(GH.server, 'actions_run_trigger', { method: 'run_workflow', owner: GH.owner, repo: GH.repo, workflow_id: GH.workflow, ref: GH.ref, inputs: { modifications } });
+        await marquerEnvoye(lot, 'connecteur');
         toast('Commit envoyé à GitHub : la PR s’ouvre dans une minute environ.');
       } catch (error) {
-        const why = { server_not_connected: 'Ajoutez le connecteur GitHub dans les réglages de claude.ai.', needs_reauth: 'Reconnectez le connecteur GitHub dans les réglages de claude.ai.', not_granted: 'Autorisation refusée pour le connecteur GitHub.' }[error?.code];
+        const why = { server_not_connected: 'Ajoutez le connecteur GitHub dans les réglages de claude.ai.', needs_reauth: 'Reconnectez le connecteur GitHub dans les réglages de claude.ai.', not_granted: 'Autorisation refusée pour le connecteur GitHub.', not_in_manifest: 'Le connecteur GitHub est désactivé pour cette carte : réactivez-le dans le menu Permissions de l’artefact.', approval_required: 'claude.ai attend votre accord pour le connecteur GitHub : recliquez sur Commiter et acceptez.', selection_required: 'Plusieurs connecteurs s’appellent « GitHub » : choisissez-en un quand claude.ai le demande, puis recliquez.' }[error?.code] || (error?.retryable || /not confirmed/i.test(error?.message || '') ? 'L’accès au connecteur GitHub n’a pas encore été confirmé : recliquez sur Commiter et acceptez la demande de claude.ai.' : null);
         const raw = `${error?.message || ''} ${JSON.stringify(error?.result || '')}`;
         const msg = why || (/404|not found|does not exist/i.test(raw) ? 'GitHub ne trouve pas le workflow carte-outils-commit.yml sur main : la PR qui l’ajoute doit être mergée.' : `Échec du lancement : ${error?.message || error}`);
         await cloud.db.doc('etat/commit').set({ statut: 'echec', erreur: msg, code: String(error?.code || ''), at: new Date().toISOString() }).catch(() => {});
@@ -886,6 +1001,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   });
 
   $('ig-close').addEventListener('click', closePanel);
+  $('ig-back').addEventListener('click', goBack);
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { $('ig-dlg').classList.remove('open'); closePanel(); } });
   $('ig-reload').addEventListener('click', () => load().then(() => toast(mode === 'snap' ? 'Pas de serveur local : instantané affiché.' : 'Code relu.')));
   let searchTimer;
@@ -921,6 +1037,10 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       }
       refresh();
     }, () => toast('Modifications enregistrées illisibles pour le moment.'));
+    db.collection('verifications').onSnapshot((snap) => {
+      cloud.verifs = new Map(snap.docs.map((d) => d.data()).filter((d) => d && typeof d.id === 'string' && typeof d.lu === 'string').map((d) => [d.id, d]));
+      refresh();
+    }, () => toast('Vérifications illisibles pour le moment.'));
     db.doc('etat/commit').onSnapshot((snap) => { cloud.etat = snap.data() || null; setMode(); }, () => {});
     refresh();
   }

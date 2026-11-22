@@ -7,10 +7,13 @@ on:
         description: 'Tableau JSON [{"id","lu","expected"}] envoyé par la Carte des outils'
         required: true
         type: string
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 concurrency:
   group: carte-outils-commit
@@ -18,6 +21,10 @@ concurrency:
 
 jobs:
   appliquer:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (startsWith(github.event.issue.title, '[carte-outils]') &&
+       contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -32,13 +39,17 @@ jobs:
       - name: Installer TypeScript pour la vérification de syntaxe
         run: npm install --prefix "$RUNNER_TEMP/ts" --no-audit --no-fund typescript@5.9.3
 
+      - name: Lire les modifications
+        env:
+          MODIFICATIONS: ${{ inputs.modifications }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: node scripts/carte-outils/lire-modifications.mjs > "$RUNNER_TEMP/modifications.json"
+
       - name: Appliquer les modifications
         id: appliquer
         env:
-          MODIFICATIONS: ${{ inputs.modifications }}
           NODE_PATH: ${{ runner.temp }}/ts/node_modules
         run: |
-          printf '%s' "$MODIFICATIONS" > "$RUNNER_TEMP/modifications.json"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           branch="carte-outils/${GITHUB_RUN_ID}"
@@ -52,15 +63,34 @@ jobs:
           echo "committed=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')).commit.committed" "$RUNNER_TEMP/resultat.json")" >> "$GITHUB_OUTPUT"
 
       - name: Ouvrir la PR
+        id: pr
         if: steps.appliquer.outputs.committed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           BRANCH: ${{ steps.appliquer.outputs.branch }}
+          BASE: ${{ github.event.repository.default_branch }}
         run: |
           git push origin "$BRANCH"
-          gh pr create --base "$GITHUB_REF_NAME" --head "$BRANCH" \
+          url=$(gh pr create --base "$BASE" --head "$BRANCH" \
             --title "chore(carte-outils): modifier des instructions depuis la carte" \
-            --body-file "$RUNNER_TEMP/pr.md"
+            --body-file "$RUNNER_TEMP/pr.md")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: Répondre sur le ticket
+        if: always() && github.event_name == 'issues'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          PR_URL: ${{ steps.pr.outputs.url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -n "$PR_URL" ]; then
+            { echo "PR ouverte : $PR_URL"; echo; cat "$RUNNER_TEMP/pr.md"; } > "$RUNNER_TEMP/reponse.md"
+          else
+            { echo "Aucune modification appliquée. Détail : $RUN_URL"; echo; cat "$RUNNER_TEMP/pr.md" 2>/dev/null || true; } > "$RUNNER_TEMP/reponse.md"
+          fi
+          gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/reponse.md"
+          gh issue close "$ISSUE"
 
       - name: Signaler un commit vide
         if: steps.appliquer.outputs.committed != 'true'
