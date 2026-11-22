@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { agentApi } from '@/modules/piecemaker-workspace-tabs';
@@ -37,7 +36,7 @@ export default function SidebarCentralAgentButton({ onSessionSelect, t }: Sideba
         disabled={opening}
         onClick={() => void open()}
       >
-        <Sparkles className="h-4 w-4 text-primary" />
+        <span aria-hidden="true" className="h-4 w-4 shrink-0 bg-primary" style={{ mask: "url(/logo-32.png) center / contain no-repeat" }} />
         {t('sessions.centralAgent')}
       </button>
       {error && <p className="px-1 pt-1 text-xs text-destructive">{error}</p>}
