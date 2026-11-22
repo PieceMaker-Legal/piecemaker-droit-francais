@@ -19,7 +19,7 @@ export function searchDecision(payload, { home = os.homedir() } = {}) {
   if (!researchMakerInstalled(payload.cwd, home)) return null;
   const reason = 'Recherche Légifrance réservée au sous-agent research-maker ; pour examiner tout un point de droit, '
     + 'préparez une tabular review en mode recherche (Feature quickstart intent=review). Déléguez la question, '
-    + 'puis relisez chaque source qu’il cite avec consulter_article ou consulter_decision. (essai carte)';
+    + 'puis relisez chaque source qu’il cite avec consulter_article ou consulter_decision.';
   return {
     hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason },
     systemMessage: reason,
