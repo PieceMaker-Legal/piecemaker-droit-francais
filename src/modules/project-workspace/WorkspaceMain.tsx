@@ -20,7 +20,7 @@ import WorkspaceHeader from '@/modules/project-workspace/WorkspaceHeader';
 import WorkspaceStateView from '@/modules/project-workspace/WorkspaceStateView';
 import WorkspaceErrorBoundary from '@/modules/project-workspace/WorkspaceErrorBoundary';
 import { withWorkspacePanels } from '@/modules/piecemaker-workspace-tabs';
-import { useSubagentFileOpen } from '@/modules/piecemaker-workspace-tabs';
+import { useNestedWorkspace, useSubagentFileOpen } from '@/modules/piecemaker-workspace-tabs';
 
 type WorkspaceMainProps = {
   selectedProject: Project | null;
@@ -75,7 +75,11 @@ function WorkspaceMain({
   // tear down the instance and re-fetch the bundle.
   const [visitedPluginNames, setVisitedPluginNames] = useState<string[]>([]);
 
-  useTaskMasterProjectSync(selectedProject);
+  // TaskMaster suit un seul projet pour toute l'app : le fil ouvert depuis
+  // l'agent central ne doit pas le lui disputer, sinon les deux espaces se le
+  // renvoient en boucle (des centaines de requêtes par seconde).
+  const nested = useNestedWorkspace();
+  useTaskMasterProjectSync(nested ? null : selectedProject);
   useSelectedDossierRegistration(selectedProject);
   // The folder an in-chat `path/` reference asked to reveal. Held as an object
   // so that re-clicking the same folder is a new request the tree acts on.
