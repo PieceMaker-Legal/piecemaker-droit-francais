@@ -25,17 +25,18 @@ async function loadWindowManager(platform) {
 }
 
 for (const platform of ['win32', 'darwin', 'linux']) {
+  const titlebarHeight = platform === 'darwin' ? 0 : 44;
   test(`${platform} uses the CloudCLI content bounds beneath the visible title bar`, async () => {
     const manager = await loadWindowManager(platform);
     const bounds = () => JSON.parse(JSON.stringify(manager.getContentViewBounds()));
-    assert.deepEqual(bounds(), { x: 0, y: 44, width: 0, height: 0 });
+    assert.deepEqual(bounds(), { x: 0, y: titlebarHeight, width: 0, height: 0 });
     let size = [1440, 960];
     manager.mainWindow = { getContentSize: () => size };
-    assert.deepEqual(bounds(), { x: 0, y: 44, width: 1440, height: 916 });
+    assert.deepEqual(bounds(), { x: 0, y: titlebarHeight, width: 1440, height: 960 - titlebarHeight });
     size = [1920, 1080];
-    assert.deepEqual(bounds(), { x: 0, y: 44, width: 1920, height: 1036 });
+    assert.deepEqual(bounds(), { x: 0, y: titlebarHeight, width: 1920, height: 1080 - titlebarHeight });
     size = [100, 20];
-    assert.deepEqual(bounds(), { x: 0, y: 44, width: 100, height: 0 });
+    assert.deepEqual(bounds(), { x: 0, y: titlebarHeight, width: 100, height: Math.max(0, 20 - titlebarHeight) });
   });
 }
 
@@ -44,6 +45,6 @@ test('the launcher retains the visible CloudCLI title bar and system button marg
   assert.match(titlebar, /display: flex;/);
   assert.match(titlebar, /height: 44px;/);
   assert.match(titlebar, /-webkit-app-region: drag;/);
-  assert.match(styles, /body\.mac \.titlebar \{\s+padding-left: 92px;/);
+  assert.match(styles, /body\.mac \.titlebar \{\s+display: none;\s+padding-left: 92px;/);
   assert.match(styles, /body\.win \.titlebar \{\s+padding-right: 150px;/);
 });
