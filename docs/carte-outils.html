@@ -841,7 +841,24 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     return details;
   }
 
-  $('ig-commit').addEventListener('click', () => {
+  async function accesGitHub() {
+    const perms = await Promise.resolve(window.claude?.use?.('permissions')).catch(() => null);
+    if (!perms) return true;
+    const name = `mcp:${GH.server}`;
+    let st = await perms.state(name).catch(() => 'prompt');
+    if (st === 'prompt') st = (await perms.request([name]).catch(() => ({})))[name] || 'prompt';
+    if (st === 'granted' || st === 'prompt') return true;
+    if (st === 'denied') {
+      toast('Accès au connecteur GitHub refusé pour cette carte : autorisez-le dans le menu Permissions qui s’ouvre.');
+      await perms.manage().catch(() => {});
+      return (await perms.state(name).catch(() => 'denied')) === 'granted';
+    }
+    toast('Connecteur GitHub introuvable : ajoutez-le dans claude.ai, Réglages, Connecteurs, sous le nom « GitHub ».');
+    return false;
+  }
+
+  $('ig-commit').addEventListener('click', async () => {
+    if (cloudOn() && !(await accesGitHub())) return;
     const ids = cloudOn() ? enAttente().map((p) => p.id) : graph.status?.modifiees || [];
     $('ig-cmsg').hidden = cloudOn();
     if (cloudOn()) $('ig-dnote').textContent = 'Le script GitHub Actions « Carte des outils : commit » va écrire ces instructions dans le code, vérifier la syntaxe, commiter sur une nouvelle branche et ouvrir une PR vers main. Rien d’autre n’est modifié.';
@@ -862,14 +879,15 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         const lot = enAttente();
         const modifications = JSON.stringify(lot.map((p) => ({ id: p.id, lu: p.lu, expected: p.expected })));
         if (modifications.length > 60000) throw new Error('Trop de texte pour un seul commit : commitez en plusieurs fois.');
-        await cloud.mcp.callTool(GH.server, 'actions_run_trigger', { method: 'run_workflow', owner: GH.owner, repo: GH.repo, workflow_id: GH.workflow, ref: GH.ref, inputs: { modifications } });
         $('ig-dlg').classList.remove('open');
+        toast('Envoi à GitHub… Si claude.ai demande d’autoriser le connecteur GitHub, acceptez.');
+        await cloud.mcp.callTool(GH.server, 'actions_run_trigger', { method: 'run_workflow', owner: GH.owner, repo: GH.repo, workflow_id: GH.workflow, ref: GH.ref, inputs: { modifications } });
         const at = new Date().toISOString();
         for (const p of lot) await cloud.db.doc(`modifications/${docKey(p.id)}`).set({ ...p, statut: 'envoyee', envoyeeLe: at }).catch(() => {});
         await cloud.db.doc('etat/commit').set({ statut: 'envoye', n: lot.length, at }).catch(() => {});
         toast('Commit envoyé à GitHub : la PR s’ouvre dans une minute environ.');
       } catch (error) {
-        const why = { server_not_connected: 'Ajoutez le connecteur GitHub dans les réglages de claude.ai.', needs_reauth: 'Reconnectez le connecteur GitHub dans les réglages de claude.ai.', not_granted: 'Autorisation refusée pour le connecteur GitHub.' }[error?.code];
+        const why = { server_not_connected: 'Ajoutez le connecteur GitHub dans les réglages de claude.ai.', needs_reauth: 'Reconnectez le connecteur GitHub dans les réglages de claude.ai.', not_granted: 'Autorisation refusée pour le connecteur GitHub.', not_in_manifest: 'Le connecteur GitHub est désactivé pour cette carte : réactivez-le dans le menu Permissions de l’artefact.', approval_required: 'claude.ai attend votre accord pour le connecteur GitHub : recliquez sur Commiter et acceptez.', selection_required: 'Plusieurs connecteurs s’appellent « GitHub » : choisissez-en un quand claude.ai le demande, puis recliquez.' }[error?.code] || (error?.retryable || /not confirmed/i.test(error?.message || '') ? 'L’accès au connecteur GitHub n’a pas encore été confirmé : recliquez sur Commiter et acceptez la demande de claude.ai.' : null);
         const raw = `${error?.message || ''} ${JSON.stringify(error?.result || '')}`;
         const msg = why || (/404|not found|does not exist/i.test(raw) ? 'GitHub ne trouve pas le workflow carte-outils-commit.yml sur main : la PR qui l’ajoute doit être mergée.' : `Échec du lancement : ${error?.message || error}`);
         await cloud.db.doc('etat/commit').set({ statut: 'echec', erreur: msg, code: String(error?.code || ''), at: new Date().toISOString() }).catch(() => {});
