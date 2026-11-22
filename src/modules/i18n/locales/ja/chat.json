@@ -4,13 +4,6 @@
     "copied": "コピーしました",
     "copyCode": "コードをコピー"
   },
-  "copyMessage": {
-    "copy": "メッセージをコピー",
-    "copied": "メッセージをコピーしました",
-    "selectFormat": "コピー形式を選択",
-    "copyAsMarkdown": "Markdownとしてコピー",
-    "copyAsText": "テキストとしてコピー"
-  },
   "messageTypes": {
     "user": "U",
     "error": "エラー",

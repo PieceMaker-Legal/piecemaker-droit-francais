@@ -4,13 +4,6 @@
     "copied": "Kopyalandı",
     "copyCode": "Kodu kopyala"
   },
-  "copyMessage": {
-    "copy": "Mesajı kopyala",
-    "copied": "Mesaj kopyalandı",
-    "selectFormat": "Kopyalama biçimini seç",
-    "copyAsMarkdown": "Markdown olarak kopyala",
-    "copyAsText": "Metin olarak kopyala"
-  },
   "messageTypes": {
     "user": "S",
     "error": "Hata",

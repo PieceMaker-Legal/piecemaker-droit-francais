@@ -4,15 +4,6 @@
     "copied": "הועתק",
     "copyCode": "העתקת קוד"
   },
-  "copyMessage": {
-    "copy": "העתקת הודעה",
-    "copied": "ההודעה הועתקה",
-    "selectFormat": "בחירת פורמט העתקה",
-    "copyAsMarkdown": "העתקה כ-Markdown",
-    "copyAsText": "העתקה כטקסט",
-    "markdownShort": "MD",
-    "textShort": "TXT"
-  },
   "messageTypes": {
     "user": "U",
     "error": "שגיאה",

@@ -4,15 +4,6 @@
     "copied": "Copiado",
     "copyCode": "Copiar código"
   },
-  "copyMessage": {
-    "copy": "Copiar mensaje",
-    "copied": "Mensaje copiado",
-    "selectFormat": "Selecciona el formato de copia",
-    "copyAsMarkdown": "Copiar como markdown",
-    "copyAsText": "Copiar como texto",
-    "markdownShort": "MD",
-    "textShort": "TXT"
-  },
   "messageTypes": {
     "user": "U",
     "error": "Error",

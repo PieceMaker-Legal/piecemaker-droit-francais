@@ -4,13 +4,6 @@
     "copied": "已複製",
     "copyCode": "複製程式碼"
   },
-  "copyMessage": {
-    "copy": "複製訊息",
-    "copied": "訊息已複製",
-    "selectFormat": "選擇複製格式",
-    "copyAsMarkdown": "複製為 Markdown",
-    "copyAsText": "複製為純文字"
-  },
   "messageTypes": {
     "user": "U",
     "error": "錯誤",

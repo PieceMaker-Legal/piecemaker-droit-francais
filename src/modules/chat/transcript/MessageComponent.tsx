@@ -11,7 +11,6 @@ import ChatMessageImages from '@/modules/chat/transcript/ChatMessageImages';
 import ChatMessageFiles from '@/modules/chat/transcript/ChatMessageFiles';
 import { Markdown } from '@/modules/chat/transcript/Markdown';
 import StreamingMarkdown from '@/modules/chat/transcript/StreamingMarkdown';
-import MessageCopyControl from '@/modules/chat/transcript/MessageCopyControl';
 import MessageModelLabel from '@/modules/chat/transcript/MessageModelLabel';
 import MessageSpeakControl from '@/modules/chat/transcript/MessageSpeakControl';
 import { useIsExportingTranscript } from '@/modules/chat/context/TranscriptRenderContext';
@@ -108,10 +107,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
   const isCommandOrFileEditToolResponse = Boolean(
     message.isToolUse && COPY_HIDDEN_TOOL_NAMES.has(String(message.toolName || ''))
   );
-  // Copy and speak are affordances for a live conversation. In an exported
-  // document there is nothing to click, and rendering them statically would
-  // also pull in browser-only voice state that a document render has no
-  // provider for.
+  // Speak is an affordance for a live conversation. In an exported document
+  // there is nothing to click, and rendering it statically would also pull in
+  // browser-only voice state that a document render has no provider for.
   const isExporting = useIsExportingTranscript();
   const shouldShowAssistantActions = !isExporting &&
     message.type === 'assistant' &&
@@ -138,8 +136,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     const isPendingAnswer = isAnswerRow && message.sideQuestion.status === 'running' && !String(message.content || '').trim();
     const railClassName = 'border-l-2 border-l-purple-500 bg-purple-500/5 px-3 dark:border-l-purple-400 dark:bg-purple-400/10';
     return (
-      <MessageCopyControl
-        content={isExporting ? undefined : isAnswerRow ? formattedMessageContent : userCopyContent}
+      <div
         data-message-timestamp={message.timestamp || undefined}
         className="chat-message side-question w-full px-3 sm:px-0"
       >
@@ -177,18 +174,12 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
             </div>
           </div>
         )}
-      </MessageCopyControl>
+      </div>
     );
   }
 
-  const copyContent = message.type === 'user' && !isExporting
-    ? userCopyContent
-    : shouldShowAssistantActions && !message.compact && !message.contextCleared && !message.isTaskNotification
-      ? assistantCopyContent
-      : undefined;
   return (
-    <MessageCopyControl
-      content={copyContent}
+    <div
       data-message-timestamp={message.timestamp || undefined}
       className={`chat-message ${message.type} ${isGrouped ? 'grouped' : ''} ${message.type === 'user' ? 'flex justify-end px-3 sm:px-0' : 'px-3 sm:px-0'}`}
     >
@@ -428,11 +419,9 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
               <Reasoning defaultOpen={isExporting}>
                 <ReasoningTrigger />
                 <ReasoningContent>
-                  <MessageCopyControl content={isExporting ? undefined : String(message.content || '')}>
-                    <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
-                      {message.content}
-                    </Markdown>
-                  </MessageCopyControl>
+                  <Markdown className="prose prose-sm prose-gray max-w-none font-serif dark:prose-invert">
+                    {message.content}
+                  </Markdown>
                 </ReasoningContent>
               </Reasoning>
             ) : (
@@ -516,8 +505,8 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                 )}
                 {/* Which model actually answered, as the provider recorded it
                     on this row. Provenance rather than an affordance, so unlike
-                    copy and speak it is not gated on the copy control, and an
-                    exported transcript keeps it wherever the footer renders. */}
+                    speak it is not gated on the export, and an exported
+                    transcript keeps it wherever the footer renders. */}
                 <MessageModelLabel model={message.model} />
                 {!isGrouped && formattedTime && <span>{formattedTime}</span>}
               </div>
@@ -525,7 +514,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
           </div>
         </div>
       )}
-    </MessageCopyControl>
+    </div>
   );
 });
 

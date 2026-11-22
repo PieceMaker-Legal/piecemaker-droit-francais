@@ -4,13 +4,6 @@
     "copied": "Disalin",
     "copyCode": "Salin kode"
   },
-  "copyMessage": {
-    "copy": "Salin pesan",
-    "copied": "Pesan disalin",
-    "selectFormat": "Pilih format salinan",
-    "copyAsMarkdown": "Salin sebagai Markdown",
-    "copyAsText": "Salin sebagai teks"
-  },
   "messageTypes": {
     "user": "P",
     "error": "Kesalahan",
