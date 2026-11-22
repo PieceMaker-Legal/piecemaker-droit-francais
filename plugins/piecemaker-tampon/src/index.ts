@@ -59,7 +59,7 @@ const STYLE_TEXT = `
   .pm-tampon * { box-sizing: border-box; }
   .pm-tampon__head { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; width: 100%; max-width: 48rem; margin: 0 auto; padding: 16px 16px 12px; }
   .pm-tampon__head-text { flex: 1; min-width: 0; }
-  .pm-tampon__title { margin: 0; font-family: var(--piecemaker-font-editorial, EB Garamond, Georgia, serif); font-size: 1.4rem; font-weight: 500; letter-spacing: -.02em; }
+  .pm-tampon__title { margin: 0; font-family: var(--piecemaker-font-editorial,Inter,ui-sans-serif,system-ui,sans-serif); font-size: 1.4rem; font-weight: 500; letter-spacing: -.02em; }
   .pm-tampon__muted { margin: 0; color: hsl(var(--muted-foreground, 220 9% 46%)); font-size: 13px; }
   .pm-tampon__error { margin: 0; color: hsl(var(--destructive, 0 72% 51%)); font-size: 13px; }
   .pm-tampon__stamp { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 12px 4px 4px; border: 1px solid hsl(var(--border, 220 13% 91%)); border-radius: 999px; background: hsl(var(--card, 0 0% 100%)); color: inherit; font: inherit; font-size: 13px; cursor: pointer; }

@@ -1,6 +1,6 @@
 export const STYLES = `
 .pme{
-  --font-sans:"Anthropic Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --text-caption:400 .75rem/1.0625rem var(--font-sans);
   --text-footnote:400 .8125rem/1.0625rem var(--font-sans);
   --text-body:400 .875rem/1.25rem var(--font-sans);
@@ -173,7 +173,7 @@ button.pme-pill:hover{filter:brightness(.96)}
 .pme-drawer-head{display:flex;align-items:flex-start;gap:8px;padding:20px 20px 16px;border-bottom:1px solid var(--border)}
 .pme-drawer-titles{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0}
 .pme-drawer-eyebrow{font:var(--text-caption);color:var(--text-muted)}
-.pme-drawer-title{font:500 1.25rem/1.625rem var(--font-eb-garamond,"EB Garamond"),Georgia,serif}
+.pme-drawer-title{font:500 1.25rem/1.625rem var(--font-sans)}
 .pme-drawer-tags:empty{display:none}
 .pme-drawer-tags{display:flex;gap:6px}
 .pme-drawer-body{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:16px;font:var(--text-footnote);font-family:var(--font-sans)}

@@ -80,7 +80,7 @@ export const PLUGIN_STYLES = `
 .pmd-content{min-width:0;min-height:0;flex:1;overflow:auto;padding:22px 24px}
 .pmd-content:has(.pmd-general){padding:18px 22px}
 .pmd-toolbar{display:flex;align-items:flex-end;gap:12px;margin-bottom:20px}
-.pmd-title{margin:0;font-family:var(--piecemaker-font-editorial,EB Garamond,Georgia,serif);font-size:1.35rem;font-weight:500;letter-spacing:-.02em;color:var(--pmd-ink)}
+.pmd-title{margin:0;font-family:var(--piecemaker-font-editorial,Inter,ui-sans-serif,system-ui,sans-serif);font-size:1.35rem;font-weight:500;letter-spacing:-.02em;color:var(--pmd-ink)}
 .pmd-subtitle{margin-top:4px;color:var(--pmd-muted);font-size:12px}
 .pmd-error{margin:12px 22px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--pmd-danger) 35%,var(--pmd-border));border-radius:10px;background:color-mix(in srgb,var(--pmd-danger) 6%,var(--pmd-surface));color:var(--pmd-danger);font-size:13px}
 .pmd-empty,.pmd-no-parties{min-height:280px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:var(--pmd-muted)}
@@ -172,7 +172,7 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-tiers-toggle{display:flex;min-height:46px;flex-shrink:0;align-items:center;gap:8px;border:0;border-bottom:1px solid var(--pmd-border);background:transparent;color:var(--pmd-text);padding:10px 14px;text-align:left;cursor:pointer}
 .pmd-tiers-toggle:hover{background:var(--pmd-soft)}
 .pmd-tiers-chevron{width:15px;height:15px;flex-shrink:0;color:var(--pmd-muted)}
-.pmd-tiers-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;font-family:var(--piecemaker-font-editorial,EB Garamond,Georgia,serif);font-size:1.05rem;font-weight:500;letter-spacing:-.02em;text-transform:none;color:var(--pmd-ink)}
+.pmd-tiers-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin:0;font-family:var(--piecemaker-font-editorial,Inter,ui-sans-serif,system-ui,sans-serif);font-size:1.05rem;font-weight:500;letter-spacing:-.02em;text-transform:none;color:var(--pmd-ink)}
 .pmd-tiers-count{display:flex;min-width:22px;height:22px;align-items:center;justify-content:center;margin-left:auto;border:1px solid var(--pmd-border);border-radius:999px;background:var(--pmd-soft);color:var(--pmd-muted);font-size:10px;font-weight:500}
 .pmd-tiers-content{display:flex;flex:1;flex-direction:column;gap:8px;min-height:0;overflow:auto;padding:10px;scrollbar-width:thin;scrollbar-color:var(--pmd-border) transparent}
 .pmd-tiers-column[data-collapsed=true] .pmd-tiers-toggle{height:100%;flex-direction:column;justify-content:flex-start;padding:12px 7px;border-bottom:0}
@@ -187,7 +187,7 @@ button.pmd-column-empty small{color:var(--pmd-muted);font-size:11px}
 .pmd-tiers-content>.pmd-profile-card .pmd-profile-kind{font-size:10px}
 .pmd-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:22px}
 .pmd-metric{padding:14px 16px;border:1px solid var(--pmd-border);border-radius:14px;background:var(--pmd-surface);box-shadow:var(--pmd-glass-shadow)}
-.pmd-metric strong{display:block;font-family:var(--piecemaker-font-editorial,EB Garamond,Georgia,serif);font-size:1.6rem;font-weight:500;letter-spacing:-.03em;color:var(--pmd-ink)}
+.pmd-metric strong{display:block;font-family:var(--piecemaker-font-editorial,Inter,ui-sans-serif,system-ui,sans-serif);font-size:1.6rem;font-weight:500;letter-spacing:-.03em;color:var(--pmd-ink)}
 .pmd-metric span{color:var(--pmd-muted);font-size:11px}
 .pmd-okf-graph-wrap{position:relative;display:flex;flex:1;min-height:0;background:var(--pmd-bg);overflow:hidden}
 .pmd-okf-graph-wrap>.pmd-empty{flex:1;min-height:0}
@@ -305,7 +305,7 @@ button.pmd-fact-pill:hover{filter:brightness(.95)}
 .pmd-profile-editor[data-side=premise]{--pmd-profile-tone:var(--pmd-premise);--pmd-profile-tone-ink:var(--pmd-muted)}
 .pmd-relation-open{font:inherit;cursor:pointer}
 .pmd-relation-open:hover{border-color:var(--pmd-muted)}
-.pmd-relation-quote{font-family:var(--piecemaker-font-editorial,EB Garamond,Georgia,serif);font-size:13px;line-height:1.4}
+.pmd-relation-quote{font-family:var(--piecemaker-font-editorial,Inter,ui-sans-serif,system-ui,sans-serif);font-size:13px;line-height:1.4}
 .pmd-profile-editor [hidden]{display:none!important}
 .pmd-profile-editor .pmd-form{gap:12px}
 .pmd-profile-identity{position:relative;display:flex;align-items:center;gap:14px;overflow:hidden;padding:14px 16px;border:1px solid color-mix(in srgb,var(--pmd-profile-tone) 65%,var(--pmd-border));border-radius:12px;background:linear-gradient(135deg,color-mix(in srgb,var(--pmd-profile-tone) 26%,var(--pmd-surface)),color-mix(in srgb,var(--pmd-profile-tone) 10%,var(--pmd-surface)))}
