@@ -294,7 +294,7 @@ function opamInstall({ platformKey, topiary, recipe = catalaRecipe }) {
     const python = run(path.join(compilerBin, 'python3.exe'), ['-c', 'import os; print(os.name)']).trim();
     if (python !== 'posix') throw new Error('La compilation Z3 Windows exige Python Cygwin (posix).');
   }
-  if (opamVar('ocaml-version') !== compiler.replace('ocaml-base-compiler.', '')) throw new Error(`Le switch opam doit utiliser ${compiler}.`);
+  if (opamVar('ocaml:version') !== compiler.replace('ocaml-base-compiler.', '')) throw new Error(`Le switch opam doit utiliser ${compiler}.`);
   const opam = (...args) => run('opam', args, { env, stdio: 'inherit' });
   for (const [name, url] of Object.entries({ ...(platformKey === 'windows' ? windowsPins : {}), ...pins })) opam('pin', 'add', '--no-action', '--yes', name, url);
   let list = packages;
