@@ -417,7 +417,7 @@ function talk(command, env, messages, expected) {
 export async function smokeCatalaPack(packFile, work) {
   const pack = JSON.parse(fs.readFileSync(packFile, 'utf8'));
   const home = path.join(work, 'Profil vide');
-  fs.mkdirSync(home, { recursive: true });
+  for (const folder of ['Local', 'Roaming']) fs.mkdirSync(path.join(home, 'AppData', folder), { recursive: true });
   const env = { ...pack.env, CATALA_STDLIB: path.join(pack.prefix, 'lib', 'catala', 'runtime'), PATH: [...pack.path, ...systemPath()].join(path.delimiter), HOME: home, USERPROFILE: home, LOCALAPPDATA: path.join(home, 'AppData', 'Local'), APPDATA: path.join(home, 'AppData', 'Roaming'), SystemRoot: process.env.SystemRoot, TEMP: os.tmpdir(), TMP: os.tmpdir(), TMPDIR: os.tmpdir(), LANG: 'C.UTF-8' };
   const tool = (name, args, cwd = work) => run(pack.bin[name], args, { cwd, env });
   const results = {};
