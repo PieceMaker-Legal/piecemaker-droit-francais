@@ -100,7 +100,7 @@ export function createServer() {
     get_project_settings: ['Lit les réglages du projet.', {}],
     update_project_settings: ['Modifie les réglages fournis pour le projet.', {
       instructions: z.string().optional(), orchestrator_provider: provider, orchestrator_model: z.string().optional(),
-      default_provider: provider.describe('Fournisseur par défaut des nouveaux fils.'),
+      default_provider: z.enum(['chat', 'claude', 'codex', 'mistral']).optional().describe('Fournisseur par défaut des nouveaux fils ; chat : le même que le chat principal.'),
       default_models: perProvider(text).describe('Modèle des nouveaux fils pour chaque fournisseur.'),
       concurrency: perProvider(positiveInteger).describe('Nombre maximal de fils simultanés par fournisseur.'),
       folders: z.array(text).optional().describe('Dossiers supplémentaires autorisés pour les fils. Tout nouvel accès exige l’accord de l’avocat.'),

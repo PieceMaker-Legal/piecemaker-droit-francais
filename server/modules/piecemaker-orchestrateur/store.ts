@@ -8,7 +8,7 @@ function initialState(): ProjectState {
   return {
     version: 1, revision: 0,
     settings: {
-      instructions: '', defaultProvider: 'auto', orchestratorProvider: 'auto', orchestratorModel: '',
+      instructions: '', defaultProvider: 'chat', orchestratorProvider: 'auto', orchestratorModel: '',
       defaultModels: {}, concurrency: { claude: 3, codex: 3, mistral: 3 }, folders: [], recycleAfter: 60,
     },
     threads: [], messages: [], decisions: [], schedules: [], deliverables: [], lookups: [],
@@ -36,6 +36,7 @@ export function openProjectStore(root: string) {
     write('etat.json', JSON.stringify({ ...state, revision }, null, 2));
     state.revision = revision;
   }
+  if ((state.settings.defaultProvider as string) === 'auto') state.settings.defaultProvider = 'chat';
   const orch = state.orchestrator;
   const legacy = orch.chatSessionId === undefined;
   if (legacy) {
