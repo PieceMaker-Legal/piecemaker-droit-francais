@@ -72,7 +72,9 @@
     "prepublishOnly": "npm run build",
     "postinstall": "node scripts/fix-node-pty.js",
     "prepare": "husky",
-    "update:platform": "./update-platform.sh"
+    "update:platform": "./update-platform.sh",
+    "carte-outils": "node scripts/carte-outils/serve.mjs",
+    "carte-outils:embed": "node scripts/carte-outils/graph.mjs --embed"
   },
   "build": {
     "appId": "ai.cloudcli.desktop",
