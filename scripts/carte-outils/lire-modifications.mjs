@@ -1,6 +1,17 @@
 #!/usr/bin/env node
+import fs from 'node:fs';
+
 const brut = (process.env.MODIFICATIONS || '').trim();
+const fichiers = (process.env.DEMANDES || '').split('\n').map((f) => f.trim()).filter(Boolean);
 let texte = brut;
+if (!texte && fichiers.length) {
+  try {
+    texte = JSON.stringify(fichiers.flatMap((f) => JSON.parse(fs.readFileSync(f, 'utf8'))));
+  } catch {
+    console.error('Fichier de demande illisible ou JSON invalide.');
+    process.exit(1);
+  }
+}
 if (!texte) {
   const corps = (process.env.ISSUE_BODY || '').replace(/\r\n/g, '\n');
   const bloc = corps.match(/```json\n([\s\S]*?)\n```/);
