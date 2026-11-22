@@ -1,16 +1,10 @@
 #!/usr/bin/env node
-// Serveur local de la carte des outils : sert la page, relit le code à chaque
-// requête, écrit les instructions modifiées et commite.
-// Écoute uniquement sur 127.0.0.1. Les écritures exigent le jeton glissé dans la
-// page servie : une autre page web ne peut pas modifier le dépôt.
-//
-// Usage : npm run carte-outils   (ouvre http://127.0.0.1:4785)
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { ROOT, PAGE, buildGraph, applyEdit, commitChanges, status, diff } from './graph.mjs';
+import { ROOT, PAGE, buildGraph, applyEdit, commitChanges, status } from './graph.mjs';
 
 const port = Number(process.env.CARTE_OUTILS_PORT || 4785);
 const token = crypto.randomBytes(16).toString('hex');
@@ -19,7 +13,6 @@ const page = path.join(ROOT, PAGE);
 const headers = (type) => ({
   'content-type': type,
   'cache-control': 'no-store',
-  // Lecture seule depuis l'artefact publié (instantané rafraîchi en direct).
   'access-control-allow-origin': '*',
   'access-control-allow-private-network': 'true',
 });
@@ -58,15 +51,14 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') return send(res, 204, 'text/plain', '');
     if (req.method === 'GET' && (pathname === '/' || pathname === '/index.html')) return send(res, 200, 'text/html; charset=utf-8', livePage());
-    if (req.method === 'GET' && pathname === '/api/graph') return json(res, 200, { ...buildGraph(), status: status() });
+    if (req.method === 'GET' && pathname === '/api/graph') return json(res, 200, buildGraph(ROOT, { live: true }));
     if (req.method === 'GET' && pathname === '/api/status') return json(res, 200, status());
-    if (req.method === 'GET' && pathname === '/api/diff') return send(res, 200, 'text/plain; charset=utf-8', diff());
     if (req.method !== 'POST') return json(res, 404, { error: 'Introuvable.' });
     if (req.headers['x-carte-token'] !== token) return json(res, 403, { error: 'Écriture réservée à la page servie par npm run carte-outils.' });
     const body = await readBody(req);
     if (pathname === '/api/instruction') {
-      if (typeof body.id !== 'string' || typeof body.text !== 'string') return json(res, 400, { error: 'id et text attendus.' });
-      const result = applyEdit(ROOT, body.id, body.text, body.expected);
+      if (typeof body.id !== 'string' || typeof body.lu !== 'string') return json(res, 400, { error: 'id et lu attendus.' });
+      const result = applyEdit(ROOT, body.id, body.lu, body.expected);
       return json(res, 200, { ok: true, ...result, status: status() });
     }
     if (pathname === '/api/commit') {
