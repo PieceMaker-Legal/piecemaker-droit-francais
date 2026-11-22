@@ -115,6 +115,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 .it .t { color: var(--fg); font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: baseline; }
 .it .t .badge { font: 500 11px var(--sans); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 1px 7px; margin-left: auto; white-space: nowrap; }
 .it .t .badge.mod { color: var(--warn); border-color: rgba(251,191,36,.5); }
+.it .t .badge.ok { color: var(--ok); border-color: rgba(74,222,128,.5); }
 .it .q { color: var(--muted); font-size: 12.5px; }
 .it .loc { font: 400 11.5px var(--mono); color: var(--subtle); overflow-wrap: anywhere; }
 .it .pre { margin: 0 12px 10px; color: var(--body); font: 400 12.5px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 4.6em; overflow: hidden; }
@@ -184,7 +185,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
 
   <aside class="ig-panel" id="ig-panel" aria-label="Instructions de l’arête" aria-hidden="true">
     <div class="ig-ph">
-      <div class="row"><h3 id="ig-ptitle"></h3><button class="btn ghost" id="ig-close" type="button" aria-label="Fermer">Fermer</button></div>
+      <div class="row"><button class="btn ghost" id="ig-back" type="button" aria-label="Revenir au panneau précédent" hidden>← Retour</button><h3 id="ig-ptitle"></h3><button class="btn ghost" id="ig-close" type="button" aria-label="Fermer">Fermer</button></div>
       <p id="ig-psub"></p>
     </div>
     <div class="ig-pb" id="ig-pbody"></div>
@@ -461,10 +462,15 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   const openItems = new Set();
   const GH = { server: 'GitHub', owner: 'PieceMaker-Legal', repo: 'piecemaker-droit-francais', workflow: 'carte-outils-commit.yml', ref: 'main' };
   const RUNS = `https://github.com/${GH.owner}/${GH.repo}/actions/workflows/${GH.workflow}`;
-  const cloud = { db: null, mcp: null, can: false, pending: new Map(), etat: null };
+  const cloud = { db: null, mcp: null, can: false, pending: new Map(), verifs: new Map(), etat: null };
   const cloudOn = () => mode !== 'live' && !!cloud.db && cloud.can;
   const docKey = (id) => id.replace(/[^A-Za-z0-9_\-.~@+]/g, '_').slice(0, 200);
   const enAttente = () => [...cloud.pending.values()].filter((p) => p.statut === 'en_attente');
+  const localVerifs = new Map();
+  try { for (const v of Object.values(JSON.parse(localStorage.getItem('carte-outils-verifs') || '{}'))) if (v && typeof v.id === 'string') localVerifs.set(v.id, v); } catch {}
+  const saveLocalVerifs = () => { try { localStorage.setItem('carte-outils-verifs', JSON.stringify(Object.fromEntries(localVerifs))); } catch {} };
+  const texteAffiche = (item) => cloud.pending.get(item.id)?.lu ?? item.lu;
+  const verifMap = () => (cloudOn() ? cloud.verifs : localVerifs);
   const textParts = (text) => text.split(/(⟦[^⟦⟧]*⟧)/).filter(Boolean).map((t) => (/^⟦[^⟦⟧]*⟧$/.test(t) ? { type: 'code', label: t.slice(1, -1).trim() } : { type: 'texte', value: t }));
   const varLabels = (parts) => parts.filter((p) => p.type === 'code').map((p) => p.label).sort();
 
@@ -619,7 +625,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     }
     const nItems = Object.keys(graph.items).length;
     const nErr = Object.values(graph.items).filter((i) => i.erreur).length;
-    $('ig-count').textContent = `${graph.edges.length} arêtes · ${nItems} instructions${nErr ? ` · ${nErr} introuvables` : ''}`;
+    const avecTexte = Object.values(graph.items).filter((i) => i.lu !== undefined && !i.erreur);
+    const nVerifs = avecTexte.filter((i) => verifStatut(i) === 'ok').length;
+    $('ig-count').textContent = `${graph.edges.length} arêtes · ${nItems} instructions${nErr ? ` · ${nErr} introuvables` : ''} · ${nVerifs}/${avecTexte.length} vérifiées`;
     geo = layout();
     svg.setAttribute('viewBox', `0 0 ${geo.width} ${geo.height}`);
     svg.setAttribute('width', geo.width); svg.setAttribute('height', geo.height);
@@ -636,10 +644,13 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         el('title', {}, label), el('path', { class: 'hit', d }), el('path', { class: 'vis', d, stroke: color }));
       gEdges.append(g);
       if (e.items.length) {
-        const txt = String(e.items.length);
+        const ver = edgeVerif(e);
+        const tout = ver.total > 0 && ver.ok === ver.total;
+        const txt = `${e.items.length}${tout ? ' ✓' : ver.ok ? ` · ${ver.ok}/${ver.total} ✓` : ''}`;
         const pw = 10 + txt.length * 7;
         const modified = e.items.some((id) => graph.items[id]?.modifie);
-        gPills.append(el('g', { class: 'ig-edge pill', style: `color:${modified ? '#fbbf24' : color}`, 'data-edge': e.id, onclick: () => openEdge(e.id) },
+        const pillColor = modified ? '#fbbf24' : tout ? '#4ade80' : color;
+        gPills.append(el('g', { class: 'ig-edge pill', style: `color:${pillColor}`, 'data-edge': e.id, onclick: () => openEdge(e.id) },
           el('title', {}, label),
           el('rect', { x: mx - pw / 2, y: my - 9, width: pw, height: 18, rx: 9 }),
           el('text', { x: mx, y: my + 4, 'text-anchor': 'middle', text: txt })));
@@ -673,6 +684,29 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
   const matches = (item, q) => item && [item.titre, item.quand, item.lu, item.fichier].some((v) => (v || '').toLowerCase().includes(q));
 
+  const verifStatut = (item) => {
+    const doc = verifMap().get(item.id);
+    return !doc ? 'non' : doc.lu === texteAffiche(item) ? 'ok' : 'revoir';
+  };
+  const edgeVerif = (edge) => {
+    const items = edge.items.map((id) => graph.items[id]).filter((i) => i && i.lu !== undefined && !i.erreur);
+    return { ok: items.filter((i) => verifStatut(i) === 'ok').length, total: items.length };
+  };
+  async function setVerif(item, on, lot) {
+    try {
+      if (cloudOn()) {
+        const ref = cloud.db.doc(`verifications/${docKey(item.id)}`);
+        if (on) await ref.set({ id: item.id, lu: texteAffiche(item), at: new Date().toISOString() });
+        else await ref.delete();
+        return;
+      }
+      if (on) localVerifs.set(item.id, { id: item.id, lu: texteAffiche(item), at: new Date().toISOString() });
+      else localVerifs.delete(item.id);
+      saveLocalVerifs();
+      if (!lot) render();
+    } catch (error) { toast(error.message || 'Vérification non enregistrée.'); }
+  }
+
   function focusNode(id) {
     const svg = $('ig-svg');
     svg.querySelectorAll('.ig-edge[data-from]').forEach((g) => g.classList.toggle('dim', !!id && g.dataset.from !== id && g.dataset.to !== id));
@@ -683,9 +717,23 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     svg.querySelectorAll('.ig-edge.pill').forEach((g) => g.classList.toggle('dim', !edgesOn.has(g.dataset.edge)));
   }
 
-  function openEdge(id) { current = { kind: 'edge', id }; openPanel(); }
-  function openNode(id) { current = { kind: 'node', id }; openPanel(); }
+  const panelHistory = [];
+  function go(next) {
+    if (current && $('ig-panel').classList.contains('open') && !(current.kind === next.kind && current.id === next.id)) panelHistory.push(current);
+    current = next;
+    openPanel();
+  }
+  function openEdge(id) { go({ kind: 'edge', id }); }
+  function openNode(id) { go({ kind: 'node', id }); }
+  function goBack() {
+    const prev = panelHistory.pop();
+    if (!prev) return closePanel();
+    current = prev;
+    if (prev.kind === 'search') $('ig-search').value = prev.id;
+    openPanel();
+  }
   function openPanel() {
+    $('ig-back').hidden = !panelHistory.length;
     $('ig-panel').classList.add('open');
     $('ig-panel').setAttribute('aria-hidden', 'false');
     refreshPanel();
@@ -695,6 +743,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     $('ig-panel').classList.remove('open');
     $('ig-panel').setAttribute('aria-hidden', 'true');
     current = null;
+    panelHistory.length = 0;
+    $('ig-back').hidden = true;
     $('ig-svg').querySelectorAll('.ig-edge.on').forEach((g) => g.classList.remove('on'));
   }
 
@@ -709,6 +759,17 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       if (!e) return closePanel();
       $('ig-ptitle').textContent = `${label(e.from)} → ${label(e.to)}`;
       $('ig-psub').textContent = [e.note, `${e.items.length} instruction(s)`].filter(Boolean).join(' · ');
+      const ver = edgeVerif(e);
+      if (ver.total) {
+        const tout = ver.ok === ver.total;
+        body.append(el('button', { class: 'btn ghost', type: 'button', text: tout ? 'Tout retirer' : 'Tout marquer vérifié', onclick: async (ev) => {
+          ev.currentTarget.disabled = true;
+          const lot = e.items.map((id) => graph.items[id]).filter((i) => i && i.lu !== undefined && !i.erreur && (verifStatut(i) === 'ok') === tout);
+          for (const i of lot) await setVerif(i, !tout, true);
+          render();
+          toast(`${lot.length} instruction(s) ${tout ? 'retirée(s)' : 'marquée(s) vérifiée(s)'}.`);
+        } }));
+      }
       if (!e.items.length) body.append(el('p', { class: 'ig-note', text: 'Ce lien n’envoie pas de texte par lui-même : il déclenche ou alimente la fonctionnalité suivante. Ouvrez l’arête suivante pour lire les instructions.' }));
       e.items.forEach((id) => body.append(itemCard(graph.items[id])));
     } else if (current.kind === 'node') {
@@ -745,9 +806,11 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       ontoggle: (ev) => (ev.target.open ? openItems.add(item.id) : openItems.delete(item.id)) });
     const edge = withEdge ? graph.edges.find((e) => e.items.includes(item.id)) : null;
     const pend = cloudOn() && !config ? cloud.pending.get(item.id) : null;
+    const vs = item.lu === undefined ? 'non' : verifStatut(item);
+    const vbadge = vs === 'non' ? null : el('span', { class: vs === 'ok' ? 'badge ok' : 'badge mod', style: 'margin-left:0', text: vs === 'ok' ? 'vérifiée' : 'à revérifier' });
     const badge = pend?.statut === 'envoyee' ? ['mod', 'envoyée en PR'] : pend ? ['mod', 'modifiée, à commiter'] : item.modifie ? ['mod', 'modifiée, à commiter'] : config ? ['', 'réglage, non lu par l’agent'] : item.lu === undefined ? ['', 'sans texte'] : ['agent', 'lu par l’agent'];
     details.append(el('summary', {},
-      el('div', { class: 't' }, el('span', { text: item.titre || item.id }), el('span', { class: `badge ${badge[0]}`, text: badge[1] })),
+      el('div', { class: 't' }, el('span', { text: item.titre || item.id }), el('span', { class: `badge ${badge[0]}`, text: badge[1] }), vbadge),
       item.quand ? el('div', { class: 'q', text: item.quand }) : null,
       edge ? el('div', { class: 'q', text: `${label(edge.from)} → ${label(edge.to)}` }) : null));
     if (item.erreur) {
@@ -774,6 +837,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       if (editable) acts.append(el('button', { class: 'btn', type: 'button', text: 'Modifier ce texte', onclick: showEditor }));
       if (editable && pend) acts.append(el('button', { class: 'btn ghost', type: 'button', text: 'Annuler ma modification', onclick: () => save(item.lu) }));
       else if (editable && item.modifie && mode === 'live') acts.append(el('button', { class: 'btn ghost', type: 'button', text: 'Revenir à la version commitée', onclick: () => save(item.luCommit) }));
+      acts.append(el('button', { class: 'btn ghost', type: 'button', text: vs === 'ok' ? 'Retirer la vérification' : 'Marquer vérifiée', onclick: () => setVerif(item, vs !== 'ok') }));
       if (acts.childNodes.length) body.append(acts);
       if (pend?.statut === 'envoyee') body.append(el('div', { class: 'hint' }, 'Envoyée à GitHub : elle sera dans la carte une fois la PR mergée et la carte republiée. ', el('a', { href: RUNS, target: '_blank', rel: 'noopener', text: 'Suivre l’exécution' })));
       if (pend) body.append(el('details', { class: 'code' }, el('summary', { text: 'Version actuelle du code' }), el('div', { class: 'lu old', text: item.lu })));
@@ -904,6 +968,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
   });
 
   $('ig-close').addEventListener('click', closePanel);
+  $('ig-back').addEventListener('click', goBack);
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { $('ig-dlg').classList.remove('open'); closePanel(); } });
   $('ig-reload').addEventListener('click', () => load().then(() => toast(mode === 'snap' ? 'Pas de serveur local : instantané affiché.' : 'Code relu.')));
   let searchTimer;
@@ -939,6 +1004,10 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       }
       refresh();
     }, () => toast('Modifications enregistrées illisibles pour le moment.'));
+    db.collection('verifications').onSnapshot((snap) => {
+      cloud.verifs = new Map(snap.docs.map((d) => d.data()).filter((d) => d && typeof d.id === 'string' && typeof d.lu === 'string').map((d) => [d.id, d]));
+      refresh();
+    }, () => toast('Vérifications illisibles pour le moment.'));
     db.doc('etat/commit').onSnapshot((snap) => { cloud.etat = snap.data() || null; setMode(); }, () => {});
     refresh();
   }
