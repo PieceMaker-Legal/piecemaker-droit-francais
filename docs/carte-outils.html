@@ -197,7 +197,8 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       <p class="ig-note" id="ig-dnote">Seules ces instructions sont commitées, sur la branche <code id="ig-branch"></code>. Le reste des fichiers, même modifié, n’est pas touché.</p>
       <ul id="ig-files"></ul>
       <input id="ig-cmsg" type="text" placeholder="chore(instructions): …" aria-label="Message de commit">
-      <div class="ig-bar"><span style="margin-right:auto"></span><button class="btn ghost" id="ig-cancel" type="button">Annuler</button><button class="btn primary" id="ig-do-commit" type="button">Commiter</button></div>
+      <div class="ig-bar"><span style="margin-right:auto"></span><button class="btn ghost" id="ig-cancel" type="button">Annuler</button><button class="btn primary" id="ig-do-commit" type="button">Commiter</button><a class="btn primary" id="ig-gh-issue" target="_blank" rel="noopener" hidden>Commiter sur GitHub</a></div>
+      <div id="ig-gh-copy" hidden><p class="ig-note">Le texte est trop long pour passer dans le lien : il a été copié. Collez-le comme description du ticket GitHub qui s’ouvre. S’il n’a pas été copié, sélectionnez-le ici :</p><textarea id="ig-gh-text" readonly rows="5" style="width:100%"></textarea></div>
     </div>
   </div>
   <div class="ig-toast" id="ig-toast" role="status"></div>
@@ -534,9 +535,9 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     $('ig-open-local').hidden = mode === 'live';
     const changed = cloudOn() ? enAttente().map((p) => p.id) : graph?.status?.modifiees || [];
     const btn = $('ig-commit');
-    btn.disabled = cloudOn() ? !changed.length || !cloud.mcp : mode !== 'live' || !changed.length;
+    btn.disabled = cloudOn() ? !changed.length : mode !== 'live' || !changed.length;
     btn.textContent = changed.length ? `Commiter mes changements (${changed.length} instruction${changed.length > 1 ? 's' : ''})` : 'Commiter mes changements';
-    btn.title = mode === 'live' ? '' : cloudOn() ? (cloud.mcp ? '' : 'Le connecteur GitHub de claude.ai est nécessaire pour commiter depuis cette page.') : 'Lancez npm run carte-outils pour modifier et commiter.';
+    btn.title = mode === 'live' ? '' : cloudOn() ? '' : 'Lancez npm run carte-outils pour modifier et commiter.';
     if (cloudOn()) chip.lastChild.textContent += ' · modifiable ici';
     const etat = $('ig-etat');
     const e = cloudOn() ? cloud.etat : null;
@@ -917,21 +918,54 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
       await perms.manage().catch(() => {});
       return (await perms.state(name).catch(() => 'denied')) === 'granted';
     }
-    toast('Connecteur GitHub introuvable : ajoutez-le dans claude.ai, Réglages, Connecteurs, sous le nom « GitHub ».');
+    toast('Connecteur GitHub introuvable dans claude.ai : utilisez « Commiter sur GitHub ».');
     return false;
   }
 
+  function ticketGitHub(lot) {
+    const json = JSON.stringify(lot.map((p) => ({ id: p.id, lu: p.lu, expected: p.expected })), null, 1);
+    const titre = `[carte-outils] ${lot.length} instruction${lot.length > 1 ? 's' : ''} modifiée${lot.length > 1 ? 's' : ''}`;
+    const intro = `Envoyé depuis la Carte des outils. En créant ce ticket, le workflow « Carte des outils : commit » applique ces modifications et ouvre une PR.\n\n${lot.map((p) => `- ${p.titre || p.id}`).join('\n')}\n\n`;
+    const corps = `${intro}\`\`\`json\n${json}\n\`\`\``;
+    const base = `https://github.com/${GH.owner}/${GH.repo}/issues/new?title=${encodeURIComponent(titre)}&body=`;
+    const url = base + encodeURIComponent(corps);
+    if (url.length <= 7500) return { url, corps, long: false };
+    return { url: base + encodeURIComponent('Collez ici le texte copié depuis la Carte des outils.'), corps, long: true };
+  }
+
+  async function marquerEnvoye(lot, via) {
+    const at = new Date().toISOString();
+    for (const p of lot) await cloud.db.doc(`modifications/${docKey(p.id)}`).set({ ...p, statut: 'envoyee', envoyeeLe: at }).catch(() => {});
+    await cloud.db.doc('etat/commit').set({ statut: 'envoye', via, n: lot.length, at }).catch(() => {});
+  }
+
+  $('ig-gh-issue').addEventListener('click', () => {
+    const lot = enAttente();
+    const t = ticketGitHub(lot);
+    if (t.long) {
+      try { navigator.clipboard?.writeText(t.corps).catch(() => {}); } catch {}
+      $('ig-gh-text').value = t.corps;
+      $('ig-gh-copy').hidden = false;
+    } else $('ig-dlg').classList.remove('open');
+    marquerEnvoye(lot, 'ticket').then(() => toast('Créez le ticket sur GitHub : la PR s’ouvre une minute après.'));
+  });
+
   $('ig-commit').addEventListener('click', async () => {
-    if (cloudOn() && !(await accesGitHub())) return;
     const ids = cloudOn() ? enAttente().map((p) => p.id) : graph.status?.modifiees || [];
     $('ig-cmsg').hidden = cloudOn();
-    if (cloudOn()) $('ig-dnote').textContent = 'Le script GitHub Actions « Carte des outils : commit » va écrire ces instructions dans le code, vérifier la syntaxe, commiter sur une nouvelle branche et ouvrir une PR vers main. Rien d’autre n’est modifié.';
-    else { $('ig-dnote').replaceChildren('Seules ces instructions sont commitées, sur la branche ', el('code', { id: 'ig-branch' }), '. Le reste des fichiers, même modifié, n’est pas touché.'); }
+    if (!cloudOn()) { $('ig-dnote').replaceChildren('Seules ces instructions sont commitées, sur la branche ', el('code', { id: 'ig-branch' }), '. Le reste des fichiers, même modifié, n’est pas touché.'); }
     if (!cloudOn()) $('ig-branch').textContent = graph.status?.branch || '';
     $('ig-files').replaceChildren(...ids.map((id) => el('li', { text: graph.items[id]?.titre || id })));
     $('ig-cmsg').value = '';
+    $('ig-gh-copy').hidden = true;
+    $('ig-gh-issue').hidden = !cloudOn();
+    if (cloudOn()) $('ig-gh-issue').href = ticketGitHub(enAttente()).url;
+    $('ig-do-commit').hidden = cloudOn() && !cloud.mcp;
+    $('ig-do-commit').textContent = cloudOn() ? 'Via le connecteur GitHub' : 'Commiter';
+    $('ig-do-commit').className = cloudOn() ? 'btn ghost' : 'btn primary';
+    if (cloudOn()) $('ig-dnote').textContent = '« Commiter sur GitHub » ouvre un ticket prérempli sur GitHub : cliquez sur « Create » (ou « Submit new issue ») et le workflow « Carte des outils : commit » écrit ces instructions dans le code, vérifie la syntaxe et ouvre une PR vers main. Rien d’autre n’est modifié.';
     $('ig-dlg').classList.add('open');
-    (cloudOn() ? $('ig-do-commit') : $('ig-cmsg')).focus();
+    (cloudOn() ? $('ig-gh-issue') : $('ig-cmsg')).focus();
   });
   $('ig-cancel').addEventListener('click', () => $('ig-dlg').classList.remove('open'));
   $('ig-dlg').addEventListener('click', (ev) => { if (ev.target === $('ig-dlg')) $('ig-dlg').classList.remove('open'); });
@@ -939,6 +973,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
     if (cloudOn()) {
       const btn = $('ig-do-commit');
       btn.disabled = true;
+      if (!(await accesGitHub())) { btn.disabled = false; return; }
       try {
         const lot = enAttente();
         const modifications = JSON.stringify(lot.map((p) => ({ id: p.id, lu: p.lu, expected: p.expected })));
@@ -946,9 +981,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         $('ig-dlg').classList.remove('open');
         toast('Envoi à GitHub… Si claude.ai demande d’autoriser le connecteur GitHub, acceptez.');
         await cloud.mcp.callTool(GH.server, 'actions_run_trigger', { method: 'run_workflow', owner: GH.owner, repo: GH.repo, workflow_id: GH.workflow, ref: GH.ref, inputs: { modifications } });
-        const at = new Date().toISOString();
-        for (const p of lot) await cloud.db.doc(`modifications/${docKey(p.id)}`).set({ ...p, statut: 'envoyee', envoyeeLe: at }).catch(() => {});
-        await cloud.db.doc('etat/commit').set({ statut: 'envoye', n: lot.length, at }).catch(() => {});
+        await marquerEnvoye(lot, 'connecteur');
         toast('Commit envoyé à GitHub : la PR s’ouvre dans une minute environ.');
       } catch (error) {
         const why = { server_not_connected: 'Ajoutez le connecteur GitHub dans les réglages de claude.ai.', needs_reauth: 'Reconnectez le connecteur GitHub dans les réglages de claude.ai.', not_granted: 'Autorisation refusée pour le connecteur GitHub.', not_in_manifest: 'Le connecteur GitHub est désactivé pour cette carte : réactivez-le dans le menu Permissions de l’artefact.', approval_required: 'claude.ai attend votre accord pour le connecteur GitHub : recliquez sur Commiter et acceptez.', selection_required: 'Plusieurs connecteurs s’appellent « GitHub » : choisissez-en un quand claude.ai le demande, puis recliquez.' }[error?.code] || (error?.retryable || /not confirmed/i.test(error?.message || '') ? 'L’accès au connecteur GitHub n’a pas encore été confirmé : recliquez sur Commiter et acceptez la demande de claude.ai.' : null);
