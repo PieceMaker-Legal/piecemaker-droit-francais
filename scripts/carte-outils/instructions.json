@@ -1078,7 +1078,7 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/guard-legal-search.mjs",
       "guillemet": "'",
-      "ancre": "Recherche Légifrance réservée au sous-agent research-maker"
+      "ancre": "Recherche Légifrance réservée au sous-agent resear"
     },
     {
       "id": "hook-verify-subagent--verification-decisions-citees-jamais-lues",
