@@ -216,9 +216,25 @@ it('range les fils de l’agent central par dossier et coche les dossiers qu’i
   expect(dupont.textContent).toContain('Rédiger la note de synthèse');
   expect(screen.getByRole('region', { name: 'Dossier Societe Exemple' }).textContent).toContain('Analyser le contrat');
   fireEvent.click(screen.getByRole('button', { name: 'Paramètres' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Dossiers actifs' }));
   fireEvent.click(await screen.findByRole('checkbox', { name: 'Societe Exemple' }));
   await act(async () => undefined);
   expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: central, folders: [PROJECT, exemple] }, method: 'PUT' });
+});
+
+it('range les dossiers actifs de l’agent central en haut de leur onglet', async () => {
+  const exemple = '/dossiers/Societe Exemple';
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  data.settings.folders = [exemple];
+  data.dossiers = [{ path: PROJECT, selected: false }, { path: exemple, selected: true }];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Dossiers actifs' }));
+  const labels = screen.getAllByRole('checkbox').map((box) => box.closest('label')?.textContent);
+  expect(labels).toEqual(['Societe Exemple', 'Dupont']);
 });
 
 it('déplace le brain de l’agent central vers le dossier choisi et y rouvre sa session', async () => {
@@ -230,6 +246,7 @@ it('déplace le brain de l’agent central vers le dossier choisi et y rouvre sa
   vi.stubGlobal('location', { ...window.location, assign });
   render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
   fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Brain' }));
   const input = await screen.findByRole('textbox', { name: 'Emplacement du brain' });
   expect((input as HTMLInputElement).value).toBe(CENTRAL);
   fireEvent.change(input, { target: { value: '/Users/exemple/Brain' } });
