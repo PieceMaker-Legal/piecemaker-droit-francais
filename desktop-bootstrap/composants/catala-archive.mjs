@@ -148,7 +148,8 @@ function stageGrammars({ platformKey, stage, cache, compilerEnv }) {
   const exe = platformKey === 'windows' ? '.exe' : '';
   const ncl = path.join(stage, 'share', 'topiary', 'configs', 'catala.ncl');
   const revision = grammarRevision(fs.readFileSync(ncl, 'utf8'));
-  run(path.join(stage, 'bin', '.topiary-wrapped', `topiary${exe}`), ['prefetch', '-C', ncl], { env: { ...process.env, ...compilerEnv } });
+  const prefetch = () => run(path.join(stage, 'bin', '.topiary-wrapped', `topiary${exe}`), ['prefetch', '-C', ncl], { env: { ...process.env, ...compilerEnv } });
+  try { prefetch(); } catch (error) { if (platformKey !== 'windows') throw error; prefetch(); }
   const extension = platformKey === 'windows' ? 'dll' : 'dylib';
   return catalaGrammars.map((language) => {
     const file = path.join('share', 'topiary', 'grammars', `${language}.${extension}`);
