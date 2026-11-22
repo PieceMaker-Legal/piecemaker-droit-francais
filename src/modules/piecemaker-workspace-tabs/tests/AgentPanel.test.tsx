@@ -118,7 +118,7 @@ it('liste les fils, les décisions à traiter et ouvre le chat du fil dans le vo
 });
 
 const Workspace = withWorkspacePanels((props) => <>
-  <output data-testid={`main ${props.selectedProject?.fullPath}`}>{props.selectedSession?.id}</output>
+  <output data-testid={`main ${props.selectedProject?.fullPath}`} data-project-id={props.selectedProject?.projectId}>{props.selectedSession?.id}</output>
   <WorkspaceIconTabs activeTab={props.activeTab} setActiveTab={props.setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />
   {props.selectedProject?.fullPath === CENTRAL && <AgentChatCard card={{ messageId: 'm1', decisions: [], outputs: [{ kind: 'file', ref: `${PROJECT}/note.docx`, title: 'Note Dupont' }] }} project={CENTRAL} />}
 </>);
@@ -199,6 +199,27 @@ it('ouvre un fil de l’agent central dans un volet imbriqué, avec son dossier,
   expect(await screen.findByRole('region', { name: 'Fil Rédiger la note de synthèse' })).toBeTruthy();
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 5)); });
   expect(openInEditor).toHaveBeenCalledWith(`${PROJECT}/note.docx`);
+});
+
+it('donne au fil ouvert l’identifiant de son dossier dès que l’état de l’agent central l’apporte', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const data = state();
+    data.central = true;
+    data.decisions = [];
+    data.dossiers = [{ path: PROJECT, selected: true }];
+    calls.state = data;
+    calls.agentSession = 'agent-1';
+    render(<Harness sessionId="agent-1" project={CENTRAL} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Rédiger la note de synthèse/ }));
+    const nested = await screen.findByRole('region', { name: 'Fil Rédiger la note de synthèse' });
+    expect(nested.querySelector(`[data-testid="main ${PROJECT}"]`)?.getAttribute('data-project-id')).toBe('');
+    calls.state = { ...data, projectIds: { [`${PROJECT}/`]: 'dupont' } };
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(screen.getByRole('region', { name: 'Fil Rédiger la note de synthèse' }).querySelector(`[data-testid="main ${PROJECT}"]`)?.getAttribute('data-project-id')).toBe('dupont');
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('range les fils de l’agent central par dossier et coche les dossiers qu’il peut utiliser', async () => {
