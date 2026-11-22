@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { catalaRecipe } from './catala.mjs';
-import { catalaBuildFingerprint, pinArchive } from './catala-archive.mjs';
+import { catalaBuildFingerprint, patchZ3MkUtil, pinArchive } from './catala-archive.mjs';
 
 function release() {
   const receipts = {};
@@ -27,4 +27,12 @@ test('a release can only pin both tested archives built from this recipe', () =>
     change(data);
     assert.throws(() => pinArchive(catalaRecipe, 'pack-test', data.assets, data.receipts));
   }
+});
+
+test('Z3 passes MinGW static runtime flags to flexlink through -Wl', () => {
+  const line = "            LIBZ3 = LIBZ3 + ' ' + ' '.join(map(lambda x: '-cclib ' + x, LDFLAGS.split()))\n";
+  const patched = patchZ3MkUtil(`a\n${line}b\n`);
+  assert.match(patched, /'-Wl,' \+ x if x\.startswith\('-static-lib'\) else x/);
+  assert.throws(() => patchZ3MkUtil('a\n'), /introuvable/);
+  assert.throws(() => patchZ3MkUtil(line + line), /ambiguë/);
 });
