@@ -277,6 +277,22 @@ export function buildCatalaArchive({ platformKey, prefix, out, ninja, topiary, c
   return { archive, sha256, size: fs.statSync(archive).size, extractedSize, files: walk(stage).map((file) => path.relative(stage, file).split(path.sep).join('/')).sort() };
 }
 
+const Z3_OCAML_LDFLAGS = "' '.join(map(lambda x: '-cclib ' + x, LDFLAGS.split()))";
+
+export function patchZ3MkUtil(text) {
+  if (text.split(Z3_OCAML_LDFLAGS).length !== 2) throw new Error('mk_util.py de Z3 : ligne des options OCaml introuvable ou ambiguë.');
+  return text.replace(Z3_OCAML_LDFLAGS, "' '.join(map(lambda x: '-cclib ' + ('-Wl,' + x if x.startswith('-static-lib') else x), LDFLAGS.split()))");
+}
+
+function pinZ3ForFlexlink(opam, z3) {
+  const source = path.join(os.tmpdir(), 'piecemaker-z3-source');
+  fs.rmSync(source, { recursive: true, force: true });
+  opam('source', z3, `--dir=${source}`);
+  const mkUtil = path.join(source, 'scripts', 'mk_util.py');
+  fs.writeFileSync(mkUtil, patchZ3MkUtil(fs.readFileSync(mkUtil, 'utf8')));
+  opam('pin', 'add', '--no-action', '--yes', '--kind=path', z3, source);
+}
+
 function opamInstall({ platformKey, topiary, recipe = catalaRecipe }) {
   const { compiler, pins, windowsPins, packages } = recipe.build;
   const env = { ...process.env, OPAMYES: '1', OPAMCONFIRMLEVEL: 'unsafe-yes', OPAMCOLOR: 'never' };
@@ -304,6 +320,7 @@ function opamInstall({ platformKey, topiary, recipe = catalaRecipe }) {
     const fake = packages.find((name) => name.startsWith('topiary.'));
     opam('install', '--yes', '--fake', fake);
     list = packages.filter((name) => name !== fake && !name.startsWith('dune.'));
+    pinZ3ForFlexlink(opam, packages.find((name) => name.startsWith('z3.')));
   }
   opam('install', '--yes', `--jobs=${os.availableParallelism?.() ?? os.cpus().length}`, ...list);
 }
