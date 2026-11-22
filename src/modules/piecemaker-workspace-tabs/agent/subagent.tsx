@@ -30,6 +30,10 @@ export function setMainWorkspaceShadowed(value: boolean) {
 
 export const NestedWorkspaceContext = createContext(false);
 
+export function useNestedWorkspace() {
+  return useContext(NestedWorkspaceContext);
+}
+
 export function useWorkspaceListening() {
   const nested = useContext(NestedWorkspaceContext);
   return useCallback(() => nested || !shadowed, [nested]);
