@@ -526,3 +526,29 @@ test('Un modèle inconnu du fournisseur est refusé, list_providers donne les mo
   assert.equal(f.turns.filter(turn => turn.session === t.sessionId).length, 1);
   assert.ok(s.orchestrator.pending.some(event => event.type === 'thread_failed'));
 });
+
+test('Un fil prend par défaut le fournisseur du chat principal, sauf réglage contraire', async ctx => {
+  const f = fixture(ctx);
+  assert.equal((await f.state()).settings.defaultProvider, 'chat');
+  f.service.updateSettings(f.root, { orchestratorProvider: 'codex' });
+  f.user('Commence');
+  await flush();
+  assert.equal((await f.state()).orchestrator.chatProvider, 'codex');
+  assert.equal((await f.start('Suit le chat')).provider, 'codex');
+  assert.equal((await f.start('Choisi', { provider: 'claude' })).provider, 'claude');
+  f.service.updateSettings(f.root, { defaultProvider: 'claude' });
+  assert.equal((await f.start('Réglé', { provider: 'auto' })).provider, 'claude');
+  assert.throws(() => f.service.updateSettings(f.root, { defaultProvider: 'auto' }), /Paramètres invalides/);
+});
+
+test('Un ancien réglage automatique des fils suit désormais le chat principal', async ctx => {
+  const f = fixture(ctx);
+  const file = path.join(f.root, '.piecemaker', 'orchestrateur', 'etat.json');
+  f.service.updateSettings(f.root, { recycleAfter: 10 });
+  const saved = JSON.parse(readFileSync(file, 'utf8'));
+  saved.settings.defaultProvider = 'auto';
+  writeFileSync(file, JSON.stringify(saved));
+  const again = createOrchestratorService(f.deps);
+  ctx.after(() => again.stop());
+  assert.equal((await again.state(f.root)).settings.defaultProvider, 'chat');
+});

@@ -8,6 +8,7 @@ import type { Project, ProjectSession } from '@/shared/types';
 const POLL_MS = 5_000;
 
 export type Subagent = { thread: AgentThread; project: Project; session: ProjectSession; open: AgentOutput | null };
+type OpenSubagent = Omit<Subagent, 'project'>;
 
 export type SubagentApi = {
   open: (thread: AgentThread, output?: AgentOutput | null) => boolean;
@@ -50,7 +51,9 @@ export function threadForPath(threads: AgentThread[], target: string): AgentThre
 
 function toProject(thread: AgentThread, state: AgentState | null): Project {
   const name = trim(thread.projectPath).split(/[\\/]/).at(-1) ?? thread.projectPath;
-  return { projectId: state?.projectIds?.[thread.projectPath] ?? '', displayName: name, fullPath: thread.projectPath, path: thread.projectPath };
+  const ids = Object.entries(state?.projectIds ?? {});
+  const projectId = ids.find(([folder, id]) => id && trim(folder) === trim(thread.projectPath))?.[1] ?? '';
+  return { projectId, displayName: name, fullPath: thread.projectPath, path: thread.projectPath };
 }
 
 function toSession(thread: AgentThread, sessionId: string): ProjectSession {
@@ -61,10 +64,15 @@ export function useSubagentHost(projectPath: string | null, enabled: boolean) {
   const central = useCentralAgent();
   const isCentral = Boolean(enabled && projectPath && central?.project && trim(central.project) === trim(projectPath));
   const [state, setState] = useState<AgentState | null>(null);
-  const [current, setCurrent] = useState<Subagent | null>(null);
+  const [opened, setOpened] = useState<OpenSubagent | null>(null);
+  // Le dossier est recalculé à chaque état reçu : un fil ouvert avant le premier
+  // état connaissait sinon un identifiant de projet vide, et les plugins qui s'en
+  // servent (Dossier) restaient bloqués sur « Chargement… ».
+  const projectId = opened ? toProject(opened.thread, state).projectId : '';
+  const current = useMemo<Subagent | null>(() => opened && { ...opened, project: { ...toProject(opened.thread, null), projectId } }, [opened, projectId]);
 
   useEffect(() => {
-    setCurrent(null);
+    setOpened(null);
     setState(null);
     if (!isCentral || !projectPath) return;
     let alive = true;
@@ -81,9 +89,9 @@ export function useSubagentHost(projectPath: string | null, enabled: boolean) {
 
   const open = useCallback((thread: AgentThread, output: AgentOutput | null = null) => {
     if (!isCentral || !thread.sessionId) return false;
-    setCurrent({ thread, project: toProject(thread, state), session: toSession(thread, thread.sessionId), open: output });
+    setOpened({ thread, session: toSession(thread, thread.sessionId), open: output });
     return true;
-  }, [isCentral, state]);
+  }, [isCentral]);
 
   const openOutput = useCallback((output: AgentOutput, threadId: string | null = null) => {
     if (!isCentral || !state || output.kind === 'link') return false;
@@ -92,9 +100,9 @@ export function useSubagentHost(projectPath: string | null, enabled: boolean) {
     return thread ? open(thread, output) : false;
   }, [isCentral, open, state]);
 
-  const close = useCallback(() => setCurrent(null), []);
+  const close = useCallback(() => setOpened(null), []);
   const followSession = useCallback((sessionId: string) => {
-    setCurrent((value) => value && { ...value, session: toSession(value.thread, sessionId), open: null });
+    setOpened((value) => value && { ...value, session: toSession(value.thread, sessionId), open: null });
   }, []);
   const api = useMemo<SubagentApi | null>(() => isCentral ? { open, openOutput, close } : null, [close, isCentral, open, openOutput]);
   return { api, current, close, followSession };

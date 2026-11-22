@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import express from 'express';
@@ -34,7 +35,13 @@ export function createOrchestratorRouter(service: Service, projects: Projects, b
     });
   }
 
-  const projectId = (root: string) => projects.getProjectPaths().find(row => path.resolve(row.project_path) === path.resolve(root))?.project_id ?? null;
+  // Les dossiers de l'agent central sont des chemins canoniques (liens résolus) :
+  // on compare donc les chemins réels, sinon l'identifiant du projet reste introuvable.
+  const real = (folder: string) => { try { return realpathSync(path.resolve(folder)); } catch { return path.resolve(folder); } };
+  const projectId = (root: string) => {
+    const wanted = real(root);
+    return projects.getProjectPaths().find(row => real(row.project_path) === wanted)?.project_id ?? null;
+  };
   router.get('/central', (_request, response) => send(response, () => {
     const central = service.central();
     return { ...central, projectId: projectId(central.project) };
@@ -56,7 +63,9 @@ export function createOrchestratorRouter(service: Service, projects: Projects, b
   }));
   router.get('/state', route(async (root, { user }) => {
     const state = await service.state(root, user?.id ?? null);
-    return state.central ? { ...state, projectIds: Object.fromEntries(state.dossiers.map(dossier => [dossier.path, projectId(dossier.path)])) } : state;
+    if (!state.central) return state;
+    const folders = new Set([...state.dossiers.map(dossier => dossier.path), ...state.threads.map(thread => thread.projectPath)]);
+    return { ...state, projectIds: Object.fromEntries([...folders].map(folder => [folder, projectId(folder)])) };
   }));
   router.get('/session', route(root => ({ sessionId: service.sessionId(root) })));
   router.post('/session', route((root, { user }) => service.session(root, user?.id ?? null)));

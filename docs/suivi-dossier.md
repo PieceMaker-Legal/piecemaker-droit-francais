@@ -89,7 +89,7 @@ Service `server/modules/piecemaker-suivi/etapes.ts`, routes `/api/piecemaker/eta
 - Vue Tâches (`src/taches.ts`) : Automatiques (une à la fois), Manuelles, Terminées. « Lancer immédiatement » passe la file.
 - Questions des tâches : le prompt demande à l'IA de finir par une ligne « Question : … » quand l'avocat doit décider. La tâche passe alors au statut `question`, en colonne Questions : « Répondre » relance un tour dans la même session, « Terminer » la clôt. Pendant un tour, les demandes en attente de la session (AskUserQuestion, ExitPlanMode, autorisation d'outil) s'affichent sur la carte et se règlent depuis la vue (routes `repondre`, `decision`, `terminer`).
 - Panneau du dossier, commun aux trois vues : un clic sur une carte du Tableau, une tâche ou une carte du Matter board (Échéances) ouvre le même tiroir à droite. Le clic sur le Matter board est intercepté : son propre panneau ne s'ouvre plus.
-  - Style de `docs/Design_Rule.md` : panneau flottant `rounded-2xl` en verre, police Inter, titre en EB Garamond, boutons `rounded-full` de 28 px (principal en noir), anneau de focus bleu.
+  - Style de `docs/Design_Rule.md` : panneau flottant `rounded-2xl` en verre, police Inter (titres compris), boutons `rounded-full` de 28 px (principal en noir), anneau de focus bleu.
   - En-tête : nom du dossier, acte en titre (sinon nom du dossier), pastille de nature.
   - Sections : la colonne courante (état, alertes, actions), Parties (noms et rôles de `matter.parties`, en clair, depuis le disque), Document à produire, Objectifs (tous), Versions précédentes.
   - Versions précédentes, après « + Document du tiers » : chaque ancienne version ouvre son programme Catala et ses documents.

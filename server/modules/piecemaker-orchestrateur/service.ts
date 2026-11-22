@@ -39,7 +39,7 @@ const decisionInput = z.object({
   recommended: index, reason: string.optional(),
 });
 const settingsInput = z.strictObject({
-  instructions: z.string(), orchestratorProvider: choice, orchestratorModel: z.string(), defaultProvider: choice,
+  instructions: z.string(), orchestratorProvider: choice, orchestratorModel: z.string(), defaultProvider: z.enum(['chat', ...RUNNABLE_PROVIDERS]),
   defaultModels: z.partialRecord(z.enum(RUNNABLE_PROVIDERS), string),
   concurrency: z.partialRecord(z.enum(RUNNABLE_PROVIDERS), z.number().int().positive()),
   folders: z.array(string), recycleAfter: z.number().int().positive(),
@@ -375,7 +375,8 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
   });
   async function prepareThread(input: z.input<typeof startInput>, projectInstructions = state.settings.instructions) {
     const args = parse(startInput, input);
-    const p = await provider(args.provider === 'auto' || !args.provider ? state.settings.defaultProvider : args.provider);
+    const wanted = args.provider === 'auto' || !args.provider ? state.settings.defaultProvider : args.provider;
+    const p = await provider(wanted === 'chat' ? orch.chatProvider ?? state.settings.orchestratorProvider : wanted);
     const model = args.model ? await knownModel(p, args.model) : state.settings.defaultModels[p] ?? await deps.defaultModel(p);
     const t: Thread = {
       id: id('thr'), key: randomUUID(), sessionId: null, title: args.title, instructions: args.instructions,

@@ -20,6 +20,8 @@ const ThreadConversation = lazy(() => import('@/modules/piecemaker-workspace-tab
 const threadLoading = <p role="status" className="p-4 text-sm">Chargement de la session…</p>;
 
 type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled';
+type SettingsTab = 'general' | 'instructions' | 'dream' | 'brain' | 'folders';
+const SETTINGS_TABS: Array<[SettingsTab, string]> = [['general', 'Général'], ['instructions', 'Instructions'], ['dream', 'Dream'], ['brain', 'Brain'], ['folders', 'Dossiers actifs']];
 
 const TABS: Array<[AgentPanelTab, string, string]> = [['threads', 'Fils', 'Fils de discussion'], ['context', 'Contexte', 'Contexte'], ['scheduled', 'Planifiées', 'Tâches planifiées']];
 const PROVIDERS: AgentProvider[] = ['claude', 'codex', 'mistral'];
@@ -180,7 +182,7 @@ function Brain({ projectPath }: { projectPath: string }) {
   </fieldset>;
 }
 
-function Settings({ state, act, projectPath }: { state: AgentState; act: AgentActions; projectPath: string }) {
+function Settings({ state, act }: { state: AgentState; act: AgentActions }) {
   const settings = state.settings;
   const connected = new Set(state.providers.filter((provider) => provider.authenticated).map((provider) => provider.provider));
   const [folder, setFolder] = useState('');
@@ -197,7 +199,9 @@ function Settings({ state, act, projectPath }: { state: AgentState; act: AgentAc
     </fieldset>
     <fieldset className="space-y-2">
       <legend className="text-sm text-foreground">Fils de discussion</legend>
-      <label className="block text-muted-foreground">Fournisseur par défaut<select className={`${inputClass} mt-1`} value={settings.defaultProvider} onChange={(event) => save({ defaultProvider: event.target.value as AgentSettings['defaultProvider'] })}>{providerOptions}</select></label>
+      <label className="block text-muted-foreground">Fournisseur par défaut<select className={`${inputClass} mt-1`} value={settings.defaultProvider} onChange={(event) => save({ defaultProvider: event.target.value as AgentSettings['defaultProvider'] })}>
+        {['chat', ...PROVIDERS].map((value) => <option key={value} value={value} disabled={value !== 'chat' && !connected.has(value as AgentProvider)}>
+          {PROVIDER_LABELS[value]}{value !== 'chat' && !connected.has(value as AgentProvider) ? ' (non connecté)' : ''}</option>)}</select></label>
       {PROVIDERS.map((provider) => <div key={provider} className="grid grid-cols-[1fr_6rem] gap-2">
         <label className="block text-muted-foreground">Modèle {PROVIDER_LABELS[provider]}<ModelSelect className={`${inputClass} mt-1`} providers={[provider]} disabled={!connected.has(provider)} value={settings.defaultModels[provider] ?? ''}
           onChange={(model) => model && save({ defaultModels: { [provider]: model } })} /></label>
@@ -205,15 +209,7 @@ function Settings({ state, act, projectPath }: { state: AgentState; act: AgentAc
           onBlur={(event) => Number(event.target.value) > 0 && save({ concurrency: { ...settings.concurrency, [provider]: Number(event.target.value) } })} /></label>
       </div>)}
     </fieldset>
-    {state.central && <Brain projectPath={projectPath} />}
-    {state.central ? <fieldset className="space-y-2">
-      <legend className="text-[15px] text-foreground">Dossiers de l’agent central</legend>
-      <p className="text-muted-foreground">Chaque fil travaille dans un seul de ces dossiers, et sa session y est rangée.</p>
-      {state.dossiers.length ? state.dossiers.map((item) => <label key={item.path} className="flex items-center gap-2 text-foreground/80" title={item.path}>
-        <input type="checkbox" checked={item.selected} onChange={() => save({ folders: item.selected ? settings.folders.filter((entry) => entry !== item.path) : [...settings.folders, item.path] })} />
-        <span className="min-w-0 flex-1 truncate">{folderName(item.path)}</span>
-      </label>) : <p className="text-muted-foreground">Aucun dossier pour l’instant.</p>}
-    </fieldset> : <fieldset className="space-y-2">
+    {!state.central && <fieldset className="space-y-2">
       <legend className="text-[15px] text-foreground">Dossiers autorisés</legend>
       {settings.folders.length ? settings.folders.map((item) => <div key={item} className="flex items-center gap-2 text-foreground/80">
         <span className="min-w-0 flex-1 truncate">{item}</span>
@@ -223,6 +219,20 @@ function Settings({ state, act, projectPath }: { state: AgentState; act: AgentAc
         <button type="button" className={buttonClass} disabled={!folder.trim()} onClick={() => { save({ folders: [...settings.folders, folder.trim()] }); setFolder(''); }}>Ajouter</button></div>
     </fieldset>}
   </div>;
+}
+
+function ActiveFolders({ state, act }: { state: AgentState; act: AgentActions }) {
+  const settings = state.settings;
+  const save = (patch: Partial<AgentSettings>) => void act('settings', patch, 'PUT');
+  const folders = [...state.dossiers].sort((a, b) => Number(b.selected) - Number(a.selected));
+  return <fieldset className="space-y-2">
+    <legend className="text-[15px] text-foreground">Dossiers actifs</legend>
+    <p className="text-muted-foreground">Chaque fil travaille dans un seul de ces dossiers, et sa session y est rangée.</p>
+    {folders.length ? folders.map((item) => <label key={item.path} className="flex items-center gap-2 text-foreground/80" title={item.path}>
+      <input type="checkbox" checked={item.selected} onChange={() => save({ folders: item.selected ? settings.folders.filter((entry) => entry !== item.path) : [...settings.folders, item.path] })} />
+      <span className="min-w-0 flex-1 truncate">{folderName(item.path)}</span>
+    </label>) : <p className="text-muted-foreground">Aucun dossier pour l’instant.</p>}
+  </fieldset>;
 }
 
 const DREAM_DEFAULTS: AgentDreamSettings = { enabled: false, provider: 'auto', model: '', hour: 3 };
@@ -251,7 +261,7 @@ function Dream({ state, act }: { state: AgentState; act: AgentActions }) {
 export function AgentPanel({ projectPath, projectId, panelActions, onShowSettings }: { projectPath: string; projectId: string; panelActions?: ReactNode; onShowSettings?: () => void }) {
   const { state, error, act } = useAgentState(projectPath);
   const [tab, setTab] = useState<AgentPanelTab>('threads');
-  const [settingsTab, setSettingsTab] = useState<'general' | 'dream'>('general');
+  const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
   const [menu, setMenu] = useState<'plus' | 'filter' | null>(null);
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -327,11 +337,17 @@ export function AgentPanel({ projectPath, projectId, panelActions, onShowSetting
         {tab === 'threads' && <Threads state={state} act={act} query={query} filter={filter} onOpen={setOpenThreadId} />}
         {tab === 'context' && <Context state={state} act={act} projectPath={projectPath} onTab={onTab} onOpenArtifact={onOpenArtifact} />}
         {tab === 'settings' && <>
-          {state.central && <nav role="tablist" aria-label="Paramètres de l’agent" className="flex gap-1 border-b border-border px-4 py-2">
-            {([['general', 'Réglages'], ['dream', 'Dream']] as const).map(([value, label]) => <button key={value} role="tab" type="button" aria-selected={settingsTab === value} onClick={() => setSettingsTab(value)}
+          {state.central && <nav role="tablist" aria-label="Paramètres de l’agent" className="flex flex-wrap gap-1 border-b border-border px-4 py-2">
+            {SETTINGS_TABS.map(([value, label]) => <button key={value} role="tab" type="button" aria-selected={settingsTab === value} onClick={() => setSettingsTab(value)}
               className={`rounded-lg px-3 py-1 text-sm ${settingsTab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>{label}</button>)}
           </nav>}
-          {state.central && settingsTab === 'dream' ? <Dream state={state} act={act} /> : <><Instructions state={state} act={act} /><Settings state={state} act={act} projectPath={projectPath} /></>}
+          {state.central ? <>
+            {settingsTab === 'general' && <Settings state={state} act={act} />}
+            {settingsTab === 'instructions' && <Instructions state={state} act={act} />}
+            {settingsTab === 'dream' && <Dream state={state} act={act} />}
+            {settingsTab === 'brain' && <Brain projectPath={projectPath} />}
+            {settingsTab === 'folders' && <ActiveFolders state={state} act={act} />}
+          </> : <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
         </>}
         {tab === 'scheduled' && <AgentScheduled state={state} act={act} onOpenArtifact={onOpenArtifact} />}
       </div>

@@ -68,7 +68,7 @@ const thread: AgentThread = {
 function state(): AgentState {
   return {
     revision: 1,
-    settings: { instructions: '', orchestratorProvider: 'auto', orchestratorModel: '', defaultProvider: 'auto', defaultModels: {}, concurrency: { claude: 2, codex: 2, mistral: 2 }, folders: [], recycleAfter: 50 },
+    settings: { instructions: '', orchestratorProvider: 'auto', orchestratorModel: '', defaultProvider: 'chat', defaultModels: {}, concurrency: { claude: 2, codex: 2, mistral: 2 }, folders: [], recycleAfter: 50 },
     messages: [],
     decisions: [{ id: 'd1', question: 'Quel plan retenir ?', options: [{ label: 'Plan court', consequence: 'Deux parties.' }, { label: 'Plan long', consequence: 'Quatre parties.' }], recommended: 0, chosen: null, closedBy: null, withdrawn: false, owner: { threadId: 'f1' } }],
     threads: [thread],
@@ -118,7 +118,7 @@ it('liste les fils, les décisions à traiter et ouvre le chat du fil dans le vo
 });
 
 const Workspace = withWorkspacePanels((props) => <>
-  <output data-testid={`main ${props.selectedProject?.fullPath}`}>{props.selectedSession?.id}</output>
+  <output data-testid={`main ${props.selectedProject?.fullPath}`} data-project-id={props.selectedProject?.projectId}>{props.selectedSession?.id}</output>
   <WorkspaceIconTabs activeTab={props.activeTab} setActiveTab={props.setActiveTab} shouldShowTasksTab={false} shouldShowBrowserTab={false} />
   {props.selectedProject?.fullPath === CENTRAL && <AgentChatCard card={{ messageId: 'm1', decisions: [], outputs: [{ kind: 'file', ref: `${PROJECT}/note.docx`, title: 'Note Dupont' }] }} project={CENTRAL} />}
 </>);
@@ -201,6 +201,27 @@ it('ouvre un fil de l’agent central dans un volet imbriqué, avec son dossier,
   expect(openInEditor).toHaveBeenCalledWith(`${PROJECT}/note.docx`);
 });
 
+it('donne au fil ouvert l’identifiant de son dossier dès que l’état de l’agent central l’apporte', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    const data = state();
+    data.central = true;
+    data.decisions = [];
+    data.dossiers = [{ path: PROJECT, selected: true }];
+    calls.state = data;
+    calls.agentSession = 'agent-1';
+    render(<Harness sessionId="agent-1" project={CENTRAL} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Rédiger la note de synthèse/ }));
+    const nested = await screen.findByRole('region', { name: 'Fil Rédiger la note de synthèse' });
+    expect(nested.querySelector(`[data-testid="main ${PROJECT}"]`)?.getAttribute('data-project-id')).toBe('');
+    calls.state = { ...data, projectIds: { [`${PROJECT}/`]: 'dupont' } };
+    await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
+    expect(screen.getByRole('region', { name: 'Fil Rédiger la note de synthèse' }).querySelector(`[data-testid="main ${PROJECT}"]`)?.getAttribute('data-project-id')).toBe('dupont');
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
 it('range les fils de l’agent central par dossier et coche les dossiers qu’il peut utiliser', async () => {
   const central = CENTRAL;
   const exemple = '/dossiers/Societe Exemple';
@@ -216,9 +237,25 @@ it('range les fils de l’agent central par dossier et coche les dossiers qu’i
   expect(dupont.textContent).toContain('Rédiger la note de synthèse');
   expect(screen.getByRole('region', { name: 'Dossier Societe Exemple' }).textContent).toContain('Analyser le contrat');
   fireEvent.click(screen.getByRole('button', { name: 'Paramètres' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Dossiers actifs' }));
   fireEvent.click(await screen.findByRole('checkbox', { name: 'Societe Exemple' }));
   await act(async () => undefined);
   expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: central, folders: [PROJECT, exemple] }, method: 'PUT' });
+});
+
+it('range les dossiers actifs de l’agent central en haut de leur onglet', async () => {
+  const exemple = '/dossiers/Societe Exemple';
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  data.settings.folders = [exemple];
+  data.dossiers = [{ path: PROJECT, selected: false }, { path: exemple, selected: true }];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Dossiers actifs' }));
+  const labels = screen.getAllByRole('checkbox').map((box) => box.closest('label')?.textContent);
+  expect(labels).toEqual(['Societe Exemple', 'Dupont']);
 });
 
 it('déplace le brain de l’agent central vers le dossier choisi et y rouvre sa session', async () => {
@@ -230,6 +267,7 @@ it('déplace le brain de l’agent central vers le dossier choisi et y rouvre sa
   vi.stubGlobal('location', { ...window.location, assign });
   render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
   fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  fireEvent.click(await screen.findByRole('tab', { name: 'Brain' }));
   const input = await screen.findByRole('textbox', { name: 'Emplacement du brain' });
   expect((input as HTMLInputElement).value).toBe(CENTRAL);
   fireEvent.change(input, { target: { value: '/Users/exemple/Brain' } });
@@ -367,4 +405,19 @@ it('ouvre le document Word à gauche et la session de publication à droite depu
   await within(within(workspace).getByRole('complementary', { name: 'Session de création' })).findByText('Session fil-createur');
   fireEvent.click(within(workspace).getByRole('button', { name: 'Fermer l’artifact' }));
   expect(screen.queryByRole('dialog', { name: 'Rapport fictif' })).toBeNull();
+});
+
+it('règle le fournisseur par défaut des fils, qui suit le chat principal tant qu’on ne le change pas', async () => {
+  const data = state();
+  data.central = true;
+  data.decisions = [];
+  calls.state = data;
+  render(<MemoryRouter><AgentPanel projectPath={CENTRAL} projectId="central" /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Paramètres' }));
+  const select = await screen.findByRole('combobox', { name: 'Fournisseur par défaut' });
+  expect((select as HTMLSelectElement).value).toBe('chat');
+  expect(screen.getByRole('option', { name: 'Comme le chat principal' })).toBeTruthy();
+  fireEvent.change(select, { target: { value: 'claude' } });
+  await act(async () => undefined);
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, defaultProvider: 'claude' }, method: 'PUT' });
 });

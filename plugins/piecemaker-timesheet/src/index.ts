@@ -144,7 +144,7 @@ const STYLE_TEXT = `
   .pm-timesheet[data-theme=dark] .piecemaker-button--glass { color: var(--pm-timesheet-text); }
   .pm-timesheet * { box-sizing: border-box; }
   .pm-timesheet__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; margin: 0 0 20px; }
-  .pm-timesheet__title { margin: 0 0 6px; font-family: var(--piecemaker-font-editorial, EB Garamond, Georgia, serif); font-size: 1.25rem; font-weight: 500; letter-spacing: -.02em; }
+  .pm-timesheet__title { margin: 0 0 6px; font-family: var(--piecemaker-font-editorial,Inter,ui-sans-serif,system-ui,sans-serif); font-size: 1.25rem; font-weight: 500; letter-spacing: -.02em; }
   .pm-timesheet__subtitle { margin: 4px 0; color: var(--pm-timesheet-muted); line-height: 1.5; }
   .pm-timesheet__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
   .pm-timesheet__select { font: inherit; cursor: pointer; color: inherit; background: transparent; border: 1px solid var(--piecemaker-border, #e5e7eb); border-radius: .75rem; padding: 7px 12px; box-shadow: none; }

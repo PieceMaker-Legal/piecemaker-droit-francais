@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { mock, test } from 'node:test';
@@ -104,4 +104,25 @@ test('L’agent central lit et modifie la paire About.md et Roadmap.json d’un 
   const refused = await call('PUT', '/case/roadmap', { project: central, folder: dupont, roadmap: { suivis, etapes: { mappingValide: '2026-01-01' } } });
   assert.equal(refused.status, 400);
   assert.match(String(refused.value.error), /"etapes" cannot be changed/);
+});
+
+test('L’état de l’agent central donne l’identifiant du projet de chaque fil, même enregistré par un lien', async t => {
+  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'pm-ids-')));
+  t.after(() => rmSync(base, { recursive: true, force: true }));
+  const central = path.join(base, 'PieceMaker Agent');
+  const dupont = path.join(base, 'Dossier Dupont');
+  const lien = path.join(base, 'Lien Dupont');
+  mkdirSync(dupont);
+  symlinkSync(dupont, lien);
+  const state = mock.fn(async () => ({ central: true, dossiers: [{ path: dupont, selected: true }], threads: [{ projectPath: dupont }] }));
+  const service = { state, isCentral: (project: string) => project === central } as unknown as Parameters<typeof createOrchestratorRouter>[0];
+  const router = createOrchestratorRouter(service, { getProjectPaths: () => [{ project_id: 'p-dupont', project_path: lien }] });
+  const result = await new Promise<{ status: number; value: Record<string, unknown> }>((resolve, reject) => {
+    let status = 200;
+    const req = { method: 'GET', url: '/state', query: { project: central }, headers: {}, user: { id: 7 } };
+    const res = { status(code: number) { status = code; return res; }, json(value: Record<string, unknown>) { resolve({ status, value }); } };
+    router(req as unknown as express.Request, res as unknown as express.Response, error => reject(error ?? new Error('Route absente.')));
+  });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.value.projectIds, { [dupont]: 'p-dupont' });
 });

@@ -20,7 +20,7 @@ export const THREAD_STATE_COLORS: Record<AgentThreadState, string> = {
   stopped: 'bg-zinc-500',
 };
 
-export const PROVIDER_LABELS: Record<string, string> = { auto: 'Automatique', claude: 'Claude', codex: 'Codex', mistral: 'Mistral' };
+export const PROVIDER_LABELS: Record<string, string> = { auto: 'Automatique', chat: 'Comme le chat principal', claude: 'Claude', codex: 'Codex', mistral: 'Mistral' };
 
 export const DELIVERABLE_LABELS = { brouillon: 'Brouillon', a_relire: 'À relire', valide: 'Validé' } as const;
 

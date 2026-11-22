@@ -109,7 +109,7 @@ export const PLUGIN_STYLES = `
 .ptr-citation-list{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
 .ptr-citation-quote{font-style:italic;color:inherit}
 blockquote.ptr-citation-quote{margin:8px 0;padding-left:8px;border-left:3px solid #f59e0b}
-.ptr-source-text{margin-top:8px;white-space:pre-wrap;word-break:break-word;font-family:Georgia,serif;font-size:13px;line-height:1.55;max-height:60vh;overflow:auto;border:1px solid var(--ptr-border);border-radius:8px;padding:10px 12px}
+.ptr-source-text{margin-top:8px;white-space:pre-wrap;word-break:break-word;font-family:var(--piecemaker-font-ui,Inter,ui-sans-serif,sans-serif);font-size:13px;line-height:1.55;max-height:60vh;overflow:auto;border:1px solid var(--ptr-border);border-radius:8px;padding:10px 12px}
 .ptr-source-text mark{background:#fde68a;color:#111827;border-radius:2px}
 .ptr-md p{margin:0 0 3px}
 .ptr-md ul{margin:0 0 3px;padding-left:16px}

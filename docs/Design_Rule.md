@@ -5,9 +5,9 @@ icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML
 
 ## Sources et principes
 
-- Interface : `Inter`, exposée par `--font-inter` et `--font-sans`.
-- Titres éditoriaux et contenu juridique : `EB Garamond`, exposée par
-  `--font-eb-garamond` et `--font-serif`.
+- Police unique : `Inter`, pour toute l'interface (titres, chat, contenu
+  juridique compris). Aucune police à empattements (ni Merriweather, ni
+  EB Garamond). `font-serif` et `--piecemaker-font-editorial` rendent Inter.
 - Icônes : bibliothèque `lucide-react`, avec un trait par défaut de 2 px.
 - Style de surface : liquid glass, avec bordure fine, ombre intérieure et
   transparence légère.
@@ -42,7 +42,7 @@ icônes, boutons, toggles et cases à cocher. Elle ne définit aucun markup HTML
 @layer components {
   :root {
     --piecemaker-font-ui: var(--font-inter, Inter, sans-serif);
-    --piecemaker-font-editorial: var(--font-eb-garamond, "EB Garamond", serif);
+    --piecemaker-font-editorial: var(--piecemaker-font-ui);
     --piecemaker-blue: rgb(0 136 255);
     --piecemaker-text: #374151;
     --piecemaker-muted: #6b7280;
