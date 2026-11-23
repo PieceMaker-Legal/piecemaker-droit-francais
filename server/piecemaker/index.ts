@@ -5,7 +5,7 @@ import { pathToFileURL } from 'url';
 
 import type { Router } from 'express';
 
-import { getConnection, projectsDb, sessionsDb, userPreferencesDb } from '@/modules/database/index.js';
+import { getConnection, initializeDatabase, projectsDb, sessionsDb, userPreferencesDb } from '@/modules/database/index.js';
 import { desktopAuthRoutes } from '@/modules/desktop-auth/index.js';
 import { createNotificationEvent, notifyUserIfEnabled } from '@/modules/notifications/index.js';
 import { createOrchestratorLocalRouter, createOrchestratorRouter, createOrchestratorService, wakeDisplay, type RunnableProvider } from '@/modules/piecemaker-orchestrateur/index.js';
@@ -71,6 +71,8 @@ import { createTabularReviewLocalRouter } from './tabular-review-assistant.js';
 import { createOrchestratorProviderStatuses } from './orchestrator-providers.js';
 import { mistralSdkAuth } from './mistral-sdk/auth.service.js';
 import { createMistralHistory, createMistralSdkAuthRouter, createMistralTabularBridge, installMistralSdk, installMistralTokenUsage } from './mistral-sdk/index.js';
+
+await initializeDatabase();
 
 /**
  * Point d'entrée PieceMaker. Les modules de `server/piecemaker/vendor/` sont du
