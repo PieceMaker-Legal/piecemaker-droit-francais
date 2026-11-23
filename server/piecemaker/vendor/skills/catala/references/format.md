@@ -189,7 +189,8 @@ champ d'application TestResolution:
 
 - Déclarez chaque fait du dossier comme un `contexte` titré : `condition` s'il est vrai ou faux, `contenu argent`, `entier` ou `date` s'il porte une valeur.
 - Une `condition` est fausse tant qu'aucune règle ne la remplit. Dans le test, écrivez `règle calcul.fait rempli` pour un fait établi, `définition calcul.prix égal à …` pour une valeur.
-- Un fait établi par une pièce peut la citer : un lien Markdown vers la pièce, suivi de l'extrait exact entre « ». `pm catala verifier` contrôle l'extrait.
+- Dans le scénario du dossier, chaque fait établi cite ses pièces, juste au-dessus de la ligne qui le fixe, une ligne par pièce : `## [Contrat](../../../pieces/contrat.md) « Le prix est de 12 000 €. »`. `pm catala verifier` contrôle l'extrait et refuse un fait établi sans pièce.
+- Un fait non établi s'écrit `règle calcul.fait non rempli`, sans pièce. Un scénario d'hypothèse, sans pièce, reste libre.
 - Gardez les déclarations dans un bloc ` ```catala-metadata ` : un module n'expose que ces blocs.
 
 ## Structure

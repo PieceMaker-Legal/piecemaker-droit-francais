@@ -358,7 +358,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><th>Demande</th><th>À charger</th></tr>
         <tr><td>Pièces, index, chronologie, base du dossier, conversion, volets, bordereau, tabular review, échéances</td><td class="c-mcp">MCP features : <code>Feature quickstart</code>, puis les pages qu'il indique (<code>Feature read &lt;feature&gt; path=…</code>)</td></tr>
         <tr><td>Bundle OKF du dossier (Context-OKF 0.3 sur la LOF) : concepts écrits avec Write ou Edit, validés par le Hérisson ; arborescence commune, réglée par l'avocat (l'agent propose en modifiant <code>ontologie.json</code> avec Edit ou Write)</td><td class="c-skill">okf, puis piecemaker (<code>pm okf verify</code>)</td></tr>
-        <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala ; prémisses avec okf</td></tr>
+        <tr><td>Règle juridique en programme, calcul formel, preuve sur les exceptions</td><td class="c-skill">catala ; faits cités dans les pièces</td></tr>
         <tr><td>Question de droit à documenter</td><td class="c-agent">research-maker ; l'agent principal relit chaque source avant de la citer</td></tr>
         <tr><td>Lire, modifier, annoter ou créer un fichier Word <code>.docx</code></td><td class="c-skill">docx-cli</td></tr>
         <tr><td>Rédiger ou relire un acte, un courrier, un document juridique</td><td class="c-skill">style-redaction-cabinet, puis docx-cli</td></tr>
@@ -397,7 +397,7 @@ ul { margin: 0; padding-left: 18px; display: grid; gap: 8px; }
         <tr><td><code>pm dossier arborescence [--dossiers JSON] [--motif]</code></td><td>Lit l'arborescence et la proposition en attente ; avec <code>--dossiers</code>, propose une arborescence que l'avocat accepte, refuse ou modifie dans Index › Classement.</td><td>non</td></tr>
         <tr><td><code>pm dossier classer &lt;document&gt; &lt;dossier&gt;</code></td><td>Range un document dans un dossier de l'arborescence : il prend le type de ce dossier. <code>pm check</code> nomme les documents sans type.</td><td>non</td></tr>
         <tr><td><code>pm dossier sql "REQUÊTE"</code></td><td>Lit ou modifie les dates et les libellés des pièces en base (requêtes d'exemple dans la skill).</td><td>non</td></tr>
-        <tr><td><code>pm check</code></td><td>Bilan du dossier : anonymisation, mapping, conversion, index OKF, prémisses, programmes Catala, suivi, revues de recherche, étape. Chaque défaut donne la commande ou le sous-agent qui le corrige.</td><td>non</td></tr>
+        <tr><td><code>pm check</code></td><td>Bilan du dossier : anonymisation, mapping, conversion, index OKF, programmes Catala, suivi, revues de recherche, étape. Chaque défaut donne la commande ou le sous-agent qui le corrige.</td><td>non</td></tr>
       </table></div>
     </section>
 

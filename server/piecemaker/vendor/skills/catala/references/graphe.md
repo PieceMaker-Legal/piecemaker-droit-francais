@@ -3,7 +3,7 @@
 1. Formulez la question juridique avant de coder sa réponse.
 2. Décomposez la réponse en qualifications, conditions et exceptions nommées. Gardez les liens dans les expressions Catala.
 3. Une entrée est un fait typé (date, montant, durée, texte d’une clause), jamais une question. La règle le qualifie.
-4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque fait à son concept du bundle OKF ; le concept porte la pièce (`resource`) et sa citation.
+4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque fait à une ou plusieurs pièces, chacune avec sa citation exacte.
 5. Établissez chaque fait par les pièces. Un fait que les pièces ne prouvent pas est écarté, faute de preuve, au détriment de la partie qui le supporte (art. 1353 C. civ.). Ne le laissez pas inconnu.
 6. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée, sourcée par le texte ou la jurisprudence, pas une entrée.
 7. Écrivez un scénario `#[test]` du dossier, avec les faits établis. Ajoutez un scénario seulement quand un fait contesté change l’issue.
@@ -21,7 +21,7 @@ Un fait est un `contexte` du champ (`format.md`, « Faits du dossier »). Dans l
 
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées. Gardez les étiquettes et exceptions dans Catala.
 
-Un fait peut citer sa pièce par un lien suivi de l'extrait entre « » ; `pm catala verifier` contrôle l'extrait.
+Juste au-dessus de la ligne qui fixe un fait, écrivez une ligne par pièce : `## [Contrat](../../../pieces/contrat.md) « Le prix est de 12 000 €. »`. Le graphe montre ces pièces sous le fait ; `pm catala verifier` contrôle l'extrait.
 
 Le graphe est un arbre lu de gauche à droite : la prétention, avec sa conclusion dessous, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
 La couleur donne la valeur du scénario : vert pour rempli ou vrai, orange pour indéterminé, rouge pour non rempli. L’état de la preuve est une étiquette à part (« Pièce à rattacher », « Pièce citée »). La conclusion liste les réserves.

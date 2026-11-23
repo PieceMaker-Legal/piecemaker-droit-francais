@@ -655,7 +655,7 @@ const FACTS = [
   '```',
   '',
 ].join('\n');
-const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  ## okf:/_premises/demande.md\n  définition calcul.demande égal à 0 €\n  assertion calcul.montant = 0 €\n```\n";
+const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  ## [Demande de Jean Dupont](../../../pieces/demande.md) « La prime demandée est nulle. »\n  définition calcul.demande égal à 0 €\n  assertion calcul.montant = 0 €\n```\n";
 
 test('verifier requires a title, a legal anchor and a complete task', async () => {
   const { home, dossier, cleanup } = scratch();
@@ -671,7 +671,7 @@ test('verifier requires a title, a legal anchor and a complete task', async () =
       [FACTS.replace('  ## Montant demandé\n', ''), 'prime.catala_fr:5: titre manquant pour cette entrée. Écrivez ## texte court au-dessus.'],
       [FACTS.replace('## Montant demandé', '## Montant ?'), 'prime.catala_fr:5: titre « Montant ? » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
       [FACTS.replace('## Montant demandé', '## montant_demande de Jean'), 'prime.catala_fr:5: titre « montant_demande de Jean » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
-      [FACTS.replace('  ## Montant demandé\n', '  ## Montant demandé\n  #[doc="source: okf:/_premises/montant-demande.md"]\n'), 'prime.catala_fr:6: #[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section.'],
+      [FACTS.replace('  ## Montant demandé\n', '  ## Montant demandé\n  #[doc="source: Pièce 1"]\n'), 'prime.catala_fr:6: #[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section.'],
       [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1'), "prime.catala_fr:16: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
       [FACTS.replace('« Passage exact. »\n\n', ''), ["prime.catala_fr:10: LEGIARTI000000000001 cité sans section propre : écrivez ## Article N | LEGIARTI000000000001 suivi de l'extrait entre « ».", "prime.catala_fr:14: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."]],
       [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Décision fictive | JURITEXT000000000001'), null],
@@ -728,6 +728,23 @@ test('verifier fails a test without assertion, a typecheck warning, and a misspe
       assert.deepEqual(documentation.errors, ['prime.catala_fr:12: bloc ignoré par Catala : ouvrez-le exactement par ```catala ou ```catala-metadata, sans espace ni majuscule.'], opening);
     }
   } finally { cleanup(); }
+});
+
+test('a fact fixed in the dossier scenario cites one or several pieces; a hypothesis scenario stays free', () => {
+  const scenario = (name, body) => `#[test]\ndéclaration champ d'application ${name}:\n  résultat cas champ d'application Prime.Prime\nchamp d'application ${name}:\n${body}`;
+  const content = ['```catala', scenario('Dossier', [
+    '  ## [Contrat](../../../pieces/contrat.md) « Le prix est de 1 000 €. »',
+    '  ## [Facture](../../../pieces/facture.md) « Montant : 1 000 €. »',
+    '  définition cas.prix égal à 1 000 €',
+    '  règle cas.paiement_reçu rempli',
+    '  règle cas.mise_en_demeure non rempli',
+    '  définition cas.lecture égal à Inconnu',
+    '  assertion cas.dû = 1 000 €',
+  ].join('\n')), scenario('Hypothèse', '  règle cas.paiement_reçu rempli\n  assertion cas.dû = 0 €'), '```', ''].join('\n');
+  const { entries, errors } = catalaDocumentation(content, { test: true });
+  assert.deepEqual(errors.map((error) => [error.line, error.message.split(' :')[0]]), [[9, 'fait sans pièce']]);
+  assert.deepEqual(entries.find((entry) => entry.startLine === 6), { startLine: 6, endLine: 8, doc: '[Contrat](../../../pieces/contrat.md)\n« Le prix est de 1 000 €. »\n[Facture](../../../pieces/facture.md)\n« Montant : 1 000 €. »', hasDoc: true, title: '' });
+  assert.deepEqual(catalaDocumentation(content, { test: true, contract: true }).errors, []);
 });
 
 test('the indemnity fixture passes documentation and each rule rejects its fault', async () => {

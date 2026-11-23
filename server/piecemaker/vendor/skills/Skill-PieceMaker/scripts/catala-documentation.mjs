@@ -5,8 +5,8 @@ const CITED = /\b(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)\d{12}\b/g;
 const MALFORMED = /\b(?:LEGIARTI|JORFARTI|JURITEXT|CETATEXT|CONSTEXT)(?!\d{12}\b)/;
 const WHOLE_TEXT = /\b(?:LEGITEXT|JORFTEXT)\d+/;
 const ARTICLE_LABEL = /\d[\p{L}\p{N}]*_\p{L}[\p{L}_]*$/u;
-const PREMISE = /^okf:\/\S+$/;
-const NO_PREMISE = /^\s*##\s+Sans prémisse\s*:\s*(\S.*?)\s*$/u;
+const ESTABLISHED = /^\S+\s+\S+\s+(?:rempli\b|(?:égal à|equals)\s+(?:-?\d|\||vrai\b|faux\b|true\b|false\b))/u;
+const PIECE = /^\[([^\]\n]+)\]\(([^)\s]+)\)\s*«\s*(.*?)\s*»$/u;
 const DECLARED_TEST = /#\[test\]\s*(?:déclaration|declaration)\s+(?:champ d'application|scope)\s+([\p{L}\p{N}_]+)/gu;
 
 const CONTRACT_WORDS = /(?<![\p{L}])(?:contrat|convention|clause|statuts|pacte|avenant|bail|protocole|conditions générales|CGV|accord)(?![\p{L}])/iu;
@@ -31,6 +31,8 @@ export function catalaDocumentation(content, { test = false, contract = false } 
   let startLine = 0;
   let block = [];
   let scope = '';
+  const cited = new Set();
+  const uncited = [];
   const inspect = () => {
     const text = block.join('\n');
     const anchored = Boolean(headings.at(-1)?.anchored);
@@ -55,8 +57,10 @@ export function catalaDocumentation(content, { test = false, contract = false } 
           pending.push(decode(token[1]));
           const field = decode(token[1]).match(/^\s*(titre|source|quote)\s*:/im)?.[1];
           if (field) errors.push({ line: lineAt(token.index), message: `#[doc] contient « ${field}: » : le titre va dans ## texte court, la source juridique dans le titre de section.` });
-        } else if (PREMISE.test(token[2].trim()) || NO_PREMISE.test(`## ${token[2]}`)) {
-          pending.push(token[2].trim());
+        } else if (PIECE.test(token[2].trim())) {
+          const [, label, target, quote] = PIECE.exec(token[2].trim());
+          pending.push(`[${label}](${target})\n« ${quote} »`);
+          meta.piece = true;
         } else {
           meta.title = token[2].trim();
           const words = meta.title.split(/\s+/).filter(Boolean);
@@ -75,11 +79,15 @@ export function catalaDocumentation(content, { test = false, contract = false } 
       if (previous) previous.endLine = lineAt(token.index) - 1;
       const line = lineAt(token.index);
       const doc = pending.join('\n');
-      const title = meta.title ?? doc.trim();
+      const title = meta.title ?? (meta.piece ? '' : doc.trim());
       const entry = { startLine: pendingLine || line, endLine: startLine + block.length, doc, hasDoc: pending.length > 0, title };
       entries.push(entry);
       previous = entry;
       if (/^(?:entrée|input)$/.test(token[0]) && !meta.title) errors.push({ line, message: 'titre manquant pour cette entrée. Écrivez ## texte court au-dessus.' });
+      if (/^(?:définition|definition|règle|rule)$/.test(token[0]) && !contract && tests.has(scope)) {
+        if (meta.piece) cited.add(scope);
+        else if (ESTABLISHED.test(text.slice(token.index).split('\n')[0])) uncited.push({ scope, line });
+      }
       if (/^(?:définition|definition|règle|rule)$/.test(token[0]) && !test && !tests.has(scope) && !anchored) errors.push({ line, message: contract ? "règle sans clause ni texte : placez-la sous le titre de sa clause (## Article N — Intitulé), suivi du texte exact de la clause entre « », ou sous un titre ## Article N | LEGIARTI… suivi de l'extrait." : "règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »." });
       pending = [];
       meta = {};
@@ -119,6 +127,7 @@ export function catalaDocumentation(content, { test = false, contract = false } 
     } else if (fence && code) block.push(line);
   });
   if (code) inspect();
+  for (const { scope: name, line } of uncited) if (cited.has(name)) errors.push({ line, message: 'fait sans pièce : écrivez juste au-dessus une ligne ## [Pièce](chemin de la pièce) « extrait exact » par pièce qui l’établit. Un fait que les pièces n’établissent pas s’écrit règle cas.fait non rempli.' });
   return { entries, errors };
 }
 
