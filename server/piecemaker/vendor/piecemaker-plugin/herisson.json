@@ -65,6 +65,15 @@
       "format": "memoire"
     },
     {
+      "nom": "objectifs",
+      "cible": "^objectifs\\.md$",
+      "ecriture": "agent",
+      "skill": "piecemaker",
+      "verifier": ["objectifs", "verifier"],
+      "erreur": "[1-9]\\d* erreur\\(s\\)",
+      "delai": 10
+    },
+    {
       "nom": "roadmap",
       "cible": "^(?!)",
       "brain": "Roadmap.json",
@@ -118,7 +127,8 @@
           "chemin": "vendor/skills/Skill-PieceMaker",
           "references": [
             "check.md",
-            "dossier.md"
+            "dossier.md",
+            "objectifs.md"
           ]
         }
       ],
@@ -129,6 +139,14 @@
             "check"
           ],
           "role": "Numbered state of the case, in work order; each defect names its fix."
+        },
+        {
+          "nom": "verify_objectives",
+          "pm": [
+            "objectifs",
+            "verifier"
+          ],
+          "role": "Check the objectives of the case and the parties of each (.piecemaker/objectifs.md)."
         },
         {
           "nom": "query_database",

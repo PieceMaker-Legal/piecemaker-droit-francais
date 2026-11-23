@@ -270,7 +270,8 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
   const text = await run(['check', '--dossier', dossier], { deps });
   assert.deepEqual(calls, [{ action: 'verify', folder: dossier }]);
   assert.equal(text, [
-    'Dossier : 8 point(s) à traiter.',
+    'Dossier : 9 point(s) à traiter.',
+    '0° Objectifs : à définir avec l’avocat → pm objectifs verifier',
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
@@ -336,8 +337,12 @@ test('check sur un dossier à jour ne signale rien', async () => {
     okfFn: async () => ({ erreurs: [], contradictions: [], manques: [] }),
     suiviFn: async () => { throw new Error('inattendu'); },
   };
+  fs.mkdirSync(path.join(dossier, '.piecemaker', 'okf', '_parties'), { recursive: true });
+  fs.writeFileSync(path.join(dossier, '.piecemaker', 'okf', '_parties', 'PERSONNE_PHYSIQUE_01.md'), '');
+  fs.writeFileSync(path.join(dossier, '.piecemaker', 'objectifs.md'), '## Objectif : Obtenir le paiement\nRésultat recherché : paiement de la facture.\nParties :\n- PERSONNE_PHYSIQUE_01 : créancier, client\n');
   assert.equal(await run(['check', '--dossier', dossier], { deps }), [
     'Dossier : valide.',
+    '0° Objectifs (1) : valide',
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
@@ -345,20 +350,20 @@ test('check sur un dossier à jour ne signale rien', async () => {
     '5° Raisonnement : aucun',
   ].join('\n'));
   const pending = { ...deps, mappingValidated: () => false, piecesFn: async () => ({ pieces: [{ path: 'Pièces/lettre.pdf', status: 'conversion-failed', protected: true }] }) };
-  assert.equal((await run(['check', '--dossier', dossier], { deps: pending })).split('\n').slice(0, 4).join('\n'), [
+  assert.equal((await run(['check', '--dossier', dossier], { deps: pending })).split('\n').filter((ligne) => !ligne.startsWith('0° ')).slice(0, 4).join('\n'), [
     'Dossier : 2 point(s) à traiter.',
     '1° Conversion : 1 pièce(s) non convertie(s) : pm dossier conversion',
     '2° Anonymisation : valide',
     '3° Mapping : à valider par l’avocat (onglet Dossier, Mapping)',
   ].join('\n'));
   const copie = { ...deps, entityCount: async () => 0 };
-  assert.equal((await run(['check', '--dossier', dossier], { deps: copie })).split('\n').slice(0, 3).join('\n'), [
+  assert.equal((await run(['check', '--dossier', dossier], { deps: copie })).split('\n').filter((ligne) => !ligne.startsWith('0° ')).slice(0, 3).join('\n'), [
     'Dossier : 1 point(s) à traiter.',
     '1° Conversion : valide',
     '2° Anonymisation : à refaire, aucune entité ni mapping en base pour ce dossier : pm dossier conversion',
   ].join('\n'));
   const scan = { ...deps, caseState: () => ({ anonymized: false, lifted: false }), conversionJob: async () => ({ job: { state: 'running', phase: 'scan', percent: 27.25, processed: 8, total: 216 } }) };
-  assert.equal((await run(['check', '--dossier', dossier], { deps: scan })).split('\n').slice(1, 3).join('\n'), [
+  assert.equal((await run(['check', '--dossier', dossier], { deps: scan })).split('\n').slice(2, 4).join('\n'), [
     '1° Conversion : Conversion en cours : phase scan, 8/216 (avancement global 27 %). Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala et suivi, qui ne lisent pas les pièces.',
     '2° Anonymisation : en cours, voir 1°',
   ].join('\n'));
@@ -366,7 +371,7 @@ test('check sur un dossier à jour ne signale rien', async () => {
     { element: '/_premises/date-de-rupture.md', manque: 'prémisse sans partie concernée (involves) : attend l’avocat', avocat: true },
     { element: 'Pièces/avenant.md', manque: 'pièce à examiner' },
   ] }) };
-  assert.equal((await run(['check', '--dossier', dossier], { deps: parties })).split('\n')[4], '4° Index : 1 manque(s), 1 manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier) → pm okf verify');
+  assert.equal((await run(['check', '--dossier', dossier], { deps: parties })).split('\n')[5], '4° Index : 1 manque(s), 1 manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier) → pm okf verify');
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
@@ -515,4 +520,45 @@ test('pm catala section transmet fichier, source, extrait et titre au wrapper Ca
   assert.equal(await run(['catala', 'section', '--fichier', 'prime.catala_fr', '--source', 'LEGIARTI000000000001', '--extrait', 'Texte fictif', '--titre', 'Article 1', '--dossier', '/tmp/dossier'], { deps }), 'Section ajoutée');
   assert.deepEqual(seen[0].flags, { fichier: 'prime.catala_fr', source: 'LEGIARTI000000000001', extrait: 'Texte fictif', titre: 'Article 1', dossier: '/tmp/dossier' });
   assert.match((await run(['--help'], { deps })) ?? '', /catala section --fichier F --source ID --extrait/);
+});
+
+test('objectifs verifier contrôle objectifs, parties, points à établir et actes', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-objectifs-'));
+  const write = (relative, content) => { fs.mkdirSync(path.dirname(path.join(dossier, relative)), { recursive: true }); fs.writeFileSync(path.join(dossier, relative), content); };
+  const verify = () => run(['objectifs', 'verifier', '--dossier', dossier], { deps: {} });
+  assert.match(await verify(), /^\.piecemaker\/objectifs\.md : introuvable\..*\nObjectifs : 0 objectif\(s\), 1 erreur\(s\), 0 manque\(s\)\.$/);
+  write('.piecemaker/okf/_parties/PERSONNE_PHYSIQUE_01.md', '');
+  write('.piecemaker/okf/_premises/loyers-impayes.md', '');
+  write('.piecemaker/etapes.json', JSON.stringify({ raisonnements: { 'assignation-loyers': {}, expulsion: {}, ancien: { remplacePar: 'expulsion' } } }));
+  write('.piecemaker/objectifs.md', [
+    '# Objectifs du dossier',
+    '',
+    '## Objectif : Obtenir le paiement des loyers',
+    'Statut : en cours',
+    'Résultat recherché : condamnation du preneur à payer l’arriéré.',
+    'Parties :',
+    '- PERSONNE_PHYSIQUE_01 : bailleur, client',
+    '- SOCIETE_EXEMPLE_SAS : preneur, adversaire',
+    'Points à établir :',
+    '- Loyers impayés',
+    '- Commandement resté sans effet',
+    'Actes : assignation-loyers',
+    '',
+    '## Objectif : Récupérer le local',
+    'Statut : suspendu',
+    'Parties :',
+    '- Jean Dupont : occupant',
+    '',
+  ].join('\n'));
+  assert.equal(await verify(), [
+    '.piecemaker/objectifs.md:14: erreur : objectif « Récupérer le local » sans « Résultat recherché : » (ce que le client veut obtenir).',
+    '.piecemaker/objectifs.md:15: erreur : statut « suspendu » inconnu. Statuts admis : en cours, en attente, atteint, abandonné.',
+    '.piecemaker/objectifs.md:17: erreur : « Jean Dupont » n’est pas un code de partie de l’index (ex. PERSONNE_PHYSIQUE_01) ; un nom ne va pas ici.',
+    '.piecemaker/objectifs.md:8: manque : SOCIETE_EXEMPLE_SAS n’est pas une partie de l’index ; la qualification attend l’avocat (onglet Dossier, vue générale).',
+    '.piecemaker/objectifs.md:11: manque : point à établir sans prémisse dans l’index (okf:/_premises/commandement-reste-sans-effet.md) : cherchez-le dans les pièces (skill okf).',
+    '.piecemaker/objectifs.md : manque : l’acte expulsion ne sert aucun objectif ; ajoutez-le à la ligne « Actes : » de l’objectif qu’il sert.',
+    'Objectifs : 2 objectif(s), 3 erreur(s), 3 manque(s).',
+  ].join('\n'));
+  await assert.rejects(() => run(['objectifs', 'lire', '--dossier', dossier], { deps: {} }), /objectifs attend verifier/);
+  fs.rmSync(dossier, { recursive: true, force: true });
 });

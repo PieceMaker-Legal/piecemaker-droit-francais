@@ -1311,6 +1311,16 @@
       "ancre": "Tu es un assistant juridique. Voici les règles :"
     },
     {
+      "id": "injection-agents-md--regle-0-objectifs-et-parties",
+      "titre": "Règle 0° : objectifs et parties",
+      "quand": "Lu à chaque session du dossier : CLAUDE.md importe AGENTS.md, qui importe .piecemaker/objectifs.md ; la ligne est aussi remise sous l'en-tête au balayage des projets si elle manque.",
+      "de": "injection:agents-md",
+      "vers": "agent",
+      "fichier": "server/piecemaker/agent-instructions.ts",
+      "guillemet": "'",
+      "ancre": "Tout le dossier se détermine par ses objectifs"
+    },
+    {
       "id": "injection-agents-md--regle-1-anonymisation",
       "titre": "Règle 1° : anonymisation",
       "quand": "Lu à chaque session du dossier : CLAUDE.md importe AGENTS.md ; le fichier est écrit au balayage des projets (toutes les 5 s) ou à l'appel de POST /agent-instructions.",

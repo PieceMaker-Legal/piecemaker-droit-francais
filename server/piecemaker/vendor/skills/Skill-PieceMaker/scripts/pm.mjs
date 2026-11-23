@@ -6,9 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CATALA_COMMANDS, listPrograms, premiseLinks, runCatala } from './catala.mjs';
+import { rapportObjectifs, verifierObjectifs } from './objectifs.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
+const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'objectifs', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
 const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'artifacts', 'fichier'];
 const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
@@ -60,7 +61,7 @@ function memoiresOf(folder) {
 export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossier PATH])
 
   check
-      bilan numéroté du dossier, dans l'ordre du travail : conversion, anonymisation,
+      bilan numéroté du dossier, dans l'ordre du travail : objectifs, conversion, anonymisation,
       mapping, index, puis chaque raisonnement (programme Catala, prémisses, actes,
       suivi) et les revues de recherche ; chaque défaut donne la commande ou le
       sous-agent qui le corrige
@@ -104,6 +105,11 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   memoire verifier [--memoire NOM]
       mémoire d'un projet : .piecemaker/memoires/NOM.md, récit sans frontmatter,
       nommée comme son acte ; sans --memoire : toutes ; rien si tout est conforme
+
+  objectifs verifier
+      objectifs et parties du dossier : .piecemaker/objectifs.md, une section
+      « ## Objectif : <intitulé> » par objectif (résultat recherché, parties par code,
+      points à établir, actes)
 
   okf verify
       index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
@@ -737,7 +743,7 @@ async function check(api, folder) {
   const research = await researchPoints(api, folder);
   const suivis = await Promise.all(others.map(async (suivi) => point('', `Suivi ${suivi}`, await suiviState(api, folder, suivi), `pm suivi_dossiers verifier --suivi ${suivi}`)));
   const tail = [...research, ...suivis].map((entry, index) => ({ ...entry, numero: `${6 + index}°`, depth: 0 }));
-  const all = [...preparation, indexPoint(okfResult), ...points, ...tail];
+  const all = [objectifsPoint(folder), ...preparation, indexPoint(okfResult), ...points, ...tail];
   const failing = all.filter((entry) => !entry.titre && !entry.ok).length;
   const note = await synthese(api, folder, all);
   return [
@@ -920,6 +926,21 @@ async function suiviDossiers(api, positional, flags, resolved) {
   return api.suiviFn({ commande, chemin, donnees, cwd });
 }
 
+const actesOf = (folder) => Object.entries(etapesOf(folder).raisonnements ?? {}).filter(([, suite]) => !suite?.remplacePar).map(([nom]) => nom);
+
+function objectifs(positional, resolved) {
+  if (positional[1] !== 'verifier') usage('objectifs attend verifier.');
+  const folder = path.resolve(resolved);
+  return rapportObjectifs(verifierObjectifs(folder, { actes: actesOf(folder) }));
+}
+
+function objectifsPoint(folder) {
+  const { objectifs: liste, erreurs, manques } = verifierObjectifs(folder, { actes: actesOf(folder) });
+  if (!liste.length && erreurs.length) return point('0°', 'Objectifs', 'à définir avec l’avocat', 'pm objectifs verifier');
+  const defauts = [erreurs.length && `${erreurs.length} erreur(s)`, manques.length && `${manques.length} manque(s)`].filter(Boolean).join(', ');
+  return point('0°', `Objectifs (${liste.length})`, defauts, 'pm objectifs verifier');
+}
+
 function memoire(positional, flags, resolved) {
   if (positional[1] !== 'verifier') usage('memoire attend verifier.');
   if (flags.memoire === true) usage('Indiquez une valeur pour --memoire.');
@@ -978,6 +999,7 @@ export async function run(argv, { cwd = process.cwd(), deps } = {}) {
   if (tool === 'catala') return catala(api, positional, flags, resolved);
   if (tool === 'okf') return okf(api, positional, flags, resolved);
   if (tool === 'memoire') return memoire(positional, flags, resolved);
+  if (tool === 'objectifs') return objectifs(positional, resolved);
 
   if (tool === 'bordereau') {
     const pieces = positional.slice(1);

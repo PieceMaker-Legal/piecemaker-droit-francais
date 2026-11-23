@@ -6,6 +6,7 @@ pm check
 
 Bilan court du dossier. La première ligne dit « Dossier : valide. » ou donne le nombre de points à traiter. Suit une ligne par point :
 
+0. Objectifs et parties du dossier (`objectifs.md`) : « à définir avec l’avocat » sans fichier.
 1. Anonymisation, mapping, conversion.
 2. Index OKF, prémisses, contradictions, autres manques du graphe.
 3. Chaque programme Catala, et ses conditions (`contexte … condition`) sans prémisse citée dans un scénario.
@@ -17,6 +18,7 @@ Un point valide affiche « valide ». Un point en défaut donne le nombre d'erre
 
 - Lancez la commande du rapport détaillé avant de corriger.
 - Signalez les défauts à l'avocat. Lancez un sous-agent seulement si sa tâche est celle demandée, ou sur accord de l'avocat.
+- Objectifs à définir : demandez-les à l'avocat avant le reste du travail ; n'en inventez pas.
 - Le mapping se valide par l'avocat seul, dans l'onglet Dossier : ne le validez pas à sa place.
 - Présentez les contradictions à l'avocat : ne choisissez pas une valeur à sa place.
 

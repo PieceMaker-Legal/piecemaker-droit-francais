@@ -19,6 +19,7 @@ Avant d'utiliser une commande, lisez sa référence dans `<cette-skill>/referenc
 
 | Commande | Rôle | Référence |
 | --- | --- | --- |
+| `pm objectifs` | verifier les objectifs du dossier et les parties de chacun (`.piecemaker/objectifs.md`), d'où part tout le reste | `objectifs.md` |
 | `pm check` | bilan du dossier, avec la commande ou le sous-agent qui corrige chaque défaut | `check.md` |
 | `pm tab` | lister, afficher ou fermer un volet ou un fichier | `tab.md` |
 | `pm dossier` | sql, conversion, arborescence, index des pièces | `dossier.md` |
@@ -29,7 +30,7 @@ Avant d'utiliser une commande, lisez sa référence dans `<cette-skill>/referenc
 | `pm okf` | `verify` l'index OKF du dossier et les éléments manquants du graphe, `link` ou `unlink` pièces, prémisses et parties, `examinee` une pièce lue sans lien, `revue` lie une colonne de revue tabulaire à une prémisse | `okf.md` |
 | `pm catala` | verifier un programme Catala (format, tests, preuve, Catleg) | skill `catala` |
 
-Au début du travail sur un dossier, lancez `pm check`.
+Au début du travail sur un dossier, lisez `.piecemaker/objectifs.md`, puis lancez `pm check`.
 
 ## Sous-agents
 

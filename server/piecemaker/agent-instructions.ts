@@ -49,6 +49,7 @@ const REPLACE_TREE_RULE = '3° Arborescence: Respecte l’arborescence du dossie
 const PREVIOUS_TREE_RULE = '3° Arborescence: Respecte l’arborescence du dossier, enregistrée dans .piecemaker/arborescence.json : l’avocat la règle dans le Tabular review index, tu la lis ou la remplaces avec pm tabular_review_index arborescence (voir la skill piecemaker), un « / » dans un nom crée un sous-dossier. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
 const OLD_TREE_RULE = '3° Arborescence: Respecte arborescence convenue dans perso.md. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
 const TEMPLATE_HEADER = 'Tu es un assistant juridique. Voici les règles :';
+const OBJECTIFS_RULE = '0° Objectifs et parties: Tout le dossier se détermine par ses objectifs : lis d’abord @.piecemaker/objectifs.md. Il donne, pour chaque objectif, le résultat recherché, les parties (codes de l’index) avec leur rôle, les points à établir et les actes qui le servent. Raisonnement, recherche, index (prémisses et parties à chercher dans les pièces, avant l’ontologie) et rédaction partent de là. S’il manque, demande à l’avocat le ou les objectifs du dossier et écris-le ; maintiens-le quand un objectif change ou qu’un acte s’ajoute. pm objectifs verifier le contrôle (voir la skill piecemaker, references/objectifs.md).';
 const TOOLS_RULE_START = '6° Outils:';
 const HELP_LINE = '- Syntaxe d’une commande → pm --help';
 const OLD_DELEGATION_LINE = '- Index des pièces → sous-agent index-maker ; raisonnement d’un acte → sous-agent reasoning-maker, puis premise-maker pour les prémisses de son programme Catala ; question de droit → sous-agent research-maker. Lis leur compte rendu et la vérification qui le suit ; relance le sous-agent si une erreur subsiste. Sans sous-agent activé, fais-le toi-même avec le skill.';
@@ -97,6 +98,7 @@ const RULE_UPDATES = new Map([
 export function agentInstructionsTemplate(): string {
   return [
   TEMPLATE_HEADER,
+  OBJECTIFS_RULE,
   '1° Anonymisation: Les entités sensibles sont pseudonymisées automatiquement à la lecture et dépseudonymisées à l’écriture. Conserve les pseudonymes fournis ; ne cherche pas à retrouver les identités réelles. Ne jamais ouvrir un dossier non anonymisé sans autorisation préalable',
   GENERAL_RULE,
   TREE_RULE,
@@ -124,14 +126,22 @@ const withDelegationRule = (content: string) => {
   return lines.join('\n');
 };
 
+const withObjectifsRule = (content: string) => {
+  const lines = content.split('\n');
+  const anchor = lines.findIndex((line) => line.replace(/\r$/, '') === TEMPLATE_HEADER);
+  if (anchor < 0 || lines.some((line) => line.startsWith('0° Objectifs'))) return content;
+  lines.splice(anchor + 1, 0, OBJECTIFS_RULE + (lines[anchor].endsWith('\r') ? '\r' : ''));
+  return lines.join('\n');
+};
+
 const refreshRules = async (agentsPath: string) => {
   const content = await readFile(agentsPath, 'utf8');
-  const next = withDelegationRule(withToolsRule(content.split('\n').map((line) => {
+  const next = withObjectifsRule(withDelegationRule(withToolsRule(content.split('\n').map((line) => {
     const updated = RULE_UPDATES.get(line.replace(/\r$/, ''));
     const current = updated ?? line.replace(/\r$/, '');
     const ending = line.endsWith('\r') ? '\r' : '';
     return current === SUIVI_RULE && !content.includes(DISCRETION_RULE) ? `${current}${ending}\n${DISCRETION_RULE}${ending}` : updated ? updated + ending : line;
-  }).join('\n')));
+  }).join('\n'))));
   if (next !== content) await writeFile(agentsPath, next);
 };
 

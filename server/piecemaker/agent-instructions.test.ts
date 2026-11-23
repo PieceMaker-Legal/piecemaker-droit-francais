@@ -158,10 +158,10 @@ test('replaces the previous delegation lines without duplicating them', () => wi
 }));
 
 test('leaves a tools rule rewritten by the lawyer untouched',() => withProject(async (root) => {
-  const content = `${agentInstructionsTemplate().split('\n')[0]}\n6° Outils: ma propre table\n`;
-  await writeFile(path.join(root, 'AGENTS.md'), content);
+  const [header, objectifs] = agentInstructionsTemplate().split('\n');
+  await writeFile(path.join(root, 'AGENTS.md'), `${header}\n6° Outils: ma propre table\n`);
   await ensureAgentInstructionFiles(root, SHARED);
-  assert.equal(await read(root, 'AGENTS.md'), content);
+  assert.equal(await read(root, 'AGENTS.md'), `${header}\n${objectifs}\n6° Outils: ma propre table\n`);
 }));
 
 test('points the rules of an existing AGENTS.md to the common folder tree and keeps custom lines', () => withProject(async (root) => {
@@ -169,7 +169,7 @@ test('points the rules of an existing AGENTS.md to the common folder tree and ke
   const oldTreeRule = '3° Arborescence: Respecte arborescence convenue dans perso.md. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
   await writeFile(path.join(root, 'AGENTS.md'), `Ma règle sur perso.md\r\n${oldGeneralRule}\r\n${oldTreeRule}\r\n`);
   await ensureAgentInstructionFiles(root, SHARED);
-  const [, , generalRule, treeRule] = agentInstructionsTemplate().split('\n');
+  const [, , , generalRule, treeRule] = agentInstructionsTemplate().split('\n');
   assert.match(treeRule, /~\/\.piecemaker\/ontologie\.json/);
   assert.doesNotMatch(generalRule, /arborescence/);
   assert.equal(await read(root, 'AGENTS.md'), `Ma règle sur perso.md\r\n${generalRule}\r\n${treeRule}\r\n`);
@@ -179,7 +179,7 @@ test('tells the agent of an existing AGENTS.md to propose the tree, not replace 
   const replaceRule = '3° Arborescence: Respecte l’arborescence du dossier, enregistrée dans .piecemaker/arborescence.json : l’avocat la règle dans l’index du dossier, tu la lis dans ce fichier et tu la remplaces avec pm dossier arborescence (voir la skill piecemaker), un « / » dans un nom crée un sous-dossier. Si absente, proposes en une à partir des dossiers existants, proposes des améliorations si ambigüe et fais-la valider avant de déplacer des fichiers. Les Markdown sous .piecemaker sont des fichiers techniques, pas les pièces originales : ne les déplace pas.';
   await writeFile(path.join(root, 'AGENTS.md'), `${replaceRule}\n`);
   await ensureAgentInstructionFiles(root, SHARED);
-  const treeRule = agentInstructionsTemplate().split('\n')[3];
+  const treeRule = agentInstructionsTemplate().split('\n')[4];
   assert.match(treeRule, /seul l’avocat l’accepte/);
   assert.equal(await read(root, 'AGENTS.md'), `${treeRule}\n`);
 }));
@@ -232,4 +232,16 @@ test('the migration converts existing CLAUDE.md files and hands each project to 
   } finally {
     stop();
   }
+}));
+
+test('announces the objectives file right under the header of an existing AGENTS.md, once', () => withProject(async (root) => {
+  const template = agentInstructionsTemplate().split('\n');
+  const objectifs = template.find((line) => line.startsWith('0° Objectifs'));
+  assert.equal(template[1], objectifs);
+  assert.match(objectifs ?? '', /@\.piecemaker\/objectifs\.md/);
+  const old = template.filter((line) => line !== objectifs).join('\r\n');
+  await writeFile(path.join(root, 'AGENTS.md'), old);
+  await ensureAgentInstructionFiles(root, SHARED);
+  await ensureAgentInstructionFiles(root, SHARED);
+  assert.equal(await read(root, 'AGENTS.md'), template.join('\r\n'));
 }));

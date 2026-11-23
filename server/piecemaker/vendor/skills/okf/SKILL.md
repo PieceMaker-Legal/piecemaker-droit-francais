@@ -7,6 +7,14 @@ description: Gérer l'index OKF du dossier (.piecemaker/okf/) — fiches de docu
 
 > Une prémisse ne se crée que pour une condition Catala qui la demande. On la cherche dans les pièces ; on ne l'invente pas.
 
+## Partir des objectifs
+
+Les objectifs du dossier (`.piecemaker/objectifs.md`, référence `objectifs.md` du skill `piecemaker`) décident de ce que l'index doit contenir, avant l'ontologie :
+
+1. Les parties d'un objectif sont celles dont les prémisses comptent : une prémisse de cet objectif les concerne par `involves`.
+2. Ses « Points à établir » sont les prémisses à chercher en premier dans les pièces. Le titre du point est le titre de la prémisse.
+3. Une pièce sans rapport avec aucun objectif passe après. L'ontologie ne dit que la forme des liens entre documents, pas ce qui compte.
+
 L'index OKF résume le dossier en fiches Markdown. Il vit dans `.piecemaker/okf/`. L'OKF fait autorité : en cas de doute, il l'emporte sur toute autre note.
 
 ## Fiches
