@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.3.2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.3.1...v2.3.2) (2026-11-23)
+
+### Bug Fixes
+
+* **build:** charger depuis les sources les scripts que tsc n'émet pas ([a2c5af5](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a2c5af5c0f1a53f1d851bdb8c80794bea66c0d3b))
+
 ## [2.3.1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.3.0...v2.3.1) (2026-11-23)
 
 ### Bug Fixes
