@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const RELATIVE_IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|createRequire\([^)]*\)\s*\(\s*)['"](\.\.?\/[^'"]+\.[cm]?js)['"]/g;
+const RELATIVE_IMPORT = /(\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|createRequire\([^)]*\)\s*\(\s*)(['"])(\.\.?\/[^'"]+\.[cm]?js)\2/g;
 
 function scripts(folder) {
   return fs.readdirSync(folder, { withFileTypes: true, recursive: true })
@@ -12,26 +12,23 @@ function scripts(folder) {
 }
 
 export function completeDistServer(sourceRoot, distRoot) {
-  const copied = [];
-  const pending = scripts(distRoot);
-  while (pending.length) {
-    const file = pending.pop();
-    for (const [, specifier] of fs.readFileSync(file, 'utf8').matchAll(RELATIVE_IMPORT)) {
+  const redirected = [];
+  for (const file of scripts(distRoot)) {
+    const text = fs.readFileSync(file, 'utf8');
+    const next = text.replace(RELATIVE_IMPORT, (match, prefix, quote, specifier) => {
       const target = path.resolve(path.dirname(file), specifier);
-      if (fs.existsSync(target)) continue;
       const source = path.join(sourceRoot, path.relative(distRoot, target));
-      if (!fs.existsSync(source)) continue;
-      fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.copyFileSync(source, target);
-      copied.push(path.relative(distRoot, target));
-      pending.push(target);
-    }
+      if (fs.existsSync(target) || !fs.existsSync(source)) return match;
+      redirected.push(path.relative(distRoot, target));
+      return `${prefix}${quote}${path.relative(path.dirname(file), source).split(path.sep).join('/')}${quote}`;
+    });
+    if (next !== text) fs.writeFileSync(file, next);
   }
-  return copied;
+  return redirected;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-  const copied = completeDistServer(root, path.resolve(root, process.argv[2] ?? 'dist-server'));
-  for (const file of copied) console.log(`dist-server : ${file} ajouté depuis les sources.`);
+  const redirected = completeDistServer(root, path.resolve(root, process.argv[2] ?? 'dist-server'));
+  for (const file of redirected) console.log(`dist-server : ${file} chargé depuis les sources.`);
 }
