@@ -2,6 +2,7 @@ import express from 'express';
 
 import { CONVERSION_RUNNING, RENAME_RUNNING } from './service.js';
 import type { createKnowledgeService } from './service.js';
+import type { KnowledgeUpdateInput, KnowledgeUpdateOperation } from '../../../plugins/piecemaker-dossier/src/types.js';
 
 type KnowledgeService = ReturnType<typeof createKnowledgeService>;
 
@@ -11,6 +12,16 @@ function statusFor(error: unknown): number {
   if (error instanceof Error && (error.message === CONVERSION_RUNNING || error.message === RENAME_RUNNING)) return 409;
   return 500;
 }
+
+const HUMAN = { auteur: 'human' };
+
+const markHuman = (operation: KnowledgeUpdateOperation): KnowledgeUpdateOperation => {
+  if (operation?.op === 'upsertNode' && operation.node?.kind !== 'document' && !String(operation.node?.id).startsWith('system:')) return { ...operation, node: { ...operation.node, data: { ...operation.node.data, ...HUMAN } } };
+  if (operation?.op === 'link') return { ...operation, link: { ...operation.link, data: { ...operation.link?.data, ...HUMAN } } };
+  return operation;
+};
+
+const byHuman = (body: KnowledgeUpdateInput): KnowledgeUpdateInput => Array.isArray(body?.operations) ? { ...body, operations: body.operations.map(markHuman) } : body;
 
 export function createKnowledgeRouter(service: KnowledgeService) {
   const router = express.Router();
@@ -23,7 +34,7 @@ export function createKnowledgeRouter(service: KnowledgeService) {
   router.get('/knowledge/version', (_request, response) => respond(() => service.version(), response));
   router.get('/knowledge/projects', (_request, response) => respond(() => service.projects(), response));
   router.post('/knowledge/query', (request, response) => respond(() => service.query(request.body), response));
-  router.post('/knowledge/update', (request, response) => respond(() => service.update(request.body), response));
+  router.post('/knowledge/update', (request, response) => respond(() => service.update(byHuman(request.body)), response));
   router.get('/knowledge/pieces', (request, response) => respond(() => service.pieces(request.query.projectId), response));
   router.post('/knowledge/rename', (request, response) => respond(() => service.rename(request.body?.projectId, request.body?.path, request.body?.name, request.body?.directory), response));
   router.post('/knowledge/scan', (request, response) => respond(() => service.scan(request.body?.projectId, request.body?.files, request.body?.ocrMissing), response));

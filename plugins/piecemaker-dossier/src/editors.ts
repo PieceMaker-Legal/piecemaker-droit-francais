@@ -332,6 +332,9 @@ export function partyTypePicker(root: HTMLElement, side: 'client' | 'adversaire'
   return layer;
 }
 
+const AUTHOR_STATUS: Record<string, string> = { human: 'Validé', agent: 'À vérifier' };
+const authorStatus = (data: Record<string, unknown> | undefined): string => AUTHOR_STATUS[textValue(data?.auteur)] || 'À trier';
+
 export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNode | null, save: (operations: KnowledgeUpdateOperation[]) => Promise<void>, defaults: PartyEditorDefaults = {}): void {
   const id = node?.id || `manual:${crypto.randomUUID()}`;
   const selectedKind = node?.kind || defaults.kind || 'person';
@@ -362,7 +365,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
     <form class="pmd-form" data-node-form>
       <header class="pmd-profile-identity">
         <span class="pmd-profile-avatar" data-profile-avatar>${selectedKind === 'company' ? profileCompanyIcon : profilePersonIcon}</span>
-        <div class="pmd-profile-identity-copy"><span class="pmd-profile-eyebrow" data-profile-role>${roleLabels[selectedSide]}</span><strong data-profile-name>${escapeHtml(node?.label || 'Nouvel élément')}</strong><span class="pmd-profile-kind" data-profile-kind>${escapeHtml(kindLabels[selectedKind])}</span></div>
+        <div class="pmd-profile-identity-copy"><span class="pmd-profile-eyebrow" data-profile-role>${roleLabels[selectedSide]}</span>${node ? `<span class="pmd-profile-kind">${authorStatus(node.data)}</span>` : ''}<strong data-profile-name>${escapeHtml(node?.label || 'Nouvel élément')}</strong><span class="pmd-profile-kind" data-profile-kind>${escapeHtml(kindLabels[selectedKind])}</span></div>
         <span class="pmd-profile-watermark">${profileCompanyIcon}</span>
         <button type="button" class="pmd-icon-button pmd-profile-close" data-close aria-label="Fermer">×</button>
       </header>
@@ -392,7 +395,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       ${profileLinks.length ? `<div class="pmd-current-relations"><div class="pmd-relation-list">${profileLinks.map(({ relation, index, relatedNode, relatedNodeId }) => {
         const relatedLabel = relatedNode?.label || relatedNodeId;
         const relatedKind = relatedNode?.kind === 'person' ? 'Personne physique' : 'Personne morale';
-        return `<div class="pmd-relation-row"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong><small class="pmd-relation-kind">${escapeHtml(relatedKind)}</small></span><button type="button" class="pmd-relation-remove" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}">×</button></div>`;
+        return `<div class="pmd-relation-row"><span class="pmd-relation-copy"><span class="pmd-relation-type">${escapeHtml(relationLabel(relation.relation))}</span><strong class="pmd-relation-target">${escapeHtml(relatedLabel)}</strong><small class="pmd-relation-kind">${escapeHtml(relatedKind)} · ${authorStatus(relation.data)}</small></span><button type="button" class="pmd-relation-remove" data-unlink="${index}" aria-label="Supprimer le lien ${escapeHtml(relationLabel(relation.relation))} avec ${escapeHtml(relatedLabel)}">×</button></div>`;
       }).join('')}</div></div>` : '<p class="pmd-form-note">Aucun lien avec une autre personne.</p>'}
       <div class="pmd-profile-link-fields">
       <label>Ajouter un lien<select class="pmd-select" name="target"><option value="">Personne ou société…</option>${linkTargets.map((entry) => `<option value="${escapeHtml(entry.id)}">${escapeHtml(entry.label)}</option>`).join('')}</select></label>
@@ -548,6 +551,7 @@ export function nodeEditor(root: HTMLElement, data: ViewData, node: KnowledgeNod
       const relation = relations[index];
       operations.push({ op: 'unlink', link: { fromNodeId: relation.fromNodeId, toNodeId: relation.toNodeId, relation: relation.relation } });
     }
+    for (const [index, relation] of relations.entries()) if (relation.relation !== 'mentions' && !removals.has(index)) operations.push({ op: 'link', link: { fromNodeId: relation.fromNodeId, toNodeId: relation.toNodeId, relation: relation.relation, data: relation.data } });
     const target = textValue(form.get('target'));
     const selectedRelation = textValue(form.get('relation')).trim();
     const customRelation = textValue(form.get('customRelation')).trim();

@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import { bundleRoot, linksOf, readTypes } from '../bundle.js';
 import { createOkfBackend, parseValidation, premiseDate } from '../index.js';
+import { renderPersons } from '../persons.js';
 import { ontologyFile, readOntology, migrateArborescence, saveOntology } from '../ontology.js';
 
 process.env.PIECEMAKER_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'okf-home-'));
@@ -31,10 +32,30 @@ function dossier() {
   return { projectPath, root };
 }
 
-function backend(projectPath: string) {
+const node = (id: string, kind: string, label: string, data: Record<string, unknown> = {}) => ({ projectId: 'p', id, kind, label, aliases: [], data, date: null, createdAt: '', updatedAt: '' });
+const link = (fromNodeId: string, toNodeId: string, relation: string, data: Record<string, unknown> = {}) => ({ projectId: 'p', fromNodeId, toNodeId, relation, data, createdAt: '', updatedAt: '' });
+const PARTIES = {
+  projectId: 'p',
+  nodes: [
+    node('document:contrat', 'document', 'Contrat', { path: CONTRACT }),
+    node('entity:PERSONNE_PHYSIQUE_01', 'person', 'Jean Dupont', { code: 'PERSONNE_PHYSIQUE_01', partySide: 'client', auteur: 'human' }),
+    node('entity:SOCIETE_01', 'company', 'Société Exemple SAS', { code: 'SOCIETE_01', auteur: 'agent' }),
+    node('entity:SIREN_01', 'identifier', '123 456 789'),
+    node('entity:ADRESSE_01', 'address', '12 rue des Lilas, Paris'),
+  ],
+  links: [
+    link('document:contrat', 'entity:PERSONNE_PHYSIQUE_01', 'mentions'),
+    link('entity:PERSONNE_PHYSIQUE_01', 'entity:SOCIETE_01', 'dirigeant de', { auteur: 'agent' }),
+    link('entity:SOCIETE_01', 'entity:SIREN_01', 'immatriculée sous'),
+  ],
+  mappings: [],
+  citations: [{ projectId: 'p', fromNodeId: 'entity:SOCIETE_01', toNodeId: 'entity:SIREN_01', relation: 'immatriculée sous', pieceId: 'document:contrat', source: '', texte: 'RCS Paris 123 456 789', createdAt: '' }],
+};
+
+function backend(projectPath: string, snapshot: (projectId: string) => unknown = (projectId) => ({ projectId, nodes: [], links: [], mappings: [], citations: [] })) {
   return createOkfBackend({
     projects: { getProjectById: () => ({ project_path: projectPath }), getProjectPath: () => ({ project_id: 'p', project_path: projectPath }) },
-    snapshot: (projectId) => ({ projectId, nodes: [], links: [], mappings: [], citations: [] }),
+    snapshot: snapshot as never,
     skillRoot: SKILL,
     python: () => 'python3',
     isLoopback: () => true,
@@ -73,13 +94,36 @@ test('premiseDate trouve un concept daté par son titre, avec sa pièce et sa ci
 test('verify lance le validateur Context-OKF en mode strict', async () => {
   const { projectPath, root } = dossier();
   const okf = backend(projectPath);
-  assert.deepEqual(await okf.verify('p'), { erreurs: [], lints: [], resume: '7 file(s), 0 error(s), 0 lint(s)' });
+  assert.deepEqual(await okf.verify('p'), { erreurs: [], lints: [], resume: '8 file(s), 0 error(s), 0 lint(s)' });
   write(root, 'roles/client.md', '---\ndescription: Jean Dupont.\n---\n\n# Client\n\nVoir [absent](absent.md).\n');
   const report = await okf.verify('p');
   assert.ok(report.erreurs.some((finding) => finding.fiche === 'roles/client.md'));
   assert.ok(report.lints.some((finding) => finding.fiche === 'roles/client.md'));
   fs.rmSync(path.join(root, 'index.md'));
   assert.match((await okf.verify('p')).erreurs[0].erreur, /bundle OKF du dossier absent/);
+});
+
+test('persons rend une fiche par personne ou organisation, classée par auteur', () => {
+  const files = renderPersons(PARTIES as never);
+  assert.deepEqual([...files.keys()], ['index.md', 'personne-physique-01.md', 'societe-01.md']);
+  const index = files.get('index.md')!;
+  assert.match(index, /## Validé\n\n- \[Jean Dupont\]\(\/persons\/personne-physique-01\.md\) — Personne/);
+  assert.match(index, /## À vérifier\n\n- \[Société Exemple SAS\]/);
+  assert.match(index, /## Éléments non rattachés\n\n- address : 12 rue des Lilas, Paris/);
+  const societe = files.get('societe-01.md')!;
+  assert.match(societe, /type: Organisation\n[^]*cco: Organization\n/);
+  assert.match(societe, /- \[Jean Dupont\]\(\/persons\/personne-physique-01\.md\) → dirigeant de — À vérifier/);
+  assert.match(societe, /immatriculée sous → 123 456 789 — À trier — « RCS Paris 123 456 789 » \(`Pièces\/Contrat\.pdf`\)/);
+  assert.match(files.get('personne-physique-01.md')!, /## Pièces qui la mentionnent\n\n- `Pièces\/Contrat\.pdf`/);
+});
+
+test('un Rôle lié à une fiche persons prend son côté, et le bundle reste valide', async () => {
+  const { projectPath, root } = dossier();
+  write(root, 'roles/prestataire.md', '---\ntype: Rôle\ntitle: Prestataire\ndescription: Prestataire du contrat.\n---\n\n# Prestataire\n\nPorteur : [Jean Dupont](/persons/personne-physique-01.md).\n');
+  const okf = backend(projectPath, () => PARTIES);
+  assert.equal(okf.read('p').fiches.find((fiche) => fiche.id === '/roles/prestataire.md')?.side, 'client');
+  const report = await okf.verify('p');
+  assert.deepEqual([report.erreurs, report.lints], [[], []]);
 });
 
 test('l\'ontologie rend les six patterns LOF du contexte', () => {

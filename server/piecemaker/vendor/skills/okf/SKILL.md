@@ -76,11 +76,18 @@ Corrélatif : [devoir de payer](devoir-de-payer.md). Titulaire : [prestataire](.
 
 ## Parties
 
-Un Rôle porte le code anonymisé de la personne, jamais une identité réelle. La qualification d'une partie cliente ou adverse appartient à l'avocat. Signalez-lui une personne qu'une pièce montre partie ; ne la qualifiez pas vous-même.
+Le dossier `persons/` contient une fiche par personne (CCO *Person*) et par organisation (CCO *Organization*) de la base du dossier. Le serveur génère ces fiches depuis la base. N'écrivez jamais dans `persons/` : la génération suivante écrase vos modifications.
+
+1. Pour compléter une fiche, écrivez dans la base avec l'outil `sql` : nœud, lien entre éléments (dirigeant, SIREN, adresse), citation avec `piece_id` ou `source`.
+2. Rapprochez les éléments trouvés par l'anonymisation : un SIREN à sa société, une adresse à sa personne. Vérifiez une société dans le registre public ou le BODACC ; citez la source.
+3. Seuls un acte ou un registre établissent un dirigeant. Ne déduisez jamais un rôle d'une simple mention.
+4. Un Rôle a un seul porteur. Liez le Rôle à sa fiche : `[Jean Dupont](/persons/personne-physique-01.md)`.
+
+Chaque écriture de l'agent porte l'auteur `agent` (« À vérifier »). Le scan porte l'auteur `gliner` (« À trier »). L'avocat valide une fiche dans l'onglet Dossier : l'auteur devient `human` (« Validé »). La qualification d'une partie cliente ou adverse appartient à l'avocat. Signalez-lui une personne qu'une pièce montre partie ; ne la qualifiez pas vous-même.
 
 ## Règles de conduite
 
-- Conservez les pseudonymes tels qu'ils apparaissent. Ne cherchez jamais l'identité réelle.
+- Ne recopiez pas une personne dans un concept : liez sa fiche `persons/`.
 - Ne citez jamais sans extrait littéral de la pièce.
 - Si deux pièces se contredisent, créez un Conflit. Ne tranchez pas sans Détermination de l'autorité compétente.
 - Si le bundle ne contient pas l'information, répondez « je ne sais pas ». N'inventez ni concept ni lien.
