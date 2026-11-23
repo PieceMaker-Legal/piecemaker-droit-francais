@@ -3,6 +3,12 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.3.1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.3.0...v2.3.1) (2026-11-23)
+
+### Bug Fixes
+
+* **build:** embarquer dans dist-server les scripts non compilés importés ([866a4a2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/866a4a2b85230d4b02f3b9941520058589d81431))
+
 ## [2.3.0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.2.2...v2.3.0) (2026-11-22)
 
 ### New Features
