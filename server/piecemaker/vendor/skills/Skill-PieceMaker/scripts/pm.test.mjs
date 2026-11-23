@@ -266,7 +266,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     okfFn: async (input) => { calls.push(input); return {
       erreurs: [{ fiche: 'Pièces/bail.md', erreur: 'lien sans citation' }, { fiche: '/Note.docx.md', erreur: 'type « Non classé » hors arborescence (Pièces)' }],
       contradictions: [],
-      manques: [{ element: '/_premises/date-de-rupture.md', manque: 'prémisse sans valeur' }, { element: 'Pièces/avenant.md', manque: 'pièce sans prémisse ni lien' }],
+      manques: [{ element: '/_lof/creance-de-loyer.md', manque: 'legal position incomplète : « held by »' }, { element: 'JEAN_DUPONT', manque: 'partie sans lien LOF cité' }],
     }; },
     suiviFn: async ({ suivi }) => (suivi === 'suivi.json' ? '0 erreur(s), 0 manque(s).'
       : `Suivi du dossier (.piecemaker/${suivi})\nÉchéances :\n  02/01/2026 — Conclusions (conclusions) — DÉPASSÉE\n  01/06/2027 — Audience (audience) — à venir\n\n1 erreur(s), 0 manque(s).`),
@@ -344,7 +344,7 @@ test('check sur un dossier à jour ne signale rien', async () => {
     '2° Anonymisation : en cours, voir 1°',
   ].join('\n'));
   const parties = { ...deps, okfFn: async () => ({ erreurs: [], contradictions: [], manques: [
-    { element: '/_premises/date-de-rupture.md', manque: 'prémisse sans partie concernée (involves) : attend l’avocat', avocat: true },
+    { element: '/_lof/creance-de-loyer.md', manque: 'sans titulaire (held by) : attend l’avocat', avocat: true },
     { element: 'Pièces/avenant.md', manque: 'pièce à examiner' },
   ] }) };
   assert.equal((await run(['check', '--dossier', dossier], { deps: parties })).split('\n')[4], '4° Index : 1 manque(s), 1 manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier) → pm okf verify');
@@ -383,7 +383,7 @@ test('dossier conversion lance le CLI, ou renvoie l’avancée d’un travail en
 
 const ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
   + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala et suivi.\n'
-  + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
+  + 'L’index et ses liens attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
   + 'Revenez à la fin avec pm dossier conversion.';
 
 test('dossier conversion attend un travail déjà en cours sans relancer le CLI', async () => {
@@ -452,23 +452,28 @@ test('sessionDossier suit la session plutôt que le répertoire courant', async 
 });
 
 
-test('okf types propose la liste complète à l’avocat', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-types-'));
-  const calls = [];
-  const documentTypes = [{ name: 'contrat', icon: 'pen' }];
-  const result = await run(['okf', 'types', '--json', JSON.stringify(documentTypes)], { cwd: dossier, deps: {
-    okfFn: async (input) => { calls.push(input); return { documentTypes, motif: '', date: '' }; },
-  } });
-  assert.deepEqual(calls, [{ action: 'proposer', folder: path.resolve(dossier), ontologie: { documentTypes } }]);
-  assert.match(result, /Proposition enregistrée \(1 type\(s\) de documents\)/);
-  assert.equal(await run(['okf', 'types', '--json', '[]'], { cwd: dossier, deps: { okfFn: async () => ({ motif: '', date: '' }) } }), 'Aucun changement par rapport à l’ontologie actuelle : aucune proposition en attente.');
+test('okf ontologie lit LOF, son attribution et les libellés des propriétés', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-lof-'));
+  const lof = [
+    { id: 'C1', label: 'legal position', kind: 'class', subClassOf: [], annotations: [['definition', 'A position.']] },
+    { id: 'C2', label: 'material entity', kind: 'class', subClassOf: [], annotations: [] },
+    { id: 'P1', label: 'held by', kind: 'objprop', domain: ['C1'], range: ['C2'], annotations: [['definition', 'Held.']] },
+  ];
+  const okfFn = async () => ({ lof, attribution: 'Legal Ontologies Foundry, CC BY 4.0', types: ['Pièces'] });
+  assert.deepEqual(JSON.parse(await run(['okf', 'ontologie', '--noms'], { cwd: dossier, deps: { okfFn } })), ['held by']);
+  const listing = await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn } });
+  assert.match(listing, /Legal Ontologies Foundry, CC BY 4\.0/);
+  assert.match(listing, /- held by : legal position → material entity — Held\./);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
-test('okf ontologie --noms donne les relations de l’ontologie scellée lue par le serveur', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-noms-'));
-  const okfFn = async () => ({ relations: [{ name: 'contests', label: 'conteste', source: ['Pièces'], target: ['Pièces'] }], systeme: [{ name: 'states' }, { name: 'mentions' }, { name: 'involves' }] });
-  assert.deepEqual(JSON.parse(await run(['okf', 'ontologie', '--noms'], { cwd: dossier, deps: { okfFn } })), ['contests', 'states', 'involves']);
+test('okf link exige la pièce et la citation et transmet les classes', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-link-'));
+  const calls = [];
+  const okfFn = async (input) => { calls.push(input); return { source: input.source, relation: input.relation, target: input.target ?? input.piece }; };
+  await assert.rejects(() => run(['okf', 'link', 'Créance', 'held by', 'CLIENT_1', '--citation', 'phrase'], { cwd: dossier, deps: { okfFn } }), /--piece et --citation/);
+  await run(['okf', 'link', 'Créance', 'held by', 'CLIENT_1', '--piece', 'facture.pdf', '--citation', 'phrase', '--source_class', 'legal position'], { cwd: dossier, deps: { okfFn } });
+  assert.deepEqual(calls[0], { action: 'link', folder: path.resolve(dossier), source: 'Créance', relation: 'held by', target: 'CLIENT_1', piece: 'facture.pdf', citation: 'phrase', source_class: 'legal position' });
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 

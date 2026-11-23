@@ -1,9 +1,9 @@
-import { isoDateOf, premiseId } from './bundle.js';
+import { entityId, isoDateOf } from './bundle.js';
 import { OKF_SCHEME, premiseEvidence } from './premises.js';
 
 export function premiseDate(projectPath: string, title: string) {
   let evidence;
-  try { evidence = premiseEvidence(projectPath, `${OKF_SCHEME}${premiseId(title)}`); } catch { return null; }
+  try { evidence = premiseEvidence(projectPath, `${OKF_SCHEME}${entityId(title)}`); } catch { return null; }
   if (!evidence) return null;
   const dated = evidence.pieces.flatMap((piece) => {
     const date = isoDateOf(piece.value);

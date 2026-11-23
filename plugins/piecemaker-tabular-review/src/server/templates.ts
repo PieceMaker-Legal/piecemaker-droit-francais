@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { readOntology } from '../../../../server/piecemaker/okf/ontology.js';
 import { DEFAULT_DOCUMENT_TYPES, documentTypeNames } from '../../../piecemaker-dossier/src/document-types.js';
 import type { DocumentType } from '../../../piecemaker-dossier/src/document-types.js';
 
@@ -112,8 +111,7 @@ function libraryTemplates(own: Template[]): Template[] {
 
 export function readTemplates(): Template[] {
   const own = readOwnTemplates();
-  const types = readOntology('').documentTypes;
-  return [...own, ...libraryTemplates(own)].map((template) => ({ ...(template.name === LEGACY_INDEX_NAME ? { ...template, name: INDEX_TEMPLATE_NAME, description: INDEX_TEMPLATE.description } : template), columns: alignDocumentTypes(template.columns, types) }));
+  return [...own, ...libraryTemplates(own)].map((template) => ({ ...(template.name === LEGACY_INDEX_NAME ? { ...template, name: INDEX_TEMPLATE_NAME, description: INDEX_TEMPLATE.description } : template), columns: alignDocumentTypes(template.columns) }));
 }
 
 function readOwnTemplates(): Template[] {

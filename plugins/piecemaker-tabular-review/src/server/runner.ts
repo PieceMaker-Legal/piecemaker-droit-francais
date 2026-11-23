@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { readOntology } from '../../../../server/piecemaker/okf/ontology.js';
 
 import type { Cell, Review, ReviewColumn, ReviewRow } from '../shared.js';
 import { classifyColumn, emptyColumns, MAX_CITATION_CORRECTIONS, DOCUMENT_TITLE_INDEX, citationIssue, citationRequired, reviewCategory, isDocumentTypeColumn } from '../shared.js';
@@ -94,7 +93,7 @@ async function runRow(job: Job, task: RowTask): Promise<void> {
     });
     return;
   }
-  const columns = alignDocumentTypes(review.columns.filter((column) => targets.includes(column.index)), readOntology(job.project).documentTypes);
+  const columns = alignDocumentTypes(review.columns.filter((column) => targets.includes(column.index)));
   const withTitle = reviewCategory(review) !== 'recherche-juridique' && row.documents.length === 1 && !row.title;
   const requested = withTitle ? [{ index: DOCUMENT_TITLE_INDEX, name: 'Nom du document', format: 'text' as const, prompt: 'Donne un titre court qui identifie la nature précise et l’objet du document. Reprends son intitulé s’il existe. Justifie ce titre par une citation du document. Ne reprends pas le nom du fichier et n’invente aucune information. Si aucun titre ne peut être établi, réponds « Non trouvé ».' }, ...columns] : columns;
   const mode = rowMode(row);

@@ -4,16 +4,11 @@ import path from 'node:path';
 import type { MarkdownOf } from './build.js';
 import {
   AGENT_ACTOR,
-  DERIVED_ACTORS,
-  PREMISE_TYPE,
-  INVOLVES,
-  MENTIONS,
-  PARTY_TYPE,
-  STATES,
   conceptFile,
   conceptId,
-  premiseId,
-  isPremiseId,
+  entityId,
+  isEntityId,
+  isoDateOf,
   isPartyId,
   parseConcept,
   partyId,
@@ -21,22 +16,21 @@ import {
   squash,
   text,
 } from './bundle.js';
-import type { Ontology } from './ontology.js';
-import { readOntology, relationNames, ruleOf } from './ontology.js';
+import { HAS_DATE_TIME_VALUE, LEGAL_DOCUMENT, MATERIAL_ENTITY, fits, isFunctional, lofId, lofLabel, lofTerm } from './lof.js';
 import { EXAMINED, fingerprintOf } from './premises.js';
 import { reviewColumn, reviewFileName } from './reviews.js';
 import type { OkfStore } from './store.js';
 import { quoted } from './verify.js';
 
-// Links, premises and examinations are written to SQLite only. The fiches read here are the views
-// generated from it just before (createOkfBackend rebuilds them before and after each write).
 export type OkfTarget = { projectPath: string; projectId: string; store: OkfStore };
 
-export type LinkInput = { source?: unknown; relation?: unknown; target?: unknown; citation?: unknown; value?: unknown; single?: unknown };
+export type LinkInput = { source?: unknown; source_class?: unknown; relation?: unknown; target?: unknown; target_class?: unknown; piece?: unknown; citation?: unknown; value?: unknown };
 export type Link = { source: string; relation: string; target: string };
 export type ExamInput = { source?: unknown; motif?: unknown };
-export type ReviewLinkInput = { premise?: unknown; fichier?: unknown; colonne?: unknown };
+export type ReviewLinkInput = { premise?: unknown; classe?: unknown; fichier?: unknown; colonne?: unknown };
 export type ReviewLink = { premise: string; fichier: string; colonne: number };
+
+type Endpoint = { id: string; classId: string; title: string; create: boolean };
 
 function load(projectPath: string, id: string, role: string) {
   const filePath = conceptFile(projectPath, id);
@@ -55,80 +49,117 @@ function documentId(projectPath: string, resource: unknown, role: string): strin
 
 function loadDocument(projectPath: string, id: string, role: string) {
   const concept = load(projectPath, id, role);
-  if ([PREMISE_TYPE, PARTY_TYPE].includes(text(concept.frontmatter.type))) throw new TypeError(`${role} : ${concept.id} n'est pas un document.`);
+  if (isEntityId(id) || isPartyId(id)) throw new TypeError(`${role} : ${concept.id} n'est pas un document.`);
   return concept;
 }
 
-function relationName(value: unknown, ontology: Ontology | null): string {
-  const name = text(value);
-  if (name === MENTIONS) throw new TypeError(`${MENTIONS} est posé par l'analyse du dossier : qualifier la personne de partie dans l'index.`);
-  if (!name) throw new TypeError('relation absente.');
-  const writable = ontology ? [...relationNames(ontology), STATES, INVOLVES] : null;
-  if (writable && !writable.includes(name)) throw new TypeError(`relation hors ontologie : « ${name} ». Relations admises : ${writable.join(', ')}. Seul l'avocat modifie l'ontologie (onglet Index › Ontologie).`);
-  return name;
+function classOf(value: unknown, role: string): string {
+  const given = squash(text(value));
+  if (!given) return '';
+  const id = lofId(given, ['class']);
+  if (!id) throw new TypeError(`${role} : classe hors LOF « ${given} ». Donner le libellé exact d'une classe de la Legal Ontologies Foundry (pm okf ontologie).`);
+  return id;
 }
 
-function endpoints(projectPath: string, name: string, input: LinkInput): { source: string; target: string } {
-  if (name === INVOLVES) return { source: premiseId(text(input.source)), target: partyId(text(input.target)) };
-  return { source: documentId(projectPath, input.source, 'source'), target: name === STATES ? premiseId(text(input.target)) : documentId(projectPath, input.target, 'cible') };
+function partyCodes(projectPath: string): string[] {
+  const folder = path.dirname(conceptFile(projectPath, partyId('_')));
+  return fs.existsSync(folder) ? fs.readdirSync(folder).filter((name) => name.endsWith('.md')).map((name) => name.slice(0, -3)) : [];
 }
+
+function endpoint(projectPath: string, value: unknown, classValue: unknown, role: string): Endpoint {
+  const given = squash(text(value));
+  if (!given) throw new TypeError(`${role} : donner un code de partie, un chemin de document ou le titre d'une fiche LOF.`);
+  const wanted = classOf(classValue, role);
+  const party = partyId(given);
+  if (isPartyId(given) || partyCodes(projectPath).includes(given)) {
+    if (!fs.existsSync(conceptFile(projectPath, party))) throw new TypeError(`${role} : ${party} n'est pas une partie du dossier. Parties : ${partyCodes(projectPath).join(', ') || 'aucune'}.`);
+    if (wanted && wanted !== MATERIAL_ENTITY) throw new TypeError(`${role} : une partie est une « ${lofLabel(MATERIAL_ENTITY)} ».`);
+    return { id: party, classId: MATERIAL_ENTITY, title: given, create: false };
+  }
+  const document = documentId(projectPath, given, role);
+  if (!isEntityId(given) && fs.existsSync(conceptFile(projectPath, document))) {
+    const concept = loadDocument(projectPath, document, role);
+    const classId = lofId(text(concept.frontmatter.nature), ['class']) || LEGAL_DOCUMENT;
+    if (wanted && wanted !== classId) throw new TypeError(`${role} : ${document} est un « ${lofLabel(classId)} ».`);
+    return { id: document, classId, title: text(concept.frontmatter.title), create: false };
+  }
+  const id = entityId(given);
+  if (!fs.existsSync(conceptFile(projectPath, id))) {
+    if (isEntityId(given)) throw new TypeError(`${role} : aucune fiche ${given}. Donner son titre et sa classe LOF pour la créer.`);
+    if (!wanted) throw new TypeError(`${role} : nouvelle fiche « ${given} » sans classe. Donner sa classe LOF (${role}_class).`);
+    return { id, classId: wanted, title: given, create: true };
+  }
+  const stored = lofId(text(load(projectPath, id, role).frontmatter.lof), ['class']) || '';
+  if (wanted && stored && wanted !== stored) throw new TypeError(`${role} : ${id} est déjà de classe « ${lofLabel(stored)} ».`);
+  if (!wanted && !stored) throw new TypeError(`${role} : ${id} n'a pas de classe LOF. Donner sa classe (${role}_class).`);
+  return { id, classId: stored || wanted, title: given, create: !stored };
+}
+
+function propertyOf(value: unknown): string {
+  const given = squash(text(value));
+  if (!given) throw new TypeError('relation absente.');
+  const id = lofId(given, ['objprop', 'dataprop']);
+  if (!id) throw new TypeError(`propriété hors LOF : « ${given} ». Donner le libellé exact d'une propriété de la Legal Ontologies Foundry (pm okf ontologie).`);
+  return id;
+}
+
+const labels = (ids: string[] = []): string => ids.map(lofLabel).join(', ');
 
 export function addLink(target: OkfTarget, input: LinkInput, markdownOf: MarkdownOf, origin = AGENT_ACTOR, now = new Date().toISOString()): Link {
   const { projectPath, projectId, store } = target;
-  const ontology = readOntology(projectPath);
-  const name = relationName(input.relation, ontology);
-  const ids = endpoints(projectPath, name, input);
-  const source = name === INVOLVES ? load(projectPath, ids.source, 'source') : loadDocument(projectPath, ids.source, 'source');
+  const property = propertyOf(input.relation);
+  const term = lofTerm(property)!;
+  const source = endpoint(projectPath, input.source, input.source_class, 'source');
+  const piece = loadDocument(projectPath, documentId(projectPath, input.piece, 'pièce'), 'pièce');
   const citation = squash(text(input.citation));
-  const value = squash(text(input.value));
-  if (source.id === ids.target) throw new TypeError('un document ne peut pas être lié à lui-même.');
-
-  if (name === INVOLVES) {
-    if (!isPartyId(ids.target) || !fs.existsSync(conceptFile(projectPath, ids.target))) {
-      const folder = path.dirname(conceptFile(projectPath, partyId('_')));
-      const codes = fs.existsSync(folder) ? fs.readdirSync(folder).filter((name) => name.endsWith('.md')).map((name) => name.slice(0, -3)) : [];
-      throw new TypeError(`cible : ${ids.target} n'est pas une partie du dossier. Parties : ${codes.join(', ') || 'aucune'}. Cible admise : le code d'une partie (ex. PERSONNE_PHYSIQUE_01). La qualification d'une partie attend l'avocat : il désigne une partie cliente ou adverse dans l'onglet Dossier, vue générale (colonnes Parties clientes et Parties adverses, ou champ Rôle de la fiche) ; ne la qualifie pas toi-même.`);
-    }
-  } else if (!quoted(markdownOf(text(source.frontmatter.resource)), citation)) {
-    throw new TypeError('citation introuvable mot pour mot dans le document source.');
-  }
-  const rule = ruleOf(ontology, name);
-  if (rule) {
-    const target = loadDocument(projectPath, ids.target, 'cible');
-    for (const [concept, allowed, role] of [[source, rule.source, 'source'], [target, rule.target, 'cible']] as const) {
-      const type = text(concept.frontmatter.type);
-      if (!allowed.includes(type)) throw new TypeError(`${role} : ${concept.id} est de type « ${type} ». L'ontologie admet ${name} ${role === 'source' ? 'depuis' : 'vers'} : ${allowed.join(', ')}.`);
+  if (!quoted(markdownOf(text(piece.frontmatter.resource)), citation)) throw new TypeError('citation introuvable mot pour mot dans la pièce.');
+  if (!fits(source.classId, term.domain)) throw new TypeError(`source : « ${lofLabel(source.classId)} » hors du domaine de « ${term.label} » (${labels(term.domain)}).`);
+  let targetId: string;
+  let value = '';
+  let targetEndpoint: Endpoint | null = null;
+  if (term.kind === 'dataprop') {
+    if (property !== HAS_DATE_TIME_VALUE) throw new TypeError(`« ${term.label} » : seule « ${lofLabel(HAS_DATE_TIME_VALUE)} » porte une valeur dans l'index.`);
+    value = isoDateOf(squash(text(input.value))) || '';
+    if (!value) throw new TypeError('valeur : donner la date au format AAAA-MM-JJ.');
+    targetId = piece.id;
+  } else {
+    targetEndpoint = endpoint(projectPath, input.target, input.target_class, 'cible');
+    if (!fits(targetEndpoint.classId, term.range)) throw new TypeError(`cible : « ${lofLabel(targetEndpoint.classId)} » hors du codomaine de « ${term.label} » (${labels(term.range)}).`);
+    if (targetEndpoint.id === source.id) throw new TypeError('une fiche ne peut pas être liée à elle-même.');
+    targetId = targetEndpoint.id;
+    if (isFunctional(property)) {
+      const other = (relationsOf(fs.existsSync(conceptFile(projectPath, source.id)) ? load(projectPath, source.id, 'source').frontmatter : {})[term.label] || []).find((entry) => !entry.dismissed && entry.target !== targetId);
+      if (other) throw new TypeError(`« ${term.label} » est fonctionnelle : ${source.id} la porte déjà vers ${other.target}. Retirer ce lien d'abord.`);
     }
   }
   store.transaction(() => {
-    if (name === STATES) {
-      const title = text(input.target);
-      if (!fs.existsSync(conceptFile(projectPath, ids.target)) && isPremiseId(title)) throw new TypeError(`cible : aucune fiche ${title}. Donner le titre de la prémisse pour la créer.`);
-      store.upsertPremise(projectId, { id: ids.target, title, description: title, single: input.single === true, by: origin, at: now });
-    }
-    store.upsertRelation(projectId, { source: source.id, relation: name, target: ids.target, citation, value, origin, at: now, dismissed: false });
+    for (const entry of [source, targetEndpoint]) if (entry?.create) store.upsertPremise(projectId, { id: entry.id, title: entry.title, description: entry.title, single: false, by: origin, at: now, lofClass: entry.classId });
+    store.upsertRelation(projectId, { source: source.id, relation: property, target: targetId, citation, value, origin, at: now, dismissed: false, piece: piece.id });
   });
-  return { source: source.id, relation: name, target: ids.target };
+  return { source: source.id, relation: term.label, target: targetId };
 }
 
-export function removeLink(target: OkfTarget, input: LinkInput, now = new Date().toISOString()): Link {
+export function removeLink(target: OkfTarget, input: LinkInput): Link {
   const { projectPath, projectId, store } = target;
-  const name = relationName(input.relation, null);
-  const ids = endpoints(projectPath, name, input);
-  const source = name === INVOLVES ? load(projectPath, ids.source, 'source') : loadDocument(projectPath, ids.source, 'source');
-  const entry = (relationsOf(source.frontmatter)[name] || []).find((candidate) => candidate.target === ids.target && !candidate.dismissed);
-  if (!entry) throw new TypeError(`aucun lien ${name} vers ${ids.target}.`);
-  if (DERIVED_ACTORS.includes(entry.origin)) store.upsertRelation(projectId, { source: source.id, relation: name, target: ids.target, citation: entry.citation, value: entry.value || '', origin: entry.origin, at: now, dismissed: true });
-  else store.deleteRelation(projectId, source.id, name, ids.target);
-  if (name === STATES) store.dropUnstatedPremise(projectId, ids.target);
-  return { source: source.id, relation: name, target: ids.target };
+  const property = propertyOf(input.relation);
+  const term = lofTerm(property)!;
+  const given = squash(text(input.source));
+  const source = isPartyId(given) || partyCodes(projectPath).includes(given) ? partyId(given) : isEntityId(given) || !fs.existsSync(conceptFile(projectPath, documentId(projectPath, given, 'source'))) ? entityId(given) : documentId(projectPath, given, 'source');
+  const targetGiven = squash(text(term.kind === 'dataprop' ? input.piece : input.target));
+  const entries = relationsOf(load(projectPath, source, 'source').frontmatter)[term.label] || [];
+  const entry = entries.find((candidate) => !candidate.dismissed && [candidate.target, candidate.piece].some((value) => value && [targetGiven, partyId(targetGiven), entityId(targetGiven), conceptId(targetGiven.replace(/^\/+|\.md$/g, ''))].includes(value)));
+  if (!entry) throw new TypeError(`aucun lien « ${term.label} » depuis ${source} vers ${targetGiven}.`);
+  store.deleteRelation(projectId, source, property, entry.target);
+  store.dropUnstatedPremise(projectId, source);
+  store.dropUnstatedPremise(projectId, entry.target);
+  return { source, relation: term.label, target: entry.target };
 }
 
 export function markExamined(target: OkfTarget, input: ExamInput, origin = AGENT_ACTOR, now = new Date().toISOString()): { source: string; motif: string } {
   const { projectPath, projectId, store } = target;
   const concept = loadDocument(projectPath, documentId(projectPath, input.source, 'source'), 'source');
   const motif = squash(text(input.motif));
-  if (!motif) throw new TypeError('motif absent : dire en une phrase pourquoi aucun passage du document ne justifie un lien ni une prémisse.');
+  if (!motif) throw new TypeError('motif absent : dire en une phrase pourquoi aucun passage du document ne justifie un lien.');
   store.setExam(projectId, { source: concept.id, motif, by: origin, at: now, empreinte: fingerprintOf(projectPath, text(concept.frontmatter.resource)) });
   return { source: concept.id, motif };
 }
@@ -141,26 +172,22 @@ export function unmarkExamined(target: OkfTarget, input: ExamInput): { source: s
   return { source: concept.id };
 }
 
-/** Lie une colonne d'une revue tabulaire à une prémisse, créée au besoin d'après son titre : ses lignes positives l'établissent. */
 export function linkReview(target: OkfTarget, input: ReviewLinkInput, origin = AGENT_ACTOR, now = new Date().toISOString()): ReviewLink {
   const { projectPath, projectId, store } = target;
-  const title = squash(text(input.premise));
-  if (!title) throw new TypeError('prémisse : donner le titre ou le chemin de la prémisse.');
-  const id = premiseId(title);
+  const entity = endpoint(projectPath, input.premise, input.classe, 'fiche');
+  if (!isEntityId(entity.id)) throw new TypeError('fiche : une revue se lie à une fiche LOF, pas à une partie ni à un document.');
   const file = reviewFileName(input.fichier);
   const { index } = reviewColumn(projectPath, file, input.colonne);
-  const exists = fs.existsSync(conceptFile(projectPath, id));
-  if (!exists && isPremiseId(title)) throw new TypeError(`prémisse : aucune fiche ${title}. Donner le titre de la prémisse pour la créer.`);
   store.transaction(() => {
-    if (!exists) store.upsertPremise(projectId, { id, title, description: title, single: false, by: origin, at: now });
-    store.upsertReviewLink(projectId, { premise: id, file, column: index, by: origin, at: now });
+    if (entity.create) store.upsertPremise(projectId, { id: entity.id, title: entity.title, description: entity.title, single: false, by: origin, at: now, lofClass: entity.classId });
+    store.upsertReviewLink(projectId, { premise: entity.id, file, column: index, by: origin, at: now });
   });
-  return { premise: id, fichier: file, colonne: index };
+  return { premise: entity.id, fichier: file, colonne: index };
 }
 
 export function unlinkReview(target: OkfTarget, input: ReviewLinkInput): ReviewLink {
   const { projectPath, projectId, store } = target;
-  const id = premiseId(squash(text(input.premise)));
+  const id = entityId(squash(text(input.premise)));
   const file = reviewFileName(input.fichier);
   const given = Number(text(String(input.colonne ?? '')));
   const column = Number.isInteger(given) && text(String(input.colonne ?? '')) !== '' ? given : reviewColumn(projectPath, file, input.colonne).index;

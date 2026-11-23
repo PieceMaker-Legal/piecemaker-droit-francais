@@ -850,13 +850,13 @@
     },
     {
       "id": "hook-guard-ontologie--ontologie-cle-relations-ou-arborescence-requise",
-      "titre": "Ontologie : clé relations ou arborescence requise",
-      "quand": "Quand le JSON édité ne contient ni la liste relations ni la liste arborescence.",
+      "titre": "Ontologie : clé arborescence requise",
+      "quand": "Quand le JSON édité ne contient pas la liste arborescence.",
       "de": "hook:guard-ontologie",
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/proposition-edit.mjs",
       "guillemet": "'",
-      "ancre": "the file must contain \"relations\", the list of relations"
+      "ancre": "the file must contain \"arborescence\", the list of folders"
     },
     {
       "id": "hook-guard-ontologie--proposition-refusee-json-invalide",
@@ -3050,7 +3050,7 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
       "guillemet": "'",
-      "ancre": "Writes the OKF index of the case, with the ontology enforced"
+      "ancre": "Writes the OKF index of the case with the Legal Ontologies Foundry"
     },
     {
       "id": "mcp-features--parametre-writes-source-de-okfwrite",
@@ -3060,7 +3060,7 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
       "guillemet": "'",
-      "ancre": "The source document (path in the case), or the premise title for in"
+      "ancre": "link, unlink: a document path, a party code or a LOF record title. mark_examined"
     },
     {
       "id": "mcp-features--parametre-writes-relation-de-okfwrite",
@@ -3070,7 +3070,7 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
       "guillemet": "'",
-      "ancre": "link, unlink: a relation of the ontology, or states (document"
+      "ancre": "link, unlink: the label of a LOF property."
     },
     {
       "id": "mcp-features--parametre-writes-target-de-okfwrite",
@@ -3080,7 +3080,7 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
       "guillemet": "'",
-      "ancre": "link, unlink: the target document, premise title or party code."
+      "ancre": "link, unlink: a document path, a party code or a LOF record title. unlink has"
     },
     {
       "id": "mcp-features--parametre-writes-citation-de-okfwrite",
@@ -3090,7 +3090,7 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
       "guillemet": "'",
-      "ancre": "link: the exact sentence of the source that proves the link."
+      "ancre": "link: the exact sentence of the piece that proves the link."
     },
     {
       "id": "mcp-features--parametre-writes-value-de-okfwrite",
@@ -3100,17 +3100,47 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
       "guillemet": "'",
-      "ancre": "link states: the value of the premise."
+      "ancre": "link has date-time value: the date, YYYY-MM-DD."
     },
     {
-      "id": "mcp-features--parametre-writes-single-de-okfwrite",
-      "titre": "Paramètre writes[].single de OkfWrite",
+      "id": "mcp-features--parametre-writes-piece-de-okfwrite",
+      "titre": "Paramètre writes[].piece de OkfWrite",
       "quand": "Schéma de OkfWrite à chaque tour où l'outil est exposé.",
       "de": "mcp:features",
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
       "guillemet": "'",
-      "ancre": "link states: the premise has a single value."
+      "ancre": "link: the case document that proves the link."
+    },
+    {
+      "id": "mcp-features--parametre-writes-source-class-de-okfwrite",
+      "titre": "Paramètre writes[].source_class de OkfWrite",
+      "quand": "Schéma de OkfWrite à chaque tour où l'outil est exposé.",
+      "de": "mcp:features",
+      "vers": "agent",
+      "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
+      "guillemet": "'",
+      "ancre": "link: the LOF class of the source when its record is new."
+    },
+    {
+      "id": "mcp-features--parametre-writes-target-class-de-okfwrite",
+      "titre": "Paramètre writes[].target_class de OkfWrite",
+      "quand": "Schéma de OkfWrite à chaque tour où l'outil est exposé.",
+      "de": "mcp:features",
+      "vers": "agent",
+      "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
+      "guillemet": "'",
+      "ancre": "link: the LOF class of the target when its record is new."
+    },
+    {
+      "id": "mcp-features--parametre-writes-class-de-okfwrite",
+      "titre": "Paramètre writes[].class de OkfWrite",
+      "quand": "Schéma de OkfWrite à chaque tour où l'outil est exposé.",
+      "de": "mcp:features",
+      "vers": "agent",
+      "fichier": "server/piecemaker/vendor/mcp/features/server.mjs",
+      "guillemet": "'",
+      "ancre": "link_review: the LOF class of the record when it is new."
     },
     {
       "id": "mcp-features--parametre-writes-reason-de-okfwrite",

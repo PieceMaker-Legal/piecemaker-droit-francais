@@ -303,12 +303,12 @@ export function graphView(okf: OkfIndex | null, showPremises = true): string {
   const hasDocuments = okf?.fiches.some((fiche) => okf.typesGraphe.includes(fiche.type));
   const emptyMessage = okf ? `Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.` : 'Index indisponible.';
   const key = (kind: string, label: string) => `<span class="pmd-okf-key">${iconSvg(kind)}${label}</span>`;
-  return `<div class="pmd-okf-graph-wrap"${hasDocuments ? ' data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, prémisses et parties : fiches dans .piecemaker/okf/"' : ''}>
-    ${hasDocuments ? '<div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, prémisses et parties reliés entre eux"></div>' : `<div class="pmd-empty">${emptyMessage}</div>`}
+  return `<div class="pmd-okf-graph-wrap"${hasDocuments ? ' data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, fiches LOF et parties : fiches dans .piecemaker/okf/"' : ''}>
+    ${hasDocuments ? '<div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, fiches LOF et parties reliées entre elles"></div>' : `<div class="pmd-empty">${emptyMessage}</div>`}
     <div class="pmd-okf-legend" role="group" aria-label="Légende du graphe">
-      ${key('file', 'Type du document')}${key('diamond', 'Prémisse')}${key('users', 'Partie')}
-      <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${showPremises ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="okf-premises" aria-pressed="${showPremises}">Prémisses</button>
-      <a href="#" data-action="edit-ontology" title="Relations admises entre documents et types qu’elles relient">Ontologie</a>
+      ${key('file', 'Type du document')}${key('diamond', 'Fiche LOF')}${key('users', 'Partie')}
+      <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${showPremises ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="okf-premises" aria-pressed="${showPremises}">Fiches LOF</button>
+      <a href="#" data-action="edit-ontology" title="Ontologie Legal Ontologies Foundry : classes et propriétés">Ontologie</a>
     </div>
   </div>`;
 }
@@ -316,7 +316,6 @@ export function graphView(okf: OkfIndex | null, showPremises = true): string {
 export function proposalBanner(proposals?: PendingProposals): string {
   const plural = (count: number, word: string) => `${count} ${word}${count > 1 ? 's' : ''}`;
   const entries = [
-    proposals?.ontologie ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--sm" data-action="edit-ontology">Ontologie : ${plural(proposals.ontologie, 'modification')}</button>` : '',
     proposals?.arborescence ? `<button type="button" class="pmd-button piecemaker-button piecemaker-button--sm" data-action="edit-tree">Arborescence : ${plural(proposals.arborescence, 'modification')}</button>` : '',
   ].filter(Boolean);
   return `<div class="pmd-proposals" data-proposals role="status"${entries.length ? '' : ' hidden'}><span>L’assistant propose des modifications à examiner.</span>${entries.join('')}</div>`;
@@ -330,6 +329,5 @@ export function chronologyView(proposals?: PendingProposals, chronology = false)
     <div class="pmd-okf-legend" role="group" aria-label="Légende de l’index">
       <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${chronology ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="index-chronology" aria-pressed="${chronology}" title="Afficher seulement les pièces, de la plus ancienne à la plus récente">Chronologie</button>
       <a href="#" data-action="edit-tree" title="Organiser l’arborescence du dossier (colonne Classement)">Arborescence</a>
-      <a href="#" data-action="edit-document-types">Types d'actes</a>
     </div>`;
 }

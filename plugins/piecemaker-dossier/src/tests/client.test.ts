@@ -1,6 +1,6 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { etapesApi, knowledgeApi } from '../api.js';
+import { classificationApi, etapesApi, knowledgeApi } from '../api.js';
 import { mount, unmount } from '../client.js';
 import { mountGraph, okfApi } from '../okf.js';
 import { mountIndexAnalysis } from '../index-analysis.js';
@@ -137,10 +137,11 @@ describe('Graphe', () => {
 
 describe('Liens des légendes', () => {
   it.each([
-    ['chronology', 'edit-document-types', 'types', '[data-type-name]'],
-    ['graph', 'edit-ontology', 'relations', '[data-ontology-form]'],
+    ['chronology', 'edit-tree', 'tree', '[data-tree-name]'],
+    ['graph', 'edit-ontology', 'relations', '[data-lof-view]'],
   ])('ouvre directement l’éditeur depuis %s', async (tab, action, pane, field) => {
-    vi.spyOn(okfApi, 'ontology').mockResolvedValue({ relations: [], systeme: [], personnalisee: false, types: [], documentTypes: [{ name: 'contrat', icon: 'file' }] });
+    vi.spyOn(okfApi, 'ontology').mockResolvedValue({ lof: [], attribution: 'LOF', source: 'https://example.org', personnalisee: false, types: [] });
+    vi.spyOn(classificationApi, 'read').mockResolvedValue({ folders: [{ name: 'Documents', explanation: 'Documents du dossier', type: 'Pièces' }] });
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
     container.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)!.click();
     const selector = `.pmd-okf-legend a[data-action="${action}"]`;

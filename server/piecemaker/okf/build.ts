@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { sentenceContaining } from '../../../plugins/piecemaker-dossier/src/excerpt.js';
 import { REVIEW_FOLDER, documentTitle, isCellFilled } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 import type { Review } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
@@ -9,17 +8,14 @@ import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/
 import type { Frontmatter, Relation, Relations } from './bundle.js';
 import {
   AGENT_ACTOR,
-  PREMISE_TYPE,
-  MENTIONS,
   OKF_VERSION,
-  PARTY_TYPE,
   SCAN_ACTOR,
-  STATES,
   UNCLASSIFIED,
   bundleRoot,
   conceptFile,
   conceptId,
   fold,
+  isEntityId,
   migratedId,
   partyId,
   readBundle,
@@ -32,7 +28,7 @@ import {
   typeOf,
   writeIfChanged,
 } from './bundle.js';
-import { isSystemRelation, readOntology, ruleOf } from './ontology.js';
+import { LEGAL_DOCUMENT, MATERIAL_ENTITY, lofId, lofLabel, lofTerm } from './lof.js';
 import { EXAMINED, REVIEWS } from './premises.js';
 import { documentMetadataFromReviews, reviewRowPieces } from './reviews.js';
 import type { OkfRecords, StoredReviewLink } from './store.js';
@@ -131,56 +127,28 @@ export function mergeDocuments(fromIndex: SourceDocument[], fromScan: SourceDocu
   return [...merged.values()].sort((left, right) => left.resource.localeCompare(right.resource));
 }
 
-const SCAN_RELATION = 'refers-to';
-
-function scanRelations(source: SourceDocument, targets: SourceDocument[], markdown: string): Relation[] {
-  const byDate = new Map<string, SourceDocument[]>();
-  for (const target of targets) {
-    if (target.resource === source.resource || !target.date || !target.nature) continue;
-    byDate.set(target.date, [...(byDate.get(target.date) || []), target]);
-  }
-  const found = new Map<string, Relation>();
-  if (!byDate.size) return [];
-  for (const line of markdown.split('\n')) {
-    for (const { literal, date } of datesIn(line)) {
-      const candidates = byDate.get(date);
-      const sentence = candidates && sentenceContaining(line, [literal]);
-      if (!sentence) continue;
-      const folded = fold(sentence);
-      const matching = (candidates as SourceDocument[]).filter((target) => folded.includes(fold(target.nature)));
-      if (matching.length !== 1) continue;
-      const target = conceptId(matching[0].resource);
-      if (!found.has(target)) found.set(target, { target, citation: sentence, origin: SCAN_ACTOR });
-    }
-  }
-  return [...found.values()];
-}
-
 function storedRelations(records: OkfRecords, source: string): Relations {
   const relations: Relations = {};
   for (const entry of records.relations) {
     if (entry.source !== source) continue;
-    (relations[entry.relation] ||= []).push({ target: entry.target, citation: entry.citation, origin: entry.origin, ...(entry.value ? { value: entry.value } : {}), ...(entry.at ? { at: entry.at } : {}), ...(entry.dismissed ? { dismissed: true } : {}) });
+    if (!lofTerm(entry.relation)) continue;
+    (relations[lofLabel(entry.relation)] ||= []).push({ target: entry.target, citation: entry.citation, origin: entry.origin, ...(entry.piece ? { piece: entry.piece } : {}), ...(entry.value ? { value: entry.value } : {}), ...(entry.at ? { at: entry.at } : {}), ...(entry.dismissed ? { dismissed: true } : {}) });
   }
   return relations;
 }
 
-function mergedRelations(stored: Relations, derived: Relations): Relations {
+function liveRelations(stored: Relations): Relations {
   const relations: Relations = {};
-  for (const [name, entries] of Object.entries(stored)) if (entries.length) relations[name] = [...entries];
-  const dismissed = new Set(Object.entries(stored).flatMap(([name, entries]) => entries.filter((entry) => entry.dismissed).map((entry) => `${name}\u0000${entry.target}`)));
-  const linkedDocuments = new Set(Object.entries(relations).filter(([name]) => !isSystemRelation(name)).flatMap(([, entries]) => entries.filter((entry) => !entry.dismissed)).map((entry) => entry.target));
-  for (const [name, entries] of Object.entries(derived)) {
-    const known = name === SCAN_RELATION ? linkedDocuments : new Set((relations[name] || []).map((entry) => entry.target));
-    const added = entries.filter((entry) => !known.has(entry.target) && !dismissed.has(`${name}\u0000${entry.target}`));
-    if (added.length) relations[name] = [...(relations[name] || []), ...added];
+  for (const [name, entries] of Object.entries(stored)) {
+    const live = entries.filter((entry) => !entry.dismissed).sort((left, right) => left.target.localeCompare(right.target));
+    if (live.length) relations[name] = live;
   }
-  for (const entries of Object.values(relations)) entries.sort((left, right) => left.target.localeCompare(right.target));
   return relations;
 }
 
 function indexContent(entries: Array<{ id: string; frontmatter: Frontmatter }>, types: string[]): string {
-  const sections = [...types, UNCLASSIFIED, PREMISE_TYPE, PARTY_TYPE].flatMap((type) => {
+  const classes = [...new Set(entries.map((entry) => text(entry.frontmatter.type)))].filter((type) => type && !types.includes(type) && type !== UNCLASSIFIED).sort();
+  const sections = [...types, UNCLASSIFIED, ...classes].flatMap((type) => {
     const lines = entries
       .filter((entry) => entry.frontmatter.type === type)
       .map((entry) => `* [${text(entry.frontmatter.title)}](${encodeURI(entry.id)}) - ${text(entry.frontmatter.description)}`);
@@ -189,11 +157,12 @@ function indexContent(entries: Array<{ id: string; frontmatter: Frontmatter }>, 
   return `---\nokf_version: "${OKF_VERSION}"\n---\n\n${sections.join('\n\n')}\n`;
 }
 
-function backlinksBody(id: string, relation: string, documents: Array<{ id: string; frontmatter: Frontmatter }>): string {
-  const sections = documents.flatMap((document) => (relationsOf(document.frontmatter)[relation] || [])
+function backlinksBody(id: string, concepts: Array<{ id: string; frontmatter: Frontmatter }>): string {
+  const title = (target: string) => text(concepts.find((concept) => concept.id === target)?.frontmatter.title) || target;
+  const sections = concepts.flatMap((concept) => Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
     .filter((entry) => entry.target === id && !entry.dismissed)
-    .map((entry) => [`## [${text(document.frontmatter.title)}](${encodeURI(document.id)})`, ...(entry.value ? [`Valeur : ${entry.value}`] : []), `> ${entry.citation}`].join('\n\n')));
-  return sections.length ? ['# Pièces', ...sections].join('\n\n') : '';
+    .map((entry) => [`## [${text(concept.frontmatter.title)}](${encodeURI(concept.id)}) ${relation}`, ...(entry.piece && entry.piece !== concept.id ? [`Pièce : [${title(entry.piece)}](${encodeURI(entry.piece)})`] : []), ...(entry.value ? [`Valeur : ${entry.value}`] : []), `> ${entry.citation}`].join('\n\n'))));
+  return sections.length ? ['# Relations entrantes', ...sections].join('\n\n') : '';
 }
 
 export const AUTHOR_LABELS: Record<string, string> = { human: 'vérifiée par l’avocat', agent: 'agent, non vérifiée' };
@@ -214,19 +183,20 @@ function pruneEmptyDirectories(directory: string, root: string): void {
   }
 }
 
-/** Authoritative parts of fiches written before SQLite held them, for a one-time import. Mentions and scan links are derived: they are not imported. */
+/** Authoritative parts of fiches written before SQLite held them, for a one-time import. Relations outside LOF are not imported. */
 export function legacyRecords(projectPath: string): OkfRecords {
   const records: OkfRecords = { premises: [], relations: [], exams: [], reviews: [] };
   for (const concept of readBundle(projectPath)) {
     if (concept.error) continue;
     const id = migratedId(concept.id);
     const generated = (concept.frontmatter.generated || {}) as Record<string, unknown>;
-    if (concept.frontmatter.type === PREMISE_TYPE) records.premises.push({ id, title: text(concept.frontmatter.title), description: text(concept.frontmatter.description), single: concept.frontmatter.single_value === true, by: text(generated.by) || AGENT_ACTOR, at: text(generated.at) });
+    if (isEntityId(id)) records.premises.push({ id, title: text(concept.frontmatter.title), description: text(concept.frontmatter.description), single: false, by: text(generated.by) || AGENT_ACTOR, at: text(generated.at), lofClass: lofId(text(concept.frontmatter.lof), ['class']) || '' });
     for (const [relation, entries] of Object.entries(relationsOf(concept.frontmatter))) {
-      if (relation === MENTIONS) continue;
+      const property = lofId(relation, ['objprop', 'dataprop']);
+      if (!property) continue;
       for (const entry of entries) {
         if (entry.origin === SCAN_ACTOR && !entry.dismissed) continue;
-        records.relations.push({ source: id, relation, target: migratedId(entry.target), citation: entry.citation, value: entry.value || '', origin: entry.origin || AGENT_ACTOR, at: entry.at || text(generated.at), dismissed: entry.dismissed === true });
+        records.relations.push({ source: id, relation: property, target: migratedId(entry.target), citation: entry.citation, value: entry.value || '', origin: entry.origin || AGENT_ACTOR, at: entry.at || text(generated.at), dismissed: entry.dismissed === true, piece: entry.piece || '' });
       }
     }
     const exam = concept.frontmatter[EXAMINED] as Record<string, unknown> | undefined;
@@ -235,7 +205,7 @@ export function legacyRecords(projectPath: string): OkfRecords {
   return records;
 }
 
-/** Writes the fiches of the case from SQLite: documents, parties and mentions from the knowledge base, premises, links and examinations from the OKF tables. Every fiche is a view: files not produced here are removed. */
+/** Writes the fiches of the case from SQLite: documents and parties from the knowledge base, LOF fiches, links and examinations from the OKF tables. Every fiche is a view: files not produced here are removed. */
 export function buildBundle(input: { projectPath: string; documents: SourceDocument[]; markdownOf: MarkdownOf; parties?: SourceParty[]; records?: OkfRecords; now?: string }): { written: number; removed: number } {
   const { projectPath, documents } = input;
   const parties = input.parties || [];
@@ -243,77 +213,68 @@ export function buildBundle(input: { projectPath: string; documents: SourceDocum
   const now = input.now || new Date().toISOString();
   const types = readTypes(projectPath);
   const stored = readBundle(projectPath);
-  const scanRule = ruleOf(readOntology(projectPath), SCAN_RELATION);
-  const ofTypes = (allowed: string[] = []) => documents.filter((document) => allowed.includes(typeOf(document.resource, types, projectPath)));
-  const scanSources = ofTypes(scanRule?.source);
-  const scanTargets = ofTypes(scanRule?.target);
-  const entries: Array<{ id: string; frontmatter: Frontmatter }> = [];
-  let written = 0;
-
-  const markdownCache = new Map<string, string | null>();
-  const markdown = (resource: string): string | null => {
-    if (!markdownCache.has(resource)) markdownCache.set(resource, input.markdownOf(resource));
-    return markdownCache.get(resource) as string | null;
-  };
+  const pending: Array<{ id: string; frontmatter: Frontmatter; by: string; at: string; reviews?: StoredReviewLink[] }> = [];
   const previousAt = new Map(stored.map((concept) => [concept.id, text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.at)]));
-  const write = (id: string, frontmatter: Frontmatter, body: string, by: string, at: string): void => {
-    frontmatter.generated = { by, at: at || previousAt.get(id) || now };
-    if (writeIfChanged(conceptFile(projectPath, id), serializeConcept(frontmatter, body))) written += 1;
-    entries.push({ id, frontmatter });
-  };
   const latest = (...values: string[]): string => values.filter(Boolean).sort().at(-1) || '';
-  const partyCodes = new Set(parties.map((party) => party.code));
   const exams = new Map(records.exams.map((exam) => [exam.source, exam]));
+  const ownAt = (relations: Relations) => Object.values(relations).flat().map((entry) => entry.at || '');
 
   for (const document of documents) {
     const id = conceptId(document.resource);
-    const own = storedRelations(records, id);
-    const derived: Relations = {
-      [SCAN_RELATION]: scanSources.includes(document) && markdown(document.resource) ? scanRelations(document, scanTargets, markdown(document.resource) as string) : [],
-      [MENTIONS]: document.parties.filter((party) => partyCodes.has(party.code)).map((party) => ({ target: partyId(party.code), citation: party.citation, origin: SCAN_ACTOR })),
-    };
-    const relations = mergedRelations(own, derived);
+    const relations = liveRelations(storedRelations(records, id));
     const exam = exams.get(id);
-    const frontmatter: Frontmatter = {
+    pending.push({ id, by: SCAN_ACTOR, at: latest(document.updatedAt || '', ...ownAt(relations), exam?.at || ''), frontmatter: {
       type: typeOf(document.resource, types, projectPath),
       title: document.title,
       nature: document.nature,
+      lof: lofId(document.nature, ['class']) || LEGAL_DOCUMENT,
       description: [document.nature, document.date].filter(Boolean).join(' du ') || document.title,
       resource: document.resource,
       ...(document.date ? { date: document.date } : {}),
       ...(Object.keys(relations).length ? { relations } : {}),
       ...(exam ? { [EXAMINED]: { motif: exam.motif, by: exam.by, at: exam.at, empreinte: exam.empreinte } } : {}),
-    };
-    write(id, frontmatter, '', SCAN_ACTOR, latest(document.updatedAt || '', ...Object.values(own).flat().map((entry) => entry.at || ''), exam?.at || ''));
+    } });
   }
-  const documentEntries = [...entries];
-
-  for (const premise of records.premises) {
-    const relations = mergedRelations(storedRelations(records, premise.id), {});
-    const reviews = (records.reviews || []).filter((link) => link.premise === premise.id);
-    const frontmatter: Frontmatter = {
-      type: PREMISE_TYPE,
-      title: premise.title,
-      description: premise.description || premise.title,
-      ...(premise.single ? { single_value: true } : {}),
+  for (const entity of records.premises) {
+    const relations = liveRelations(storedRelations(records, entity.id));
+    const reviews = (records.reviews || []).filter((link) => link.premise === entity.id);
+    const classId = lofTerm(entity.lofClass || '')?.kind === 'class' ? entity.lofClass as string : '';
+    pending.push({ id: entity.id, by: entity.by, reviews, at: latest(entity.at, ...ownAt(relations), ...reviews.map((link) => link.at)), frontmatter: {
+      type: classId ? lofLabel(classId) : UNCLASSIFIED,
+      ...(classId ? { lof: classId } : {}),
+      title: entity.title,
+      description: entity.description || entity.title,
       ...(Object.keys(relations).length ? { relations } : {}),
       ...(reviews.length ? { [REVIEWS]: reviews.map((link) => ({ fichier: link.file, colonne: link.column, by: link.by, at: link.at })) } : {}),
-    };
-    const body = [backlinksBody(premise.id, STATES, documentEntries), reviewsBody(projectPath, reviews)].filter(Boolean).join('\n\n');
-    write(premise.id, frontmatter, body, premise.by, latest(premise.at, ...reviews.map((link) => link.at)));
+    } });
   }
   for (const party of parties) {
     const id = partyId(party.code);
-    write(id, { type: PARTY_TYPE, title: party.code, description: party.side === 'client' ? 'Partie cliente' : 'Partie adverse', side: party.side }, backlinksBody(id, MENTIONS, documentEntries), SCAN_ACTOR, party.updatedAt || '');
+    const relations = liveRelations(storedRelations(records, id));
+    pending.push({ id, by: SCAN_ACTOR, at: latest(party.updatedAt || '', ...ownAt(relations)), frontmatter: {
+      type: lofLabel(MATERIAL_ENTITY),
+      lof: MATERIAL_ENTITY,
+      title: party.code,
+      description: party.side === 'client' ? 'Partie cliente' : 'Partie adverse',
+      side: party.side,
+      ...(Object.keys(relations).length ? { relations } : {}),
+    } });
   }
 
-  const kept = new Set(entries.map((entry) => entry.id));
+  let written = 0;
+  for (const entry of pending) {
+    const body = [backlinksBody(entry.id, pending), entry.reviews ? reviewsBody(projectPath, entry.reviews) : ''].filter(Boolean).join('\n\n');
+    entry.frontmatter.generated = { by: entry.by, at: entry.at || previousAt.get(entry.id) || now };
+    if (writeIfChanged(conceptFile(projectPath, entry.id), serializeConcept(entry.frontmatter, body))) written += 1;
+  }
+
+  const kept = new Set(pending.map((entry) => entry.id));
   const stale = stored.filter((concept) => !kept.has(concept.id));
   for (const concept of stale) {
     const filePath = conceptFile(projectPath, concept.id);
     fs.rmSync(filePath, { force: true });
     pruneEmptyDirectories(path.dirname(filePath), bundleRoot(projectPath));
   }
-  if (writeIfChanged(path.join(bundleRoot(projectPath), 'index.md'), indexContent(entries, types))) written += 1;
+  if (writeIfChanged(path.join(bundleRoot(projectPath), 'index.md'), indexContent(pending, types))) written += 1;
   return { written, removed: stale.length };
 }

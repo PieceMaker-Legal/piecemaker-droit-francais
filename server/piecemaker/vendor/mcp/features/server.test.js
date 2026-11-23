@@ -13,7 +13,7 @@ async function connect({ pm } = {}) {
   const { InMemoryTransport } = await import('@modelcontextprotocol/sdk/inMemory.js');
   const { createServer } = await import('./server.mjs');
   const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();
-  await createServer({ root, pm: fakePm, relations: ['amends', 'refers-to', 'states', 'involves'] }).connect(serverSide);
+  await createServer({ root, pm: fakePm, relations: ['held by', 'has date-time value'] }).connect(serverSide);
   const client = new Client({ name: 'test', version: '0' });
   await client.connect(clientSide);
   const call = async (name, args) => {
@@ -111,21 +111,21 @@ test('OkfWrite enforces the ontology and the required fields', async () => {
   const { call, calls, root } = await connect();
   const okf = (...writes) => call('OkfWrite', { writes });
   const result = await okf(
-    { action: 'link', source: 'Pièces/avenant.pdf', relation: 'amends', target: 'Pièces/contrat.pdf', citation: 'Le présent avenant modifie le contrat.' },
-    { action: 'link', source: 'Loyer mensuel', relation: 'involves', target: 'JEAN_DUPONT' },
+    { action: 'link', source: 'Créance de loyer', relation: 'held by', target: 'JEAN_DUPONT', piece: 'Pièces/bail.pdf', citation: 'Le bailleur perçoit le loyer.', source_class: 'legal position' },
+    { action: 'link', source: 'Signature du bail', relation: 'has date-time value', piece: 'Pièces/bail.pdf', citation: 'Fait le 1er mars 2024.', value: '2024-03-01' },
     { action: 'mark_examined', source: 'Pièces/note.pdf', reason: 'Aucun lien' },
     { action: 'link_review', source: 'Résiliation du contrat', file: 'revue.json', column: 0 },
   );
   assert.equal(result.error, false);
   assert.match(result.text, /^1\. .*\n2\. .*\n3\. .*\n4\. /);
   assert.deepEqual(calls, [
-    ['okf', 'link', 'Pièces/avenant.pdf', 'amends', 'Pièces/contrat.pdf', '--citation', 'Le présent avenant modifie le contrat.', '--dossier', root],
-    ['okf', 'link', 'Loyer mensuel', 'involves', 'JEAN_DUPONT', '--dossier', root],
+    ['okf', 'link', 'Créance de loyer', 'held by', 'JEAN_DUPONT', '--piece', 'Pièces/bail.pdf', '--citation', 'Le bailleur perçoit le loyer.', '--source_class', 'legal position', '--dossier', root],
+    ['okf', 'link', 'Signature du bail', 'has date-time value', '--piece', 'Pièces/bail.pdf', '--citation', 'Fait le 1er mars 2024.', '--value', '2024-03-01', '--dossier', root],
     ['okf', 'examinee', 'Pièces/note.pdf', '--motif', 'Aucun lien', '--dossier', root],
     ['okf', 'revue', 'Résiliation du contrat', '--fichier', 'revue.json', '--colonne', '0', '--dossier', root],
   ]);
-  assert.equal((await okf({ action: 'link', source: 'a', relation: 'contests', target: 'b', citation: 'x' })).error, true);
-  assert.match((await okf({ action: 'unlink', source: 'a', relation: 'amends', target: 'b' }, { action: 'link', source: 'a', relation: 'amends', target: 'b' })).text, /^invalid_argument: link needs "citation"/);
+  assert.equal((await okf({ action: 'link', source: 'a', relation: 'amends', target: 'b', piece: 'p', citation: 'x' })).error, true);
+  assert.match((await okf({ action: 'unlink', source: 'a', relation: 'held by', target: 'b' }, { action: 'link', source: 'a', relation: 'held by', target: 'b', piece: 'p' })).text, /^invalid_argument: link needs "citation"/);
   assert.match((await okf({ action: 'mark_examined', source: 'a' })).text, /^invalid_argument/);
   assert.match((await okf({ action: 'link_review', source: 'a', file: 'revue.json' })).text, /^invalid_argument/);
   assert.equal((await call('OkfWrite', { writes: [] })).error, true);
@@ -135,19 +135,19 @@ test('OkfWrite enforces the ontology and the required fields', async () => {
 test('OkfWrite stops at the first failure', async () => {
   const seen = [];
   const { call } = await connect({ pm: async (args) => { seen.push(args); return seen.length === 2 ? { code: 1, stdout: '', stderr: 'Citation introuvable' } : { code: 0, stdout: 'Lien posé', stderr: '' }; } });
-  const link = { action: 'link', source: 'a', relation: 'amends', target: 'b', citation: 'x' };
+  const link = { action: 'link', source: 'a', relation: 'held by', target: 'b', piece: 'p', citation: 'x' };
   const result = await call('OkfWrite', { writes: [link, link, link] });
   assert.equal(result.error, true);
   assert.equal(result.text, '1. Lien posé\n2. Citation introuvable\nStopped: operations 3 to 3 not run.');
   assert.equal(seen.length, 2);
 });
 
-test('okfRelations takes the sealed ontology from the server and adds the system relations', async () => {
+test('okfRelations takes the LOF property labels from the server', async () => {
   const { okfRelations } = await import('./server.mjs');
   const seen = [];
-  const pm = async (args) => { seen.push(args); return { code: 0, stdout: JSON.stringify(['contests', 'states', 'involves']), stderr: '' }; };
-  assert.deepEqual(await okfRelations('/dossier', pm), ['contests', 'states', 'involves']);
+  const pm = async (args) => { seen.push(args); return { code: 0, stdout: JSON.stringify(['held by', 'evidences']), stderr: '' }; };
+  assert.deepEqual(await okfRelations('/dossier', pm), ['held by', 'evidences']);
   assert.deepEqual(seen, [['okf', 'ontologie', '--noms', '--dossier', '/dossier']]);
   const down = async () => ({ code: 1, stdout: '', stderr: 'serveur indisponible' });
-  assert.deepEqual(await okfRelations('/dossier', down), ['amends', 'responds-to', 'refers-to', 'supersedes', 'states', 'involves']);
+  assert.equal(await okfRelations('/dossier', down), null);
 });

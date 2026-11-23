@@ -75,7 +75,7 @@ describe('arborescence du dossier', () => {
     const folders = [{ name: 'Documents', explanation: 'Pièces reçues', type: 'Pièces' }];
     await saveClassification(project, folders);
     expect(readClassification(project)).toEqual(folders);
-    await expect(saveClassification(project, [{ ...folders[0], type: 'Partie' }])).rejects.toThrow('Type principal invalide');
+    await expect(saveClassification(project, [{ ...folders[0], type: 'Non classé' }])).rejects.toThrow('Type principal invalide');
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
 

@@ -6,8 +6,8 @@ import path from 'node:path';
 import type { ClassificationFolder } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 import { DEFAULT_CLASSIFICATION, REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
-// ~/.piecemaker/ontologie.json, commun à tous les dossiers : relations, natures et arborescence,
-// sous un seul sceau. Ce module ne dépend pas de bundle.ts, qui y lit l'arborescence.
+// ~/.piecemaker/ontologie.json, commun à tous les dossiers : l'arborescence, sous un sceau.
+// Classes, relations et natures viennent de la Legal Ontologies Foundry (lof.json).
 
 const home = (): string => process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
 export const ontologyFile = (): string => path.join(home(), 'ontologie.json');
@@ -26,6 +26,7 @@ export const sealOf = (key: Buffer, content: unknown): string => createHmac('sha
 
 /** Ce que couvre le sceau. Un fichier antérieur au catalogue des natures ne scellait que les relations. */
 export function sealedContent(stored: Record<string, unknown>): unknown {
+  if (stored.relations === undefined && stored.documentTypes === undefined) return stored.arborescence === undefined ? {} : { arborescence: stored.arborescence };
   if (stored.documentTypes === undefined) return stored.relations;
   return { relations: stored.relations, documentTypes: stored.documentTypes, ...(stored.arborescence === undefined ? {} : { arborescence: stored.arborescence }) };
 }
@@ -51,7 +52,7 @@ export function readSealed(): SealedRead {
 const MAX_FOLDERS = 30;
 const MAX_NAME = 200;
 const MAX_EXPLANATION = 500;
-const RESERVED = ['Premise', 'Partie', 'Non classé'];
+const RESERVED = ['Non classé'];
 
 function folderName(value: unknown): string {
   const name = typeof value === 'string' ? value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '') : '';

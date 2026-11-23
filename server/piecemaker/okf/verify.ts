@@ -2,18 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { MarkdownOf } from './build.js';
+import type { Concept } from './bundle.js';
 import {
-  PREMISE_TYPE,
-  INVOLVES,
-  MENTIONS,
   OKF_VERSION,
-  PARTY_TYPE,
-  STATES,
+  UNCLASSIFIED,
   bundleRoot,
   conceptId,
   fold,
+  isEntityId,
   isoDateOf,
-  isPremiseId,
   isPartyId,
   parseConcept,
   readBundle,
@@ -24,7 +21,8 @@ import {
   typeOf,
   typographic,
 } from './bundle.js';
-import { readOntology, relationNames, ruleOf } from './ontology.js';
+import { HAS_DATE_TIME_VALUE, MATERIAL_ENTITY, TEMPORAL_INSTANT, fits, isFunctional, lofId, lofLabel, lofTerm } from './lof.js';
+import { readOntology } from './ontology.js';
 import { storedOntologyErrors } from './ontology-proposal.js';
 import { linkedReviews, reviewPieces } from './premises.js';
 import { reviewRowPieces } from './reviews.js';
@@ -61,16 +59,16 @@ function indexErrors(projectPath: string, ids: string[]): OkfError[] {
   return errors;
 }
 
-const ALLOWED: Record<string, string[]> = { [PREMISE_TYPE]: [INVOLVES], [PARTY_TYPE]: [] };
 const ONTOLOGY_FICHE = '~/.piecemaker/ontologie.json';
+const labels = (ids: string[] = []): string => ids.map(lofLabel).join(', ');
+export const classOf = (concept: Pick<Concept, 'frontmatter'>): string => lofId(text(concept.frontmatter.lof), ['class']) || '';
 
 export function verifyBundle(input: { projectPath: string; resources: string[]; markdownOf: MarkdownOf }): OkfError[] {
   const { projectPath, markdownOf } = input;
   const types = readTypes(projectPath);
   const ontology = readOntology(projectPath);
-  const documentRelations = [...relationNames(ontology), STATES, MENTIONS];
   const concepts = readBundle(projectPath);
-  const typeById = new Map(concepts.map((concept) => [concept.id, text(concept.frontmatter.type)]));
+  const byId = new Map(concepts.filter((concept) => !concept.error).map((concept) => [concept.id, concept]));
   const errors: OkfError[] = [];
   if (ontology.erreur) errors.push({ fiche: ONTOLOGY_FICHE, erreur: ontology.erreur });
   errors.push(...storedOntologyErrors());
@@ -80,13 +78,21 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
     if (concept.error) { report(concept.error); continue; }
     const type = text(concept.frontmatter.type);
     const resource = text(concept.frontmatter.resource);
-    const reserved = isPremiseId(concept.id) ? PREMISE_TYPE : isPartyId(concept.id) ? PARTY_TYPE : '';
+    const classId = classOf(concept);
+    if (text(concept.frontmatter.lof) && !classId) report(`classe hors LOF : ${text(concept.frontmatter.lof)}`);
     if (!type) report('type absent');
-    else if (reserved || type === PREMISE_TYPE || type === PARTY_TYPE) {
-      if (type !== reserved) report(`type « ${type} » incompatible avec l'emplacement de la fiche`);
+    if (isEntityId(concept.id)) {
       if (!text(concept.frontmatter.title)) report('title absent');
-    } else if (!types.includes(type)) report(`type « ${type} » hors arborescence (${types.join(', ')})`);
-    if (!reserved) {
+      if (!classId) report(`fiche sans classe LOF : la relier de nouveau en donnant sa classe (pm okf link "${text(concept.frontmatter.title)}" … --source_class <classe>)`);
+      else if (type !== lofLabel(classId)) report(`type « ${type} » différent de la classe LOF « ${lofLabel(classId)} »`);
+      for (const link of linkedReviews(concept)) {
+        const { erreur } = reviewRowPieces(projectPath, link.fichier, link.colonne);
+        if (erreur) report(`revue liée ${link.fichier} › colonne ${link.colonne} : ${erreur} ; la délier : pm okf revue "${text(concept.frontmatter.title)}" --fichier "${link.fichier}" --colonne ${link.colonne} --retirer`);
+      }
+    } else if (isPartyId(concept.id)) {
+      if (classId !== MATERIAL_ENTITY || type !== lofLabel(MATERIAL_ENTITY)) report(`une partie est une « ${lofLabel(MATERIAL_ENTITY)} »`);
+    } else {
+      if (type !== UNCLASSIFIED && !types.includes(type)) report(`type « ${type} » hors arborescence (${types.join(', ')})`);
       if (!resource) report('resource absent');
       else {
         if (!fs.existsSync(path.join(projectPath, resource))) report(`document absent : ${resource}`);
@@ -94,45 +100,47 @@ export function verifyBundle(input: { projectPath: string; resources: string[]; 
         if (type && typeOf(resource, types, projectPath) !== type) report(`type « ${type} » différent du dossier du document`);
       }
     }
-    const allowed = ALLOWED[reserved] || documentRelations;
-    if (reserved === PREMISE_TYPE) for (const link of linkedReviews(concept)) {
-      const { erreur } = reviewRowPieces(projectPath, link.fichier, link.colonne);
-      if (erreur) report(`revue liée ${link.fichier} › colonne ${link.colonne} : ${erreur} ; la délier : pm okf revue "${text(concept.frontmatter.title)}" --fichier "${link.fichier}" --colonne ${link.colonne} --retirer`);
-    }
-    const markdown = resource ? markdownOf(resource) : null;
     for (const [name, entries] of Object.entries(relationsOf(concept.frontmatter))) {
-      if (!allowed.includes(name) && entries.some((entry) => !entry.dismissed)) report(`relation hors ontologie : ${name} (relations admises : ${allowed.join(', ') || 'aucune'})`);
-      const rule = ruleOf(ontology, name);
-      for (const entry of entries) {
-        if (entry.dismissed) continue;
+      const property = lofId(name, ['objprop', 'dataprop']);
+      const live = entries.filter((entry) => !entry.dismissed);
+      if (!property) {
+        if (live.length) report(`relation hors LOF : ${name}`);
+        continue;
+      }
+      const term = lofTerm(property)!;
+      if (term.kind === 'objprop' && isFunctional(property) && new Set(live.map((entry) => entry.target)).size > 1) report(`« ${name} » est fonctionnelle : une seule cible admise`);
+      if (live.length && classId && !fits(classId, term.domain)) report(`${name} : « ${lofLabel(classId)} » hors du domaine (${labels(term.domain)})`);
+      for (const entry of live) {
         const link = `${name} → ${entry.target || '?'}`;
-        const targetType = typeById.get(entry.target);
-        if (targetType === undefined) report(`${link} : cible absente du dossier`);
-        else if (name === STATES) { if (targetType !== PREMISE_TYPE) report(`${link} : la cible n'est pas une prémisse`); }
-        else if (name === MENTIONS || name === INVOLVES) { if (targetType !== PARTY_TYPE) report(`${link} : la cible n'est pas une partie`); }
-        else if (rule && !rule.target.includes(targetType)) report(`${link} : la cible est de type « ${targetType} », l'ontologie admet ${rule.target.join(', ')}`);
-        if (entry.target === concept.id) report(`${link} : lien vers soi-même`);
-        if (rule && !rule.source.includes(type)) report(`${link} : la source est de type « ${type} », l'ontologie admet ${rule.source.join(', ')}`);
-        if (name === INVOLVES) continue;
+        const target = byId.get(entry.target);
+        if (!target) report(`${link} : cible absente du dossier`);
+        else if (term.kind === 'objprop' && classOf(target) && !fits(classOf(target), term.range)) report(`${link} : « ${lofLabel(classOf(target))} » hors du codomaine (${labels(term.range)})`);
+        if (term.kind === 'objprop' && entry.target === concept.id) report(`${link} : lien vers soi-même`);
+        if (property === HAS_DATE_TIME_VALUE && !isoDateOf(entry.value || '')) report(`${link} : date absente`);
+        const piece = byId.get(entry.piece || '') || (!isEntityId(concept.id) && !isPartyId(concept.id) ? concept : undefined);
+        if (!piece) {
+          report(`${link} : pièce absente`);
+          continue;
+        }
         if (!entry.citation) report(`${link} : citation absente`);
-        else if (!quoted(markdown, entry.citation)) report(`${link} : citation introuvable dans le document`);
+        else if (!quoted(markdownOf(text(piece.frontmatter.resource)), entry.citation)) report(`${link} : citation introuvable dans ${piece.id}`);
       }
     }
   }
 
   for (const resource of input.resources) {
-    if (!typeById.has(conceptId(resource))) errors.push({ fiche: conceptId(resource), erreur: 'document sans fiche : lancer pm dossier conversion, qui convertit puis analyse le dossier et écrit les fiches' });
+    if (!concepts.some((concept) => concept.id === conceptId(resource))) errors.push({ fiche: conceptId(resource), erreur: 'document sans fiche : lancer pm dossier conversion, qui convertit puis analyse le dossier et écrit les fiches' });
   }
   return [...errors, ...indexErrors(projectPath, concepts.map((concept) => concept.id))];
 }
 
 export function contradictions(projectPath: string): OkfContradiction[] {
   const concepts = readBundle(projectPath).filter((concept) => !concept.error);
-  return concepts.filter((concept) => concept.frontmatter.type === PREMISE_TYPE && concept.frontmatter.single_value === true).flatMap((premise) => {
-    const valeurs = concepts.flatMap((concept) => (relationsOf(concept.frontmatter)[STATES] || [])
-      .filter((entry) => entry.target === premise.id && !entry.dismissed && entry.value)
-      .map((entry) => ({ piece: concept.id, valeur: entry.value as string })))
-      .concat(reviewPieces(projectPath, premise, concepts).filter((piece) => piece.value).map((piece) => ({ piece: conceptId(piece.resource), valeur: piece.value })));
-    return new Set(valeurs.map((entry) => isoDateOf(entry.valeur) ?? fold(squash(entry.valeur)))).size > 1 ? [{ premise: premise.id, titre: text(premise.frontmatter.title), valeurs }] : [];
+  const label = lofLabel(HAS_DATE_TIME_VALUE);
+  return concepts.filter((concept) => isEntityId(concept.id) && fits(classOf(concept), [TEMPORAL_INSTANT])).flatMap((entity) => {
+    const valeurs = (relationsOf(entity.frontmatter)[label] || []).filter((entry) => !entry.dismissed && entry.value)
+      .map((entry) => ({ piece: entry.piece || entry.target, valeur: entry.value as string }))
+      .concat(reviewPieces(projectPath, entity, concepts).filter((piece) => piece.value).map((piece) => ({ piece: conceptId(piece.resource), valeur: piece.value })));
+    return new Set(valeurs.map((entry) => isoDateOf(entry.valeur) ?? fold(squash(entry.valeur)))).size > 1 ? [{ premise: entity.id, titre: text(entity.frontmatter.title), valeurs }] : [];
   });
 }

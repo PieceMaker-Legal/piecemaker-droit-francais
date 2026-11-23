@@ -5,7 +5,7 @@
       "cible": "^ontologie(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "okf",
-      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: relations, document types and the folder tree under the key arborescence), in the Index › Ontologie and Index › Classement tabs. Read it with pm okf ontologie and pm dossier arborescence. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
+      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: the folder tree under the key arborescence), in the Index › Classement tab. The ontology itself is the Legal Ontologies Foundry, fixed: read it with pm okf ontologie. Read the tree with pm dossier arborescence. To propose a change to the tree, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
     },
     {
       "nom": "okf",
@@ -232,7 +232,7 @@
       "nom": "index",
       "titre": "Index",
       "volet": "index",
-      "description": "OKF index of the case documents: cited links between documents, premises, parties and the link ontology.",
+      "description": "OKF index of the case documents: records typed by the Legal Ontologies Foundry (David Koepsell, CC BY 4.0), linked by its properties, each link proved by a piece and its exact quotation.",
       "skills": [
         {
           "chemin": "vendor/skills/okf"
@@ -257,7 +257,7 @@
             "okf",
             "ontologie"
           ],
-          "role": "Relations allowed between documents (read-only)."
+          "role": "Legal Ontologies Foundry (David Koepsell, CC BY 4.0): classes and properties with their definitions (read-only)."
         },
         {
           "nom": "propose_ontology",
@@ -266,21 +266,9 @@
             "ontologie",
             "proposer"
           ],
-          "role": "Propose relations and/or document types to the lawyer.",
+          "role": "Propose the folder tree to the lawyer.",
           "parametres": {
             "ontology": "--json",
-            "reason": "--motif"
-          }
-        },
-        {
-          "nom": "propose_document_types",
-          "pm": [
-            "okf",
-            "types"
-          ],
-          "role": "Propose the full catalogue of document types to the lawyer.",
-          "parametres": {
-            "types": "--json",
             "reason": "--motif"
           }
         },
@@ -290,14 +278,16 @@
             "okf",
             "link"
           ],
-          "role": "Cited link: document relation document, document states \"premise\", or \"premise\" involves PARTY.",
+          "role": "Cited link between LOF records: source \"LOF property\" target, proved by a piece and its exact quotation; a new record needs its LOF class.",
           "parametres": {
             "source": "#",
             "relation": "#",
-            "target": "#",
+            "target": "#?",
+            "piece": "--piece",
             "citation": "--citation",
-            "value": "--value",
-            "single": "--single"
+            "source_class": "--source_class",
+            "target_class": "--target_class",
+            "value": "--value"
           }
         },
         {
@@ -332,7 +322,7 @@
             "okf",
             "revues"
           ],
-          "role": "Tabular reviews of the case documents and their columns, to link to a premise.",
+          "role": "Tabular reviews of the case documents and their columns, to link to a LOF record.",
           "parametres": {}
         },
         {
@@ -341,9 +331,10 @@
             "okf",
             "revue"
           ],
-          "role": "Link a tabular review column to \"premise\" (created if missing): its positive rows are pieces stating it, author agent until the lawyer checks them in the review (remove = unlink).",
+          "role": "Link a tabular review column to a LOF record (created with its class if missing): its positive rows are its pieces, author agent until the lawyer checks them in the review (remove = unlink).",
           "parametres": {
             "premise": "#",
+            "class": "--classe",
             "file": "--fichier",
             "column": "--colonne",
             "remove": "--retirer"

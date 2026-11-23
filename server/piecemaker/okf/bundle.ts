@@ -6,15 +6,10 @@ import { parse, stringify } from 'yaml';
 import { readArborescence } from './sealed.js';
 
 export const OKF_VERSION = '0.2';
-export const STATES = 'states';
-export const MENTIONS = 'mentions';
-export const INVOLVES = 'involves';
 export const SCAN_ACTOR = 'piecemaker/gliner';
 export const AGENT_ACTOR = 'piecemaker/agent';
 export const LAWYER_ACTOR = 'piecemaker/avocat';
-export const DERIVED_ACTORS = [SCAN_ACTOR];
-export const PREMISE_TYPE = 'Premise';
-export const PARTY_TYPE = 'Partie';
+const LOF_FOLDER = '/_lof/';
 const PREMISE_FOLDER = '/_premises/';
 const LEGACY_PREMISE_FOLDER = '/_faits/';
 const PARTY_FOLDER = '/_parties/';
@@ -23,7 +18,7 @@ export const DEFAULT_GRAPH_TYPES = ['Pièces'];
 const RESERVED = new Set(['index.md', 'log.md']);
 
 export type Frontmatter = Record<string, unknown>;
-export type Relation = { target: string; citation: string; origin: string; value?: string; at?: string; dismissed?: boolean };
+export type Relation = { target: string; citation: string; origin: string; piece?: string; value?: string; at?: string; dismissed?: boolean };
 export type Relations = Record<string, Relation[]>;
 export type Concept = { id: string; frontmatter: Frontmatter; body: string; error?: string };
 
@@ -38,15 +33,15 @@ export const squash = (value: string): string => value.replace(/\s+/g, ' ').trim
 export const typographic = (value: string): string => squash(value.replace(/[\u2018\u2019\u02BC\u2032]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u00A0\u202F]/g, ' '));
 export const fold = (value: string): string => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('fr');
 export const migratedId = (id: string): string => id.startsWith(LEGACY_PREMISE_FOLDER) ? `${PREMISE_FOLDER}${id.slice(LEGACY_PREMISE_FOLDER.length)}` : id;
-export const isPremiseId = (id: string): boolean => id.startsWith(PREMISE_FOLDER);
+export const isEntityId = (id: string): boolean => id.startsWith(LOF_FOLDER) || id.startsWith(PREMISE_FOLDER);
 export const isPartyId = (id: string): boolean => id.startsWith(PARTY_FOLDER);
 export const partyId = (code: string): string => isPartyId(code) ? code : `${PARTY_FOLDER}${code}.md`;
 
-export function premiseId(title: string): string {
-  if (isPremiseId(title)) return title;
+export function entityId(title: string): string {
+  if (isEntityId(title)) return title;
   const slug = fold(title).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  if (!slug) throw new TypeError('prémisse sans titre.');
-  return `${PREMISE_FOLDER}${slug}.md`;
+  if (!slug) throw new TypeError('fiche LOF sans titre.');
+  return `${LOF_FOLDER}${slug}.md`;
 }
 
 export function parseConcept(source: string): { frontmatter: Frontmatter; body: string } {
@@ -68,7 +63,7 @@ export function relationsOf(frontmatter: Frontmatter): Relations {
   for (const [name, entries] of Object.entries(source as Record<string, unknown>)) {
     relations[name] = (Array.isArray(entries) ? entries : []).map((entry) => {
       const value = (entry && typeof entry === 'object' ? entry : { target: entry }) as Record<string, unknown>;
-      return { target: text(value.target), citation: text(value.citation), origin: text(value.origin), ...(text(value.value) ? { value: text(value.value) } : {}), ...(text(value.at) ? { at: text(value.at) } : {}), ...(value.dismissed === true ? { dismissed: true } : {}) };
+      return { target: text(value.target), citation: text(value.citation), origin: text(value.origin), ...(text(value.piece) ? { piece: text(value.piece) } : {}), ...(text(value.value) ? { value: text(value.value) } : {}), ...(text(value.at) ? { at: text(value.at) } : {}), ...(value.dismissed === true ? { dismissed: true } : {}) };
     });
   }
   return relations;

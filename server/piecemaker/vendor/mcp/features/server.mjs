@@ -17,20 +17,17 @@ const FILE_LINES = 200;
 
 export const INTENTS = { case: 'case', index: 'index', review: 'tabular_review', stamp: 'exhibits', deadlines: 'deadlines', catala: 'catala', draft: 'projects', other: 'case' };
 
-const DEFAULT_RELATIONS = ['amends', 'responds-to', 'refers-to', 'supersedes'];
-const SYSTEM_RELATIONS = ['states', 'involves'];
-
 /**
- * Relations de l'ontologie lues par le serveur, qui vérifie son sceau : une ontologie modifiée
- * hors de l'onglet Index n'entre pas dans le schéma. Sans serveur, les relations par défaut.
+ * Libellés des propriétés de la Legal Ontologies Foundry, lus par le serveur : le schéma de l'outil OkfWrite.
+ * Sans serveur, une chaîne libre que le serveur contrôle à l'écriture.
  */
 export async function okfRelations(root, pm = runPmScript) {
   try {
     const result = await pm(['okf', 'ontologie', '--noms', '--dossier', root], root);
     const names = result.code === 0 ? JSON.parse(result.stdout) : null;
-    if (Array.isArray(names) && names.length) return [...new Set([...names.filter((name) => typeof name === 'string' && name), ...SYSTEM_RELATIONS])];
+    if (Array.isArray(names) && names.length) return [...new Set(names.filter((name) => typeof name === 'string' && name))];
   } catch {}
-  return [...DEFAULT_RELATIONS, ...SYSTEM_RELATIONS];
+  return null;
 }
 
 export function runPmScript(args, cwd) {
@@ -50,20 +47,21 @@ function required(value, name, action) {
   return value;
 }
 
-export function okfArgv({ action, source, relation, target, citation, value, single, reason, remove, file, column }) {
+export function okfArgv({ action, source, relation, target, piece, citation, value, source_class, target_class, reason, remove, file, column, class: classe }) {
   if (action === 'link_review') {
     required(file, 'file', action);
     required(column, 'column', action);
-    return pmArgv('index', action, { premise: source, file, column: String(column), remove });
+    return pmArgv('index', action, { premise: source, class: classe, file, column: String(column), remove });
   }
   if (action === 'mark_examined') {
     if (!remove) required(reason, 'reason', action);
     return pmArgv('index', action, { document: source, reason, remove });
   }
   required(relation, 'relation', action);
-  required(target, 'target', action);
-  if (action === 'link' && relation !== 'involves') required(citation, 'citation', action);
-  return pmArgv('index', action, action === 'link' ? { source, relation, target, citation, value, single } : { source, relation, target });
+  if (action === 'unlink') return pmArgv('index', action, { source, relation, target: required(target, 'target', action) });
+  required(piece, 'piece', action);
+  required(citation, 'citation', action);
+  return pmArgv('index', action, { source, relation, target, piece, citation, source_class, target_class, value });
 }
 
 export function caseFiles(root) {
@@ -89,7 +87,7 @@ function featureText(name, root) {
   ].join('\n');
 }
 
-export function createServer({ root = process.cwd(), pm = runPmScript, relations = [...DEFAULT_RELATIONS, ...SYSTEM_RELATIONS] } = {}) {
+export function createServer({ root = process.cwd(), pm = runPmScript, relations = null } = {}) {
   const server = new McpServer({ name: 'features', version: '0.1.0' });
   const store = openStore(root);
   const comments = openComments(root);
@@ -206,16 +204,19 @@ export function createServer({ root = process.cwd(), pm = runPmScript, relations
   });
 
   server.registerTool('OkfWrite', {
-    description: 'Writes the OKF index of the case, with the ontology enforced and the citation checked against the source by the server. writes holds one or more operations, run in order; all are validated before the first runs, and the run stops at the first failure. link adds a cited link: between documents (a relation of the ontology), document states premise (citation, optional value and single), premise involves party code (no citation). unlink removes a link. mark_examined records that a document was read and nothing justifies a link (reason), or undoes it (remove). link_review links a tabular review column (file, column) to the premise titled source: its positive rows become pieces stating the premise, author agent until the lawyer checks them in the review; remove unlinks. Read the ontology with Feature run index read_ontology.',
+    description: 'Writes the OKF index of the case with the Legal Ontologies Foundry (David Koepsell, CC BY 4.0): the server enforces the domain and range of each property and checks the quotation in the piece. writes holds one or more operations, run in order; all are validated before the first runs, and the run stops at the first failure. link adds a link source property target, proved by a piece and its exact quotation; a new record needs its LOF class (source_class, target_class); a party is a material entity; has date-time value takes value (YYYY-MM-DD) and no target. unlink removes a link. mark_examined records that a document was read and nothing justifies a link (reason), or undoes it (remove). link_review links a tabular review column (file, column) to the record titled source (class if new): its positive rows become its pieces, author agent until the lawyer checks them in the review; remove unlinks. Read the ontology with Feature run index read_ontology.',
     inputSchema: {
       writes: z.array(z.object({
         action: z.enum(['link', 'unlink', 'mark_examined', 'link_review']),
-        source: z.string().min(1).describe('The source document (path in the case), or the premise title for involves. mark_examined: the document. link_review: the premise title.'),
-        relation: z.enum(relations).optional().describe('link, unlink: a relation of the ontology, or states (document → premise) or involves (premise → party).'),
-        target: z.string().min(1).optional().describe('link, unlink: the target document, premise title or party code.'),
-        citation: z.string().min(1).optional().describe('link: the exact sentence of the source that proves the link. Not for involves.'),
-        value: z.string().optional().describe('link states: the value of the premise.'),
-        single: z.boolean().optional().describe('link states: the premise has a single value.'),
+        source: z.string().min(1).describe('link, unlink: a document path, a party code or a LOF record title. mark_examined: the document. link_review: the record title.'),
+        relation: (relations ? z.enum(relations) : z.string().min(1)).optional().describe('link, unlink: the label of a LOF property.'),
+        target: z.string().min(1).optional().describe('link, unlink: a document path, a party code or a LOF record title. unlink has date-time value: the piece.'),
+        piece: z.string().min(1).optional().describe('link: the case document that proves the link.'),
+        citation: z.string().min(1).optional().describe('link: the exact sentence of the piece that proves the link.'),
+        source_class: z.string().min(1).optional().describe('link: the LOF class of the source when its record is new.'),
+        target_class: z.string().min(1).optional().describe('link: the LOF class of the target when its record is new.'),
+        class: z.string().min(1).optional().describe('link_review: the LOF class of the record when it is new.'),
+        value: z.string().optional().describe('link has date-time value: the date, YYYY-MM-DD.'),
         reason: z.string().min(1).optional().describe('mark_examined: why no link is justified.'),
         remove: z.boolean().optional().describe('mark_examined: undo the mark. link_review: unlink the review.'),
         file: z.string().min(1).optional().describe('link_review: the review file (.json), from Feature run index list_linkable_reviews.'),

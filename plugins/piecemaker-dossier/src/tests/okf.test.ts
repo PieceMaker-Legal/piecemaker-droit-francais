@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { spreadBoxes, premiseEstablishers, premiseParties, premiseStatements, premises, ficheLinks, graphElements, partyPremises } from '../okf.js';
+import { entities, entityEvidence, ficheLinks, graphElements, linkedEntities, partyEntities, pieceStatements, spreadBoxes } from '../okf.js';
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
 import { documentTitle, linksMarkup, shell } from '../views.js';
@@ -10,9 +10,10 @@ const fiche = (resource: string, type: string, title: string, relations: OkfInde
 const index: OkfIndex = {
   types: ['Pièces', 'Projets'],
   typesGraphe: ['Pièces'],
+  ontologie: [{ name: 'establishes', label: 'establishes', inverse: 'established by', kind: 'objprop' }],
   fiches: [
     fiche('Pièces/Contrat.pdf', 'Pièces', 'Contrat'),
-    fiche('Pièces/Courrier.pdf', 'Pièces', 'Courrier', [{ relation: 'refers-to', target: '/Pièces/Contrat.pdf.md', citation: 'Nous faisons suite au contrat.', origin: 'piecemaker/gliner' }]),
+    fiche('Pièces/Courrier.pdf', 'Pièces', 'Courrier', [{ relation: 'establishes', target: '/Pièces/Contrat.pdf.md', citation: 'Nous faisons suite au contrat.', origin: 'piecemaker/gliner' }]),
     fiche('Projets/Conclusions.docx', 'Projets', 'Conclusions'),
   ],
 };
@@ -20,7 +21,7 @@ const index: OkfIndex = {
 describe('index OKF', () => {
   it('le graphe ne garde que les types choisis et leurs liens', () => {
     const elements = graphElements(index);
-    expect(elements.map((element) => element.data.label)).toEqual(['Contrat', 'Courrier', 'se réfère à']);
+    expect(elements.map((element) => element.data.label)).toEqual(['Contrat', 'Courrier', 'establishes']);
     expect(elements[2].data).toMatchObject({ source: '/Pièces/Courrier.pdf.md', target: '/Pièces/Contrat.pdf.md' });
   });
 
@@ -35,16 +36,14 @@ describe('index OKF', () => {
   });
 
   it('les liens se lisent dans les deux sens', () => {
-    expect(ficheLinks(index, 'Pièces/Courrier.pdf')).toEqual([{ label: 'se réfère à →', title: 'Contrat', citation: 'Nous faisons suite au contrat.' }]);
-    expect(ficheLinks(index, 'Pièces/Contrat.pdf')).toEqual([{ label: '← visé par', title: 'Courrier', citation: 'Nous faisons suite au contrat.' }]);
+    expect(ficheLinks(index, 'Pièces/Courrier.pdf')).toEqual([{ label: 'establishes →', title: 'Contrat', citation: 'Nous faisons suite au contrat.' }]);
+    expect(ficheLinks(index, 'Pièces/Contrat.pdf')).toEqual([{ label: '← established by', title: 'Courrier', citation: 'Nous faisons suite au contrat.' }]);
     expect(ficheLinks(null, 'Pièces/Contrat.pdf')).toEqual([]);
   });
 
-  it('les libellés suivent l’ontologie du dossier', () => {
-    const custom: OkfIndex = { ...index, ontologie: [{ name: 'refers-to', label: 'invoque', inverse: 'invoqué par' }] };
-    expect(ficheLinks(custom, 'Pièces/Courrier.pdf')[0].label).toBe('invoque →');
-    expect(ficheLinks(custom, 'Pièces/Contrat.pdf')[0].label).toBe('← invoqué par');
-    expect(graphElements(custom)[2].data.label).toBe('invoque');
+  it('sans ontologie, le lien entrant garde le libellé LOF', () => {
+    const bare: OkfIndex = { ...index, ontologie: undefined };
+    expect(ficheLinks(bare, 'Pièces/Contrat.pdf')[0].label).toBe('← establishes');
   });
 
   it('le mode chronologie ne garde que les lignes dont la fiche est une pièce', () => {
@@ -57,7 +56,7 @@ describe('index OKF', () => {
 
   it('l’Index affiche les liens et citations de chaque pièce', () => {
     const links = linksMarkup(index, indexRowResource({ id: 'r1', piece: 'Pièces/Courrier.pdf', documents: [{ source: 'Fichiers convertis PieceMaker/Courrier.md' }] }));
-    expect(links).toContain('se réfère à → Contrat');
+    expect(links).toContain('establishes → Contrat');
     expect(links).toContain('title="Nous faisons suite au contrat."');
     expect(indexRowResource({ id: 'r2', documents: [{ source: 'Pièces/Note.md' }] })).toBe('Pièces/Note.md');
   });
@@ -67,148 +66,116 @@ describe('index OKF', () => {
   });
 });
 
-const premiseIndex: OkfIndex = {
-  types: ['Pièces', 'Projets', 'Premise', 'Partie'],
+const lofIndex: OkfIndex = {
+  types: ['Pièces', 'Projets'],
   typesGraphe: ['Pièces'],
+  ontologie: [{ name: 'held by', label: 'held by', inverse: 'held by', kind: 'objprop' }, { name: 'has date-time value', label: 'has date-time value', inverse: 'has date-time value', kind: 'dataprop' }],
   fiches: [
-    fiche('Pièces/Contrat.pdf', 'Pièces', 'Contrat', [
-      { relation: 'states', target: '/_premises/Prix.md', citation: 'Le prix est de 1 000 euros.', origin: 'piecemaker/gliner', value: '1 000 €' },
-      { relation: 'states', target: '/_premises/Eligibilite.md', citation: 'Le client remplit les conditions.', origin: 'piecemaker/gliner' },
-    ]),
-    fiche('Pièces/Courrier.pdf', 'Pièces', 'Courrier', [
-      { relation: 'states', target: '/_premises/Prix.md', citation: 'Le prix convenu est de 1 200 euros.', origin: 'piecemaker/gliner', value: '1 200 €' },
-    ]),
+    fiche('Pièces/Contrat.pdf', 'Pièces', 'Contrat'),
+    fiche('Pièces/Courrier.pdf', 'Pièces', 'Courrier'),
     fiche('Projets/Conclusions.docx', 'Projets', 'Conclusions'),
-    fiche('_premises/Prix', 'Premise', 'Prix'),
-    fiche('_premises/Eligibilite', 'Premise', 'Éligibilité'),
-    fiche('_premises/Dommage', 'Premise', 'Dommage'),
-    fiche('_premises/Clause', 'Premise', 'Clause <pénale>'),
-    { ...fiche('Parties/Jean Dupont', 'Partie', 'Jean Dupont'), side: 'client' },
-    { ...fiche('Parties/Société Exemple SAS', 'Partie', 'Société Exemple SAS'), side: 'adversaire' },
-    fiche('Parties/ZETABIO', 'Partie', 'ZETABIO'),
+    { ...fiche('_lof/date-signature', 'temporal instant', 'Date de signature', [
+      { relation: 'has date-time value', target: '/Pièces/Contrat.pdf.md', piece: '/Pièces/Contrat.pdf.md', citation: 'Signé le 15 janvier 2026.', origin: 'piecemaker/gliner', value: '2026-01-15' },
+      { relation: 'has date-time value', target: '/Pièces/Courrier.pdf.md', piece: '/Pièces/Courrier.pdf.md', citation: 'Le contrat signé le 16 janvier 2026.', origin: 'piecemaker/gliner', value: '2026-01-16' },
+    ]), resource: '', lof: 'temporal instant' },
+    { ...fiche('_lof/creance', 'legal position', 'Créance <prix>', [
+      { relation: 'held by', target: '/_parties/Jean Dupont.md', piece: '/Pièces/Courrier.pdf.md', citation: 'Jean Dupont réclame le prix.', origin: 'piecemaker/agent' },
+    ]), resource: '', lof: 'legal position', description: 'Créance du prix de vente' },
+    { ...fiche('_lof/vide', 'legal position', 'Sans pièce'), resource: '', lof: 'legal position' },
+    { ...fiche('_parties/Jean Dupont', 'material entity', 'Jean Dupont'), resource: '', side: 'client' },
+    { ...fiche('_parties/Société Exemple SAS', 'material entity', 'Société Exemple SAS'), resource: '', side: 'adversaire' },
+    { ...fiche('_parties/ZETABIO', 'material entity', 'ZETABIO'), resource: '' },
   ],
 };
 
-describe('prémisses de l’index OKF', () => {
-  it('premiseStatements liste les prémisses établies par une pièce', () => {
-    expect(premiseStatements(premiseIndex, 'Pièces/Contrat.pdf')).toEqual([
-      { premise: '/_premises/Prix.md', title: 'Prix', citation: 'Le prix est de 1 000 euros.', value: '1 000 €' },
-      { premise: '/_premises/Eligibilite.md', title: 'Éligibilité', citation: 'Le client remplit les conditions.', value: '' },
+describe('fiches LOF de l’index OKF', () => {
+  it('pieceStatements liste les liens LOF fondés sur une pièce', () => {
+    expect(pieceStatements(lofIndex, 'Pièces/Courrier.pdf')).toEqual([
+      { source: '/_lof/date-signature.md', sourceTitle: 'Date de signature', relation: 'has date-time value', target: '/Pièces/Courrier.pdf.md', targetTitle: 'Courrier', citation: 'Le contrat signé le 16 janvier 2026.', value: '2026-01-16' },
+      { source: '/_lof/creance.md', sourceTitle: 'Créance <prix>', relation: 'held by', target: '/_parties/Jean Dupont.md', targetTitle: 'Jean Dupont', citation: 'Jean Dupont réclame le prix.', value: '' },
     ]);
+    expect(pieceStatements(null, 'Pièces/Contrat.pdf')).toEqual([]);
+    expect(pieceStatements(lofIndex, 'Pièces/Inconnue.pdf')).toEqual([]);
   });
 
-  it('premiseStatements reste vide sans index ou pour une pièce inconnue', () => {
-    expect(premiseStatements(null, 'Pièces/Contrat.pdf')).toEqual([]);
-    expect(premiseStatements(premiseIndex, 'Pièces/Inconnue.pdf')).toEqual([]);
+  it('entities ne garde que les fiches LOF, triées sans tenir compte des accents', () => {
+    expect(entities(lofIndex).map((entity) => entity.title)).toEqual(['Créance <prix>', 'Date de signature', 'Sans pièce']);
+    expect(entities(null)).toEqual([]);
   });
 
-  it('premises ne garde que les fiches Premise, triées sans tenir compte des accents', () => {
-    expect(premises(premiseIndex).map((premise) => premise.title)).toEqual(['Clause <pénale>', 'Dommage', 'Éligibilité', 'Prix']);
-    expect(premises(null)).toEqual([]);
-  });
-
-  it('le graphe inclut les prémisses et les parties avec leur nature', () => {
-    const nodes = graphElements(premiseIndex).filter((element) => !element.data.source);
+  it('le graphe inclut les fiches LOF et les parties avec leur côté', () => {
+    const nodes = graphElements(lofIndex).filter((element) => !element.data.source);
     expect(Object.fromEntries(nodes.map((element) => [element.data.label, element.data.kind]))).toEqual({
       Contrat: 'document',
       Courrier: 'document',
-      Prix: 'premise',
-      'Éligibilité': 'premise',
-      Dommage: 'premise',
-      'Clause <pénale>': 'premise',
+      'Date de signature': 'premise',
+      'Créance <prix>': 'premise',
+      'Sans pièce': 'premise',
       'Jean Dupont': 'party-client',
       'Société Exemple SAS': 'party-adverse',
       ZETABIO: 'party-tiers',
     });
+    expect(graphElements(lofIndex).filter((element) => element.data.source)).toContainEqual({ data: { id: '/_lof/creance.md|held by|/_parties/Jean Dupont.md', source: '/_lof/creance.md', target: '/_parties/Jean Dupont.md', label: 'held by', relation: 'held by' } });
   });
 
-  it('sans les prémisses, le graphe retire leurs nœuds et leurs liens', () => {
-    const elements = graphElements(premiseIndex, false);
-    expect(elements.some((element) => element.data.kind === 'premise')).toBe(false);
-    expect(elements.some((element) => element.data.relation === 'states' || element.data.target?.startsWith('/_premises/'))).toBe(false);
+  it('sans les fiches LOF, le graphe retire leurs nœuds et leurs liens', () => {
+    const elements = graphElements(lofIndex, false);
+    expect(elements.some((element) => element.data.kind === 'premise' || element.data.source?.startsWith('/_lof/'))).toBe(false);
     expect(elements.some((element) => element.data.kind === 'party-client')).toBe(true);
   });
 
-  it('le graphe porte la relation sur chaque arête', () => {
-    const edges = graphElements(premiseIndex).filter((element) => element.data.source);
-    expect(edges).toContainEqual({ data: { id: '/Pièces/Contrat.pdf.md|states|/_premises/Prix.md', source: '/Pièces/Contrat.pdf.md', target: '/_premises/Prix.md', label: 'établit', relation: 'states' } });
-    expect(edges.every((element) => element.data.relation)).toBe(true);
-  });
-
-  it('premiseEstablishers donne les pièces, valeurs et citations d’une prémisse', () => {
-    expect(premiseEstablishers(premiseIndex, '/_premises/Prix.md')).toEqual([
-      { piece: 'Contrat', resource: 'Pièces/Contrat.pdf', value: '1 000 €', citation: 'Le prix est de 1 000 euros.', origin: 'piecemaker/gliner', at: undefined },
-      { piece: 'Courrier', resource: 'Pièces/Courrier.pdf', value: '1 200 €', citation: 'Le prix convenu est de 1 200 euros.', origin: 'piecemaker/gliner', at: undefined },
+  it('entityEvidence donne les pièces, valeurs et citations d’une fiche', () => {
+    expect(entityEvidence(lofIndex, '/_lof/date-signature.md')).toEqual([
+      { piece: 'Contrat', resource: 'Pièces/Contrat.pdf', label: 'has date-time value', value: '2026-01-15', citation: 'Signé le 15 janvier 2026.', origin: 'piecemaker/gliner', at: undefined },
+      { piece: 'Courrier', resource: 'Pièces/Courrier.pdf', label: 'has date-time value', value: '2026-01-16', citation: 'Le contrat signé le 16 janvier 2026.', origin: 'piecemaker/gliner', at: undefined },
     ]);
-    expect(premiseEstablishers(premiseIndex, '/_premises/Inconnu.md')).toEqual([]);
+    expect(entityEvidence(lofIndex, '/_lof/inconnue.md')).toEqual([]);
   });
 
-  it('la carte d’une prémisse donne valeurs, pièces sources, citations et divergence', () => {
-    const html = ficheCardMarkup(premiseIndex, '/_premises/Prix.md');
-    expect(html).toContain('<h2 class="pmd-fact-title">Prix</h2>');
-    expect(html).toContain('data-detail-close');
+  it('partyEntities et linkedEntities relient une fiche LOF à ses parties', () => {
+    expect(partyEntities(lofIndex, 'Jean Dupont').map((entity) => entity.title)).toEqual(['Créance <prix>']);
+    expect(partyEntities(lofIndex, 'ZETABIO')).toEqual([]);
+    expect(partyEntities(null, 'Jean Dupont')).toEqual([]);
+    expect(linkedEntities(lofIndex, '/_parties/Jean Dupont.md').map((entity) => entity.id)).toEqual(['/_lof/creance.md']);
+  });
+
+  it('la carte d’une fiche LOF donne classe, valeurs, pièces et divergence', () => {
+    const html = ficheCardMarkup(lofIndex, '/_lof/date-signature.md');
+    expect(html).toContain('<h2 class="pmd-fact-title">Date de signature</h2>');
+    expect(html).toContain('temporal instant');
     expect(html).toContain('data-open-fiche="/Pièces/Contrat.pdf.md"');
-    expect(html).toContain('data-chat-file="Pièces/Contrat.pdf"');
-    expect(html).toContain('« Le prix est de 1 000 euros. »');
-    expect(html).toContain('data-open-fiche="/Pièces/Courrier.pdf.md">Courrier</button>');
-    expect(html).toContain('data-open-file="Pièces/Courrier.pdf"');
-    expect(html).not.toContain('Les sources divergent');
-    expect(ficheCardMarkup({ ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, single: true })) }, '/_premises/Prix.md')).toContain('Les sources divergent');
+    expect(html).toContain('« Signé le 15 janvier 2026. »');
+    expect(html).toContain('Les sources divergent');
+  });
+
+  it('la carte échappe le titre, montre les parties et signale une fiche sans pièce', () => {
+    const html = ficheCardMarkup(lofIndex, '/_lof/creance.md');
+    expect(html).toContain('Créance &lt;prix&gt;');
+    expect(html).not.toContain('<prix>');
+    expect(html).toContain('Créance du prix de vente');
+    expect(html).toContain('data-open-fiche="/_parties/Jean Dupont.md"');
+    expect(ficheCardMarkup(lofIndex, '/_lof/vide.md')).toContain('Aucune pièce ne fonde cette fiche.');
+    expect(ficheCardMarkup(lofIndex, '/_lof/inconnue.md')).toBe('');
   });
 
   it('la carte signe la fiche et chaque lien', () => {
-    const signed: OkfIndex = { ...premiseIndex, fiches: premiseIndex.fiches.map((entry) => ({ ...entry, generated: { by: 'piecemaker/agent', at: '2026-03-02T10:00:00.000Z' }, relations: entry.relations.map((link) => ({ ...link, origin: 'piecemaker/avocat', at: '2026-03-03T09:00:00.000Z' })) })) };
-    const html = ficheCardMarkup(signed, '/_premises/Prix.md');
+    const signed: OkfIndex = { ...lofIndex, fiches: lofIndex.fiches.map((entry) => ({ ...entry, generated: { by: 'piecemaker/agent', at: '2026-03-02T10:00:00.000Z' }, relations: entry.relations.map((link) => ({ ...link, origin: 'piecemaker/avocat', at: '2026-03-03T09:00:00.000Z' })) })) };
+    const html = ficheCardMarkup(signed, '/_lof/creance.md');
     expect(html).toContain('Créée par l’agent le 02/03/2026');
     expect(html).toContain('Lien posé par l’avocat le 03/03/2026');
   });
 
-  it('la carte échappe le titre et signale une prémisse sans pièce', () => {
-    const html = ficheCardMarkup(premiseIndex, '/_premises/Clause.md');
-    expect(html).toContain('Clause &lt;pénale&gt;');
-    expect(html).not.toContain('<pénale>');
-    expect(html).toContain('Aucune pièce n’établit cette prémisse.');
-    expect(ficheCardMarkup(premiseIndex, '/_premises/Inconnu.md')).toBe('');
-  });
-
-  it('la carte d’une pièce liste ses prémisses et la cible au chat', () => {
-    const html = ficheCardMarkup(premiseIndex, '/Pièces/Contrat.pdf.md');
-    expect(html).toContain('data-edit-fiche');
-    expect(html).toContain('data-open-fiche="/_premises/Prix.md"');
+  it('la carte d’une pièce liste les fiches LOF qui la citent', () => {
+    const html = ficheCardMarkup(lofIndex, '/Pièces/Courrier.pdf.md');
+    expect(html).toContain('Fiches LOF');
+    expect(html).toContain('data-open-fiche="/_lof/creance.md"');
     expect(html).toContain('data-chat-kind="Document"');
   });
 
-  it('ficheLinks affiche la valeur d’une prémisse établie', () => {
-    expect(ficheLinks(premiseIndex, 'Pièces/Contrat.pdf')).toContainEqual({ label: 'établit →', title: 'Prix : 1 000 €', citation: 'Le prix est de 1 000 euros.' });
-    expect(ficheLinks(premiseIndex, '_premises/Prix')).toEqual([
-      { label: '← établi par', title: 'Contrat', citation: 'Le prix est de 1 000 euros.' },
-      { label: '← établi par', title: 'Courrier', citation: 'Le prix convenu est de 1 200 euros.' },
-    ]);
-  });
-});
-
-describe('fiches du graphe', () => {
-  const linked: OkfIndex = {
-    ...premiseIndex,
-    fiches: premiseIndex.fiches.map((entry) => entry.title === 'Prix' ? { ...entry, single: true, description: 'Prix de vente', relations: [{ relation: 'involves', target: '/Parties/Jean Dupont.md', citation: '', origin: 'piecemaker/agent' }] } : entry),
-  };
-
-  it('premiseParties et partyPremises relient une prémisse à ses parties', () => {
-    expect(premiseParties(linked, '/_premises/Prix.md').map((party) => party.title)).toEqual(['Jean Dupont']);
-    expect(partyPremises(linked, 'Jean Dupont').map((premise) => premise.title)).toEqual(['Prix']);
-    expect(partyPremises(linked, 'ZETABIO')).toEqual([]);
-    expect(partyPremises(null, 'Jean Dupont')).toEqual([]);
-  });
-
-  it('la carte d’une prémisse montre ses parties', () => {
-    const html = ficheCardMarkup(linked, '/_premises/Prix.md');
-    expect(html).toContain('Prémisse · valeur unique');
-    expect(html).toContain('Prix de vente');
-    expect(html).toContain('data-open-fiche="/Parties/Jean Dupont.md"');
-  });
-
-  it('la carte d’une prémisse ne propose plus de revue tabulaire', () => {
-    expect(ficheCardMarkup(premiseIndex, '/_premises/Prix.md')).not.toContain('data-premise-review');
+  it('la carte d’une partie liste ses fiches LOF', () => {
+    const html = ficheCardMarkup(lofIndex, '/_parties/Jean Dupont.md');
+    expect(html).toContain('Fiches LOF');
+    expect(html).toContain('data-open-fiche="/_lof/creance.md"');
   });
 });
 

@@ -41,7 +41,7 @@ describe('titre du document dans la première cellule', () => {
     expect(review.rows[0].title?.citations?.[0].verified).toBe(true);
     expect(await citationSource(project, 'index.json', 'r1', -1, 0)).toMatchObject({ quote: 'Contrat de prestation.', verified: true });
     expect(session.send).toHaveBeenCalledTimes(2);
-    expect(session.send.mock.calls[0][0]).toContain('acte de procédure');
+    expect(session.send.mock.calls[0][0]).toContain('legal document');
     expect(session.send.mock.calls[0][0]).not.toContain('assignation, conclusions');
   });
 

@@ -2,29 +2,27 @@ import { requestJson } from '../../../src/shared/authToken.js';
 
 import { iconSvg } from './document-types.js';
 import type { DocumentType } from './document-types.js';
+import type { ClassificationFolder } from '../../piecemaker-tabular-review/src/shared.js';
 
-export type OkfRelation = { relation: string; target: string; citation: string; origin: string; at?: string; value?: string };
+export type OkfRelation = { relation: string; target: string; piece?: string; citation: string; origin: string; at?: string; value?: string };
 export type OkfReviewRow = { row: string; label: string; resource: string; value: string; citation: string; author: 'human' | 'agent'; checkedAt?: string };
 export type OkfReviewLink = { fichier: string; colonne: number; titre: string; question: string; by: string; at: string; lignes: OkfReviewRow[]; erreur?: string };
 export type OkfReviewChoice = { fichier: string; titre: string; colonnes: Array<{ index: number; nom: string; format: string }> };
-export type OkfFiche = { id: string; type: string; title: string; titleCitation?: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; single?: boolean; generated?: { by: string; at: string }; examen?: { motif: string; by: string; at: string } | null; revues?: OkfReviewLink[]; relations: OkfRelation[] };
-export type OkfRelationLabel = { name: string; label: string; inverse: string };
-export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[]; documentTypes?: DocumentType[] };
-export type OntologyRelation = { name: string; label: string; inverse: string; description: string; source: string[]; target: string[] };
-export type SystemRelation = { name: string; label: string; inverse: string; description: string; source: string; target: string };
-export type OntologyProposal = { relations?: OntologyRelation[]; documentTypes?: DocumentType[]; motif: string; date: string };
-export type OntologyState = { relations: OntologyRelation[]; documentTypes?: DocumentType[]; personnalisee: boolean; erreur?: string; systeme: SystemRelation[]; types: string[]; fichier?: string; lignes?: Record<string, { debut: number; fin: number }>; total?: number; proposition?: OntologyProposal | null };
-export type PendingProposals = { ontologie: number; arborescence: number };
-export type OkfLink = { source: string; relation: string; target: string; citation?: string; value?: string };
+export type OkfFiche = { id: string; type: string; title: string; titleCitation?: string; description: string; resource: string; date: string; nature?: string; icon?: string; side?: string; lof?: string; generated?: { by: string; at: string }; examen?: { motif: string; by: string; at: string } | null; revues?: OkfReviewLink[]; relations: OkfRelation[] };
+export type OkfRelationLabel = { name: string; label: string; inverse: string; kind?: 'objprop' | 'dataprop' };
+export type OkfIndex = { types: string[]; typesGraphe: string[]; fiches: OkfFiche[]; ontologie?: OkfRelationLabel[]; classes?: string[]; documentTypes?: DocumentType[] };
+export type LofEntry = { id: string; iri: string; label: string; kind: 'class' | 'objprop' | 'dataprop' | 'individual'; annotations: string[][]; subClassOf?: string[]; domain?: string[]; range?: string[]; inverseOf?: string[]; subPropertyOf?: string[]; type?: string[]; axioms?: Array<{ k: string; m: string }> };
+export type OntologyProposal = { arborescence?: ClassificationFolder[]; motif: string; date: string };
+export type OntologyState = { personnalisee: boolean; erreur?: string; lof: LofEntry[]; attribution: string; source: string; types: string[]; fichier?: string; proposition?: OntologyProposal | null };
+export type PendingProposals = { arborescence: number };
+export type OkfLink = { source: string; relation: string; target?: string; piece?: string; source_class?: string; target_class?: string; citation?: string; value?: string };
 
-export const PREMISE_TYPE = 'Premise';
-export const PARTY_TYPE = 'Partie';
-export const RELATION_LABELS: Record<string, string> = { amends: 'modifie', 'responds-to': 'répond à', 'refers-to': 'se réfère à', supersedes: 'remplace', states: 'établit', mentions: 'mentionne', involves: 'concerne' };
-const INCOMING_LABELS: Record<string, string> = { amends: 'modifié par', 'responds-to': 'répondu par', 'refers-to': 'visé par', supersedes: 'remplacé par', states: 'établi par', mentions: 'mentionné par', involves: 'concerné par' };
+export const isEntity = (fiche: Pick<OkfFiche, 'id'>): boolean => fiche.id.startsWith('/_lof/') || fiche.id.startsWith('/_premises/');
+export const isParty = (fiche: Pick<OkfFiche, 'id'>): boolean => fiche.id.startsWith('/_parties/');
+export const isDocument = (fiche: Pick<OkfFiche, 'id'>): boolean => !isEntity(fiche) && !isParty(fiche);
 
 export function relationLabel(index: OkfIndex | null, name: string, incoming = false): string {
-  const entry = index?.ontologie?.find((relation) => relation.name === name);
-  return (incoming ? entry?.inverse : entry?.label) || (incoming ? INCOMING_LABELS : RELATION_LABELS)[name] || name;
+  return incoming ? index?.ontologie?.find((relation) => relation.name === name)?.inverse || name : name;
 }
 
 const request = <T>(path: string, payload?: unknown, method?: string): Promise<T> => requestJson<T>(`/api/piecemaker/okf${path}`, payload, method);
@@ -37,23 +35,23 @@ export const okfApi = {
   reviews: (projectId: string) => request<{ revues: OkfReviewChoice[] }>(`/revues?projectId=${encodeURIComponent(projectId)}`),
   linkReview: (projectId: string, premise: string, fichier: string, colonne: number, retirer = false) => request<{ premise: string; fichier: string; colonne: number }>('/revue', { projectId, premise, fichier, colonne, ...(retirer ? { retirer: true } : {}) }),
   ontology: (projectId: string) => request<OntologyState>(`/ontologie?projectId=${encodeURIComponent(projectId)}`),
-  saveOntology: (projectId: string, relations: OntologyRelation[]) => request<OntologyState>('/ontologie', { projectId, relations }, 'PUT'),
-  saveTypes: (projectId: string, documentTypes: DocumentType[]) => request<OntologyState>('/types', { projectId, documentTypes }, 'PUT'),
-  dropProposal: (projectId: string, partie: 'relations' | 'documentTypes') => request<OntologyState>(`/ontologie/proposition?projectId=${encodeURIComponent(projectId)}&partie=${partie}`, undefined, 'DELETE'),
 };
 
-export type PremiseStatement = { premise: string; title: string; citation: string; value: string };
+export type PieceStatement = { source: string; sourceTitle: string; relation: string; target: string; targetTitle: string; citation: string; value: string };
 
-export function premiseStatements(index: OkfIndex | null, resource: string): PremiseStatement[] {
-  const fiche = index?.fiches.find((entry) => entry.resource === resource.normalize('NFC'));
-  if (!index || !fiche) return [];
-  return fiche.relations
-    .filter((entry) => entry.relation === 'states')
-    .map((entry) => ({ premise: entry.target, title: index.fiches.find((other) => other.id === entry.target)?.title || entry.target, citation: entry.citation, value: entry.value || '' }));
+const pieceOf = (fiche: OkfFiche, entry: OkfRelation) => entry.piece || (isDocument(fiche) ? fiche.id : '');
+
+export function pieceStatements(index: OkfIndex | null, resource: string): PieceStatement[] {
+  const document = index?.fiches.find((entry) => entry.resource === resource.normalize('NFC'));
+  if (!index || !document) return [];
+  const titleOf = (id: string) => index.fiches.find((fiche) => fiche.id === id)?.title || id;
+  return index.fiches.flatMap((fiche) => fiche.relations
+    .filter((entry) => pieceOf(fiche, entry) === document.id)
+    .map((entry) => ({ source: fiche.id, sourceTitle: fiche.title, relation: entry.relation, target: entry.target, targetTitle: titleOf(entry.target), citation: entry.citation, value: entry.value || '' })));
 }
 
-export function premises(index: OkfIndex | null): OkfFiche[] {
-  return (index?.fiches || []).filter((fiche) => fiche.type === PREMISE_TYPE).sort((left, right) => left.title.localeCompare(right.title, 'fr', { sensitivity: 'base' }));
+export function entities(index: OkfIndex | null): OkfFiche[] {
+  return (index?.fiches || []).filter(isEntity).sort((left, right) => left.title.localeCompare(right.title, 'fr', { sensitivity: 'base' }));
 }
 
 const linkTitle = (entry: OkfRelation, title: string) => entry.value ? `${title} : ${entry.value}` : title;
@@ -70,37 +68,45 @@ export function ficheLinks(index: OkfIndex | null, resource: string): Array<{ la
   ];
 }
 
-export function graphElements(index: OkfIndex, withPremises = true): Array<{ data: Record<string, string> }> {
-  const fiches = index.fiches.filter((fiche) => [...index.typesGraphe, ...(withPremises ? [PREMISE_TYPE] : []), PARTY_TYPE].includes(fiche.type));
+export function graphElements(index: OkfIndex, withEntities = true): Array<{ data: Record<string, string> }> {
+  const fiches = index.fiches.filter((fiche) => isParty(fiche) || (isEntity(fiche) ? withEntities : index.typesGraphe.includes(fiche.type)));
   const ids = new Set(fiches.map((fiche) => fiche.id));
-  const kind = (fiche: OkfFiche) => fiche.type === PREMISE_TYPE ? 'premise' : fiche.type === PARTY_TYPE ? `party-${fiche.side === 'adversaire' ? 'adverse' : fiche.side || 'tiers'}` : 'document';
+  const kind = (fiche: OkfFiche) => isEntity(fiche) ? 'premise' : isParty(fiche) ? `party-${fiche.side === 'adversaire' ? 'adverse' : fiche.side || 'tiers'}` : 'document';
   return [
-    ...fiches.map((fiche) => ({ data: { id: fiche.id, label: fiche.title.replace(/\.(?:pdf|docx?|xlsx?|png|jpe?g|txt|md)$/i, ''), resource: fiche.resource, kind: kind(fiche), type: fiche.type, icon: fiche.type === PREMISE_TYPE ? 'diamond' : fiche.type === PARTY_TYPE ? 'users' : fiche.icon || 'file' } })),
+    ...fiches.map((fiche) => ({ data: { id: fiche.id, label: fiche.title.replace(/\.(?:pdf|docx?|xlsx?|png|jpe?g|txt|md)$/i, ''), resource: fiche.resource, kind: kind(fiche), type: fiche.type, icon: isEntity(fiche) ? 'diamond' : isParty(fiche) ? 'users' : fiche.icon || 'file' } })),
     ...fiches.flatMap((fiche) => fiche.relations
       .filter((entry) => ids.has(entry.target))
       .map((entry) => ({ data: { id: `${fiche.id}|${entry.relation}|${entry.target}`, source: fiche.id, target: entry.target, label: relationLabel(index, entry.relation), relation: entry.relation } }))),
   ];
 }
 
-export function premiseEstablishers(index: OkfIndex, premiseId: string): Array<{ piece: string; resource: string; value: string; citation: string; origin: string; at?: string; author?: 'human' | 'agent'; review?: string }> {
-  const linked = index.fiches.flatMap((fiche) => fiche.relations
-    .filter((entry) => entry.relation === 'states' && entry.target === premiseId)
-    .map((entry) => ({ piece: fiche.title, resource: fiche.resource, value: entry.value || '', citation: entry.citation, origin: entry.origin, at: entry.at })));
-  const reviewed = (index.fiches.find((fiche) => fiche.id === premiseId)?.revues || []).flatMap((review) => review.lignes.map((row) => ({
-    piece: index.fiches.find((fiche) => fiche.resource === row.resource)?.title || row.label, resource: row.resource, value: row.value, citation: row.citation, origin: 'piecemaker/tabular-review', at: row.checkedAt, author: row.author, review: review.titre,
+export type Evidence = { piece: string; resource: string; label: string; value: string; citation: string; origin: string; at?: string; author?: 'human' | 'agent'; review?: string };
+
+export function entityEvidence(index: OkfIndex, entityId: string): Evidence[] {
+  const fiche = index.fiches.find((entry) => entry.id === entityId);
+  const byId = (id: string) => index.fiches.find((entry) => entry.id === id);
+  const evidence = (owner: OkfFiche, entry: OkfRelation, label: string) => {
+    const piece = byId(pieceOf(owner, entry));
+    return piece ? [{ piece: piece.title, resource: piece.resource, label, value: entry.value || '', citation: entry.citation, origin: entry.origin, at: entry.at }] : [];
+  };
+  const outgoing = (fiche?.relations || []).flatMap((entry) => evidence(fiche!, entry, entry.value ? entry.relation : `${entry.relation} → ${byId(entry.target)?.title || entry.target}`));
+  const incoming = index.fiches.flatMap((other) => other.relations.filter((entry) => entry.target === entityId && other.id !== entityId).flatMap((entry) => evidence(other, entry, `${other.title} · ${entry.relation}`)));
+  const reviewed = (fiche?.revues || []).flatMap((review) => review.lignes.map((row) => ({
+    piece: index.fiches.find((entry) => entry.resource === row.resource)?.title || row.label, resource: row.resource, label: '', value: row.value, citation: row.citation, origin: 'piecemaker/tabular-review', at: row.checkedAt, author: row.author, review: review.titre,
   })));
-  return [...linked, ...reviewed];
+  return [...outgoing, ...incoming, ...reviewed];
 }
 
-export function premiseParties(index: OkfIndex, premiseId: string): OkfFiche[] {
-  const targets = new Set((index.fiches.find((fiche) => fiche.id === premiseId)?.relations || []).filter((entry) => entry.relation === 'involves').map((entry) => entry.target));
-  return index.fiches.filter((fiche) => fiche.type === PARTY_TYPE && targets.has(fiche.id));
+export function linkedEntities(index: OkfIndex | null, ficheId: string): OkfFiche[] {
+  const fiche = index?.fiches.find((entry) => entry.id === ficheId);
+  if (!index || !fiche) return [];
+  const targets = new Set(fiche.relations.map((entry) => entry.target));
+  return entities(index).filter((entity) => targets.has(entity.id) || entity.relations.some((entry) => entry.target === ficheId));
 }
 
-export function partyPremises(index: OkfIndex | null, code: string): OkfFiche[] {
-  const party = index?.fiches.find((fiche) => fiche.type === PARTY_TYPE && fiche.title === code);
-  if (!party) return [];
-  return premises(index).filter((fiche) => fiche.relations.some((entry) => entry.relation === 'involves' && entry.target === party.id));
+export function partyEntities(index: OkfIndex | null, code: string): OkfFiche[] {
+  const party = index?.fiches.find((fiche) => isParty(fiche) && fiche.title === code);
+  return party ? linkedEntities(index, party.id) : [];
 }
 
 export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: number }>, gap: number, gapY = gap, rounds = 300): void {
@@ -131,7 +137,7 @@ export function spreadBoxes(boxes: Array<{ x: number; y: number; w: number; h: n
 
 export type OkfGraph = { center: () => void; destroy: () => void; select: (id: string | null) => void };
 
-export async function mountGraph(container: HTMLElement, index: OkfIndex, withPremises: boolean, onOpen: (fiche: OkfFiche) => void): Promise<OkfGraph> {
+export async function mountGraph(container: HTMLElement, index: OkfIndex, withEntities: boolean, onOpen: (fiche: OkfFiche) => void): Promise<OkfGraph> {
   const { default: cytoscape } = await import('cytoscape');
   const paint = document.createElement('canvas').getContext('2d');
   const style = getComputedStyle(container);
@@ -149,7 +155,7 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, withPr
   const fontFamily = style.fontFamily || 'sans-serif';
   const measure = document.createElement('canvas').getContext('2d');
   if (measure) measure.font = `500 12px ${fontFamily}`;
-  const elements = graphElements(index, withPremises).map((element) => {
+  const elements = graphElements(index, withEntities).map((element) => {
     if (element.data.source) return element;
     const label = element.data.label;
     const width = Math.max(96, Math.min(200, (measure?.measureText(label).width || label.length * 7) + 54));
@@ -170,7 +176,6 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, withPr
       { selector: 'node[kind = "party-client"]', style: { 'border-color': color('--pmd-client', '#a8d5b5'), 'border-width': 2 } },
       { selector: 'node[kind = "party-adverse"]', style: { 'border-color': color('--pmd-adverse', '#efb4b4'), 'border-width': 2 } },
       { selector: 'node[kind = "party-tiers"]', style: { 'border-color': color('--pmd-tiers', '#b3cdee'), 'border-width': 2 } },
-      { selector: 'edge[relation = "mentions"], edge[relation = "involves"]', style: { 'line-style': 'dashed' } },
       { selector: '.pmd-dim', style: { opacity: 0.15 } },
       { selector: 'edge.pmd-near', style: { width: 1.5, label: 'data(label)', 'target-arrow-shape': 'triangle', 'line-color': muted, 'target-arrow-color': muted, color: text } },
       { selector: 'node.pmd-near', style: { 'border-width': 1.5 } },

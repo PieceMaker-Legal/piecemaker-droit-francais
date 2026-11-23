@@ -3,7 +3,7 @@ import type { IndexChronology } from './index-analysis.js';
 import { editOntology } from './ontology.js';
 import { pendingProposals } from './pending-proposals.js';
 import { etapesApi, knowledgeApi } from './api.js';
-import { PARTY_TYPE, mountGraph, okfApi } from './okf.js';
+import { isParty, mountGraph, okfApi } from './okf.js';
 import type { OkfGraph } from './okf.js';
 import { ficheCardMarkup } from './okf-card.js';
 import type { PendingProposals } from './okf.js';
@@ -249,7 +249,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         mappingValidated = etapes.mappingValide ?? null;
         paintScanStatus();
       }, () => undefined);
-      void pendingProposals(projectId, context.project.path).then((pending) => {
+      void pendingProposals(context.project.path).then((pending) => {
         if (sequence !== loadSequence) return;
         proposals = pending;
         const host = root.querySelector<HTMLElement>('[data-proposals]');
@@ -509,7 +509,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       });
       card.querySelector('[data-edit-fiche]')?.addEventListener('click', () => {
         if (!data) return;
-        if (fiche.type === PARTY_TYPE) {
+        if (isParty(fiche)) {
           const node = data.graph.nodes.find((entry) => entry.id === `entity:${fiche.title}`);
           if (node) nodeEditor(root, data, node, save);
           return;
@@ -568,8 +568,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         void editOntology(root, context.project.name, () => { void load(); }, context.project.path).catch(showError);
         return;
       }
-      if ((action === 'edit-tree' || action === 'edit-document-types') && context.project) {
-        void editOntology(root, context.project.name, () => { void load(); }, context.project.path, action === 'edit-tree' ? 'tree' : 'types').catch(showError);
+      if (action === 'edit-tree' && context.project) {
+        void editOntology(root, context.project.name, () => { void load(); }, context.project.path, 'tree').catch(showError);
         return;
       }
       if (action === 'company-search') {

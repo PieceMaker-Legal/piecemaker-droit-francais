@@ -1,0 +1,3161 @@
+{
+ "title": "Legal Ontologies Foundry (LOF), LOF-ODP-001 to LOF-ODP-006",
+ "source": "https://github.com/legal-ontologies-foundry (lof-odp-001 to lof-odp-004 release 0.2.0; lof-odp-005 and lof-odp-006 src/ontology)",
+ "attribution": "David R. Koepsell, Legal Ontologies Foundry, https://legal-ontologies-foundry.github.io/ (https://github.com/legal-ontologies-foundry). Licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Reproduced without modification; BFO terms from Basic Formal Ontology (https://basic-formal-ontology.org/), CC BY 4.0.",
+ "terms": {
+  "BFO_0000001": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000001",
+   "label": "entity",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "001-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) An entity is anything that exists or has existed or will exist"
+    ],
+    [
+     "example",
+     "Julius Caesar; the Second World War; your body mass index; Verdi's Requiem"
+    ]
+   ],
+   "subClassOf": [],
+   "axioms": []
+  },
+  "BFO_0000002": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000002",
+   "label": "continuant",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "008-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) A continuant is an entity that persists, endures, or continues to exist through time while maintaining its identity"
+    ],
+    [
+     "example",
+     "A human being; a tennis ball; a cave; a region of space; someone's temperature"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000001"
+   ],
+   "axioms": []
+  },
+  "BFO_0000003": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000003",
+   "label": "occurrent",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "077-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) An occurrent is an entity that unfolds itself in time or it is the start or end of such an entity or it is a temporal or spatiotemporal region"
+    ],
+    [
+     "example",
+     "As for process, history, process boundary, spatiotemporal region, zero-dimensional temporal region, one-dimensional temporal region, temporal interval, temporal instant."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000001"
+   ],
+   "axioms": []
+  },
+  "BFO_0000004": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000004",
+   "label": "independent continuant",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "017-BFO"
+    ],
+    [
+     "definition",
+     "b is an independent continuant =Def b is a continuant & there is no c such that b specifically depends on c or b generically depends on c"
+    ],
+    [
+     "example",
+     "An atom; a molecule; an organism; a heart; a chair; the bottom right portion of a human torso; a leg; the interior of your mouth; a spatial region; an orchestra"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000002"
+   ],
+   "axioms": []
+  },
+  "BFO_0000008": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000008",
+   "label": "temporal region",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "100-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) A temporal region is an occurrent over which processes can unfold"
+    ],
+    [
+     "example",
+     "As for zero-dimensional temporal region and one-dimensional temporal region"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000003"
+   ],
+   "axioms": []
+  },
+  "BFO_0000015": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000015",
+   "label": "process",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "083-BFO"
+    ],
+    [
+     "alternative label",
+     "event"
+    ],
+    [
+     "definition",
+     "(Elucidation) p is a process means p is an occurrent that has some temporal proper part and for some time t, p has some material entity as participant"
+    ],
+    [
+     "example",
+     "An act of selling; the life of an organism; a process of sleeping; a process of cell-division; a beating of the heart; a process of meiosis; the taxiing of an aircraft; the programming of a computer"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000003"
+   ],
+   "axioms": []
+  },
+  "BFO_0000017": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000017",
+   "label": "realizable entity",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "058-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) A realizable entity is a specifically dependent continuant that inheres in some independent continuant which is not a spatial region & which is of a type some instances of which are realized in processes of a correlated type"
+    ],
+    [
+     "example",
+     "The role of being a doctor; the role of this boundary to delineate where Utah and Colorado meet; the function of your reproductive organs; the disposition of your blood to coagulate; the disposition of this piece of metal to conduct electricity"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000020"
+   ],
+   "axioms": []
+  },
+  "BFO_0000020": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000020",
+   "label": "specifically dependent continuant",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "050-BFO"
+    ],
+    [
+     "definition",
+     "b is a specifically dependent continuant =Def b is a continuant & there is some independent continuant c which is not a spatial region & which is such that b specifically depends on c"
+    ],
+    [
+     "example",
+     "(with multiple bearers) John's love for Mary; the ownership relation between John and this statue; the relation of authority between John and his subordinates"
+    ],
+    [
+     "example",
+     "(with one bearer) The mass of this tomato; the pink colour of a medium rare piece of grilled filet mignon at its centre; the smell of this portion of mozzarella; the disposition of this fish to decay; the role of being a doctor; the function of this heart to pump blood; the shape of this hole"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000002"
+   ],
+   "axioms": []
+  },
+  "BFO_0000023": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000023",
+   "label": "role",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "061-BFO"
+    ],
+    [
+     "alternative label",
+     "externally-grounded realizable entity"
+    ],
+    [
+     "definition",
+     "(Elucidation) A role b is a realizable entity such that b exists because there is some single bearer that is in some special physical, social, or institutional set of circumstances in which this bearer does not have to be & b is not such that, if it ceases to exist, then the physical make-up of the bearer is thereby changed"
+    ],
+    [
+     "example",
+     "The priest role; the student role; the role of subject in a clinical trial; the role of a stone in marking a property boundary; the role of a boundary to demarcate two neighbouring administrative territories; the role of a building in serving as a military target"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000017"
+   ],
+   "axioms": []
+  },
+  "BFO_0000031": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000031",
+   "label": "generically dependent continuant",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "074-BFO"
+    ],
+    [
+     "alternative label",
+     "g-dependent continuant"
+    ],
+    [
+     "definition",
+     "(Elucidation) A generically dependent continuant is an entity that exists in virtue of the fact that there is at least one of what may be multiple copies which is the content or the pattern that multiple copies would share"
+    ],
+    [
+     "example",
+     "The pdf file on your laptop; the pdf file that is a copy thereof on my laptop; the sequence of this protein molecule; the sequence that is a copy thereof in that protein molecule; the content that is shared by a string of dots and dashes written on a page and the transmitted Morse code signal; the content of a sentence; an engineering blueprint"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000002"
+   ],
+   "axioms": []
+  },
+  "BFO_0000040": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000040",
+   "label": "material entity",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "019-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) A material entity is an independent continuant that at all times at which it exists has some portion of matter as continuant part"
+    ],
+    [
+     "example",
+     "A human being; the undetached arm of a human being; an aggregate of human beings"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000004"
+   ],
+   "axioms": []
+  },
+  "BFO_0000054": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000054",
+   "label": "has realization",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "identifier",
+     "206-BFO"
+    ],
+    [
+     "alternative label",
+     "realized in"
+    ],
+    [
+     "definition",
+     "b has realization c =Def c realizes b"
+    ],
+    [
+     "example",
+     "As for realizes"
+    ]
+   ],
+   "domain": [
+    "BFO_0000017"
+   ],
+   "range": [
+    "BFO_0000015"
+   ],
+   "inverseOf": [
+    "BFO_0000055"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "BFO_0000055": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000055",
+   "label": "realizes",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "identifier",
+     "059-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) realizes is a relation between a process b and realizable entity c such that c inheres in some d & for all t, if b has participant d then c exists & the type instantiated by b is correlated with the type instantiated by c"
+    ],
+    [
+     "example",
+     "A balding process realizes a disposition to go bald; a studying process realizes a student role; a process of pumping blood realizes the pumping function of a heart"
+    ]
+   ],
+   "domain": [
+    "BFO_0000015"
+   ],
+   "range": [
+    "BFO_0000017"
+   ],
+   "inverseOf": [
+    "BFO_0000054"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "BFO_0000056": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000056",
+   "label": "participates in",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "identifier",
+     "250-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) participates in holds between some b that is either a specifically dependent continuant or generically dependent continuant or independent continuant that is not a spatial region & some process p such that b participates in p some way"
+    ],
+    [
+     "scope note",
+     "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    ]
+   ],
+   "domain": [],
+   "range": [
+    "BFO_0000015"
+   ],
+   "inverseOf": [
+    "BFO_0000057"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "BFO_0000057": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000057",
+   "label": "has participant",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "identifier",
+     "248-BFO"
+    ],
+    [
+     "definition",
+     "p has participant c =Def c participates in p"
+    ],
+    [
+     "scope note",
+     "Users that require more sophisticated representations of time are encouraged to import a temporal extension of BFO-Core provided by the BFO development team. See documentation for guidance: <https://github.com/BFO-ontology/BFO-2020/tree/master/src/owl/profiles/temporal%20extensions>"
+    ]
+   ],
+   "domain": [
+    "BFO_0000015"
+   ],
+   "range": [],
+   "inverseOf": [
+    "BFO_0000056"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "BFO_0000148": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000148",
+   "label": "zero-dimensional temporal region",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "102-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) A zero-dimensional temporal region is a temporal region that is a whole consisting of one or more separated temporal instants as parts"
+    ],
+    [
+     "example",
+     "A temporal region that is occupied by a process boundary; the moment at which a finger is detached in an industrial accident"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000008"
+   ],
+   "axioms": []
+  },
+  "BFO_0000194": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000194",
+   "label": "specifically depended on by",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "identifier",
+     "260-BFO"
+    ],
+    [
+     "alternative label",
+     "s-depended on by"
+    ],
+    [
+     "definition",
+     "b specifically depended on by c =Def c specifically depends on b"
+    ],
+    [
+     "example",
+     "Coloured object specifically depended on by colour"
+    ]
+   ],
+   "domain": [],
+   "range": [
+    "BFO_0000020"
+   ],
+   "inverseOf": [
+    "BFO_0000195"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "BFO_0000195": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000195",
+   "label": "specifically depends on",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "identifier",
+     "012-BFO"
+    ],
+    [
+     "alternative label",
+     "s-depends on"
+    ],
+    [
+     "definition",
+     "(Elucidation) specifically depends on is a relation between a specifically dependent continuant b and specifically dependent continuant or independent continuant that is not a spatial region c such that b and c share no parts in common & b is of a nature such that at all times t it cannot exist unless c exists & b is not a boundary of c"
+    ],
+    [
+     "example",
+     "A shape specifically depends on the shaped object; hue, saturation and brightness of a colour sample specifically depends on each other"
+    ],
+    [
+     "scope note",
+     "The analogue of specifically depends on for occurrents is has participant."
+    ]
+   ],
+   "domain": [
+    "BFO_0000020"
+   ],
+   "range": [],
+   "inverseOf": [
+    "BFO_0000194"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "BFO_0000196": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000196",
+   "label": "bearer of",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "identifier",
+     "053-BFO"
+    ],
+    [
+     "definition",
+     "b bearer of c =Def c inheres in b"
+    ],
+    [
+     "example",
+     "A patch of ink is the bearer of a colour quality; an organism is the bearer of a temperature quality"
+    ]
+   ],
+   "domain": [],
+   "range": [
+    "BFO_0000020"
+   ],
+   "inverseOf": [
+    "BFO_0000197"
+   ],
+   "subPropertyOf": [
+    "BFO_0000194"
+   ],
+   "axioms": []
+  },
+  "BFO_0000197": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000197",
+   "label": "inheres in",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "identifier",
+     "051-BFO"
+    ],
+    [
+     "definition",
+     "b inheres in c =Def b is a specifically dependent continuant & c is an independent continuant that is not a spatial region & b specifically depends on c"
+    ],
+    [
+     "example",
+     "A shape inheres in a shaped object; a mass inheres in a material entity"
+    ]
+   ],
+   "domain": [
+    "BFO_0000020"
+   ],
+   "range": [],
+   "inverseOf": [
+    "BFO_0000196"
+   ],
+   "subPropertyOf": [
+    "BFO_0000195"
+   ],
+   "axioms": []
+  },
+  "BFO_0000203": {
+   "iri": "http://purl.obolibrary.org/obo/BFO_0000203",
+   "label": "temporal instant",
+   "kind": "class",
+   "annotations": [
+    [
+     "identifier",
+     "209-BFO"
+    ],
+    [
+     "definition",
+     "(Elucidation) A temporal instant is a zero-dimensional temporal region that has no proper temporal part"
+    ],
+    [
+     "example",
+     "The millennium"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000148"
+   ],
+   "axioms": []
+  },
+  "ODP001_0001000": {
+   "iri": "https://w3id.org/lof/ODP001_0001000",
+   "label": "legal act",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "BFO placement (LOF-P-004): a legal act unfolds in time and has temporal parts (offer and acceptance, the stages of a legislative vote), so it is a process. It is distinguished from the content it establishes, which outlives it."
+    ],
+    [
+     "definition",
+     "A process, having one or more persons or organizations as participants, that a legal system recognizes as bringing into being, modifying, or terminating legally significant entities."
+    ],
+    [
+     "example",
+     "the signing of a residential lease; the enactment of a statute; the delivery of a judgment"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000015"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'has participant' some 'material entity'"
+    }
+   ]
+  },
+  "ODP001_0001001": {
+   "iri": "https://w3id.org/lof/ODP001_0001001",
+   "label": "legal content",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "A single body of legal content, such as a statute, typically has legal norms, legal definitions, and legal designators among its parts (BFO 'has continuant part'). It is therefore not itself a norm, a definition, or a designator as a whole."
+    ],
+    [
+     "comment",
+     "BFO placement (LOF-P-004): the same statute or contract term can be concretized in many copies and survives the destruction of any one of them. That is the mark of a generically dependent continuant. Legal content corresponds to the Work and Expression levels in FRBR-based legal standards."
+    ],
+    [
+     "alternative label",
+     "legal information content"
+    ],
+    [
+     "definition",
+     "A generically dependent continuant that is established by some legal act and that specifies legally significant entities, such as the provisions of a statute, the terms of a contract, or the holding of a judgment."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000031"
+   ],
+   "axioms": []
+  },
+  "ODP001_0001002": {
+   "iri": "https://w3id.org/lof/ODP001_0001002",
+   "label": "legal document",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "BFO placement (LOF-P-004): the particular signed paper, or the particular stored file, is a material entity that carries the content. Digital documents are treated as patterns in material storage media. Note that IAO's 'document' is an information content entity, so it corresponds to legal content here, not to legal document. Legal document corresponds to the Item level in FRBR-based legal standards. A legal document takes part in a legal act only as its instrument (performed by means of); otherwise it at most evidences the act (evidences)."
+    ],
+    [
+     "definition",
+     "A material entity that is the carrier of some legal content."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000040"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'is carrier of' some 'legal content'"
+    }
+   ]
+  },
+  "ODP001_0001003": {
+   "iri": "https://w3id.org/lof/ODP001_0001003",
+   "label": "enactment",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A legal act in which a body with legislative authority establishes legal content of general application."
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'establishes' some 'legal content'"
+    },
+    {
+     "k": "DisjointWith",
+     "m": "'contract formation'"
+    }
+   ]
+  },
+  "ODP001_0001004": {
+   "iri": "https://w3id.org/lof/ODP001_0001004",
+   "label": "contract formation",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A legal act in which two or more parties establish legal content that binds them to one another."
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'establishes' some 'legal content'"
+    }
+   ]
+  },
+  "ODP001_0001005": {
+   "iri": "https://w3id.org/lof/ODP001_0001005",
+   "label": "legal norm",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "The operative provisions of a statute, regulation, contract, or judgment. Legal positions (LOF-ODP-003) are grounded in legal norms. Corresponds to CCO 'process regulation' and its three kinds (process requirement, process prohibition, action permission); see the LOF to CCO bridge."
+    ],
+    [
+     "definition",
+     "Legal content that requires, prohibits, or permits some kind of conduct."
+    ],
+    [
+     "example",
+     "a lease clause requiring rent to be paid by the first of the month; a statute prohibiting resuscitation of a person with a valid DNR order"
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001001"
+   ],
+   "axioms": []
+  },
+  "ODP001_0001006": {
+   "iri": "https://w3id.org/lof/ODP001_0001006",
+   "label": "legal definition",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Corresponds to CCO 'descriptive information content entity'."
+    ],
+    [
+     "definition",
+     "Legal content that states what a term means for the purposes of some other legal content."
+    ],
+    [
+     "example",
+     "the definitions section of a statute"
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001001"
+   ],
+   "axioms": []
+  },
+  "ODP001_0001007": {
+   "iri": "https://w3id.org/lof/ODP001_0001007",
+   "label": "legal designator",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Corresponds to CCO 'designative information content entity'. The natural point of attachment for identifier standards such as Akoma Ntoso eIds and ELI."
+    ],
+    [
+     "definition",
+     "Legal content that names or identifies some legal content or legal document, such as a title, a section number, or a citation."
+    ],
+    [
+     "example",
+     "'8 U.S.C. 1103(a)(3)'; the short title of an act"
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001001"
+   ],
+   "axioms": []
+  },
+  "ODP001_0001100": {
+   "iri": "https://w3id.org/lof/ODP001_0001100",
+   "label": "establishes",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal act and the legal content that comes into being through that act."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001000"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [
+    "ODP001_0001101"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal act'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP001_0001101": {
+   "iri": "https://w3id.org/lof/ODP001_0001101",
+   "label": "established by",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between legal content and the legal act through which it came into being."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [
+    "ODP001_0001100"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "ODP001_0001102": {
+   "iri": "https://w3id.org/lof/ODP001_0001102",
+   "label": "performed under",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal act and pre-existing legal content that authorizes or governs it, such as an enabling statute or a rule of procedure."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001000"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal act'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP001_0001103": {
+   "iri": "https://w3id.org/lof/ODP001_0001103",
+   "label": "performed by means of",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Documents do not act; persons and organizations do. A document related by this relation is an operative (dispositive) instrument: the law makes the writing part of how the act is done. Contrast evidences, which holds of documents that merely record or attest to an act."
+    ],
+    [
+     "definition",
+     "A relation between a legal act and a legal document that participates in it as the instrument through which the act is performed, as when a deed is executed or a statutory form is signed before witnesses."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001000"
+   ],
+   "range": [
+    "ODP001_0001002"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [
+    "BFO_0000057"
+   ],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal act'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal document'"
+    }
+   ]
+  },
+  "ODP001_0001104": {
+   "iri": "https://w3id.org/lof/ODP001_0001104",
+   "label": "evidences",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Evidencing is not participation: the evidencing entity may come into existence after the act, and the act may occur with no document at all. Nothing about an act, role, or position may be inferred from the existence of an evidencing document alone. An instrument usually also evidences the act performed by means of it, so the two relations are not disjoint."
+    ],
+    [
+     "definition",
+     "A relation between a material entity, such as a legal document, and a legal act, legal content, or other entity whose existence or occurrence it records or attests to."
+    ]
+   ],
+   "domain": [
+    "BFO_0000040"
+   ],
+   "range": [],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'material entity'"
+    }
+   ]
+  },
+  "ODP002_0001000": {
+   "iri": "https://w3id.org/lof/ODP002_0001000",
+   "label": "legal role",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "A legal role has exactly one bearer (ISO/IEC 21838-2: a specifically dependent continuant inheres in exactly one bearer). When command passes from one officer to another, or a trustee is replaced, the outgoing role is terminated and a new role is conferred; what persists is the legal content that specifies both roles. Proposed by W. Mandrick's change-of-command use case."
+    ],
+    [
+     "comment",
+     "A legal role may be borne by an organization as well as a person. Persons who act for an organization, for example in a conferral act, take part as members or agents of it; the Common Core Ontologies supply 'organization', 'organization member role', and 'is affiliated with' for this, and the LOF to CCO bridge aligns them."
+    ],
+    [
+     "comment",
+     "BFO placement (LOF-P-004): a legal role is borne by a person or organization because of external circumstances (an appointment, a contract, a statute) rather than because of the bearer's physical make-up, and the bearer need not change physically to acquire or lose it. That is the mark of a BFO role, as opposed to a disposition."
+    ],
+    [
+     "definition",
+     "A role that inheres in a person or organization in virtue of some legal act or legal content, and that is realized in processes having legal significance."
+    ],
+    [
+     "example",
+     "the role of judge borne by a person appointed to a court; the role of tenant borne by a party to a lease; the role of trustee"
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000023"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'inheres in' some 'material entity'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'inheres in' exactly 1"
+    }
+   ]
+  },
+  "ODP002_0001001": {
+   "iri": "https://w3id.org/lof/ODP002_0001001",
+   "label": "conferred legal role",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Defined class. Legal roles that arise by operation of law, without any conferring act (for example, a parent's role as guardian of a newborn child), are legal roles but not conferred legal roles."
+    ],
+    [
+     "definition",
+     "A legal role that was brought into existence by some legal act."
+    ]
+   ],
+   "subClassOf": [
+    "ODP002_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('legal role' and 'conferred by' some 'legal act')"
+    }
+   ]
+  },
+  "ODP002_0001002": {
+   "iri": "https://w3id.org/lof/ODP002_0001002",
+   "label": "role conferral act",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "The conferral act realizes the power (LOF-ODP-003) of whoever performs it, which corresponds to the D-Acts 'deontic declaration performer role'. It does not realize the role it confers: that role is realized later, when its bearer acts in it. A conferral act occupies a temporal region (BFO 'occupies temporal region'), which dates the role's beginning."
+    ],
+    [
+     "definition",
+     "A legal act that brings some legal role into existence in some bearer."
+    ],
+    [
+     "example",
+     "the commissioning of a judge; the execution of a trust instrument naming a trustee; the signing of a lease"
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('legal act' and 'confers' some 'legal role')"
+    }
+   ]
+  },
+  "ODP002_0001003": {
+   "iri": "https://w3id.org/lof/ODP002_0001003",
+   "label": "role termination act",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A legal act that brings some legal role to an end."
+    ],
+    [
+     "example",
+     "the removal of a trustee by a court; the resignation of a judge; the termination of a lease"
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('legal act' and 'terminates' some 'legal role')"
+    }
+   ]
+  },
+  "ODP002_0001004": {
+   "iri": "https://w3id.org/lof/ODP002_0001004",
+   "label": "role modification act",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Proposed by W. Mandrick (ODP 2 slide). The current D-Acts 'deontic declaration' covers creating and revoking a deontic role but not modifying one, so this class has no D-Acts parent until D-Acts extends its definition."
+    ],
+    [
+     "definition",
+     "A legal act that changes what an existing legal role consists in, without bringing the role to an end."
+    ],
+    [
+     "example",
+     "a court order enlarging a guardian's powers; an amendment to a lease changing the tenant's obligations"
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('legal act' and 'modifies' some 'legal role')"
+    }
+   ]
+  },
+  "ODP002_0001100": {
+   "iri": "https://w3id.org/lof/ODP002_0001100",
+   "label": "confers",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal act and a legal role that comes into existence through that act."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001000"
+   ],
+   "range": [
+    "ODP002_0001000"
+   ],
+   "inverseOf": [
+    "ODP002_0001101"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal act'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal role'"
+    }
+   ]
+  },
+  "ODP002_0001101": {
+   "iri": "https://w3id.org/lof/ODP002_0001101",
+   "label": "conferred by",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal role and the legal act through which it came into existence."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [
+    "ODP002_0001100"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "ODP002_0001102": {
+   "iri": "https://w3id.org/lof/ODP002_0001102",
+   "label": "terminates",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal act and a legal role that ceases to exist through that act."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001000"
+   ],
+   "range": [
+    "ODP002_0001000"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal act'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal role'"
+    }
+   ]
+  },
+  "ODP002_0001103": {
+   "iri": "https://w3id.org/lof/ODP002_0001103",
+   "label": "specified by",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal role and legal content that specifies what the role consists in, such as the statute establishing an office or the lease clause defining the tenant's position."
+    ]
+   ],
+   "domain": [
+    "ODP002_0001000"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal role'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP002_0001104": {
+   "iri": "https://w3id.org/lof/ODP002_0001104",
+   "label": "modifies",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal act and a legal role whose content the act changes without bringing the role to an end."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001000"
+   ],
+   "range": [
+    "ODP002_0001000"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal act'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal role'"
+    }
+   ]
+  },
+  "ODP003_0001000": {
+   "iri": "https://w3id.org/lof/ODP003_0001000",
+   "label": "legal position",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "BFO placement (LOF-P-004): a legal position is a role. It inheres in its holder because of the holder's legal circumstances (a contract, a statute, an appointment), not the holder's physical make-up, and it is realized when the holder complies, acts, or exercises it. Like every specifically dependent continuant it has exactly one holder, so the assignment of a claim or the passing of command authority ends one position and begins another, linked by 'succeeds'. Adopted in 0.2.0 on W. Mandrick's proposal (issue #9) to align with the D-Acts deontic roles; this resolves the former Option A versus Option B question."
+    ],
+    [
+     "alternative label",
+     "Hohfeldian position"
+    ],
+    [
+     "definition",
+     "A continuant that is held by a person or organization in virtue of some legal content, and that consists in what the holder is legally required, permitted, or enabled to do, or protected from having done to them, in relation to some other party."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000023"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'held by' some 'material entity'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'grounded in' some 'legal content'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'legal position'"
+    }
+   ]
+  },
+  "ODP003_0001001": {
+   "iri": "https://w3id.org/lof/ODP003_0001001",
+   "label": "claim",
+   "kind": "class",
+   "annotations": [
+    [
+     "alternative label",
+     "right"
+    ],
+    [
+     "definition",
+     "A first-order legal position in virtue of which its holder is owed some conduct by another party."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001009"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'duty'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' only 'duty'"
+    }
+   ]
+  },
+  "ODP003_0001002": {
+   "iri": "https://w3id.org/lof/ODP003_0001002",
+   "label": "duty",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A first-order legal position in virtue of which its holder is required to engage in, or refrain from, some conduct owed to another party."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001009"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'claim'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' only 'claim'"
+    }
+   ]
+  },
+  "ODP003_0001003": {
+   "iri": "https://w3id.org/lof/ODP003_0001003",
+   "label": "liberty",
+   "kind": "class",
+   "annotations": [
+    [
+     "alternative label",
+     "privilege"
+    ],
+    [
+     "definition",
+     "A first-order legal position in virtue of which its holder is not under a duty to another party to refrain from some conduct."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001009"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'no-claim'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' only 'no-claim'"
+    }
+   ]
+  },
+  "ODP003_0001004": {
+   "iri": "https://w3id.org/lof/ODP003_0001004",
+   "label": "no-claim",
+   "kind": "class",
+   "annotations": [
+    [
+     "alternative label",
+     "no-right"
+    ],
+    [
+     "definition",
+     "A first-order legal position in virtue of which its holder has no claim against another party with respect to some conduct of that party."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001009"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'liberty'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' only 'liberty'"
+    }
+   ]
+  },
+  "ODP003_0001005": {
+   "iri": "https://w3id.org/lof/ODP003_0001005",
+   "label": "power",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A second-order legal position in virtue of which its holder can, by some legal act, change the legal positions of another party."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001010"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'liability'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' only 'liability'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'power self-link' Self"
+    }
+   ]
+  },
+  "ODP003_0001006": {
+   "iri": "https://w3id.org/lof/ODP003_0001006",
+   "label": "liability",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A second-order legal position in virtue of which its holder's legal positions can be changed by some legal act of another party."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001010"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'power'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' only 'power'"
+    }
+   ]
+  },
+  "ODP003_0001007": {
+   "iri": "https://w3id.org/lof/ODP003_0001007",
+   "label": "immunity",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A second-order legal position in virtue of which its holder's legal positions cannot be changed by some legal act of another party."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001010"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'disability'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' only 'disability'"
+    }
+   ]
+  },
+  "ODP003_0001008": {
+   "iri": "https://w3id.org/lof/ODP003_0001008",
+   "label": "disability",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A second-order legal position in virtue of which its holder cannot, by some legal act, change the legal positions of another party."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001010"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' some 'immunity'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'correlative of' only 'immunity'"
+    }
+   ]
+  },
+  "ODP003_0001009": {
+   "iri": "https://w3id.org/lof/ODP003_0001009",
+   "label": "first-order legal position",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A legal position that concerns what its holder or another party is required or permitted to do."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "DisjointWith",
+     "m": "'second-order legal position'"
+    }
+   ]
+  },
+  "ODP003_0001010": {
+   "iri": "https://w3id.org/lof/ODP003_0001010",
+   "label": "second-order legal position",
+   "kind": "class",
+   "annotations": [
+    [
+     "definition",
+     "A legal position that concerns whether its holder or another party can change first-order or second-order legal positions."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001000"
+   ],
+   "axioms": []
+  },
+  "ODP003_0001100": {
+   "iri": "https://w3id.org/lof/ODP003_0001100",
+   "label": "held by",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "A functional subproperty of BFO 'inheres in', reflecting the one-bearer axiom of ISO/IEC 21838-2. A position never has two holders; a change of holder is a new position that succeeds the old one."
+    ],
+    [
+     "definition",
+     "A relation between a legal position and the person or organization whose position it is."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "BFO_0000040"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [
+    "BFO_0000197"
+   ],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'material entity'"
+    },
+    {
+     "k": "Characteristics",
+     "m": "Functional"
+    }
+   ]
+  },
+  "ODP003_0001101": {
+   "iri": "https://w3id.org/lof/ODP003_0001101",
+   "label": "grounded in",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal position and the legal content in virtue of which it exists, such as the contract term creating a duty to pay."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [
+    "N832404acf91d479f8cd655e37b19708c",
+    "Nad38dd6e3d744392b80c20475a5dac8b",
+    "n28ef37d549a243188e6ac485cb4de689b7"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP003_0001102": {
+   "iri": "https://w3id.org/lof/ODP003_0001102",
+   "label": "correlative of",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A symmetric relation between two legal positions held by different parties, each of which exists if and only if the other does, such as a claim and the duty owed in satisfaction of it."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "ODP003_0001000"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Characteristics",
+     "m": "Symmetric"
+    }
+   ]
+  },
+  "ODP003_0001103": {
+   "iri": "https://w3id.org/lof/ODP003_0001103",
+   "label": "exercised in",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "A subproperty of BFO 'realized in': the legal act realizes the power exercised in it. This is the sense in which a role conferral act 'realizes' something (W. Mandrick, ODP 2 slide): it realizes the conferring party's power, which corresponds to the D-Acts deontic declaration performer role, not the role it confers."
+    ],
+    [
+     "definition",
+     "A relation between a power and a legal act through which the holder of the power changes the legal positions of another party."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001005"
+   ],
+   "range": [
+    "ODP001_0001000"
+   ],
+   "inverseOf": [
+    "Nde3d97c5e3fc49239d399e49756a1ece"
+   ],
+   "subPropertyOf": [
+    "BFO_0000054"
+   ],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'power'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal act'"
+    }
+   ]
+  },
+  "ODP003_0001104": {
+   "iri": "https://w3id.org/lof/ODP003_0001104",
+   "label": "succeeds",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Lets a query follow 'the same claim' through changes of holder, which Option B had obtained by making positions generically dependent, without giving up the one-bearer axiom."
+    ],
+    [
+     "definition",
+     "A relation between a legal position and an earlier legal position, held by another party, whose place it takes in the same legal relation through an assignment, a succession, or a transfer of office."
+    ],
+    [
+     "example",
+     "a collection agency's claim to rent, acquired by assignment, succeeds the landlord's claim; an incoming commander's authority to issue orders succeeds the outgoing commander's"
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "ODP003_0001000"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Characteristics",
+     "m": "Irreflexive"
+    }
+   ]
+  },
+  "ODP004_0001000": {
+   "iri": "https://w3id.org/lof/ODP004_0001000",
+   "label": "norm-establishing power",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Occupies MLC node 1 (source of authority). Grounded as a power per LOF-ODP-003; its BFO category follows the ODP-003 placement decision."
+    ],
+    [
+     "definition",
+     "A power that is exercised in some legal act that establishes legal content."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001005"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('power' and 'exercised in' some ('legal act' and 'establishes' some 'legal content'))"
+    }
+   ]
+  },
+  "ODP004_0001001": {
+   "iri": "https://w3id.org/lof/ODP004_0001001",
+   "label": "triggering occurrence",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Occupies MLC node 4 (triggering facts). Grounded as occurrent because what is legally operative is a change (a signing, a death, the start or end of a period), including the process boundary at which a standing state begins, rather than the state itself."
+    ],
+    [
+     "definition",
+     "An occurrent that satisfies a condition, set out in legal content, for some legal position to come into existence."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000003"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('occurrent' and inverse 'triggered by' some 'legal position')"
+    }
+   ]
+  },
+  "ODP004_0001002": {
+   "iri": "https://w3id.org/lof/ODP004_0001002",
+   "label": "remedial position",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Occupies MLC node 8 (remedy). A remedy is modeled as a further legal position (a claim to damages, a power to terminate, a duty to comply with an injunction), so the remedy node is itself a chain."
+    ],
+    [
+     "definition",
+     "A legal position that exists because some other legal position was not discharged, and whose discharge or exercise is directed to making good that failure."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('legal position' and 'remedies' some 'legal position')"
+    }
+   ]
+  },
+  "ODP004_0001003": {
+   "iri": "https://w3id.org/lof/ODP004_0001003",
+   "label": "fully grounded legal position",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "The chain-closure class. An individual is classified here only when every MLC node is occupied. Under the open-world assumption the reasoner cannot infer that a chain is incomplete; incompleteness is detected by the SHACL shapes in src/shapes."
+    ],
+    [
+     "definition",
+     "A legal position that is grounded in legal content established by a legal act in which some power was exercised, that is triggered by some occurrent, that is generated by a legal act realizing some legal role, that is directed at some entity, and for whose non-discharge some legal content provides a remedy."
+    ]
+   ],
+   "subClassOf": [
+    "ODP003_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('legal position' and 'grounded in' some ('legal content' and 'established by' some ('legal act' and inverse 'exercised in' some 'power')) and 'generated by' some ('legal act' and 'realizes' some 'legal role') and 'triggered by' some 'occurrent' and 'directed at' some 'entity' and 'remedy provided by' some 'legal content')"
+    }
+   ]
+  },
+  "ODP004_0001100": {
+   "iri": "https://w3id.org/lof/ODP004_0001100",
+   "label": "generated by",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Links MLC node 7 (legal effect) to node 5 (legal act). Its range is occurrent rather than legal act so that positions arising by operation of law can be represented."
+    ],
+    [
+     "definition",
+     "A relation between a legal position and an occurrent through which the position comes into existence."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "BFO_0000003"
+   ],
+   "inverseOf": [
+    "ODP004_0001101"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'occurrent'"
+    }
+   ]
+  },
+  "ODP004_0001101": {
+   "iri": "https://w3id.org/lof/ODP004_0001101",
+   "label": "generates",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between an occurrent and a legal position that comes into existence through it."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [
+    "ODP004_0001100"
+   ],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "ODP004_0001102": {
+   "iri": "https://w3id.org/lof/ODP004_0001102",
+   "label": "triggered by",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal position and an occurrent that satisfies a condition, set out in the legal content in which the position is grounded, for the position to come into existence."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "BFO_0000003"
+   ],
+   "inverseOf": [
+    "N58eed1d4203046bba9a1780878504a6d"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'occurrent'"
+    }
+   ]
+  },
+  "ODP004_0001103": {
+   "iri": "https://w3id.org/lof/ODP004_0001103",
+   "label": "directed at",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Occupies MLC node 6 (target). Inferred for party targets by the chain: correlative of o held by. Asserted directly for thing targets (the land, the patented invention, the data set)."
+    ],
+    [
+     "definition",
+     "A relation between a legal position and an entity toward which the position is oriented, either the holder of its correlative position or a thing over which the position obtains."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "SubPropertyChain",
+     "m": "'correlative of' o 'held by'"
+    }
+   ]
+  },
+  "ODP004_0001104": {
+   "iri": "https://w3id.org/lof/ODP004_0001104",
+   "label": "remedies",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal position and another legal position, whose non-discharge is the occasion of the first and whose discharge or exercise is directed to making good that non-discharge."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "ODP003_0001000"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal position'"
+    }
+   ]
+  },
+  "ODP004_0001105": {
+   "iri": "https://w3id.org/lof/ODP004_0001105",
+   "label": "remedy provided by",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal position and legal content that specifies which remedial positions arise if the position is not discharged."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP004_0001106": {
+   "iri": "https://w3id.org/lof/ODP004_0001106",
+   "label": "undischarged during",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Represents omission without reifying non-events: the omission is the asserted non-discharge of a position over a temporal region, and the end of that region is typically the triggering occurrence of a remedial position. Proposal for review."
+    ],
+    [
+     "definition",
+     "A relation between a first-order legal position and a temporal region during which no process occurs that complies with the position."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001009"
+   ],
+   "range": [
+    "BFO_0000008"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'first-order legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'temporal region'"
+    }
+   ]
+  },
+  "ODP004_0001107": {
+   "iri": "https://w3id.org/lof/ODP004_0001107",
+   "label": "legal basis for",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Proposed by W. Mandrick (issue #12): a relation from higher-level law to the lower-level law enacted under its authority. Defined by a property chain over LOF-ODP-001 and 003, so it is inferred whenever the chain of authority is recorded: the higher content grounds a power (grounded in), the power is exercised in an act (exercised in), and the act establishes the lower content (establishes). The chain runs through the power exercised, not through ODP-001 'performed under', so procedural rules under which an act is performed are not counted as its legal basis."
+    ],
+    [
+     "definition",
+     "A relation between legal content and other legal content, wherein the former grounds a power that is exercised in the legal act that establishes the latter."
+    ],
+    [
+     "example",
+     "8 U.S.C. 1103(a)(3) is the legal basis for 8 C.F.R. 103.1."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [
+    "ODP004_0001111"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    },
+    {
+     "k": "SubPropertyChain",
+     "m": "inverse 'grounded in' o 'exercised in' o 'establishes'"
+    }
+   ]
+  },
+  "ODP004_0001108": {
+   "iri": "https://w3id.org/lof/ODP004_0001108",
+   "label": "derives authority from",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Transitive, so the whole regress of authority (Minimum Legal Chain node 1, competency question 4) follows from the one-step links. Each step is the inverse of 'legal basis for'."
+    ],
+    [
+     "definition",
+     "A relation between legal content and legal content from which its authority descends through one or more steps of 'legal basis for'."
+    ],
+    [
+     "example",
+     "8 C.F.R. 103.1 derives authority from 8 U.S.C. 1103(a)(3) and, through it, from Article I, section 8 of the U.S. Constitution."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Characteristics",
+     "m": "Transitive"
+    }
+   ]
+  },
+  "ODP004_0001109": {
+   "iri": "https://w3id.org/lof/ODP004_0001109",
+   "label": "delegates legal authority to",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Proposed by W. Mandrick (issue #12). Inferred by a property chain from grounded in, held by, and the technical helper 'power self-link', which restricts the chain to powers so that duties grounded in the same content do not count as delegations."
+    ],
+    [
+     "definition",
+     "A relation between legal content and a person or organization that holds a power grounded in it."
+    ],
+    [
+     "example",
+     "8 U.S.C. 1103(a)(3) delegates legal authority to the Secretary of Homeland Security."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "BFO_0000040"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'material entity'"
+    },
+    {
+     "k": "SubPropertyChain",
+     "m": "inverse 'grounded in' o 'power self-link' o 'held by'"
+    }
+   ]
+  },
+  "ODP004_0001110": {
+   "iri": "https://w3id.org/lof/ODP004_0001110",
+   "label": "power self-link",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Not for direct assertion. It lets property chains such as 'delegates legal authority to' apply only to powers (the standard OWL 2 self-restriction technique)."
+    ],
+    [
+     "definition",
+     "A technical relation that holds between each power and itself, and only between powers."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001005"
+   ],
+   "range": [
+    "ODP003_0001005"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'power'"
+    },
+    {
+     "k": "Range",
+     "m": "'power'"
+    }
+   ]
+  },
+  "ODP004_0001111": {
+   "iri": "https://w3id.org/lof/ODP004_0001111",
+   "label": "has legal basis",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between legal content and the legal content that is its legal basis."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [
+    "ODP004_0001107"
+   ],
+   "subPropertyOf": [
+    "ODP004_0001108"
+   ],
+   "axioms": []
+  },
+  "ODP005_0001000": {
+   "iri": "https://w3id.org/lof/ODP005_0001000",
+   "label": "amending act",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Covers textual amendment, insertion, substitution, suspension, and postponement of entry into force. Legal content is not changed by amendment: the amending act establishes new content, which succeeds the amended content in whole or in part."
+    ],
+    [
+     "definition",
+     "A legal act that establishes legal content succeeding some legal content established earlier, or that ends, suspends, or alters the force or scope of such content."
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('legal act' and 'amends' some 'legal content')"
+    }
+   ]
+  },
+  "ODP005_0001001": {
+   "iri": "https://w3id.org/lof/ODP005_0001001",
+   "label": "repeal",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "The repeal is the act; its effect is the last instant of the repealed content's region in force, which may be long after the act (the General Data Protection Regulation was adopted on 27 April 2016 and repealed Directive 95/46/EC with effect from 25 May 2018). Force can also end with no repealing act: by expiry of a sunset clause, implied repeal, desuetude, or annulment. Those are recorded by the last instant of the region alone."
+    ],
+    [
+     "definition",
+     "A legal act that establishes that some legal content established earlier ceases to be in force."
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001000"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('legal act' and 'repeals' some 'legal content')"
+    }
+   ]
+  },
+  "ODP005_0001002": {
+   "iri": "https://w3id.org/lof/ODP005_0001002",
+   "label": "consolidated version",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Whether a consolidated version is itself legal content depends on the legal system. Consolidations by the EU Publications Office have no legal force; a United States Code title enacted as positive law does. The pattern therefore does not declare consolidated version disjoint from legal content: an enacted consolidation is asserted to be both, and established by its enactment (LOF-P-010)."
+    ],
+    [
+     "definition",
+     "A generically dependent continuant that combines some legal content with the content succeeding it in part, as they stand during some temporal region."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000031"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'consolidates' some 'legal content'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'states the law during' some 'temporal region'"
+    }
+   ]
+  },
+  "ODP005_0001003": {
+   "iri": "https://w3id.org/lof/ODP005_0001003",
+   "label": "compliance period",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "A defined class: a region is a compliance period by being the period some position is due within. A position due within a compliance period and undischarged during it (LOF-ODP-004) was not discharged in time; that conclusion is drawn by SPARQL, since OWL cannot compare date-times. Where legal content sets a standard rather than a fixed limit (GDPR Art. 33(1): without undue delay and, where feasible, within 72 hours), the compliance period records the fixed limit, and whether a late discharge was nonetheless lawful is a matter for the rule layer."
+    ],
+    [
+     "definition",
+     "A temporal region within which some first-order legal position is to be discharged."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000008"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('temporal region' and inverse 'due within' some 'first-order legal position')"
+    }
+   ]
+  },
+  "ODP005_0001100": {
+   "iri": "https://w3id.org/lof/ODP005_0001100",
+   "label": "amends",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "The subject is the act, as in LOF-ODP-001, so that who amended, when, and under what power are recorded. For the relation between the texts themselves use succeeds. Close match to ELI eli:amends, which relates legal resources."
+    ],
+    [
+     "definition",
+     "A relation between a legal act and legal content established earlier, such that the act establishes content succeeding it, or ends, suspends, or alters its force or scope."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001000"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal act'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP005_0001101": {
+   "iri": "https://w3id.org/lof/ODP005_0001101",
+   "label": "repeals",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a legal act and legal content established earlier, such that the act establishes that the content ceases to be in force."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [],
+   "subPropertyOf": [
+    "ODP005_0001100"
+   ],
+   "axioms": []
+  },
+  "ODP005_0001102": {
+   "iri": "https://w3id.org/lof/ODP005_0001102",
+   "label": "in force during",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Maximal: the region runs from entry into force to the end of force, not some part of it. Content suspended and revived is in force during two regions. A region with no recorded last instant is either still running or has an end not recorded; the pattern does not distinguish them. Close match to ELI eli:first_date_entry_in_force and eli:date_no_longer_in_force."
+    ],
+    [
+     "definition",
+     "A relation between legal content and a maximal temporal region throughout which the content is part of the law in force."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "BFO_0000008"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'temporal region'"
+    }
+   ]
+  },
+  "ODP005_0001103": {
+   "iri": "https://w3id.org/lof/ODP005_0001103",
+   "label": "applies during",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Separate from in force during because the two come apart: the General Data Protection Regulation was in force from 24 May 2016 and applied from 25 May 2018; retroactive content applies during a region before it is in force; repealed content continues to govern facts that occurred while it applied. Asserted only of content that is directly applicable. A directive, a non-self-executing treaty, or a uniform act not yet adopted is in force without applying to private conduct; what applies is the content that transposes or adopts it. Close match to ELI eli:date_applicability."
+    ],
+    [
+     "definition",
+     "A relation between legal content and a maximal temporal region such that the content directly governs what occurs during that region."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "BFO_0000008"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'temporal region'"
+    }
+   ]
+  },
+  "ODP005_0001104": {
+   "iri": "https://w3id.org/lof/ODP005_0001104",
+   "label": "consolidates",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "A consolidated version consolidates both the base content and each item of content succeeding it in part. Close match to ELI eli:consolidates."
+    ],
+    [
+     "definition",
+     "A relation between a consolidated version and legal content that it combines."
+    ]
+   ],
+   "domain": [
+    "ODP005_0001002"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'consolidated version'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP005_0001105": {
+   "iri": "https://w3id.org/lof/ODP005_0001105",
+   "label": "states the law during",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Its own region, not that of the content consolidated: a consolidation stops stating the law at the next amendment, while the base content stays in force."
+    ],
+    [
+     "definition",
+     "A relation between a consolidated version and a temporal region during which it correctly combines the legal content in force."
+    ]
+   ],
+   "domain": [
+    "ODP005_0001002"
+   ],
+   "range": [
+    "BFO_0000008"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'consolidated version'"
+    },
+    {
+     "k": "Range",
+     "m": "'temporal region'"
+    }
+   ]
+  },
+  "ODP005_0001106": {
+   "iri": "https://w3id.org/lof/ODP005_0001106",
+   "label": "due within",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "For a duty, the period within which the required conduct must occur; for a claim, the period within which its correlative duty must be discharged. Second-order positions are exercised rather than discharged, so periods for exercising a power (a limitation period, a time to appeal) are not covered (open question)."
+    ],
+    [
+     "definition",
+     "A relation between a first-order legal position and a temporal region within which the position is to be discharged."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001009"
+   ],
+   "range": [
+    "BFO_0000008"
+   ],
+   "inverseOf": [
+    "nfffd6928cdcf4fb4839b2c4abc25580ab13"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'first-order legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'temporal region'"
+    }
+   ]
+  },
+  "ODP005_0001107": {
+   "iri": "https://w3id.org/lof/ODP005_0001107",
+   "label": "computed from",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "The region need not begin at the occurrent: under Article 3(1) of Regulation (EEC, Euratom) No 1182/71, the moment of the event does not fall within a period expressed in hours, nor the day of the event within one expressed in days. The computation rule is type-level and belongs to the rule layer; this relation records, for a particular period, the occurrence it was computed from."
+    ],
+    [
+     "definition",
+     "A relation between a temporal region and an occurrent from which, according to legal content, the region is computed."
+    ]
+   ],
+   "domain": [
+    "BFO_0000008"
+   ],
+   "range": [
+    "BFO_0000003"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'temporal region'"
+    },
+    {
+     "k": "Range",
+     "m": "'occurrent'"
+    }
+   ]
+  },
+  "ODP005_0001108": {
+   "iri": "https://w3id.org/lof/ODP005_0001108",
+   "label": "succeeds",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Records that legal content is succeeded, not changed: the amended provision is unchanged, and a new provision takes its place in the law in force. Typically the succeeding content is established by an amending act that amends the succeeded content."
+    ],
+    [
+     "definition",
+     "A relation between two items of legal content such that the first replaces the second, in whole or in part, from the time the first is in force."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP005_0001200": {
+   "iri": "https://w3id.org/lof/ODP005_0001200",
+   "label": "has date-time value",
+   "kind": "dataprop",
+   "annotations": [
+    [
+     "comment",
+     "Values are xsd:dateTimeStamp, which is in the OWL 2 datatype map and requires a time zone; xsd:date, xsd:duration, and the xsd:g* types are not in the map. A region's bounds are its BFO first and last instants (has first instant, has last instant). Regions are closed, and values are recorded to the second. Where the law gives a date and no time, the choice of time zone is a convention to be stated (for EU acts, midnight Brussels time), not a rule of the source. Close match to OWL-Time time:inXSDDateTimeStamp on a time:Instant."
+    ],
+    [
+     "definition",
+     "A relation between a temporal instant and the date and time, with time zone, at which it falls."
+    ]
+   ],
+   "domain": [
+    "BFO_0000203"
+   ],
+   "range": [
+    "dateTimeStamp"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'temporal instant'"
+    },
+    {
+     "k": "Range",
+     "m": "'dateTimeStamp'"
+    },
+    {
+     "k": "Characteristics",
+     "m": "Functional"
+    }
+   ]
+  },
+  "ODP006_0001000": {
+   "iri": "https://w3id.org/lof/ODP006_0001000",
+   "label": "priority principle",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Not a subclass of legal content: lex specialis and lex posterior are enacted in some legal systems and doctrinal in others. Where a priority principle is enacted, assert it to be legal content as well (LOF-P-010). The classical principles, and the primacy of European Union law, are provided as individuals."
+    ],
+    [
+     "definition",
+     "A generically dependent continuant that states, on some ground such as rank, specificity, or time, which of two conflicting items of legal content prevails."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000031"
+   ],
+   "axioms": []
+  },
+  "ODP006_0001001": {
+   "iri": "https://w3id.org/lof/ODP006_0001001",
+   "label": "precedence determination",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Reifies the three-place fact that A prevails over B on ground P, as stated by some source. It is a generically dependent continuant for the reason legal content is (LOF-ODP-001): the same determination can be borne by a judgment, a commentary, and a database record; the act of determining is a process, and the determination is what that process yields. A determination has legal force only if it is also legal content, for example the holding of a court or a conflict rule in a statute; it is then an authoritative precedence determination. Guidance, scholarship, and an annotator's own reading are determinations without legal force."
+    ],
+    [
+     "definition",
+     "A generically dependent continuant that states that one item of legal content prevails over another where they conflict."
+    ]
+   ],
+   "subClassOf": [
+    "BFO_0000031"
+   ],
+   "axioms": [
+    {
+     "k": "SubClassOf",
+     "m": "'favours' some 'legal content'"
+    },
+    {
+     "k": "SubClassOf",
+     "m": "'disfavours' some 'legal content'"
+    }
+   ]
+  },
+  "ODP006_0001002": {
+   "iri": "https://w3id.org/lof/ODP006_0001002",
+   "label": "authoritative precedence determination",
+   "kind": "class",
+   "annotations": [
+    [
+     "comment",
+     "Recognized by inference: assert that a determination is legal content and it is classified here, and what it favours is then found to prevail over what it disfavours. The equivalence to 'authoritative self-link some Self' is a technical device (rolification) that lets the reasoner carry the class into the authoritative relations."
+    ],
+    [
+     "definition",
+     "A precedence determination that is itself legal content."
+    ]
+   ],
+   "subClassOf": [
+    "ODP001_0001001",
+    "ODP006_0001001"
+   ],
+   "axioms": [
+    {
+     "k": "EquivalentTo",
+     "m": "('precedence determination' and 'legal content')"
+    },
+    {
+     "k": "EquivalentTo",
+     "m": "'authoritative self-link' Self"
+    }
+   ]
+  },
+  "ODP006_0001100": {
+   "iri": "https://w3id.org/lof/ODP006_0001100",
+   "label": "particularizes",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Named to avoid confusion with LOF-ODP-002 'specified by'. Example: BDSG section 26(2) particularizes GDPR Article 7 for consent in employment. Close match to LOMO (Legal Ontology for Modelling Obligations) lomo:specifies."
+    ],
+    [
+     "definition",
+     "A relation between two items of legal content in which the first makes the second more determinate for some cases, without displacing it."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP006_0001101": {
+   "iri": "https://w3id.org/lof/ODP006_0001101",
+   "label": "derogates from",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Deliberately not a subproperty of 'held to prevail over'. A derogation is often authorized by the content it derogates from (GDPR Article 89(2) permits Member States to restrict Article 15 for research), and then the derogating content does not outrank the authorizing one: if they truly conflicted, the authorizing content would prevail. Record the authorization with LOF-ODP-001: the enactment of the derogating content is 'performed under' the authorizing content. The pattern does not represent the derogation's scope, which is type-level."
+    ],
+    [
+     "definition",
+     "A relation between two items of legal content in which the first displaces the second for the cases within its scope."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP006_0001102": {
+   "iri": "https://w3id.org/lof/ODP006_0001102",
+   "label": "substitutes for",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "What LOMO's documentation calls substitutive derogation (described there in prose, not as a property)."
+    ],
+    [
+     "definition",
+     "A relation between two items of legal content in which the first displaces the second for the cases within its scope and provides a different rule for them."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [],
+   "subPropertyOf": [
+    "ODP006_0001101"
+   ],
+   "axioms": []
+  },
+  "ODP006_0001103": {
+   "iri": "https://w3id.org/lof/ODP006_0001103",
+   "label": "creates exception to",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "What LOMO's documentation calls blocking derogation. Close to Akoma Ntoso exceptionOfScope."
+    ],
+    [
+     "definition",
+     "A relation between two items of legal content in which the first removes some cases from the scope of the second without providing a rule for them."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [],
+   "subPropertyOf": [
+    "ODP006_0001101"
+   ],
+   "axioms": []
+  },
+  "ODP006_0001104": {
+   "iri": "https://w3id.org/lof/ODP006_0001104",
+   "label": "conflicts with",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Asserted, not inferred: deciding that two positions conflict requires comparing the conduct each concerns, which is the action-type problem of LOF-ODP-003 open question 2. Typical cases: a duty to do and a duty to refrain from the same conduct held by one holder; a duty and a liberty to the contrary. Conflict between legal content is inferred from this relation."
+    ],
+    [
+     "definition",
+     "A symmetric relation between two legal positions such that compliance with both is impossible, or one permits what the other forbids."
+    ]
+   ],
+   "domain": [
+    "ODP003_0001000"
+   ],
+   "range": [
+    "ODP003_0001000"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal position'"
+    },
+    {
+     "k": "Characteristics",
+     "m": "Symmetric"
+    }
+   ]
+  },
+  "ODP006_0001105": {
+   "iri": "https://w3id.org/lof/ODP006_0001105",
+   "label": "content conflicts with",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Inferred by the chain inverse(grounded in) o conflicts with o grounded in. A content may conflict with itself, which records an internal contradiction."
+    ],
+    [
+     "definition",
+     "A symmetric relation between two items of legal content that ground conflicting legal positions."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Characteristics",
+     "m": "Symmetric"
+    },
+    {
+     "k": "SubPropertyChain",
+     "m": "inverse 'grounded in' o 'conflicts with' o 'grounded in'"
+    }
+   ]
+  },
+  "ODP006_0001106": {
+   "iri": "https://w3id.org/lof/ODP006_0001106",
+   "label": "favours",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a precedence determination and the legal content that it states prevails."
+    ]
+   ],
+   "domain": [
+    "ODP006_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [
+    "n28ef37d549a243188e6ac485cb4de689b11"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'precedence determination'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP006_0001107": {
+   "iri": "https://w3id.org/lof/ODP006_0001107",
+   "label": "disfavours",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a precedence determination and the legal content that it states yields."
+    ]
+   ],
+   "domain": [
+    "ODP006_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'precedence determination'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    }
+   ]
+  },
+  "ODP006_0001108": {
+   "iri": "https://w3id.org/lof/ODP006_0001108",
+   "label": "on the ground of",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "definition",
+     "A relation between a precedence determination and the priority principle it applies."
+    ]
+   ],
+   "domain": [
+    "ODP006_0001001"
+   ],
+   "range": [
+    "ODP006_0001000"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'precedence determination'"
+    },
+    {
+     "k": "Range",
+     "m": "'priority principle'"
+    }
+   ]
+  },
+  "ODP006_0001109": {
+   "iri": "https://w3id.org/lof/ODP006_0001109",
+   "label": "held to prevail over",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Inferred by the chain inverse(favours) o disfavours. It records a reading, not the law: guidance and scholarship produce it too. For what the law itself settles, use 'prevails over'. Not declared asymmetric or transitive: OWL 2 DL forbids asymmetry on a property defined by a chain, precedence is not transitive across different scopes, and sources disagree. Mutual holdings are reported by the SHACL shapes as contested."
+    ],
+    [
+     "definition",
+     "A relation between two items of legal content such that some precedence determination, with or without legal force, states that where they conflict the first governs and the second yields."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    },
+    {
+     "k": "SubPropertyChain",
+     "m": "inverse 'favours' o 'disfavours'"
+    }
+   ]
+  },
+  "ODP006_0001110": {
+   "iri": "https://w3id.org/lof/ODP006_0001110",
+   "label": "stated in",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Records whose determination it is: a conflict rule in the legislation itself, the holding of a court, guidance without legal force, or an annotator's note."
+    ],
+    [
+     "definition",
+     "A relation between a precedence determination and the legal content, or other information content, in which it is stated."
+    ]
+   ],
+   "domain": [
+    "ODP006_0001001"
+   ],
+   "range": [
+    "BFO_0000031"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'precedence determination'"
+    },
+    {
+     "k": "Range",
+     "m": "'generically dependent continuant'"
+    }
+   ]
+  },
+  "ODP006_0001111": {
+   "iri": "https://w3id.org/lof/ODP006_0001111",
+   "label": "authoritatively favours",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Inferred, never asserted: by the chain authoritative self-link o favours. Not declared a subproperty of favours, which OWL 2 DL forbids for a property defined by a chain through it (the property hierarchy would not be regular); every pair it relates is related by favours anyway."
+    ],
+    [
+     "definition",
+     "A relation between an authoritative precedence determination and the legal content that it states prevails."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [
+    "n28ef37d549a243188e6ac485cb4de689b18"
+   ],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "SubPropertyChain",
+     "m": "'authoritative self-link' o 'favours'"
+    }
+   ]
+  },
+  "ODP006_0001112": {
+   "iri": "https://w3id.org/lof/ODP006_0001112",
+   "label": "authoritatively disfavours",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Inferred, never asserted: by the chain authoritative self-link o disfavours. Not declared a subproperty of disfavours, for the reason given under authoritatively favours."
+    ],
+    [
+     "definition",
+     "A relation between an authoritative precedence determination and the legal content that it states yields."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": [
+    {
+     "k": "SubPropertyChain",
+     "m": "'authoritative self-link' o 'disfavours'"
+    }
+   ]
+  },
+  "ODP006_0001113": {
+   "iri": "https://w3id.org/lof/ODP006_0001113",
+   "label": "prevails over",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Inferred by the chain inverse(authoritatively favours) o authoritatively disfavours, so only determinations that are legal content produce it. What 'prevails' amounts to differs by ground and system: invalidity of the yielding content (lex superior within one legal order), its disapplication in the case (primacy of EU law, Case 106/77 Simmenthal), or neither (lex specialis); see open question 1. Not asymmetric, for the reasons given under 'held to prevail over': courts of two legal orders can each authoritatively hold the contrary (BVerfG, 2 BvR 859/15, PSPP, 5 May 2020)."
+    ],
+    [
+     "definition",
+     "A relation between two items of legal content such that a precedence determination with legal force states that where they conflict the first governs and the second yields."
+    ]
+   ],
+   "domain": [
+    "ODP001_0001001"
+   ],
+   "range": [
+    "ODP001_0001001"
+   ],
+   "inverseOf": [],
+   "subPropertyOf": [
+    "ODP006_0001109"
+   ],
+   "axioms": [
+    {
+     "k": "Domain",
+     "m": "'legal content'"
+    },
+    {
+     "k": "Range",
+     "m": "'legal content'"
+    },
+    {
+     "k": "SubPropertyChain",
+     "m": "inverse 'authoritatively favours' o 'authoritatively disfavours'"
+    }
+   ]
+  },
+  "ODP006_0001114": {
+   "iri": "https://w3id.org/lof/ODP006_0001114",
+   "label": "authoritative self-link",
+   "kind": "objprop",
+   "annotations": [
+    [
+     "comment",
+     "Never asserted. It exists so that the authoritative relations can be inferred from class membership (rolification); data and queries should use 'prevails over'."
+    ],
+    [
+     "definition",
+     "A technical relation that holds between an authoritative precedence determination and itself, and between nothing else."
+    ]
+   ],
+   "domain": [],
+   "range": [],
+   "inverseOf": [],
+   "subPropertyOf": [],
+   "axioms": []
+  },
+  "ODP006_0001500": {
+   "iri": "https://w3id.org/lof/ODP006_0001500",
+   "label": "lex superior",
+   "kind": "individual",
+   "annotations": [
+    [
+     "comment",
+     "Constitutional over statutory provisions, statute over regulation. Its usual effect is that the lower content is invalid to the extent of the conflict. The relation between EU law and national law is a different principle: see primacy of European Union law."
+    ],
+    [
+     "definition",
+     "The priority principle that legal content of higher rank in a legal order prevails over legal content of lower rank in the same order."
+    ]
+   ],
+   "type": [
+    "ODP006_0001000"
+   ],
+   "axioms": []
+  },
+  "ODP006_0001501": {
+   "iri": "https://w3id.org/lof/ODP006_0001501",
+   "label": "lex specialis",
+   "kind": "individual",
+   "annotations": [
+    [
+     "definition",
+     "The priority principle that legal content governing a narrower class of cases prevails over legal content governing a wider class that includes it."
+    ]
+   ],
+   "type": [
+    "ODP006_0001000"
+   ],
+   "axioms": []
+  },
+  "ODP006_0001502": {
+   "iri": "https://w3id.org/lof/ODP006_0001502",
+   "label": "lex posterior",
+   "kind": "individual",
+   "annotations": [
+    [
+     "comment",
+     "'Later' is judged by the enactment that established the content (LOF-ODP-001), not by when it entered into force or applies (LOF-ODP-005), although some systems use the date of publication or entry into force; record the choice. Between treaties, compare Vienna Convention on the Law of Treaties Article 30."
+    ],
+    [
+     "definition",
+     "The priority principle that legal content established later prevails over legal content of equal rank established earlier."
+    ]
+   ],
+   "type": [
+    "ODP006_0001000"
+   ],
+   "axioms": []
+  },
+  "ODP006_0001503": {
+   "iri": "https://w3id.org/lof/ODP006_0001503",
+   "label": "primacy of an overriding legal order",
+   "kind": "individual",
+   "annotations": [
+    [
+     "comment",
+     "Kept apart from lex superior, which ranks content within a single legal order. This principle relates two legal orders, and its ground is the relation between them, set by a treaty, a supremacy or paramountcy clause, or judicial doctrine. Its effect on the yielding content varies by regime and is not fixed by the pattern (see open question 1 on the pattern page). Examples: European Union law over the national law of the Member States, where the national provision is set aside in the case rather than void (Case 6/64 Costa v ENEL; Case 106/77 Simmenthal); federal law over state law in the United States, where preempted state law is without effect (Constitution Article VI, clause 2); federal paramountcy in Canada, where conflicting provincial law is inoperative to the extent of the conflict; the Australian Constitution, section 109, which renders inconsistent state law invalid to the extent of the inconsistency; and obligations under the Charter of the United Nations over other treaty obligations (Article 103). Its limits are contested in several regimes. Where a regime-specific variant needs its own identity, add it as a further individual with dcterms:coverage naming the regime."
+    ],
+    [
+     "alternative label",
+     "paramountcy"
+    ],
+    [
+     "alternative label",
+     "preemption"
+    ],
+    [
+     "alternative label",
+     "supremacy"
+    ],
+    [
+     "definition",
+     "The priority principle that the content of one legal order prevails over conflicting content of another legal order, where the relation between the two orders gives the first priority, as with supranational law over national law or federal law over state or provincial law."
+    ]
+   ],
+   "type": [
+    "ODP006_0001000"
+   ],
+   "axioms": []
+  }
+ }
+}

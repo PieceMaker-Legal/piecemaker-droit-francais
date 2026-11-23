@@ -16,10 +16,10 @@ const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee', 'revue', 'revues'];
+const OKF_COMMANDS = ['verify', 'ontologie', 'link', 'unlink', 'examinee', 'revue', 'revues'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer', 'noms']);
+const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'retirer', 'noms']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
@@ -107,38 +107,31 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
   okf verify
       index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
       reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
-      et les contradictions (une prémisse à valeur unique, plusieurs valeurs selon les pièces),
-      puis les éléments manquants du graphe : pièce sans prémisse ni lien, prémisse sans pièce,
-      sans valeur ou sans partie, partie isolée ; enfin, en information, les pièces examinées sans lien
-  okf types --json '[{"name":"contrat","icon":"pen"}]' [--motif "raison"]
-      propose à l'avocat le catalogue complet des types (clés name et icon) ; rien ne change avant sa décision
+      et les contradictions (un temporal instant daté différemment selon les pièces),
+      puis les éléments manquants du graphe : legal position incomplète ou sans titulaire (held by),
+      partie sans lien LOF cité ; enfin, en information, les pièces examinées sans lien
   okf ontologie
-      relations admises entre documents (~/.piecemaker/ontologie.json, commune à tous les dossiers, réglée par l'avocat dans l'onglet Index) :
-      nom, sens, types de la source et de la cible ; lecture seule
-  okf ontologie proposer --json '{"relations":[...],"documentTypes":[...]}' [--motif "raison"]
-      propose à l'avocat les relations (clés name, label, inverse, description, source, target) et/ou
-      les types de documents, listes complètes ; clés absentes, inconnues ou hors règles refusées ; rien ne change
-      avant sa décision : l'onglet Index › Ontologie montre chaque changement à accepter, refuser ou modifier ;
-      une nouvelle proposition remplace la précédente pour chaque liste fournie
-  okf link <source> <relation> <target> --citation "phrase du document source"
-      entre documents : une relation de l'ontologie (pm okf ontologie), entre les types qu'elle admet ;
-      source et cible : chemins ; la citation doit figurer mot pour mot dans le document source
-  okf link <pièce> states "<titre de la prémisse>" --citation "phrase de la pièce" [--value "valeur"] [--single]
-      la pièce établit une prémisse (fait, ou clause d'un contrat) ; sa fiche Premise est créée si elle manque ;
-      --single : la prémisse n'a qu'une valeur, un écart entre pièces est une contradiction
-  okf link "<titre de la prémisse>" involves <CODE_PARTIE>
-      la prémisse concerne une partie du dossier ; pas de citation
-  okf unlink <source> <relation> <target>
+      Legal Ontologies Foundry (David Koepsell, CC BY 4.0) : classes et propriétés, avec leur définition,
+      leur domaine et leur codomaine ; lecture seule ; --noms : libellés des propriétés
+  okf ontologie proposer --json '{"arborescence":[...]}' [--motif "raison"]
+      propose à l'avocat l'arborescence complète ; rien ne change avant sa décision (onglet Index › Classement)
+  okf link <source> "<propriété LOF>" <target> --piece <pièce> --citation "phrase de la pièce"
+      [--source_class "classe LOF"] [--target_class "classe LOF"]
+      source et cible : chemin d'un document, code de partie, ou titre d'une fiche LOF ;
+      une nouvelle fiche demande sa classe ; la citation doit figurer mot pour mot dans la pièce
+  okf link "<titre de la fiche>" "has date-time value" --piece <pièce> --citation "phrase" --value AAAA-MM-JJ
+  okf unlink <source> "<propriété LOF>" <target>
+      pour has date-time value, target est la pièce
   okf examinee <pièce> --motif "raison"
-      la pièce a été lue et aucun passage ne justifie un lien ni une prémisse : verify la liste
+      la pièce a été lue et aucun passage ne justifie un lien LOF : verify la liste
       en information, plus en manque ; le manque revient si le document change
   okf examinee <pièce> --retirer
       retire cette marque : la pièce redevient à examiner
   okf revues
-      revues tabulaires des pièces du dossier et leurs colonnes, à lier à une prémisse
-  okf revue "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index> [--retirer]
+      revues tabulaires des pièces du dossier et leurs colonnes, à lier à une fiche LOF
+  okf revue "<titre de la fiche>" --fichier <revue.json> --colonne <nom|index> [--classe "classe LOF"] [--retirer]
       les lignes positives de la colonne (réponse trouvée, « Oui » pour une question Oui / Non) établissent
-      la prémisse, créée si elle manque ; chaque ligne est une pièce d'auteur agent, humain une fois vérifiée
+      la fiche LOF, créée avec sa classe si elle manque ; chaque ligne est une pièce d'auteur agent, humain une fois vérifiée
       par l'avocat dans la revue ; lues dans la revue à chaque lecture : une revue relancée remonte aussitôt
 
   catala verifier [--au today|AAAA-MM-JJ] [--programme NOM]
@@ -546,7 +539,7 @@ function progress(job) {
 
 const EN_ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
   + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala et suivi.\n'
-  + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
+  + 'L’index et ses liens attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
   + 'Revenez à la fin avec pm dossier conversion.';
 
 const EN_COURS_CHECK = 'Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala et suivi, qui ne lisent pas les pièces.';
@@ -833,30 +826,29 @@ async function okf(api, positional, flags, resolved) {
       ...examinees.map((entry) => `- ${entry.element} : ${entry.motif}`),
     ].join('\n');
   }
-  if (action === 'types' || (action === 'ontologie' && positional[2] === 'proposer')) {
-    if (!value(flags.json)) usage(action === 'types' ? 'okf types attend --json : liste complète des types {name, icon}.' : 'okf ontologie proposer attend --json \'{"relations":[...],"documentTypes":[...]}\'.');
+  if (action === 'ontologie' && positional[2] === 'proposer') {
+    if (!value(flags.json)) usage('okf ontologie proposer attend --json \'{"arborescence":[...]}\'.');
     let proposee;
     try { proposee = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
-    const ontologie = { ...(action === 'types' ? { documentTypes: proposee } : Array.isArray(proposee) ? { relations: proposee } : proposee), ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) };
-    const proposition = await api.okfFn({ action: 'proposer', folder, ontologie });
-    const parts = [...(proposition.relations ? [`${proposition.relations.length} relation(s)`] : []), ...(proposition.documentTypes ? [`${proposition.documentTypes.length} type(s) de documents`] : [])];
-    return parts.length ? `Proposition enregistrée (${parts.join(', ')}) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Ontologie.` : 'Aucun changement par rapport à l’ontologie actuelle : aucune proposition en attente.';
+    const proposition = await api.okfFn({ action: 'proposer', folder, ontologie: { ...proposee, ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) } });
+    return proposition.arborescence ? `Proposition enregistrée (${proposition.arborescence.length} dossier(s)) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Classement.` : 'Aucun changement par rapport à l’arborescence actuelle : aucune proposition en attente.';
   }
   if (action === 'ontologie') {
-    const { relations, systeme, erreur, proposition, documentTypes = [], types = [], icones = [] } = await api.okfFn({ action, folder });
-    // Noms des relations de l'ontologie scellée, plus les relations système : le schéma de l'outil OkfWrite.
-    if (flags.noms) return JSON.stringify([...new Set([...relations, ...systeme].map((entry) => entry.name).filter((name) => name !== 'mentions'))]);
+    const { lof = [], attribution, erreur, proposition, types = [] } = await api.okfFn({ action, folder });
+    const label = Object.fromEntries(lof.map((term) => [term.id, term.label]));
+    const labels = (ids = []) => ids.map((id) => label[id] || id).join(', ');
+    const properties = lof.filter((term) => term.kind === 'objprop' || term.kind === 'dataprop');
+    if (flags.noms) return JSON.stringify(properties.map((term) => term.label));
+    const definition = (term) => term.annotations.find(([name]) => name === 'definition')?.[1] || '';
     return [
       ...(erreur ? [`Attention : ${erreur}`] : []),
-      ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}) : ${[...(proposition.relations || []), ...(proposition.documentTypes || [])].map((entry) => entry.name).join(', ')}.`] : []),
-      'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :',
-      ...relations.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source.join(', ')} → ${entry.target.join(', ')}${entry.description ? ` — ${entry.description}` : ''}`),
+      ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}).`] : []),
+      attribution,
+      'Classes :',
+      ...lof.filter((term) => term.kind === 'class').map((term) => `- ${term.label}${term.subClassOf?.length ? ` < ${labels(term.subClassOf)}` : ''} — ${definition(term)}`),
+      'Propriétés :',
+      ...properties.map((term) => `- ${term.label} : ${labels(term.domain) || 'tout'} → ${labels(term.range) || 'tout'} — ${definition(term)}`),
       `Types principaux du dossier : ${types.join(', ')}. Classement : pm dossier arborescence.`,
-      `Icônes disponibles : ${icones.join(', ')}.`,
-      'Types de documents (pm okf types --json pour proposer la liste complète) :',
-      ...documentTypes.map((entry) => `- ${entry.name} : ${entry.icon}`),
-      'Relations système :',
-      ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),
     ].join('\n');
   }
   if (action === 'examinee') {
@@ -873,20 +865,20 @@ async function okf(api, positional, flags, resolved) {
   }
   if (action === 'revue') {
     const premise = positional[2];
-    if (!premise || !value(flags.fichier) || flags.colonne === undefined || flags.colonne === true) usage('okf revue attend "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index>.');
-    const lien = await api.okfFn({ action, folder, premise, fichier: String(flags.fichier), colonne: String(flags.colonne), ...(flags.retirer ? { retirer: true } : {}) });
-    return flags.retirer ? `Revue déliée : ${lien.fichier} › colonne ${lien.colonne} de ${lien.premise}.` : `Revue liée : ${lien.fichier} › colonne ${lien.colonne} établit ${lien.premise}. Ses lignes positives sont des pièces de la prémisse ; l’avocat les vérifie dans la revue.`;
+    if (!premise || !value(flags.fichier) || flags.colonne === undefined || flags.colonne === true) usage('okf revue attend "<titre de la fiche>" --fichier <revue.json> --colonne <nom|index>.');
+    const lien = await api.okfFn({ action, folder, premise, fichier: String(flags.fichier), colonne: String(flags.colonne), ...(value(flags.classe) ? { classe: String(flags.classe) } : {}), ...(flags.retirer ? { retirer: true } : {}) });
+    return flags.retirer ? `Revue déliée : ${lien.fichier} › colonne ${lien.colonne} de ${lien.premise}.` : `Revue liée : ${lien.fichier} › colonne ${lien.colonne} établit ${lien.premise}. Ses lignes positives sont des pièces de la fiche ; l’avocat les vérifie dans la revue.`;
   }
   const [source, relation, target] = positional.slice(2);
-  if (!source || !relation || !target) usage(`okf ${action} attend <source> <relation> <target>.`);
-  if (action === 'link' && relation !== 'involves' && !value(flags.citation)) usage('okf link attend --citation.');
-  const detail = action === 'link' ? {
-    ...(value(flags.citation) ? { citation: String(flags.citation) } : {}),
-    ...(value(flags.value) ? { value: String(flags.value) } : {}),
-    ...(flags.single ? { single: true } : {}),
-  } : {};
-  const lien = await api.okfFn({ action, folder, source, relation, target, ...detail });
-  return `${action === 'link' ? 'Lien enregistré' : 'Lien retiré'} : ${lien.source} ${lien.relation} ${lien.target}`;
+  if (!source || !relation || (!target && action === 'unlink')) usage(`okf ${action} attend <source> <relation> <target>.`);
+  if (action === 'unlink') {
+    const lien = await api.okfFn({ action, folder, source, relation, target, piece: target });
+    return `Lien retiré : ${lien.source} ${lien.relation} ${lien.target}`;
+  }
+  if (!value(flags.citation) || !value(flags.piece)) usage('okf link attend --piece et --citation.');
+  const detail = Object.fromEntries(['piece', 'citation', 'value', 'source_class', 'target_class'].filter((key) => value(flags[key])).map((key) => [key, String(flags[key])]));
+  const lien = await api.okfFn({ action, folder, source, relation, ...(target ? { target } : {}), ...detail });
+  return `Lien enregistré : ${lien.source} ${lien.relation} ${lien.target}`;
 }
 
 async function suiviDossiers(api, positional, flags, resolved) {

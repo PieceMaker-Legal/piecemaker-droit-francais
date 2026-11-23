@@ -2,8 +2,8 @@ import type Database from 'better-sqlite3';
 
 type Connection = InstanceType<typeof Database>;
 
-export type StoredPremise = { id: string; title: string; description: string; single: boolean; by: string; at: string };
-export type StoredRelation = { source: string; relation: string; target: string; citation: string; value: string; origin: string; at: string; dismissed: boolean };
+export type StoredPremise = { id: string; title: string; description: string; single: boolean; by: string; at: string; lofClass?: string };
+export type StoredRelation = { source: string; relation: string; target: string; citation: string; value: string; origin: string; at: string; dismissed: boolean; piece?: string };
 export type StoredExam = { source: string; motif: string; by: string; at: string; empreinte: string };
 export type StoredReviewLink = { premise: string; file: string; column: number; by: string; at: string };
 export type OkfRecords = { premises: StoredPremise[]; relations: StoredRelation[]; exams: StoredExam[]; reviews?: StoredReviewLink[] };
@@ -61,25 +61,33 @@ CREATE TABLE IF NOT EXISTS piecemaker_okf_imports (
 `;
 
 /** The OKF data that is authoritative: premises, cited links and examinations. The .md fiches are views generated from it. */
+function addColumn(database: Connection, table: string, column: string): void {
+  const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((entry) => entry.name === column)) database.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+}
+
 export function createOkfStore(database: Connection) {
   database.exec(SCHEMA);
+  addColumn(database, 'piecemaker_okf_premises', 'lof_class');
+  addColumn(database, 'piecemaker_okf_relations', 'piece');
   const statements = {
-    premises: database.prepare('SELECT id, title, description, single_value, created_by, updated_at FROM piecemaker_okf_premises WHERE project_id=? ORDER BY id'),
-    relations: database.prepare('SELECT source_id, relation, target_id, citation, value, origin, updated_at, dismissed FROM piecemaker_okf_relations WHERE project_id=? ORDER BY source_id, relation, target_id'),
+    premises: database.prepare('SELECT id, title, description, single_value, created_by, updated_at, lof_class FROM piecemaker_okf_premises WHERE project_id=? ORDER BY id'),
+    relations: database.prepare('SELECT source_id, relation, target_id, citation, value, origin, updated_at, dismissed, piece FROM piecemaker_okf_relations WHERE project_id=? ORDER BY source_id, relation, target_id'),
     exams: database.prepare('SELECT source_id, motif, created_by, updated_at, empreinte FROM piecemaker_okf_exams WHERE project_id=? ORDER BY source_id'),
-    upsertPremise: database.prepare(`INSERT INTO piecemaker_okf_premises(project_id, id, title, description, single_value, created_by, updated_at) VALUES(@projectId, @id, @title, @description, @single, @by, @at)
-      ON CONFLICT(project_id, id) DO UPDATE SET single_value=MAX(single_value, excluded.single_value), updated_at=CASE WHEN excluded.single_value>single_value THEN excluded.updated_at ELSE updated_at END`),
-    upsertRelation: database.prepare(`INSERT INTO piecemaker_okf_relations(project_id, source_id, relation, target_id, citation, value, origin, updated_at, dismissed) VALUES(@projectId, @source, @relation, @target, @citation, @value, @origin, @at, @dismissed)
-      ON CONFLICT(project_id, source_id, relation, target_id) DO UPDATE SET citation=excluded.citation, value=excluded.value, origin=excluded.origin, updated_at=excluded.updated_at, dismissed=excluded.dismissed`),
+    upsertPremise: database.prepare(`INSERT INTO piecemaker_okf_premises(project_id, id, title, description, single_value, created_by, updated_at, lof_class) VALUES(@projectId, @id, @title, @description, @single, @by, @at, @lofClass)
+      ON CONFLICT(project_id, id) DO UPDATE SET single_value=MAX(single_value, excluded.single_value), lof_class=CASE WHEN lof_class='' THEN excluded.lof_class ELSE lof_class END, updated_at=CASE WHEN excluded.single_value>single_value OR (lof_class='' AND excluded.lof_class<>'') THEN excluded.updated_at ELSE updated_at END`),
+    upsertRelation: database.prepare(`INSERT INTO piecemaker_okf_relations(project_id, source_id, relation, target_id, citation, value, origin, updated_at, dismissed, piece) VALUES(@projectId, @source, @relation, @target, @citation, @value, @origin, @at, @dismissed, @piece)
+      ON CONFLICT(project_id, source_id, relation, target_id) DO UPDATE SET citation=excluded.citation, value=excluded.value, origin=excluded.origin, updated_at=excluded.updated_at, dismissed=excluded.dismissed, piece=excluded.piece`),
     deleteRelation: database.prepare('DELETE FROM piecemaker_okf_relations WHERE project_id=? AND source_id=? AND relation=? AND target_id=?'),
-    stated: database.prepare("SELECT 1 FROM piecemaker_okf_relations WHERE project_id=? AND relation='states' AND target_id=? LIMIT 1"),
+    stated: database.prepare('SELECT 1 FROM piecemaker_okf_relations WHERE project_id=@projectId AND dismissed=0 AND (target_id=@id OR source_id=@id) LIMIT 1'),
     deletePremise: database.prepare('DELETE FROM piecemaker_okf_premises WHERE project_id=? AND id=?'),
-    deleteFrom: database.prepare('DELETE FROM piecemaker_okf_relations WHERE project_id=? AND source_id=?'),
+    
     upsertExam: database.prepare(`INSERT INTO piecemaker_okf_exams(project_id, source_id, motif, created_by, updated_at, empreinte) VALUES(@projectId, @source, @motif, @by, @at, @empreinte)
       ON CONFLICT(project_id, source_id) DO UPDATE SET motif=excluded.motif, created_by=excluded.created_by, updated_at=excluded.updated_at, empreinte=excluded.empreinte`),
     deleteExam: database.prepare('DELETE FROM piecemaker_okf_exams WHERE project_id=? AND source_id=?'),
     renameSource: database.prepare('UPDATE OR REPLACE piecemaker_okf_relations SET source_id=@to WHERE project_id=@projectId AND source_id=@from'),
     renameTarget: database.prepare('UPDATE OR REPLACE piecemaker_okf_relations SET target_id=@to WHERE project_id=@projectId AND target_id=@from'),
+    renamePiece: database.prepare('UPDATE piecemaker_okf_relations SET piece=@to WHERE project_id=@projectId AND piece=@from'),
     renameExam: database.prepare('UPDATE OR REPLACE piecemaker_okf_exams SET source_id=@to WHERE project_id=@projectId AND source_id=@from'),
     reviews: database.prepare('SELECT premise_id, review_file, column_index, created_by, updated_at FROM piecemaker_okf_reviews WHERE project_id=? ORDER BY premise_id, review_file, column_index'),
     upsertReview: database.prepare(`INSERT INTO piecemaker_okf_reviews(project_id, premise_id, review_file, column_index, created_by, updated_at) VALUES(@projectId, @premise, @file, @column, @by, @at)
@@ -94,27 +102,27 @@ export function createOkfStore(database: Connection) {
   return {
     records(projectId: string): OkfRecords {
       return {
-        premises: (statements.premises.all(projectId) as Array<Record<string, string | number>>).map((row) => ({ id: String(row.id), title: String(row.title), description: String(row.description), single: row.single_value === 1, by: String(row.created_by), at: String(row.updated_at) })),
-        relations: (statements.relations.all(projectId) as Array<Record<string, string | number>>).map((row) => ({ source: String(row.source_id), relation: String(row.relation), target: String(row.target_id), citation: String(row.citation), value: String(row.value), origin: String(row.origin), at: String(row.updated_at), dismissed: row.dismissed === 1 })),
+        premises: (statements.premises.all(projectId) as Array<Record<string, string | number>>).map((row) => ({ id: String(row.id), title: String(row.title), description: String(row.description), single: row.single_value === 1, by: String(row.created_by), at: String(row.updated_at), lofClass: String(row.lof_class) })),
+        relations: (statements.relations.all(projectId) as Array<Record<string, string | number>>).map((row) => ({ source: String(row.source_id), relation: String(row.relation), target: String(row.target_id), citation: String(row.citation), value: String(row.value), origin: String(row.origin), at: String(row.updated_at), dismissed: row.dismissed === 1, piece: String(row.piece) })),
         exams: (statements.exams.all(projectId) as Array<Record<string, string>>).map((row) => ({ source: row.source_id, motif: row.motif, by: row.created_by, at: row.updated_at, empreinte: row.empreinte })),
         reviews: (statements.reviews.all(projectId) as Array<Record<string, string | number>>).map((row) => ({ premise: String(row.premise_id), file: String(row.review_file), column: Number(row.column_index), by: String(row.created_by), at: String(row.updated_at) })),
       };
     },
     upsertPremise(projectId: string, premise: StoredPremise): void {
-      statements.upsertPremise.run({ projectId, id: premise.id, title: premise.title, description: premise.description, single: premise.single ? 1 : 0, by: premise.by, at: premise.at });
+      statements.upsertPremise.run({ projectId, id: premise.id, title: premise.title, description: premise.description, single: premise.single ? 1 : 0, by: premise.by, at: premise.at, lofClass: premise.lofClass ?? '' });
     },
     upsertRelation(projectId: string, relation: StoredRelation): void {
-      statements.upsertRelation.run({ projectId, ...relation, dismissed: relation.dismissed ? 1 : 0 });
+      statements.upsertRelation.run({ projectId, ...relation, piece: relation.piece ?? '', dismissed: relation.dismissed ? 1 : 0 });
     },
     deleteRelation(projectId: string, source: string, relation: string, target: string): void {
       statements.deleteRelation.run(projectId, source, relation, target);
     },
-    /** A premise lives while a document or a linked review states it: removing its last statement removes it. */
+    /** A LOF fiche lives while a relation or a linked review touches it: removing the last one removes it. */
     dropUnstatedPremise(projectId: string, id: string): void {
-      if (statements.stated.get(projectId, id) || statements.reviewed.get(projectId, id)) return;
-      database.transaction(() => { statements.deletePremise.run(projectId, id); statements.deleteFrom.run(projectId, id); statements.deleteReviewsOf.run(projectId, id); })();
+      if (statements.stated.get({ projectId, id }) || statements.reviewed.get(projectId, id)) return;
+      database.transaction(() => { statements.deletePremise.run(projectId, id); statements.deleteReviewsOf.run(projectId, id); })();
     },
-    /** Links a tabular review column to a premise: its positive rows become pieces that state it. */
+    /** Links a tabular review column to a LOF fiche: its positive rows become the pieces that establish it. */
     upsertReviewLink(projectId: string, link: StoredReviewLink): void {
       statements.upsertReview.run({ projectId, ...link });
     },
@@ -129,7 +137,7 @@ export function createOkfStore(database: Connection) {
     },
     rename(projectId: string, from: string, to: string): void {
       database.transaction(() => {
-        for (const statement of [statements.renameSource, statements.renameTarget, statements.renameExam]) statement.run({ projectId, from, to });
+        for (const statement of [statements.renameSource, statements.renameTarget, statements.renamePiece, statements.renameExam]) statement.run({ projectId, from, to });
       })();
     },
     /** Imports, once per case, the authoritative parts of fiches written before SQLite held them. */

@@ -3,7 +3,7 @@ import path from 'node:path';
 
 import express from 'express';
 
-import { DEFAULT_DOCUMENT_TYPES, DOCUMENT_ICONS, documentIcon } from '../../../plugins/piecemaker-dossier/src/document-types.js';
+import { DEFAULT_DOCUMENT_TYPES, documentIcon } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
 import { REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
@@ -12,8 +12,9 @@ import { buildBundle, documentsFromIndex, documentsFromSnapshot, legacyRecords, 
 import { LAWYER_ACTOR, conceptId, readBundle, readTypes, relationsOf, resourceOf, text } from './bundle.js';
 import type { ExamInput, LinkInput, ReviewLinkInput } from './links.js';
 import { addLink, linkReview, markExamined, removeLink, unlinkReview, unmarkExamined } from './links.js';
-import { SYSTEM_RELATIONS, graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
-import { dropProposal, ontologyLines, proposeOntology, readProposal } from './ontology-proposal.js';
+import { LEGAL_DOCUMENT, LOF_ATTRIBUTION, LOF_SOURCE, lofId, lofLabel, lofTerms } from './lof.js';
+import { graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
+import { dropProposal, proposeOntology, readProposal } from './ontology-proposal.js';
 import { EXAMINED, graphReport, linkedReviews } from './premises.js';
 import { documentMetadataFromReviews, reviewCatalog, reviewRowPieces } from './reviews.js';
 import type { IndexStore } from './index-store.js';
@@ -64,25 +65,15 @@ export function createOkfBackend(options: OkfOptions) {
 
   const ontology = (projectId: string) => {
     const projectPath = projectPathOf(projectId);
-    const current = readOntology(projectPath);
-    const lines = current.erreur ? { lignes: {}, total: 0 } : ontologyLines(current.relations.map((relation) => relation.name));
-    return { ...current, documentTypes: current.documentTypes || DEFAULT_DOCUMENT_TYPES, icones: Object.keys(DOCUMENT_ICONS), systeme: SYSTEM_RELATIONS, types: readTypes(projectPath), fichier: ontologyFile(), ...lines, proposition: readProposal() };
+    return { ...readOntology(projectPath), lof: lofTerms().map(([id, term]) => ({ id, ...term })), attribution: LOF_ATTRIBUTION, source: LOF_SOURCE, types: readTypes(projectPath), fichier: ontologyFile(), proposition: readProposal() };
   };
 
   const propose = (projectId: string, body: { ontologie?: unknown }) => proposeOntology(projectPathOf(projectId), body.ontologie);
 
   const saveOntologyOf = (projectId: string, value: unknown) => {
     saveOntology(projectPathOf(projectId), value);
-    dropProposal('relations');
+    dropProposal();
     build(projectId);
-    return ontology(projectId);
-  };
-
-  const saveTypes = (projectId: string, value: { documentTypes?: unknown }) => {
-    const projectPath = projectPathOf(projectId);
-    if (value.documentTypes === undefined) throw new TypeError('documentTypes : liste obligatoire.');
-    saveOntology(projectPath, { relations: readOntology(projectPath).relations, documentTypes: value.documentTypes });
-    dropProposal('documentTypes');
     return ontology(projectId);
   };
 
@@ -90,12 +81,12 @@ export function createOkfBackend(options: OkfOptions) {
     const projectPath = projectPathOf(projectId);
     const metadata = documentMetadataFromReviews(projectPath);
     const nodes = new Map(options.snapshot(projectId).nodes.filter((node) => node.kind === 'document' && text(node.data.path)).map((node) => [resourceOf(projectPath, text(node.data.path)), node]));
-    const current = readOntology(projectPath);
     return {
-      documentTypes: current.documentTypes || DEFAULT_DOCUMENT_TYPES,
+      documentTypes: DEFAULT_DOCUMENT_TYPES,
       types: readTypes(projectPath),
-      typesGraphe: graphTypesOf(projectPath, current),
-      ontologie: [...current.relations, ...SYSTEM_RELATIONS].map(({ name, label, inverse }) => ({ name, label, inverse })),
+      typesGraphe: graphTypesOf(projectPath),
+      ontologie: lofTerms().filter(([, term]) => term.kind === 'objprop' || term.kind === 'dataprop').map(([, term]) => ({ name: term.label, label: term.label, inverse: (term.inverseOf || []).map(lofLabel).join(', '), kind: term.kind })),
+      classes: lofTerms().filter(([, term]) => term.kind === 'class').map(([, term]) => term.label).sort(),
       fiches: readBundle(projectPath).filter((concept) => !concept.error).map((concept) => {
         const resource = text(concept.frontmatter.resource);
         const nature = text(nodes.get(resource)?.data.nature) || metadata.get(resource)?.nature || text(concept.frontmatter.nature);
@@ -109,9 +100,9 @@ export function createOkfBackend(options: OkfOptions) {
           resource,
           date: text(concept.frontmatter.date),
           nature,
-          icon: documentIcon(nature, current.documentTypes || DEFAULT_DOCUMENT_TYPES),
+          lof: text(concept.frontmatter.lof),
+          icon: documentIcon(lofLabel(lofId(nature, ['class']) || (resource ? LEGAL_DOCUMENT : lofId(text(concept.frontmatter.lof), ['class']) || ''))),
           side: text(concept.frontmatter.side),
-          single: concept.frontmatter.single_value === true,
           generated: { by: text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.by), at: text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.at) },
           examen: exam ? { motif: text(exam.motif), by: text(exam.by), at: text(exam.at) } : null,
           revues: linkedReviews(concept).map((link) => {
@@ -120,7 +111,7 @@ export function createOkfBackend(options: OkfOptions) {
           }),
           relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
             .filter((entry) => !entry.dismissed)
-            .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin, at: entry.at || '', value: entry.value || '' }))),
+            .map((entry) => ({ relation, target: entry.target, piece: entry.piece || '', citation: entry.citation, origin: entry.origin, at: entry.at || '', value: entry.value || '' }))),
         };
       }),
     };
@@ -165,8 +156,7 @@ export function createOkfBackend(options: OkfOptions) {
   router.get('/okf', (request, response) => respond(() => read(String(request.query.projectId || '')), response));
   router.get('/okf/ontologie', (request, response) => respond(() => ontology(String(request.query.projectId || '')), response));
   router.put('/okf/ontologie', express.json(), (request, response) => respond(() => saveOntologyOf(String(request.body?.projectId || ''), request.body), response));
-  router.delete('/okf/ontologie/proposition', (request, response) => respond(() => { projectPathOf(String(request.query.projectId || '')); dropProposal(request.query.partie === 'documentTypes' ? 'documentTypes' : request.query.partie === 'relations' ? 'relations' : undefined); return ontology(String(request.query.projectId || '')); }, response));
-  router.put('/okf/types', express.json(), (request, response) => respond(() => saveTypes(String(request.body?.projectId || ''), request.body), response));
+  router.delete('/okf/ontologie/proposition', (request, response) => respond(() => { projectPathOf(String(request.query.projectId || '')); dropProposal(); return ontology(String(request.query.projectId || '')); }, response));
   router.get('/okf/verify', (request, response) => respond(() => verify(String(request.query.projectId || '')), response));
   router.post('/okf/rebuild', express.json(), (request, response) => respond(() => build(String(request.body?.projectId || '')), response));
   router.post('/okf/link', express.json(), (request, response) => respond(() => link(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
