@@ -19,8 +19,9 @@ const LIBRARY_BODY_LIMIT = 1024 * 1024;
 export async function openLibrary(home: string, applicationRoot: string, listProjectPaths: () => string[] = () => []) {
   const store = createLibraryStore(home);
   const reader = { listProviderSkills: providerSkillsService.listProviderSkills.bind(providerSkillsService) };
-  const errors = await scanLibrarySources(store, os.homedir(), listProjectPaths, reader);
-  if (errors.length) console.warn(`Bibliothèque : ${errors.length} élément(s) non importé(s) (${errors.slice(0, 3).map((error) => error.source).join(', ')}${errors.length > 3 ? ', …' : ''})`);
+  void scanLibrarySources(store, os.homedir(), listProjectPaths, reader).then((errors) => {
+    if (errors.length) console.warn(`Bibliothèque : ${errors.length} élément(s) non importé(s) (${errors.slice(0, 3).map((error) => error.source).join(', ')}${errors.length > 3 ? ', …' : ''})`);
+  });
   try { fs.unlinkSync(path.join(store.directory, 'connection.json')); } catch {}
   const router = express.Router();
   router.use((req, res, next) => {
