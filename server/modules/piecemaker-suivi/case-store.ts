@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { caseOf, readRoadmap, updateRoadmap } from '../../piecemaker/vendor/piecemaker-plugin/scripts/lib/brain-case.mjs';
+import { caseOf, goalOwners, readRoadmap, suiviOfGoal, updateRoadmap } from '../../piecemaker/vendor/piecemaker-plugin/scripts/lib/brain-case.mjs';
 
 type Json = Record<string, unknown>;
 
@@ -53,16 +53,10 @@ export function brainSuiviWrite(root: string, fichier: string, op: 'set' | 'upda
   return true;
 }
 
-export function brainSuiviCopy(root: string, from: string, to: string): boolean {
+export function brainSuiviOfActe(root: string, nom: string): string | null {
   const roadmap = roadmapOf(root);
-  if (!roadmap) return false;
-  updateRoadmap(roadmap, (value: Json) => {
-    const suivis = record(value.suivis);
-    if (suivis[to] !== undefined) throw new TypeError(`Le suivi ${to} existe déjà.`);
-    if (suivis[from] !== undefined) suivis[to] = structuredClone(suivis[from]);
-    value.suivis = suivis;
-  });
-  return true;
+  const goal = roadmap ? goalOwners(path.dirname(roadmap))[nom] : undefined;
+  return goal ? suiviOfGoal(goal) : null;
 }
 
 export async function readEtapesOf<T>(root: string, fallback: T): Promise<T> {

@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import express from 'express';
 
-import { brainSuiviCopy, readEtapesOf, writeEtapesOf } from './case-store.js';
+import { brainSuiviOfActe, readEtapesOf, roadmapOf, writeEtapesOf } from './case-store.js';
 import { SUIVI_NAME, suiviPath } from './suivi.js';
 import { dossierMatterId } from './suivi-board.js';
 import type { createSuiviService } from './suivi-service.js';
@@ -175,13 +175,14 @@ export function createEtapesService(deps: EtapesDependencies) {
     return [...known, ...skills.map((skill) => ({ nom: skill.slice('redaction-'.length).replace(/-/g, ' ').replace(/^./, (first) => first.toUpperCase()), skill }))];
   };
 
+  const ownSuivi = (root: string, nom: string) => brainSuiviOfActe(root, nom) ?? `${nom}-${SUIVI_NAME}`;
   const suiviOf = async (root: string, nom: string) => {
     const files = await deps.suivi.files(root);
-    return files.includes(`${nom}-${SUIVI_NAME}`) ? `${nom}-${SUIVI_NAME}` : files.includes(SUIVI_NAME) ? SUIVI_NAME : null;
+    return files.includes(ownSuivi(root, nom)) ? ownSuivi(root, nom) : files.includes(SUIVI_NAME) ? SUIVI_NAME : null;
   };
   const matterOf = async (root: string, nom?: string) => {
     const files = await deps.suivi.files(root).catch(() => [] as string[]);
-    const fichier = (nom && files.includes(`${nom}-${SUIVI_NAME}`) ? `${nom}-${SUIVI_NAME}` : null) ?? (files.includes(SUIVI_NAME) ? SUIVI_NAME : files.length === 1 ? files[0] : null);
+    const fichier = (nom && files.includes(ownSuivi(root, nom)) ? ownSuivi(root, nom) : null) ?? (files.includes(SUIVI_NAME) ? SUIVI_NAME : files.length === 1 ? files[0] : null);
     return fichier ? dossierMatterId(root, fichier) : null;
   };
   const nextAction = async (root: string, nom: string): Promise<Action | null> => {
@@ -364,7 +365,7 @@ export function createEtapesService(deps: EtapesDependencies) {
         await cp(source, destination, { recursive: true, errorOnExist: true, force: false, filter: (file) => path.relative(source, file) !== 'resultats' });
         copies.push(destination);
         const fichier = await suiviOf(root, precedent);
-        if (fichier && fichier !== SUIVI_NAME && !brainSuiviCopy(root, fichier, `${next}-${SUIVI_NAME}`)) {
+        if (fichier && fichier !== SUIVI_NAME && !roadmapOf(root)) {
           const destinationSuivi = path.join(root, suiviPath(`${next}-${SUIVI_NAME}`));
           await copyFile(path.join(root, suiviPath(fichier)), destinationSuivi, constants.COPYFILE_EXCL);
           copies.push(destinationSuivi);
@@ -412,7 +413,7 @@ export function createEtapesService(deps: EtapesDependencies) {
         const document = ((await read(root)).raisonnements?.[nom]?.documents ?? [])[Number(body.document)];
         if (!document) throw new TypeError('Document introuvable : ajoutez-le à la carte.');
         const type = (await typesOf(root)).find((entry) => entry.nom === document.type);
-        return { titre: `Rédaction — ${document.nom}`, prompt: `Rédige « ${document.nom} » (${document.type}) à partir du programme Catala .piecemaker/catala/${nom}/. Enregistre-le sous ${document.chemin}.\n${skillLine(root, type, document.type)}\nÀ la fin, inscris la prochaine action (par exemple : envoyer le projet à l’autre partie) dans matter.nextStep du suivi .piecemaker/${nom}-suivi.json, avec ses échéances, puis lance pm suivi_dossiers verifier --suivi ${nom}-suivi.json.${consignes(instructions)}` };
+        return { titre: `Rédaction — ${document.nom}`, prompt: `Rédige « ${document.nom} » (${document.type}) à partir du programme Catala .piecemaker/catala/${nom}/. Enregistre-le sous ${document.chemin}.\n${skillLine(root, type, document.type)}\nÀ la fin, inscris la prochaine action (par exemple : envoyer le projet à l’autre partie) dans matter.nextStep du Timeline.json de son goal, avec ses échéances, puis lance pm suivi_dossiers verifier --suivi ${ownSuivi(root, nom)}.${consignes(instructions)}` };
       }
       case 'reprise': {
         const nom = await assertReasoning(root, body.raisonnement);

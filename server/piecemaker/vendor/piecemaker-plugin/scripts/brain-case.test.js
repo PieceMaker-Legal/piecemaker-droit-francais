@@ -18,14 +18,14 @@ function fixture() {
   return { base, home, brain, dossier, cleanup: () => fs.rmSync(base, { recursive: true, force: true }) };
 }
 
-test('les anciens fichiers du dossier passent dans Roadmap.json et About.md, une seule fois', async (t) => {
+test('les anciens fichiers du dossier passent dans goals/<goal>/, une seule fois', async (t) => {
   const f = fixture();
   t.after(f.cleanup);
-  const { caseOf, readRoadmap, sections } = await load();
+  const { caseOf, readRoadmap } = await load();
   const technical = path.join(f.dossier, '.piecemaker');
   fs.writeFileSync(path.join(technical, 'appel-suivi.json'), JSON.stringify({ echeances: { 'appel': { intitule: 'Former appel' } } }));
   fs.writeFileSync(path.join(technical, 'bail-suivi.json.supprime'), JSON.stringify({ echeances: {} }));
-  fs.writeFileSync(path.join(technical, 'etapes.json'), JSON.stringify({ mappingValide: '2026-01-01' }));
+  fs.writeFileSync(path.join(technical, 'etapes.json'), JSON.stringify({ mappingValide: '2026-01-01', raisonnements: { appel: { etape: 'redaction' } } }));
   fs.writeFileSync(path.join(technical, 'memoires', 'appel.md'), 'L’avocat veut contester la date de signification.\n');
   const target = caseOf(f.dossier, { home: f.home });
   assert.equal(target.directory, path.join(f.brain, 'projects', 'Dossier Dupont'));
@@ -33,11 +33,43 @@ test('les anciens fichiers du dossier passent dans Roadmap.json et About.md, une
   assert.deepEqual(Object.keys(roadmap), ['etapes', 'suivis', 'suivisSupprimes']);
   assert.equal(roadmap.suivis['appel-suivi.json'].echeances.appel.intitule, 'Former appel');
   assert.deepEqual(roadmap.suivisSupprimes, { 'bail-suivi.json': { echeances: {} } });
-  assert.deepEqual(sections(fs.readFileSync(target.about, 'utf8')), [{ name: 'appel', line: 3, body: 'L’avocat veut contester la date de signification.' }]);
+  const goal = path.join(target.directory, 'goals', 'appel');
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(goal, 'Timeline.json'), 'utf8')), { actes: { appel: { etape: 'redaction' } }, echeances: { appel: { intitule: 'Former appel' } } });
+  assert.equal(fs.readFileSync(path.join(goal, 'Memory.md'), 'utf8'), 'L’avocat veut contester la date de signification.\n');
+  assert.deepEqual(JSON.parse(fs.readFileSync(target.roadmap, 'utf8')), { mappingValide: '2026-01-01', suivisSupprimes: { 'bail-suivi.json': { echeances: {} } } });
   assert.ok(fs.existsSync(path.join(technical, 'appel-suivi.json.migre')));
   assert.ok(fs.existsSync(path.join(technical, 'memoires', 'appel.md.migre')));
   caseOf(f.dossier, { home: f.home });
-  assert.equal(sections(fs.readFileSync(target.about, 'utf8')).length, 1);
+  assert.equal(readRoadmap(target.roadmap).suivis['appel-suivi.json'].echeances.appel.intitule, 'Former appel');
+});
+
+test('une Roadmap.json et les mémoires d’About.md passent dans goals/<goal>/', async (t) => {
+  const f = fixture();
+  t.after(f.cleanup);
+  const { caseDirectory, caseOf, readRoadmap } = await load();
+  const directory = caseDirectory(f.dossier, { home: f.home }).directory;
+  fs.writeFileSync(path.join(directory, 'Roadmap.json'), JSON.stringify({ etapes: { etape: 'redaction', raisonnements: { bail: { etape: 'raisonnement' } } }, suivis: { 'suivi.json': { matter: { client: 'Jean Dupont' } } } }));
+  fs.writeFileSync(path.join(directory, 'About.md'), '# Dossier Dupont\n\n## Ce que c’est\n\nUn bail.\n\n## Mémoire : bail\n\nClause résolutoire à vérifier.\n\n## Décisions\n\nAucune.\n');
+  const target = caseOf(f.dossier, { home: f.home });
+  assert.deepEqual(readRoadmap(target.roadmap), { etapes: { etape: 'redaction', raisonnements: { bail: { etape: 'raisonnement' } } }, suivis: { 'suivi.json': { matter: { client: 'Jean Dupont' } } } });
+  assert.ok(fs.existsSync(path.join(directory, 'goals', 'principal', 'Timeline.json')));
+  assert.equal(fs.readFileSync(path.join(directory, 'goals', 'bail', 'Memory.md'), 'utf8'), 'Clause résolutoire à vérifier.\n');
+  assert.equal(fs.readFileSync(target.about, 'utf8'), '# Dossier Dupont\n\n## Ce que c’est\n\nUn bail.\n\n## Décisions\n\nAucune.\n');
+  assert.ok(fs.existsSync(path.join(directory, 'Roadmap.json.migre')));
+});
+
+test('une nouvelle version d’acte reste dans le goal de son acte, et un suivi supprimé vide son Timeline.json', async (t) => {
+  const f = fixture();
+  t.after(f.cleanup);
+  const { caseOf, readRoadmap, updateRoadmap } = await load();
+  const target = caseOf(f.dossier, { home: f.home });
+  fs.mkdirSync(path.join(target.goals, 'contentieux'), { recursive: true });
+  fs.writeFileSync(path.join(target.goals, 'contentieux', 'Timeline.json'), JSON.stringify({ actes: { assignation: { etape: 'redaction' } }, echeances: {} }));
+  updateRoadmap(target.roadmap, (roadmap) => { roadmap.etapes.raisonnements['assignation-v2'] = { etape: 'preparation', precedent: 'assignation' }; });
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(target.goals, 'contentieux', 'Timeline.json'), 'utf8')).actes), ['assignation', 'assignation-v2']);
+  updateRoadmap(target.roadmap, (roadmap) => { roadmap.etapes.raisonnements = {}; delete roadmap.suivis; });
+  assert.equal(fs.readFileSync(path.join(target.goals, 'contentieux', 'Timeline.json'), 'utf8'), '{}\n');
+  assert.deepEqual(readRoadmap(target.roadmap), {});
 });
 
 test('deux dossiers de même nom ont chacun leur paire, et un dossier inconnu n’en reçoit pas sans création', async (t) => {
@@ -49,11 +81,11 @@ test('deux dossiers de même nom ont chacun leur paire, et un dossier inconnu n�
   assert.equal(caseDirectory(f.dossier, { home: f.home }).name, 'Dossier Dupont');
   assert.equal(caseDirectory(autre, { home: f.home }).name, 'Dossier Dupont (2)');
   assert.equal(caseDirectory(path.join(f.base, 'Societe Exemple'), { home: f.home, create: false }), null);
-  const found = caseOfBrainFile(path.join(f.brain, 'projects', 'Dossier Dupont (2)', 'Roadmap.json'), f.home);
-  assert.deepEqual([found.folder, found.rest], [autre, 'Roadmap.json']);
+  const found = caseOfBrainFile(path.join(f.brain, 'projects', 'Dossier Dupont (2)', 'goals', 'bail', 'Timeline.json'), f.home);
+  assert.deepEqual([found.folder, found.rest], [autre, 'goals/bail/Timeline.json']);
 });
 
-test('le script de synthèse du dossier est modifiable et son résultat entre dans Roadmap.json', async (t) => {
+test('le script de synthèse du dossier est modifiable et son résultat entre dans Timeline.json', async (t) => {
   const f = fixture();
   t.after(f.cleanup);
   const { caseOf, readRoadmap, runSynthese, SYNTHESE } = await load();

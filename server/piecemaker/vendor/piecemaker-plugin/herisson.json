@@ -65,24 +65,33 @@
       "format": "memoire"
     },
     {
-      "nom": "roadmap",
+      "nom": "timeline",
       "cible": "^(?!)",
-      "brain": "Roadmap.json",
+      "brain": "^goals/(?<nom>[^/]+)/Timeline\\.json$",
       "ecriture": "agent",
       "skill": "piecemaker",
-      "verifier": ["suivi_dossiers", "verifier"],
+      "verifier": ["suivi_dossiers", "verifier", "--suivi", "{suivi}"],
       "erreur": "\\d+ erreur\\(s\\), \\d+ manque\\(s\\)\\.",
-      "delai": 120,
-      "format": "roadmap"
+      "delai": 60,
+      "format": "timeline"
     },
     {
-      "nom": "about",
+      "nom": "goal",
       "cible": "^(?!)",
-      "brain": "About.md",
+      "brain": "^goals/(?<nom>[^/]+)/(?:Goal|Memory)\\.md$",
       "ecriture": "agent",
       "skill": "piecemaker",
-      "verifier": ["memoire", "verifier"],
-      "delai": 10
+      "verifier": ["memoire", "verifier", "--memoire", "{nom}"],
+      "delai": 10,
+      "format": "goal"
+    },
+    {
+      "nom": "case-timeline",
+      "cible": "^(?!)",
+      "brain": "^Timeline\\.json$",
+      "ecriture": "serveur",
+      "skill": "piecemaker",
+      "motif": "PieceMaker writes the case Timeline.json: the lawyer sets the step on the board of the Suivi des dossiers tab, and pm check writes the synthesis with synthese.mjs. Write deadlines in goals/<goal>/Timeline.json."
     },
     {
       "nom": "catala",

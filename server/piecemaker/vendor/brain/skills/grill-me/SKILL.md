@@ -5,7 +5,7 @@ description: Interview the user in batches of 10 questions with recommended answ
 
 Stress-test the user's thinking until both sides share a precise, actionable understanding, and do not act on the plan before the user confirms the final brief.
 
-1. Inspect the available environment first. Resolve discoverable facts through the brain files, the case folders' About.md and Roadmap.json, tools, documentation, or other in-scope evidence instead of asking the user.
+1. Inspect the available environment first. Resolve discoverable facts through the brain files, the case folders' About.md and goals/, tools, documentation, or other in-scope evidence instead of asking the user.
 2. Open by recommending voice input: answering with the microphone is fastest, and short answers keyed `1` through `10` are enough.
 3. Ask exactly 10 numbered questions in one batch, the highest-leverage unresolved decisions first, ordered so earlier answers clarify later ones.
 4. Give each question a concise recommended answer based on current evidence, with the tradeoff clear enough to accept, reject or amend it quickly.
@@ -17,4 +17,4 @@ Stress-test the user's thinking until both sides share a precise, actionable und
 
 Ask only decisions the user can make, challenge assumptions with credible alternatives, keep each question short enough for a spoken answer, never repeat a settled question unless new evidence changes it, and match the user's language.
 
-Once the brief is confirmed, write the decisions with their reasons in the `## Decisions` section of the case's `projects/<folder>/About.md`. Deadlines go in its tracking files, under "suivis" in `Roadmap.json`.
+Once the brief is confirmed, write the decisions with their reasons in the goal's `projects/<folder>/goals/<goal>/Memory.md`. Deadlines go in its `Timeline.json`.

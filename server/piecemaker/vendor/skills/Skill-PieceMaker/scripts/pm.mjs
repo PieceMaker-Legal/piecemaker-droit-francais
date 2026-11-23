@@ -47,9 +47,8 @@ function suivisOf(folder) {
 function memoiresOf(folder) {
   const target = brainCase(folder);
   if (target) {
-    let text = '';
-    try { text = fs.readFileSync(target.about, 'utf8'); } catch {}
-    return { lieu: target.about, notes: Object.fromEntries(brainLib.sections(text).map((section) => [section.name, section.body])) };
+    const notes = brainLib.goalNames(target.directory).flatMap((goal) => { try { return [[goal, fs.readFileSync(brainLib.goalFile(target.directory, goal, 'Memory.md'), 'utf8')]]; } catch { return []; } });
+    return { lieu: target.directory, notes: Object.fromEntries(notes) };
   }
   const directory = path.join(folder, MEMOIRES_DIR);
   let noms = [];
@@ -750,7 +749,7 @@ async function check(api, folder) {
 
 function pairLines(folder) {
   const target = brainCase(folder);
-  return target ? [`Suivis : ${target.roadmap} (clé suivis) ; mémoires et stratégie : ${target.about} (sections « ## ${brainLib.MEMOIRE_PREFIX}<nom> ») ; synthèse : ${path.join(target.directory, brainLib.SYNTHESE)}.`] : [];
+  return target ? [`Dossier : ${target.about} ; goals : ${target.goals}/<goal>/ (Goal.md, Memory.md, Archive.md, Timeline.json) ; synthèse : ${path.join(target.directory, brainLib.SYNTHESE)}.`] : [];
 }
 
 async function synthese(api, folder, points) {
@@ -930,11 +929,16 @@ function memoire(positional, flags, resolved) {
   const suivis = new Set(suivisOf(folder));
   const acte = (nom) => Boolean(etapes.raisonnements?.[nom]) || suivis.has(`${nom}-suivi.json`) || fs.existsSync(path.join(folder, '.piecemaker', 'catala', nom));
   return noms.flatMap((nom) => {
-    const fichier = lieu ? `${lieu}, section « ## ${brainLib.MEMOIRE_PREFIX}${nom} »` : `${MEMOIRES_DIR}/${nom}.md`;
+    const fichier = lieu ? brainLib.goalFile(lieu, nom, 'Memory.md') : `${MEMOIRES_DIR}/${nom}.md`;
     const texte = notes[nom];
     if (texte === undefined) return [`${fichier} : introuvable.`];
+    const lignes = texte.replace(/\n$/, '').split('\n').length;
+    if (lieu) return [
+      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter.`] : []),
+      ...(lignes > brainLib.GOAL_LIMIT ? [`${fichier} : erreur : ${lignes} lignes, limite ${brainLib.GOAL_LIMIT}. Déplacez ce qui ne sert plus dans Archive.md.`] : []),
+    ];
     return [
-      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans ${lieu ? `le suivi ${nom}-suivi.json de Roadmap.json` : `.piecemaker/${nom}-suivi.json`} ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
+      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans .piecemaker/${nom}-suivi.json ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
       ...(acte(nom) ? [] : [`${fichier} : manque : aucun programme Catala, suivi ni carte du tableau ne s’appelle ${nom}. Nommez la mémoire comme son acte.`]),
     ];
   }).join('\n');

@@ -2,7 +2,7 @@
 
 Le suivi relève les étapes du dossier qu'il ne faut pas manquer ; il ne raisonne pas (c'est le rôle du programme Catala, propre à un acte) et n'est pas une chronologie. Un suivi par acte ou procédure suivi, nommé `<nom>-suivi.json`.
 
-Où il vit : avec un brain, sous la clé `suivis` de la `Roadmap.json` du dossier, dans le brain (`pm check` donne son chemin) : `{ "suivis": { "<nom>-suivi.json": { "matter": …, "evenements": …, "echeances": … } } }`. N'écris que sous `suivis` : `etapes` (réglées par l'avocat) et `synthese` (écrite par le script `synthese.mjs` à côté, lancé par `pm check`) te sont refusées. Sans brain : `.piecemaker/<nom>-suivi.json` (`.piecemaker/suivi.json` reste valide). Chaque fichier donne une carte sur le Matter board de l'onglet Suivi des dossiers, qui montre tous les dossiers. Quand le dossier en compte plusieurs, cible le fichier : `pm suivi_dossiers verifier --suivi <nom>-suivi.json`. Les données restent sur le poste.
+Où il vit : avec un brain, dans `goals/<goal>/Timeline.json` du dossier (`pm check` donne le chemin), clés `matter`, `evenements`, `echeances` ; le goal `principal` répond à `suivi.json`, un goal `<g>` à `<g>-suivi.json`. `actes` (réglés par l'avocat) et la `Timeline.json` à la racine du dossier (écrite par le serveur) te sont refusés. Sans brain : `.piecemaker/<nom>-suivi.json` (`.piecemaker/suivi.json` reste valide). Chaque fichier donne une carte sur le Matter board de l'onglet Suivi des dossiers, qui montre tous les dossiers. Quand le dossier en compte plusieurs, cible le fichier : `pm suivi_dossiers verifier --suivi <nom>-suivi.json`. Les données restent sur le poste.
 
 N'y figurent que :
 - en contentieux, les actes qui ont une valeur procédurale (ceux qui font courir un délai ou fixent une étape) et les échéances qui en découlent ;
@@ -65,17 +65,15 @@ Recherche toi-même, avec les outils Légifrance, le texte, la décision ou la c
 - `nextStep` : `{ text, due }`. `links` : `[{ label, url }]`, en https, adresses données par la source.
 - Une valeur `responsible` qui commence par `user:` désigne un confrère : ne l'affiche pas et ne la change pas.
 
-## Mémoire projet
+## Goals
 
-Un projet est un acte précis (jeu de conclusions, contrat…). `<nom>` le désigne partout : programme `.piecemaker/catala/<nom>/`, suivi `<nom>-suivi.json`, carte du tableau, mémoire « ## Mémoire : <nom> ». Chaque information a une seule place :
+Avec un brain, chaque goal (un acte à produire ou une procédure à mener) a son dossier `goals/<goal>/` :
 
-| Information | Où | Qui l'écrit |
+| Fichier | Contenu | Qui l'écrit |
 | --- | --- | --- |
-| Récit : stratégie, décisions, consignes de l'avocat, travail fait et à faire | section « ## Mémoire : <nom> » de l'About.md du dossier (sans brain : `.piecemaker/memoires/<nom>.md`), Markdown sans frontmatter | l'agent |
-| Échéances et dates qui les font courir, prochaine action | suivi `<nom>-suivi.json` sous `suivis` de la Roadmap.json (sans brain : `.piecemaker/<nom>-suivi.json`) | l'agent |
-| Étape en cours, document à produire (type, modèle) | `etapes` de la Roadmap.json (sans brain : `.piecemaker/etapes.json`), montré par `pm check` (`5.x <nom> (<étape>)`) | l'avocat, sur le tableau de l'onglet Suivi des dossiers |
-| Parties, pièces, dates portées par une prémisse | base du dossier et index OKF ; état résumé sous `synthese` de la Roadmap.json par `synthese.mjs` | la base, l'index et le script |
+| `Goal.md` | l'objectif et ce qu'il doit obtenir pour le client (200 lignes max) | l'agent |
+| `Memory.md` | stratégie, décisions, consignes, fait et à faire (200 lignes max) | l'agent |
+| `Archive.md` | ce qui ne sert plus, sans le perdre | l'agent |
+| `Timeline.json` | `actes` (étape, versions), `evenements`, `echeances`, `matter` | l'avocat (actes), l'agent (le reste) |
 
-Le chemin de la mémoire découle de `<nom>` ; sa date de mise à jour est la date de modification du fichier (`ls -l`), `.piecemaker/` étant hors de l'historique Git du dossier. Ne recopie ni échéance, ni étape, ni modèle dans la mémoire.
-
-Le Hérisson refuse l'écriture d'un frontmatter et signale, après chaque écriture, une mémoire dont aucun programme Catala, suivi ni carte ne porte le nom. Une mémoire tenue ailleurs ou avec un frontmatter : reporte ses échéances dans le suivi, puis garde son récit seul dans sa section de l'About.md (sans brain : `.piecemaker/memoires/<nom>.md`).
+Sans frontmatter. Les parties restent dans la base, les dates portées par une prémisse dans l'index. Sans brain : mémoire `.piecemaker/memoires/<nom>.md` et suivi `.piecemaker/<nom>-suivi.json`.

@@ -118,7 +118,7 @@ export function createBrain({ home, defaultRoot, skills }: BrainOptions) {
       const target = caseOf(folder, { home });
       if (!target) return;
       if (!present(target.about)) {
-        writeFileSync(target.about, `# ${target.name}\n\nStatut : à compléter\nDossier : ${path.resolve(folder)}\n\n## Ce que c'est\n\nÀ compléter\n\n## Stratégie\n\n## Décisions\n`);
+        writeFileSync(target.about, `# ${target.name}\n\nStatut : à compléter\nDossier : ${path.resolve(folder)}\n\n## Ce que c'est\n\nÀ compléter\n`);
       }
       if (!present(target.roadmap)) writeRoadmap(target.roadmap, {});
       syntheseScript(target.directory);

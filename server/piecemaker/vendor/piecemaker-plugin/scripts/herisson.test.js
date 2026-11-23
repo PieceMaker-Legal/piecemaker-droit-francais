@@ -282,33 +282,37 @@ test('la garde refuse d’écrire les étapes, la protection et une proposition 
   assert.equal(await reason('Bash', { command: 'cat .piecemaker/etapes.json' }), null);
 });
 
-test('Roadmap.json et About.md du brain se vérifient dans leur dossier, et l’agent ne touche ni aux étapes ni à la synthèse', async () => {
+test('les fichiers goals/<goal>/ du brain se vérifient dans leur dossier, et l’agent ne touche ni aux actes ni au Timeline.json du dossier', async () => {
   const fs = require('node:fs');
   const base = fs.realpathSync(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-brain-')));
   const home = path.join(base, 'home');
   const brain = path.join(base, 'brain');
   const dossier = path.join(base, 'Dossier Dupont');
+  const goal = path.join(brain, 'projects', 'Dossier Dupont', 'goals', 'appel');
   fs.mkdirSync(path.join(brain, '.piecemaker'), { recursive: true });
-  fs.mkdirSync(path.join(brain, 'projects', 'Dossier Dupont'), { recursive: true });
+  fs.mkdirSync(goal, { recursive: true });
   fs.mkdirSync(home, { recursive: true });
   fs.writeFileSync(path.join(home, 'brain.json'), JSON.stringify({ path: brain }));
   fs.writeFileSync(path.join(brain, '.piecemaker', 'dossiers.json'), JSON.stringify({ [dossier]: 'Dossier Dupont' }));
-  const roadmap = path.join(brain, 'projects', 'Dossier Dupont', 'Roadmap.json');
-  fs.writeFileSync(roadmap, JSON.stringify({ synthese: { okf: { etat: 'valide' } }, etapes: { mappingValide: '2026-01-01' } }, null, 2));
+  const timeline = path.join(goal, 'Timeline.json');
+  fs.writeFileSync(timeline, JSON.stringify({ actes: { appel: { etape: 'redaction' } } }, null, 2));
   const previous = process.env.PIECEMAKER_HOME;
   process.env.PIECEMAKER_HOME = home;
   try {
-    const { featureOf, formatErrors } = await loadFeatures();
-    assert.deepEqual([featureOf(roadmap).feature.nom, featureOf(roadmap).root], ['roadmap', dossier]);
-    assert.equal(featureOf(path.join(brain, 'projects', 'Dossier Dupont', 'About.md')).feature.nom, 'about');
+    const { featureOf, formatErrors, verifierArgs } = await loadFeatures();
+    assert.deepEqual([featureOf(timeline).feature.nom, featureOf(timeline).root], ['timeline', dossier]);
+    assert.deepEqual(verifierArgs(featureOf(timeline)), ['suivi_dossiers', 'verifier', '--suivi', 'appel-suivi.json']);
+    assert.equal(featureOf(path.join(goal, 'Memory.md')).feature.nom, 'goal');
+    assert.match(featureOf(path.join(brain, 'projects', 'Dossier Dupont', 'Timeline.json')).feature.motif, /goals\/<goal>\/Timeline\.json/);
+    assert.equal(featureOf(path.join(goal, 'Archive.md')), null);
     assert.equal(featureOf(path.join(brain, 'AGENTS.md')), null);
-    const write = (value) => formatErrors('Write', { file_path: roadmap, content: JSON.stringify(value, null, 2) }, dossier);
-    const kept = { synthese: { okf: { etat: 'valide' } }, etapes: { mappingValide: '2026-01-01' } };
-    assert.equal(await write({ ...kept, suivis: { 'appel-suivi.json': { echeances: {} } } }), null);
-    assert.match(await write({ ...kept, etapes: {} }), /"etapes" cannot be changed by the agent/);
-    assert.match(await write({ ...kept, synthese: { okf: { etat: 'à exécuter' } } }), /synthese\.mjs/);
+    const write = (value) => formatErrors('Write', { file_path: timeline, content: JSON.stringify(value, null, 2) }, dossier);
+    const kept = { actes: { appel: { etape: 'redaction' } } };
+    assert.equal(await write({ ...kept, echeances: {} }), null);
+    assert.equal(await write({ actes: { ...kept.actes, 'conclusions': {} }, echeances: {} }), null);
+    assert.match(await write({ actes: { appel: { etape: 'clos' } } }), /act "appel" cannot be changed by the agent/);
     assert.match(await write({ ...kept, notes: 'x' }), /unknown key "notes"/);
-    assert.match(await write({ ...kept, suivis: { 'appel.json': {}, 'bail-suivi.json': { faits: {} } } }), /appel\.json[\s\S]*unknown key "faits"/);
+    assert.match(await formatErrors('Write', { file_path: path.join(goal, 'Goal.md'), content: 'x\n'.repeat(201) }, dossier), /the limit is 200[\s\S]*Archive\.md/);
   } finally {
     if (previous === undefined) delete process.env.PIECEMAKER_HOME; else process.env.PIECEMAKER_HOME = previous;
     fs.rmSync(base, { recursive: true, force: true });

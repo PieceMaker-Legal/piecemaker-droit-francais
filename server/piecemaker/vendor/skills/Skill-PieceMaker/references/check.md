@@ -11,7 +11,7 @@ Bilan court du dossier. La première ligne dit « Dossier : valide. » ou donne 
 3. Chaque programme Catala, et ses conditions (`contexte … condition`) sans prémisse citée dans un scénario.
 4. Chaque suivi : erreurs, manques, échéances dépassées, du jour ou sans date.
 5. Revues de tabular review en mode recherche.
-6. Étape du dossier au tableau (`etapes` de la Roadmap.json ; sans brain, `.piecemaker/etapes.json`).
+6. Étape du dossier au tableau (`actes` des `goals/<goal>/Timeline.json` ; sans brain, `.piecemaker/etapes.json`).
 
 Un point valide affiche « valide ». Un point en défaut donne le nombre d'erreurs, puis la commande `pm` du rapport détaillé, et le sous-agent qui corrige s'il y en a un.
 

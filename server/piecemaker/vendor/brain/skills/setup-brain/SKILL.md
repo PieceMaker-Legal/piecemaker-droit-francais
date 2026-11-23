@@ -1,6 +1,6 @@
 ---
 name: setup-brain
-description: Set up or complete the PieceMaker brain, the folder where the central agent keeps the user's profile (AGENTS.md) and one About.md and Roadmap.json per case folder, after a short interview. Use when the user wants to set up or initialize the brain, or starts from zero.
+description: Set up or complete the PieceMaker brain, the folder where the central agent keeps the user's profile (AGENTS.md) and one About.md and goals/ folder per case folder, after a short interview. Use when the user wants to set up or initialize the brain, or starts from zero.
 argument-hint: "[nothing: the brain is the folder this session runs in]"
 ---
 
@@ -17,7 +17,7 @@ Set up the brain the central agent runs in, so any future session can read one f
    7. Which case folders should the central agent follow? They are chosen in the central agent's settings; name the ones that matter most.
 3. **Check.** Sum it up in 5 short lines and ask if it is right. Fix what they correct before writing anything.
 4. **AGENTS.md.** Write the profile in `AGENTS.md` (200 lines max): who the user is, how the agent works (`## Output style`), writing conventions, tools, never rules. `AGENTS.md` may be a link to the user's general instructions file shared with every case folder: edit it in place, never replace the link. `CLAUDE.md` only imports `@AGENTS.md`: never write anything else in it.
-5. **Cases.** For each case folder the user named, complete `projects/<folder name>/About.md` (200 lines max: status, what the case is, strategy, `## Decisions` with their reasons). Its `Roadmap.json` holds the deadlines and is filled by the case's own work and checked by Le Hérisson: leave it as it is. Parties stay in the case base: do not list them. Write only what the user told you and leave "To fill" rather than guess a fact, date or name. Never copy documents from a case folder into the brain.
+5. **Cases.** For each case folder the user named, complete `projects/<folder name>/About.md` (200 lines max: status, what the case is). Each goal (an act to draft or a procedure to bring) gets `goals/<goal>/Goal.md` and `Memory.md` (200 lines max each: aim, strategy, decisions with their reasons). Leave the `Timeline.json` files as they are. Parties stay in the case base: do not list them. Write only what the user told you and leave "To fill" rather than guess a fact, date or name. Never copy documents from a case folder into the brain.
 6. **Skills.** Check that `.agents/skills/` holds `grill-me`, `connect-tool`, `skill-manager` and `setup-brain`, and that `.claude/skills` is a link to it. They are for the brain only: never install them elsewhere.
 
-Finish with three lines: where the brain is, that the central agent keeps each case's About.md and Roadmap.json up to date, and one thing to try now.
+Finish with three lines: where the brain is, that the central agent keeps each case's About.md and goals up to date, and one thing to try now.

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
-import { caseOf, parseRoadmap, sections } from '../../piecemaker-plugin/scripts/lib/brain-case.mjs';
+import { caseOf, goalFile, goalNames, parseRoadmap, ROADMAP } from '../../piecemaker-plugin/scripts/lib/brain-case.mjs';
 
 export const VIEW_FEATURE = 'case';
 const COLLECTIONS = ['okf', 'deadlines', 'memories'];
@@ -32,13 +32,10 @@ function brainCase(root) {
 }
 
 function brainSources(target) {
-  const roadmap = () => { try { return parseRoadmap(fs.readFileSync(target.roadmap, 'utf8')); } catch { return {}; } };
-  const about = () => { try { return fs.readFileSync(target.about, 'utf8'); } catch { return ''; } };
+  const goals = (file) => goalNames(target.directory).filter((goal) => fs.existsSync(goalFile(target.directory, goal, file)));
   return {
-    deadlines: () => (fs.existsSync(target.roadmap) ? Object.keys(roadmap().suivis ?? {}) : []).filter((name) => name.endsWith('-suivi.json'))
-      .map((name) => ({ id: idOf(name.slice(0, -'-suivi.json'.length)), file: target.roadmap, read: (text) => parseRoadmap(text).suivis?.[name] ?? {} })),
-    memories: () => (fs.existsSync(target.about) ? sections(about()) : [])
-      .map((section) => ({ id: idOf(section.name), file: target.about, read: (text) => ({ text: sections(text).find((entry) => entry.name === section.name)?.body ?? '' }) })),
+    deadlines: () => goals(ROADMAP).map((goal) => ({ id: idOf(goal), file: goalFile(target.directory, goal, ROADMAP), read: (text) => { const { actes, ...suivi } = parseRoadmap(text); return suivi; } })),
+    memories: () => goals('Memory.md').map((goal) => ({ id: idOf(goal), file: goalFile(target.directory, goal, 'Memory.md'), read: (text) => ({ text }) })),
   };
 }
 
@@ -81,6 +78,6 @@ export function viewGet(root, segments) {
 
 export const VIEW_WRITE_HINT = {
   okf: 'The index is written through its checked commands: Feature run index link, unlink or mark_examined.',
-  deadlines: 'Write the tracking file under "suivis" in the case Roadmap.json of the brain (pm check gives its path), or .piecemaker/<name>-suivi.json without a brain, with Edit or Write; Le Hérisson verifies it after each write.',
-  memories: 'Write the "## Mémoire : <name>" section of the case About.md in the brain (pm check gives its path), or .piecemaker/memoires/<name>.md without a brain, with Edit or Write; Le Hérisson verifies it after each write.',
+  deadlines: 'Write goals/<goal>/Timeline.json in the case folder of the brain (pm check gives its path), or .piecemaker/<name>-suivi.json without a brain, with Edit or Write; Le Hérisson verifies it after each write.',
+  memories: 'Write goals/<goal>/Memory.md in the case folder of the brain (pm check gives its path), or .piecemaker/memoires/<name>.md without a brain, with Edit or Write; Le Hérisson verifies it after each write.',
 };

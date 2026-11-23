@@ -69,6 +69,9 @@ flowchart LR
 | `etapes` | `etapes.json` | serveur | refusée : l'avocat règle les étapes sur le tableau | — | `piecemaker` | — |
 | `protection` | `protection.json` | serveur | refusée : l'avocat lève la protection par le bouclier | — | `piecemaker` | — |
 | `suivi` | `<nom>-suivi.json`, `suivi.json` | agent | refusée si le JSON est illisible ou si la racine n'a pas la forme `matter`, `evenements`, `echeances` | `pm suivi_dossiers verifier --suivi <fichier>` | `piecemaker` | 60 s |
+| `timeline` | brain : `goals/<goal>/Timeline.json` | agent | refusée si la racine n'a pas la forme `actes`, `matter`, `evenements`, `echeances` ou si un acte existant change | `pm suivi_dossiers verifier --suivi <goal>-suivi.json` | `piecemaker` | 60 s |
+| `goal` | brain : `goals/<goal>/Goal.md`, `Memory.md` | agent | refusée avec un frontmatter ou au-delà de 200 lignes (renvoi vers `Archive.md`) | — | `piecemaker` | — |
+| `case-timeline` | brain : `Timeline.json` du dossier | serveur | refusée : étape et synthèse sont écrites par le serveur | — | `piecemaker` | — |
 | `memoire` | `memoires/<nom>.md` (mémoire projet, règle 4°) | agent | refusée si l'écriture ajoute un frontmatter | `pm memoire verifier --memoire <nom>` : un acte du même nom (voir [suivi-dossier.md](suivi-dossier.md)) | `piecemaker` | 10 s |
 | `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si l'écriture ajoute une faute de format (`.catala_fr` seulement) ou une erreur de compilation, ou crée un programme au nom absent des raisonnements de `etapes.json` | `pm catala verifier --programme <nom>` ; aussi après `pm okf link` ou `unlink` avec `states` ou `involves`, pour chaque programme qui cite une prémisse `okf:/_premises/` | `catala` | 60 s |
 | `revue` | aucun fichier : brouillon de revue tabulaire | agent | libre | après `pm tabular_review preparer` ou `lancer` : `pm tabular_review verifier` (recherches en erreur ou à compléter) | `piecemaker` | 30 s |

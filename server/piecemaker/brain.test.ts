@@ -47,7 +47,7 @@ test('le brain reprend perso.md comme AGENTS.md, l’importe dans CLAUDE.md et g
   assert.equal(readFileSync(path.join(root, 'AGENTS.md'), 'utf8'), 'Profil de Jean Dupont\n');
 });
 
-test('chaque dossier suivi a seulement son About.md, sa Roadmap.json et le script de synthèse dans le brain, sans écraser ce que l’agent a écrit', t => {
+test('chaque dossier suivi a seulement son About.md, son Timeline.json et le script de synthèse dans le brain, sans écraser ce que l’agent a écrit', t => {
   const f = fixture();
   t.after(f.cleanup);
   const root = path.join(f.base, 'brain');
@@ -56,7 +56,7 @@ test('chaque dossier suivi a seulement son About.md, sa Roadmap.json et le scrip
   const directory = path.join(root, 'projects', 'Dossier Dupont');
   const about = path.join(directory, 'About.md');
   assert.match(readFileSync(about, 'utf8'), /^# Dossier Dupont\n/);
-  assert.equal(readFileSync(path.join(directory, 'Roadmap.json'), 'utf8'), '{}\n');
+  assert.equal(readFileSync(path.join(directory, 'Timeline.json'), 'utf8'), '{}\n');
   assert.match(readFileSync(path.join(directory, 'synthese.mjs'), 'utf8'), /export default async function synthese/);
   assert.equal(existsSync(path.join(directory, 'Roadmap.md')), false);
   assert.deepEqual(JSON.parse(readFileSync(path.join(root, '.piecemaker', 'dossiers.json'), 'utf8')), { [path.join(f.base, 'Dossier Dupont')]: 'Dossier Dupont' });
@@ -98,7 +98,7 @@ test('changer le brain de place y emporte tout son contenu : profil, skills, pai
   assert.equal(f.brain.root(), target);
   assert.equal(existsSync(from), false);
   assert.equal(readFileSync(path.join(target, 'projects', 'Dossier Dupont', 'About.md'), 'utf8'), 'Statut : en cours\n');
-  assert.ok(existsSync(path.join(target, 'projects', 'Dossier Dupont', 'Roadmap.json')));
+  assert.ok(existsSync(path.join(target, 'projects', 'Dossier Dupont', 'Timeline.json')));
   assert.ok(existsSync(path.join(target, '.piecemaker', 'dossiers.json')));
   assert.ok(existsSync(path.join(target, '.claude', 'skills', 'grill-me', 'SKILL.md')));
   assert.equal(readFileSync(path.join(target, 'CLAUDE.md'), 'utf8'), '@AGENTS.md\n');

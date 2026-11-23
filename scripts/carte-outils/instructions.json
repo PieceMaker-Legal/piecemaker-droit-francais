@@ -640,13 +640,13 @@
     },
     {
       "id": "herisson--roadmap-json-objet-attendu",
-      "titre": "Roadmap.json : objet attendu",
-      "quand": "Quand l'agent écrit un Roadmap.json qui n'est pas un objet : l'écriture est refusée et ce message est renvoyé.",
+      "titre": "Timeline.json : objet attendu",
+      "quand": "Quand l'agent écrit un goals/<goal>/Timeline.json qui n'est pas un objet : l'écriture est refusée et ce message est renvoyé.",
       "de": "herisson",
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
       "guillemet": "`",
-      "ancre": "Roadmap.json must be an object {"
+      "ancre": "Timeline.json must be an object {"
     },
     {
       "id": "herisson--suivi-objet-attendu",
@@ -689,36 +689,6 @@
       "ancre": "unknown key \"${key}\" at the root of the tracking file"
     },
     {
-      "id": "herisson--roadmap-nom-de-suivi-invalide",
-      "titre": "Roadmap : nom de suivi invalide",
-      "quand": "Quand une entrée de suivis de Roadmap.json ne s'appelle pas <nom>-suivi.json.",
-      "de": "herisson",
-      "vers": "agent",
-      "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
-      "guillemet": "`",
-      "ancre": "tracking name \"${name}\" must be \"<nom>-suivi.json\""
-    },
-    {
-      "id": "herisson--roadmap-suivis-de-forme-invalide",
-      "titre": "Roadmap : suivis de forme invalide",
-      "quand": "Quand suivis ou suivisSupprimes de Roadmap.json n'est pas un objet.",
-      "de": "herisson",
-      "vers": "agent",
-      "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
-      "guillemet": "`",
-      "ancre": "must be an object { \"<nom>-suivi.json\": {"
-    },
-    {
-      "id": "herisson--roadmap-cle-inconnue-a-la-racine",
-      "titre": "Roadmap : clé inconnue à la racine",
-      "quand": "Quand Roadmap.json contient une clé non permise : l'écriture est refusée.",
-      "de": "herisson",
-      "vers": "agent",
-      "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
-      "guillemet": "`",
-      "ancre": "at the root of Roadmap.json. Permitted keys"
-    },
-    {
       "id": "herisson--roadmap-cle-reservee-au-serveur-ou-a-l-avocat",
       "titre": "Roadmap : clé réservée au serveur ou à l'avocat",
       "quand": "Quand l'agent modifie etapes ou synthese dans Roadmap.json : l'écriture est refusée.",
@@ -730,23 +700,13 @@
     },
     {
       "id": "herisson--raison-etapes-reservees-a-l-avocat",
-      "titre": "Raison : étapes réservées à l'avocat",
-      "quand": "Insérée dans le refus d'une modification de la clé etapes de Roadmap.json.",
+      "titre": "Actes réservés à l'avocat",
+      "quand": "Quand l'agent modifie un acte existant de goals/<goal>/Timeline.json : l'écriture est refusée.",
       "de": "herisson",
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
-      "guillemet": "'",
-      "ancre": "the case steps (etapes) are set by the lawyer on the board"
-    },
-    {
-      "id": "herisson--raison-synthese-ecrite-par-un-script",
-      "titre": "Raison : synthèse écrite par un script",
-      "quand": "Insérée dans le refus d'une modification de la clé synthese de Roadmap.json.",
-      "de": "herisson",
-      "vers": "agent",
-      "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
-      "guillemet": "'",
-      "ancre": "the synthesis (synthese) is written by the script synthese.mjs"
+      "guillemet": "`",
+      "ancre": "cannot be changed by the agent: the lawyer sets its step"
     },
     {
       "id": "herisson--memoire-frontmatter-interdit",
@@ -830,23 +790,33 @@
     },
     {
       "id": "herisson--refus-roadmap-structure-attendue",
-      "titre": "Refus Roadmap : structure attendue",
-      "quand": "Quand Roadmap.json est refusé avant écriture.",
+      "titre": "Refus Timeline : structure attendue",
+      "quand": "Quand l'écriture d'un goals/<goal>/Timeline.json est refusée.",
       "de": "herisson",
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
       "guillemet": "'",
-      "ancre": "Roadmap.json does not have the expected structure"
+      "ancre": "Timeline.json does not have the expected structure."
+    },
+    {
+      "id": "herisson--goal-limite-de-lignes",
+      "titre": "Goal.md / Memory.md : limite de lignes",
+      "quand": "Quand l'agent écrit un Goal.md ou un Memory.md de plus de 200 lignes : l'écriture est refusée.",
+      "de": "herisson",
+      "vers": "agent",
+      "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
+      "guillemet": "`",
+      "ancre": "Move what is no longer useful to Archive.md."
     },
     {
       "id": "herisson--refus-roadmap-renvoi-vers-le-gabarit-de-suivi",
-      "titre": "Refus Roadmap : renvoi vers le gabarit de suivi",
-      "quand": "Avec le refus de Roadmap.json, pour renvoyer au modèle de suivi.",
+      "titre": "Refus Timeline : renvoi vers le gabarit de suivi",
+      "quand": "Avec le refus de Timeline.json, pour renvoyer au modèle de suivi.",
       "de": "herisson",
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/lib/herisson.mjs",
       "guillemet": "'",
-      "ancre": "Each tracking file follows Feature read deadlines path=piecemaker"
+      "ancre": "Deadlines follow Feature read deadlines path=piecemaker"
     },
     {
       "id": "herisson--entete-de-refus-d-ecriture-du-herisson",
@@ -3230,17 +3200,17 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/vue-dossier.mjs",
       "guillemet": "'",
-      "ancre": "Write the tracking file under \"suivis\" in the case Roadmap.json"
+      "ancre": "Write goals/<goal>/Timeline.json in the case folder"
     },
     {
       "id": "mcp-features--consigne-ecriture-des-memoires",
       "titre": "Consigne : écriture des mémoires",
-      "quand": "Quand un FeatureData écrit dans case/memories (refus renvoyant vers l'écriture directe de About.md).",
+      "quand": "Quand un FeatureData écrit dans case/memories (refus renvoyant vers l'écriture directe de Memory.md).",
       "de": "mcp:features",
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/features/vue-dossier.mjs",
       "guillemet": "'",
-      "ancre": "Write the \"## Mémoire : <name>\" section of the case About.md"
+      "ancre": "Write goals/<goal>/Memory.md in the case folder"
     },
     {
       "id": "mcp-features--refus-donnees-verrouillees",
