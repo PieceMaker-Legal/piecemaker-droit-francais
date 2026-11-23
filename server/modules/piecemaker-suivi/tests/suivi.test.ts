@@ -481,6 +481,8 @@ test('avec un brain, le suivi vit dans le Timeline.json de son goal et le tablea
   fs.mkdirSync(path.join(root, '.piecemaker'), { recursive: true });
   fs.mkdirSync(path.join(base, 'home'), { recursive: true });
   fs.writeFileSync(path.join(base, 'home', 'brain.json'), JSON.stringify({ path: brain }));
+  fs.mkdirSync(path.join(brain, '.piecemaker'), { recursive: true });
+  fs.writeFileSync(path.join(brain, '.piecemaker', 'dossiers.json'), JSON.stringify({ [root]: 'Dossier Dupont' }));
   fs.writeFileSync(path.join(root, '.piecemaker', 'appel-suivi.json'), toJson(CONTENTIEUX));
   const previous = process.env.PIECEMAKER_HOME;
   process.env.PIECEMAKER_HOME = path.join(base, 'home');

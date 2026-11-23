@@ -115,7 +115,7 @@ export function createBrain({ home, defaultRoot, skills }: BrainOptions) {
     try {
       disableNativeMemory(folder);
       if (root() !== path.resolve(brain)) setRoot(brain);
-      const target = caseOf(folder, { home });
+      const target = caseOf(folder, { home, create: true });
       if (!target) return;
       if (!present(target.about)) {
         writeFileSync(target.about, `# ${target.name}\n\nStatut : à compléter\nDossier : ${path.resolve(folder)}\n\n## Ce que c'est\n\nÀ compléter\n`);

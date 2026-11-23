@@ -7,7 +7,10 @@ const load = () => import(pathToFileURL(path.join(__dirname, 'herisson.mjs')).hr
 const loadFeatures = () => import(pathToFileURL(path.join(__dirname, 'lib', 'herisson.mjs')).href);
 const root = path.resolve('/dossiers/dossier-exemple');
 process.env.PIECEMAKER_HERISSON_ETAT = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-etat-'));
-test.after(() => require('node:fs').rmSync(process.env.PIECEMAKER_HERISSON_ETAT, { recursive: true, force: true }));
+process.env.PIECEMAKER_HOME = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-home-'));
+const TEST_BRAIN = path.join(process.env.PIECEMAKER_HOME, 'brain');
+require('node:fs').writeFileSync(path.join(process.env.PIECEMAKER_HOME, 'brain.json'), JSON.stringify({ path: TEST_BRAIN }));
+test.after(() => { require('node:fs').rmSync(process.env.PIECEMAKER_HERISSON_ETAT, { recursive: true, force: true }); require('node:fs').rmSync(process.env.PIECEMAKER_HOME, { recursive: true, force: true }); });
 
 function fakePm(stdout = '') {
   const calls = [];
@@ -131,7 +134,7 @@ test('la garde refuse un nouveau programme Catala dont le nom n’est pas un rai
   const fs = require('node:fs');
   const os = require('node:os');
   const { hookDecision } = await import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mjs')).href);
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-nom-'));
+  const dossier = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-nom-')));
   const previous = process.env.PIECEMAKER_COMPONENTS_HOME;
   t.after(() => {
     if (previous === undefined) delete process.env.PIECEMAKER_COMPONENTS_HOME;
@@ -143,7 +146,10 @@ test('la garde refuse un nouveau programme Catala dont le nom n’est pas un rai
   fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', 'vieux', 'vieux.catala_fr'), '> Module Vieux\n');
   const reason = async (nom) => (await hookDecision({ cwd: dossier, tool_name: 'Write', tool_input: { file_path: `.piecemaker/catala/${nom}/clerk.toml`, content: `[project]\nname = "${nom}"\n` } }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
   assert.equal(await reason('indem'), null);
-  fs.writeFileSync(path.join(dossier, '.piecemaker', 'etapes.json'), JSON.stringify({ raisonnements: { 'indemnite-licenciement': { etape: 'raisonnement' }, ancien: { etape: 'raisonnement', remplacePar: 'indemnite-licenciement' } } }));
+  const { caseDirectory } = await import(pathToFileURL(path.join(__dirname, 'lib', 'brain-case.mjs')).href);
+  const goal = path.join(caseDirectory(dossier, { create: true }).goals, 'licenciement');
+  fs.mkdirSync(goal, { recursive: true });
+  fs.writeFileSync(path.join(goal, 'Timeline.json'), JSON.stringify({ actes: { 'indemnite-licenciement': { etape: 'raisonnement' }, ancien: { etape: 'raisonnement', remplacePar: 'indemnite-licenciement' } } }));
   assert.match(await reason('indem'), /clerk\.toml:1: program name "indem" is not a reasoning of the case\. Use the exact name given by pm check: \.piecemaker\/catala\/indemnite-licenciement\/\./);
   assert.match(await reason('ancien'), /program name "ancien"/);
   assert.equal(await reason('indemnite-licenciement'), null);

@@ -17,7 +17,7 @@ const report = (errors: Errors) => errors.map((error) => `ligne ${error.line} : 
 
 function target(folder: string) {
   const found = caseOf(folder);
-  if (!found) throw invalid('Aucun brain configuré : choisissez son emplacement dans Paramètres › Brain.', 409);
+  if (!found) throw invalid('Ce dossier n’est pas dans le brain : choisissez-le dans les dossiers de l’agent central.', 409);
   return found;
 }
 

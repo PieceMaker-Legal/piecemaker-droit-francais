@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import * as volets from '../../../mcp/piecemaker/volets.mjs';
@@ -11,6 +11,10 @@ import { CASSATION_MATIERES, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_S
 import { etatDossier, findVendor, parseArgv, run, sessionDossier } from './pm.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-home-'));
+fs.writeFileSync(path.join(TEST_HOME, 'brain.json'), JSON.stringify({ path: path.join(TEST_HOME, 'brain') }));
+process.env.PIECEMAKER_HOME = TEST_HOME;
+after(() => fs.rmSync(TEST_HOME, { recursive: true, force: true }));
 
 test('parseArgv sépare drapeaux, booléens et positionnels', () => {
   assert.deepEqual(parseArgv(['dossier', 'sql', 'SELECT 1', '--dossier', '/tmp']), {

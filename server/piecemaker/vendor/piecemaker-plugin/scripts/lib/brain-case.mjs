@@ -92,13 +92,13 @@ export function caseOfBrainFile(file, home = piecemakerHome()) {
   return { brain, name: parts[1], folder, directory: path.join(brain, 'projects', parts[1]), rest: parts.slice(2).join('/') };
 }
 
-export function caseDirectory(folder, { home = piecemakerHome(), create = true } = {}) {
+export function caseDirectory(folder, { home = piecemakerHome(), create = false } = {}) {
   const brain = brainRoot(home);
   if (!brain || !folder) return null;
   const name = caseName(brain, folder, create);
   if (!name) return null;
   const directory = path.join(brain, 'projects', name);
-  if (create) fs.mkdirSync(directory, { recursive: true });
+  fs.mkdirSync(directory, { recursive: true });
   return { brain, name, directory, roadmap: path.join(directory, ROADMAP), about: path.join(directory, ABOUT), goals: path.join(directory, GOALS) };
 }
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { caseOfBrainFile, GOAL_LIMIT, GOAL_TIMELINE_KEYS, suiviOfGoal } from './brain-case.mjs';
+import { caseDirectory, caseOfBrainFile, GOAL_LIMIT, GOAL_TIMELINE_KEYS, readRoadmap, suiviOfGoal } from './brain-case.mjs';
 
 const REGISTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'herisson.json');
 
@@ -120,8 +120,9 @@ function programNameErrors(file, content) {
   const directory = path.dirname(file);
   const nom = path.basename(directory);
   if (!content || (fs.existsSync(directory) && fs.readdirSync(directory).some((entry) => entry.endsWith('.catala_fr') && path.join(directory, entry) !== file))) return [];
+  const target = caseDirectory(path.resolve(directory, '..', '..', '..'), { create: false });
   let etapes = {};
-  try { etapes = JSON.parse(fs.readFileSync(path.join(directory, '..', '..', 'etapes.json'), 'utf8')); } catch {}
+  try { etapes = target ? readRoadmap(target.roadmap).etapes ?? {} : JSON.parse(fs.readFileSync(path.join(directory, '..', '..', 'etapes.json'), 'utf8')); } catch {}
   const expected = Object.entries(etapes.raisonnements ?? {}).filter(([, suite]) => !suite?.remplacePar).map(([name]) => name);
   if (!expected.length || expected.includes(nom)) return [];
   return [{ line: 1, message: `program name "${nom}" is not a reasoning of the case. Use the exact name given by pm check: ${expected.map((name) => `.piecemaker/catala/${name}/`).join(' or ')}.` }];

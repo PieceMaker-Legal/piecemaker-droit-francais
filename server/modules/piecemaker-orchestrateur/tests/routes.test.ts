@@ -79,6 +79,8 @@ test('L’agent central lit et modifie About.md et les goals d’un dossier, sou
   mkdirSync(path.join(base, 'home'), { recursive: true });
   mkdirSync(dupont, { recursive: true });
   writeFileSync(path.join(base, 'home', 'brain.json'), JSON.stringify({ path: central }));
+  mkdirSync(path.join(central, '.piecemaker'), { recursive: true });
+  writeFileSync(path.join(central, '.piecemaker', 'dossiers.json'), JSON.stringify({ [dupont]: 'Dossier Dupont' }));
   const previous = process.env.PIECEMAKER_HOME;
   process.env.PIECEMAKER_HOME = path.join(base, 'home');
   t.after(() => { if (previous === undefined) delete process.env.PIECEMAKER_HOME; else process.env.PIECEMAKER_HOME = previous; rmSync(base, { recursive: true, force: true }); });
