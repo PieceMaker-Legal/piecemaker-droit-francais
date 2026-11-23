@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const RELATIVE_IMPORT = /(\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|createRequire\([^)]*\)\s*\(\s*)(['"])(\.\.?\/[^'"]+\.[cm]?js)\2/g;
+const PLAIN_SCRIPTS = path.join('server', 'piecemaker', 'vendor') + path.sep;
 
 function scripts(folder) {
   return fs.readdirSync(folder, { withFileTypes: true, recursive: true })
@@ -18,7 +19,7 @@ export function completeDistServer(sourceRoot, distRoot) {
     const next = text.replace(RELATIVE_IMPORT, (match, prefix, quote, specifier) => {
       const target = path.resolve(path.dirname(file), specifier);
       const source = path.join(sourceRoot, path.relative(distRoot, target));
-      if (fs.existsSync(target) || !fs.existsSync(source)) return match;
+      if (!fs.existsSync(source) || (fs.existsSync(target) && !path.relative(sourceRoot, source).startsWith(PLAIN_SCRIPTS))) return match;
       redirected.push(path.relative(distRoot, target));
       return `${prefix}${quote}${path.relative(path.dirname(file), source).split(path.sep).join('/')}${quote}`;
     });
