@@ -71,8 +71,6 @@ export function proofOf(step: Step, model: Reasoning): Proof | null {
     const pieces = step.sources.filter((source) => source.kind === 'piece');
     if (!pieces.length) return mode === 'transactional' || step.parents.length ? null : { state: 'warn', text: 'Pièce à rattacher' };
     if (pieces.some((piece) => piece.status === 'failed')) return { state: 'ko', text: 'Citation introuvable dans la pièce' };
-    if (pieces.some((piece) => piece.author === 'agent')) return { state: 'warn', text: 'Relevé par l’agent, à relire' };
-    if (pieces.every((piece) => piece.author === 'human')) return { state: 'ok', text: 'Relu par l’avocat' };
     return { state: 'neutral', text: pieces.length > 1 ? `${pieces.length} pièces citées` : 'Pièce citée' };
   }
   if (step.kind === 'rule' && step.issue) return { state: 'warn', text: WORDS[mode].lawMissing };
@@ -88,8 +86,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
   const rules = model.steps.filter((step) => step.kind === 'rule' && !container(step));
   const links: Array<{ from: string; to: string }> = [];
   const identity = (source: Source) => `${source.target}\n${source.quote}`;
-  const author = (source: Source) => source.author === 'human' ? `<span class="pmc-author" data-author="human">Relu par l’avocat${source.review ? ` · ${escape(source.review)}` : ''}</span>` : source.author === 'agent' ? `<span class="pmc-author" data-author="agent">Relevé par l’agent${source.review ? ` · ${escape(source.review)}` : ''}, à relire</span>` : '';
-  const documents = (sources: Source[], part: string) => sources.length ? `<ul class="pmc-docs" data-part="${part}">${sources.map((source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}${source.quote ? `<q>${escape(source.quote)}</q>` : '<span class="pmc-warn">Citation exacte à indiquer</span>'}${sources.length > 1 ? author(source) : ''}${source.status === 'failed' ? '<span class="pmc-warn">Citation non retrouvée dans le document</span>' : ''}</li>`).join('')}</ul>` : '';
+  const documents = (sources: Source[], part: string) => sources.length ? `<ul class="pmc-docs" data-part="${part}">${sources.map((source) => `<li data-kind="${escape(source.kind)}">${sourceLink(source)}${source.quote ? `<q>${escape(source.quote)}</q>` : '<span class="pmc-warn">Citation exacte à indiquer</span>'}${source.status === 'failed' ? '<span class="pmc-warn">Citation non retrouvée dans le document</span>' : ''}</li>`).join('')}</ul>` : '';
   const boolean = (step: Step) => /^(?:vrai|faux)$/i.test(bare(step.value));
   const truth = (step: Step): 'ok' | 'ko' | 'warn' => /^vrai$/i.test(bare(step.value)) ? 'ok' : /^faux$/i.test(bare(step.value)) ? 'ko' : tone(step) === 'warn' ? 'warn' : tone(step) === 'ko' ? 'ko' : 'ok';
   const seen = (step: Step, negated: boolean) => negated && boolean(step) ? { ok: 'ko', ko: 'ok', warn: 'warn' }[truth(step)]! : truth(step);
@@ -195,7 +192,6 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
       : step.sources;
     const foundation = step.kind === 'rule' ? sources.filter((source) => source.kind !== 'origin' && source.kind !== 'piece') : (application?.basis ?? []).filter((source) => !stated.has(identity(source)));
     const pieces = sources.filter((source) => source.kind === 'piece');
-    const statement = [...new Set(pieces.map((piece) => piece.premise).filter((text): text is string => Boolean(text) && text !== step.title))];
     const written = step.kind === 'rule' && !step.clause && (!isGoal || structured(step.value)) ? formula(step, human) : '';
     const calculation = written && written.replace(/\s/g, '') !== display(step).replace(/\s/g, '') ? written : '';
     const top = step.clause?.kind === 'all' ? step.clause.members : step.clause ? [step.clause] : [];
@@ -208,7 +204,7 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
     const proof = proofOf(step, model);
     const aliases = step === principal?.state ? ` data-summary-of="${[...summarized].join(' ')}"` : '';
     const shownValue = step === principal?.state || structured(step.value) ? display(step) : '';
-    const card = `<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}"${aliases} data-kind="${isGoal ? 'answer' : exception ? 'exception' : step.kind}" data-state="${step === principal?.state ? truth(step) : isGoal ? 'neutral' : current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === principal?.state ? step.title : isGoal && model.objective || step.title)}</h3>${statement.map((text) => `<p class="pmc-statement">${escape(text)}</p>`).join('')}${shownValue ? `<span class="pmc-value">${escape(shownValue)}</span>` : ''}${isGoal ? '' : `<p class="pmc-result">${status(step, current)}${badge(proof)}</p>`}${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, 'law')}${documents(pieces, 'evidence')}${exceptions(step)}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${isGoal ? badge(proof) : above}</article>`;
+    const card = `<article class="pmc-map-node" data-node="${step.id}" data-card="${step.id}"${aliases} data-kind="${isGoal ? 'answer' : exception ? 'exception' : step.kind}" data-state="${step === principal?.state ? truth(step) : isGoal ? 'neutral' : current}" tabindex="0" role="button" aria-pressed="false"><span class="pmc-box-kind">${kind}</span><h3>${escape(step === principal?.state ? step.title : isGoal && model.objective || step.title)}</h3>${shownValue ? `<span class="pmc-value">${escape(shownValue)}</span>` : ''}${isGoal ? '' : `<p class="pmc-result">${status(step, current)}${badge(proof)}</p>`}${calculation ? `<p class="pmc-calculation">${escape(calculation)}</p>` : ''}${documents(foundation, 'law')}${documents(pieces, 'evidence')}${exceptions(step)}${step.notes.justification ? `<p class="pmc-muted">${escape(step.notes.justification)}</p>` : ''}${step.notes.recherche ? `<p class="pmc-warn">À rechercher : ${escape(step.notes.recherche)}</p>` : ''}${isGoal ? badge(proof) : above}</article>`;
     const result = isGoal ? `<div class="pmc-root">${card}<span class="pmc-arrow" aria-hidden="true"></span>${outcome(step)}</div>` : card;
     const others = !owner && sharedResults.get(step.id);
     if (!others) return branch(result, children, isGoal ? truth(step) : current);
@@ -226,7 +222,6 @@ export function reasoningMap(model: Reasoning, human: (text: string) => string, 
       [all.filter((entry) => entry.kind === 'fact' && open(entry)), words.facts],
       [all.filter((entry) => entry.kind === 'rule' && entry !== step && open(entry) && !upstream(entry).some(open)), ['condition indéterminée', 'conditions indéterminées']],
       [all.filter((entry) => proofOf(entry, model)?.text === 'Pièce à rattacher'), ['preuve manquante', 'preuves manquantes']],
-      [all.filter((entry) => proofOf(entry, model)?.text === 'Relevé par l’agent, à relire'), ['pièce à relire', 'pièces à relire']],
       [all.filter((entry) => proofOf(entry, model)?.text === words.lawMissing), mode === 'transactional' ? ['clause à rattacher', 'clauses à rattacher'] : ['fondement à préciser', 'fondements à préciser']],
       [all.filter((entry) => proofOf(entry, model)?.state === 'ko'), ['citation introuvable', 'citations introuvables']],
     ];

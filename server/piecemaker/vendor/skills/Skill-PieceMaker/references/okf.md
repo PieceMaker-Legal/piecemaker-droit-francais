@@ -66,7 +66,7 @@ Le graphe reprend le titre descriptif de la revue : colonne `Titre`, `Intitulé`
 
 ## Prémisses
 
-Une prémisse est un point que des pièces établissent : un fait du dossier, ou une clause d'un contrat. Elle justifie qu'une condition du raisonnement Catala est remplie.
+Une prémisse est un point que des pièces établissent : un fait du dossier, ou une clause d'un contrat.
 
 Une pièce établit une prémisse par un lien `states`. La fiche `Premise` est créée si elle manque. Réutilise le titre exact d'une prémisse existante pour rattacher une autre pièce à la même prémisse.
 
@@ -83,12 +83,7 @@ pm okf unlink "Pièces/Courrier.pdf" states "Date de résiliation"
 
 L'avocat pose aussi des liens `states` dans la visionneuse. La revue tabulaire n'en pose pas.
 
-## Prémisse et raisonnement Catala
-
-1. Une condition Catala se justifie par une prémisse : `## okf:/_premises/<titre normalisé>.md` juste au-dessus du fait qui la fixe dans le scénario du dossier.
-2. Une prémisse se justifie par des pièces citées (`states`).
-3. Une condition ne cite jamais une pièce directement.
-4. Une prémisse utile alimente une entrée du programme : son fait calcule la condition qu'elle établit. La citer dans une liste ne suffit pas ; `pm catala verifier` signale chaque prémisse qui ne fixe aucune entrée.
+## Contrat
 
 Pour un contrat, chaque clause utile est une prémisse : titre = objet de la clause, citation = texte de la clause, valeur = ce qu'elle stipule.
 
@@ -100,14 +95,13 @@ pm okf verify
 
 La commande renvoie les erreurs : type hors arborescence, document absent, document sans fiche, relation inconnue, cible absente ou hors graphe, citation introuvable, `index.md` incomplet. Elle renvoie aussi les contradictions : une prémisse à valeur unique avec plusieurs valeurs. Le Hérisson la lance seul après chaque `pm okf link` ou `unlink` : corrige la cause de chaque erreur qu'il rend. Signale une contradiction à l'avocat ; ne tranche pas.
 
-Elle liste enfin les éléments manquants du graphe ; un manque lié à un programme Catala nomme ce programme :
+Elle liste enfin les éléments manquants du graphe :
 
 | Élément | Manque signalé |
 | --- | --- |
 | Pièce du graphe | pièce à examiner : aucune prémisse établie, aucun lien vers une autre pièce ; ou pièce modifiée depuis son examen sans lien |
-| Prémisse | aucune pièce citée ; à valeur unique sans valeur ; aucune partie concernée ; citée par aucun programme Catala (si un programme existe) |
+| Prémisse | aucune pièce citée ; à valeur unique sans valeur ; aucune partie concernée |
 | Partie | aucune mention dans une pièce, aucune prémisse qui la concerne |
-| `#[doc]` Catala (`fichier:ligne`) | prémisse absente de l'index ou sans pièce ; pièce citée directement |
 
 Lance `verify` toi-même seulement pour lire les manques du graphe avant de le compléter. Comble chaque manque que les pièces permettent de combler. Signale les autres à l'avocat ; n'invente ni citation ni lien.
 

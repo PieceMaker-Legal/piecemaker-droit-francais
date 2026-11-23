@@ -440,7 +440,8 @@ test('preserves a conditional dependency without claiming that a dashed link pro
 test('reads the article extract and the piece attributes in the qualification card without mixing nearby sources', () => {
   const content = [
     '## Séances constatées',
-    '[Séances constatées](okf:/_premises/seances-constatees.md)',
+    '[presence-fictive.md](pieces/presence-fictive.md)',
+    '« Jean Dupont a participé à quatre séances. »',
     '',
     '```catala-metadata',
     "déclaration champ d'application Attribution:",
@@ -467,7 +468,7 @@ test('reads the article extract and the piece attributes in the qualification ca
     x003 [label=<<table><tr><td>prime_due</td></tr><tr><td>participation_suffisante</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L18"];
     x001 -> x002 [style="solid"];
     x002 -> x003 [style="solid"];
-  }`, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }], [{ origin: '/dossier/demo.catala_fr', target: 'okf:/_premises/seances-constatees.md', quote: '', status: 'passed', pieces: [{ target: 'pieces/presence-fictive.md', quote: 'Jean Dupont a participé à quatre séances.', status: 'passed' }] }]);
+  }`, [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }], [{ origin: '/dossier/demo.catala_fr', target: 'pieces/presence-fictive.md', quote: 'Jean Dupont a participé à quatre séances.', status: 'passed' }]);
   assert.equal(model.steps.find((step) => step.id === 'x001').kind, 'fact');
   const document = new JSDOM(reasoningGraph(model)).window.document;
   const card = document.querySelector('[data-node="x002"]');
@@ -587,32 +588,3 @@ test('represents a contract: stipulation, effect, clauses as sources and hypothe
   assert.doesNotMatch(text.body.textContent, /Prétention|Pièce à rattacher/);
 });
 
-test('separates the value of a fact from who established its proof', () => {
-  const content = [
-    '## Séances constatées',
-    '[Séances constatées](okf:/_premises/seances-constatees.md)',
-    '',
-    '```catala-metadata',
-    "déclaration champ d'application Attribution:",
-    '  entrée séances_constatées contenu entier',
-    '```',
-  ].join('\n');
-  const dot = `digraph G {
-    x001 [label=<<table><tr><td>séances_constatées</td><td>4</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L6"];
-    x002 [label=<<table><tr><td>prime_due</td></tr><tr><td>séances_constatées &gt;= 3</td></tr><tr><td>=</td></tr><tr><td>true</td></tr></table>>, URL="https://catala.local/demo.catala_fr#L6"];
-    x001 -> x002 [style="solid"];
-  }`;
-  const files = [{ nom: 'demo.catala_fr', chemin: '/dossier/demo.catala_fr', contenu: content }];
-  const cite = (author) => [{ origin: '/dossier/demo.catala_fr', target: 'okf:/_premises/seances-constatees.md', quote: '', status: 'passed', title: 'Quatre séances suivies', pieces: [{ target: 'pieces/presence.md', quote: 'Il a participé à quatre séances.', status: 'passed', author }] }];
-  for (const [author, badge, state] of [['agent', 'Relevé par l’agent, à relire', 'warn'], ['human', 'Relu par l’avocat', 'ok']]) {
-    const graph = new JSDOM(reasoningGraph(reasoning(dot, files, cite(author)))).window.document;
-    const fact = graph.querySelector('[data-node="x001"]');
-    assert.equal(fact.dataset.state, 'ok', 'the value stays green whoever wrote the proof');
-    assert.equal(fact.querySelector('.pmc-proof').textContent, badge);
-    assert.equal(fact.querySelector('.pmc-proof').dataset.proof, state);
-    assert.match(fact.querySelector('.pmc-statement')?.textContent ?? fact.textContent, /Quatre séances suivies/);
-    const reserves = graph.querySelector('.pmc-outcome').textContent;
-    if (author === 'agent') assert.match(reserves, /pièce à relire/);
-    else assert.doesNotMatch(reserves, /pièce à relire/);
-  }
-});

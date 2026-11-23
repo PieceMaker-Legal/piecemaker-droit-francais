@@ -156,7 +156,7 @@ test('la garde refuse un nouveau programme Catala dont le nom n’est pas un rai
   assert.equal(await reason('vieux'), null);
 });
 
-test('une commande pm okf link vérifie l’index, et les programmes Catala qui citent une prémisse', async (t) => {
+test('une commande pm okf link vérifie l’index, sans relancer les programmes Catala', async (t) => {
   const fs = require('node:fs');
   const os = require('node:os');
   const { featureReport } = await load();
@@ -167,7 +167,7 @@ test('une commande pm okf link vérifie l’index, et les programmes Catala qui 
     fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', nom, `${nom}.catala_fr`), contenu);
   }
   const link = (command) => { const pm = fakePm('Index OKF : 0 erreur(s).'); return featureReport({ tool_name: 'Bash', cwd: dossier, tool_input: { command } }, { run: pm.run }).then(() => pm.calls.map((call) => call.args)); };
-  assert.deepEqual(await link('pm okf link pieces/a.md states "Date de départ" --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`, `catala verifier --programme cite --dossier ${dossier}`]);
+  assert.deepEqual(await link('pm okf link pieces/a.md states "Date de départ" --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`]);
   assert.deepEqual(await link('pm okf link pieces/a.md amends pieces/b.md --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`]);
   assert.deepEqual(await link('pm okf verify'), []);
 });

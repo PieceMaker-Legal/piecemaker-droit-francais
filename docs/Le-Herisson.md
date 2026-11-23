@@ -73,7 +73,7 @@ flowchart LR
 | `goal` | brain : `goals/<goal>/Goal.md`, `Memory.md` | agent | refusée avec un frontmatter ou au-delà de 200 lignes (renvoi vers `Archive.md`) | — | `piecemaker` | — |
 | `case-timeline` | brain : `Timeline.json` du dossier | serveur | refusée : étape et synthèse sont écrites par le serveur | — | `piecemaker` | — |
 | `memoire` | `memoires/<nom>.md` (mémoire projet, règle 4°) | agent | refusée si l'écriture ajoute un frontmatter | `pm memoire verifier --memoire <nom>` : un acte du même nom (voir [suivi-dossier.md](suivi-dossier.md)) | `piecemaker` | 10 s |
-| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si l'écriture ajoute une faute de format (`.catala_fr` seulement) ou une erreur de compilation, ou crée un programme au nom absent des raisonnements de `etapes.json` | `pm catala verifier --programme <nom>` ; aussi après `pm okf link` ou `unlink` avec `states` ou `involves`, pour chaque programme qui cite une prémisse `okf:/_premises/` | `catala` | 60 s |
+| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si l'écriture ajoute une faute de format (`.catala_fr` seulement) ou une erreur de compilation, ou crée un programme au nom absent des raisonnements de `etapes.json` | `pm catala verifier --programme <nom>` | `catala` | 60 s |
 | `revue` | aucun fichier : brouillon de revue tabulaire | agent | libre | après `pm tabular_review preparer` ou `lancer` : `pm tabular_review verifier` (recherches en erreur ou à compléter) | `piecemaker` | 30 s |
 
 ## Messages renvoyés à l'agent
@@ -136,7 +136,6 @@ Fautes de format Catala (`<faute>` ci-dessus), données par
 | titre trop court ou trop long | `titre « <titre> » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».` |
 | étiquette d'article incomplète | `étiquette « <étiquette> » : ajoutez le texte après le numéro (ex. article_2_code_civil).` |
 | entrée sans titre | `titre manquant pour cette entrée. Écrivez ## texte court au-dessus.` |
-| fait de test sans prémisse | `fait du scénario sans justification : écrivez ## okf:/_premises/<fiche>.md juste au-dessus de <variable>.` |
 
 Le message part dans `permissionDecisionReason` et `systemMessage` en
 PreToolUse, dans `additionalContext` en PostToolUse, dans `reason` avec
@@ -205,9 +204,7 @@ Limites des mesures :
      fichiers s'écrit fichier par fichier. Sans pack, après 10 s ou si le
      compilateur plante sans ligne `[ERROR]`, l'écriture passe ;
    - `commande` : expression régulière sur une commande shell, qui lance
-     `verifier` dans le dossier courant ;
-   - `cite` : avec `commande`, lance `verifier` pour chaque programme
-     `catala/<nom>/` dont un fichier `.catala_fr` contient ce texte.
+     `verifier` dans le dossier courant.
 2. Ajoutez un cas dans `scripts/herisson.test.js`.
 3. Ajoutez ses messages au tableau « Messages renvoyés à l'agent ».
 

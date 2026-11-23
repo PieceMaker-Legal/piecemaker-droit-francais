@@ -47,12 +47,6 @@ export function touchedFiles(payload) {
   return writtenTexts(String(payload?.tool_name || ''), payload?.tool_input || {}, payload?.cwd || process.cwd()).map((entry) => entry.file);
 }
 
-function citingPrograms(root, cite) {
-  const folder = path.join(root, '.piecemaker', 'catala');
-  const names = fs.existsSync(folder) ? fs.readdirSync(folder, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name) : [];
-  return names.filter((name) => fs.readdirSync(path.join(folder, name)).some((file) => file.endsWith('.catala_fr') && fs.readFileSync(path.join(folder, name, file), 'utf8').includes(cite)));
-}
-
 const FEATURE_TOOL = /^mcp__features__Feature$/;
 const OKF_TOOL = 'mcp__features__OkfWrite';
 
@@ -75,7 +69,7 @@ export function commandChecks(payload) {
   const root = payload.cwd || process.cwd();
   if (!fs.existsSync(path.join(root, '.piecemaker'))) return [];
   return FEATURES.filter((feature) => feature.commande && feature.verifier && new RegExp(feature.commande).test(command))
-    .flatMap((feature) => (feature.cite ? citingPrograms(root, feature.cite) : ['']).map((nom) => ({ feature, root, nom })));
+    .map((feature) => ({ feature, root, nom: '' }));
 }
 
 export async function workReport(root, calls, { run = runPm } = {}) {

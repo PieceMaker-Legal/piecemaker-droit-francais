@@ -266,7 +266,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     okfFn: async (input) => { calls.push(input); return {
       erreurs: [{ fiche: 'Pièces/bail.md', erreur: 'lien sans citation' }, { fiche: '/Note.docx.md', erreur: 'type « Non classé » hors arborescence (Pièces)' }],
       contradictions: [],
-      manques: [{ element: '/_premises/date-de-rupture.md', manque: 'prémisse sans valeur', programmes: ['rupture'] }, { element: 'Pièces/avenant.md', manque: 'pièce sans prémisse ni lien' }],
+      manques: [{ element: '/_premises/date-de-rupture.md', manque: 'prémisse sans valeur' }, { element: 'Pièces/avenant.md', manque: 'pièce sans prémisse ni lien' }],
     }; },
     suiviFn: async ({ suivi }) => (suivi === 'suivi.json' ? '0 erreur(s), 0 manque(s).'
       : `Suivi du dossier (.piecemaker/${suivi})\nÉchéances :\n  02/01/2026 — Conclusions (conclusions) — DÉPASSÉE\n  01/06/2027 — Audience (audience) — à venir\n\n1 erreur(s), 0 manque(s).`),
@@ -274,47 +274,24 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
   const text = await run(['check', '--dossier', dossier], { deps });
   assert.deepEqual(calls, [{ action: 'verify', folder: dossier }]);
   assert.equal(text, [
-    'Dossier : 8 point(s) à traiter.',
+    'Dossier : 6 point(s) à traiter.',
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
-    '4° Index : attribuer un type à Note.docx : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence), 1 erreur(s), 1 manque(s) → pm okf verify',
+    '4° Index : attribuer un type à Note.docx : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence), 1 erreur(s), 2 manque(s) → pm okf verify',
     '5° Raisonnement',
     '  5.A bail',
     '    5.A.1 Programme Catala (.piecemaker/catala/bail/) : valide',
-    '    5.A.2 Prémisses OKF du programme : aucune → skill okf',
     '  5.B rupture (rédaction)',
     '    5.B.1 Programme Catala (.piecemaker/catala/rupture/) : jamais vérifié → pm catala verifier --programme rupture',
-    '    5.B.2 Prémisses OKF du programme : 1 manque(s) → pm okf verify',
-    '    5.B.3 Conclusions en défense : en cours de rédaction',
-    '    5.B.4 Lettre fictive : validé',
-    '    5.B.5 Assignation fictive : à rédiger',
-    '    5.B.6 Suivi : 1 erreur(s), 0 manque(s), 1 échéance(s) dépassée(s), du jour ou sans date → pm suivi_dossiers verifier --suivi rupture-suivi.json',
+    '    5.B.2 Conclusions en défense : en cours de rédaction',
+    '    5.B.3 Lettre fictive : validé',
+    '    5.B.4 Assignation fictive : à rédiger',
+    '    5.B.5 Suivi : 1 erreur(s), 0 manque(s), 1 échéance(s) dépassée(s), du jour ou sans date → pm suivi_dossiers verifier --suivi rupture-suivi.json',
     '6° Recherche « Rupture fictive » : bloquée → pm tabular_review lister',
     '7° Suivi suivi.json : valide',
   ].join('\n'));
   assert.doesNotMatch(text, /ancien|yaml/i);
-  write('.piecemaker/catala/bail/bail.catala_fr', '## okf:/_premises/date-du-bail.md\n');
-  write('.piecemaker/okf/_premises/date-du-bail.md', '');
-  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : valide/);
-  write('.piecemaker/catala/bail/bail.catala_fr', [
-    'déclaration champ d\'application Bail:',
-    '  contexte bail_signé condition',
-    '  contexte congé_donné condition',
-    '  contexte loyer_impayé condition',
-    '  contexte caution_versée condition',
-    '  contexte loyer contenu argent',
-  ].join('\n'));
-  write('.piecemaker/catala/bail/test_bail.catala_fr', [
-    'champ d\'application Exemple:',
-    '  ## okf:/_premises/date-du-bail.md',
-    '  règle calcul.bail_signé rempli',
-    '  ## okf:/_premises/fiche-absente.md',
-    '  règle calcul.congé_donné rempli',
-    '  règle calcul.loyer_impayé rempli',
-    '  règle calcul.caution_versée non rempli',
-  ].join('\n'));
-  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 3 entrée\(s\) sans prémisse : loyer, congé_donné, loyer_impayé → pm catala verifier --programme bail\n/);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
   await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });

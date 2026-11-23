@@ -46,7 +46,7 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
   }).find(Boolean);
   const references: Array<{ label: string; target: string; kind: string }> = [];
   const add = (label: string, target: string, kind?: string) => {
-    const category = kind ?? (/^okf:/i.test(target) ? 'premise' : /\bjurisprudence\b|\barrêt\b|\/(?:juri|ceta|cons)\/id\/|courdecassation\.fr\/decision\//i.test(label + ' ' + target) ? 'jurisprudence' : /^pièce\b|\.(?:pdf|docx?)(?:[?#]|$)/i.test(label + ' ' + target) ? 'piece' : /legifrance\.gouv\.fr|\barticle\b/i.test(target + ' ' + label) ? 'article' : /^[a-z][\w+.-]*:/i.test(target) ? 'reference' : 'piece');
+    const category = kind ?? (/\bjurisprudence\b|\barrêt\b|\/(?:juri|ceta|cons)\/id\/|courdecassation\.fr\/decision\//i.test(label + ' ' + target) ? 'jurisprudence' : /^pièce\b|\.(?:pdf|docx?)(?:[?#]|$)/i.test(label + ' ' + target) ? 'piece' : /legifrance\.gouv\.fr|\barticle\b/i.test(target + ' ' + label) ? 'article' : /^[a-z][\w+.-]*:/i.test(target) ? 'reference' : 'piece');
     if (!references.some((entry) => entry.label === label && entry.target === target)) references.push({ label, target, kind: category });
   };
   const definitions = new Map([...file.contenu.matchAll(/^\s{0,3}\[([^\]]+)\]:\s*<?([^\s>]+)>?/gm)].map((match) => [match[1].toLowerCase(), match[2]]));
@@ -55,7 +55,6 @@ export function sourceContext(source: string, files: Array<{ nom: string; chemin
     const target = definitions.get((match[2] || match[1]).toLowerCase());
     if (target) add(match[1], target);
   }
-  for (const match of text.matchAll(/^okf:\/\S+$/gm)) add(match[0], match[0]);
   for (const match of text.matchAll(/^source\s*:\s*([^\s<>]+)\s*$/gim)) add(match[1], match[1]);
   for (const match of text.matchAll(/https?:\/\/[^\s<>\])]+/g)) if (!references.some((entry) => entry.target === match[0])) add(match[0], match[0]);
   for (const match of text.matchAll(/\b(?:LEGIARTI|JURITEXT|CETATEXT|CONSTEXT|JORFTEXT|JORFARTI)\d+\b/g)) {

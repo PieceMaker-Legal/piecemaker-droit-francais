@@ -406,7 +406,7 @@ export function createEtapesService(deps: EtapesDependencies) {
         return { titre: 'Nouveau raisonnement', prompt: `Démarre le raisonnement juridique du dossier. Objectif(s) : ${instructions || 'à demander à l’avocat'}.\nLance pm check. Écris le programme Catala dans .piecemaker/catala/<nom>/ (nom en minuscules et tirets, d’après le sujet), selon le skill catala. Lance pm catala verifier --programme <nom> jusqu’à zéro erreur.` };
       case 'lever': {
         const nom = await assertReasoning(root, body.raisonnement);
-        return { titre: `Lever manques et erreurs — ${nom}`, prompt: `Lève les erreurs du programme Catala ${nom}.\n1. Lance pm catala verifier --programme ${nom}.\n2. Corrige chaque erreur dans .piecemaker/catala/${nom}/. Complète les prémisses à partir des pièces (pm dossier sql).\n3. Relance la vérification jusqu’à zéro erreur.\n4. Liste à la fin ce qui demande une décision de l’avocat.${consignes(instructions)}` };
+        return { titre: `Lever manques et erreurs — ${nom}`, prompt: `Lève les erreurs du programme Catala ${nom}.\n1. Lance pm catala verifier --programme ${nom}.\n2. Corrige chaque erreur dans .piecemaker/catala/${nom}/. Complète les faits à partir des pièces (pm dossier sql).\n3. Relance la vérification jusqu’à zéro erreur.\n4. Liste à la fin ce qui demande une décision de l’avocat.${consignes(instructions)}` };
       }
       case 'redaction': {
         const nom = await assertReasoning(root, body.raisonnement);

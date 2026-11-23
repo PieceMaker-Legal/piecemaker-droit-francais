@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { CATALA_COMMANDS, listPrograms, premiseLinks, runCatala } from './catala.mjs';
+import { CATALA_COMMANDS, listPrograms, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
@@ -60,7 +60,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
 
   check
       bilan numéroté du dossier, dans l'ordre du travail : conversion, anonymisation,
-      mapping, index, puis chaque raisonnement (programme Catala, prémisses, actes,
+      mapping, index, puis chaque raisonnement (programme Catala, actes,
       suivi) et les revues de recherche ; chaque défaut donne la commande ou le
       sous-agent qui le corrige
 
@@ -623,9 +623,8 @@ const titre = (numero, texte, depth = 0) => ({ numero, depth, texte, titre: true
 const letter = (index) => String.fromCharCode(65 + index);
 
 function indexPoint({ erreurs = [], contradictions = [], manques = [] }) {
-  const orphans = manques.filter((entry) => !entry.programmes?.length);
-  const forAgent = orphans.filter((entry) => !entry.avocat);
-  const forLawyer = orphans.length - forAgent.length;
+  const forAgent = manques.filter((entry) => !entry.avocat);
+  const forLawyer = manques.length - forAgent.length;
   const untyped = erreurs.filter((entry) => /^type « Non classé »/.test(entry.erreur)).map((entry) => String(entry.fiche).replace(/^\//, '').replace(/\.md$/, ''));
   const faults = erreurs.length - untyped.length;
   const defauts = [
@@ -696,14 +695,6 @@ async function reasoningPoints(api, folder, manques) {
     const add = (nomPoint, defauts, detail) => children.push(point(`${numero}.${children.length + 1}`, nomPoint, defauts, detail, 2));
     if (programs.includes(nom)) {
       add(`Programme Catala (.piecemaker/catala/${nom}/)`, catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
-      const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
-      const links = premiseLinks(folder, nom);
-      const missing = [...new Set(links.errors.map((error) => error.match(/\[ERROR\] input "([^"]+)"/)?.[1]).filter(Boolean))];
-      const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} entrée(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
-      const detail = gaps ? 'pm okf verify' : missing.length ? `pm catala verifier --programme ${nom}` : 'skill okf';
-      if (defauts) add('Prémisses OKF du programme', defauts, detail);
-      else if (!links.inputs && !links.mentions) add('Prémisses OKF du programme', 'aucune', 'skill okf');
-      else children.push({ ...point(`${numero}.${children.length + 1}`, 'Prémisses OKF du programme', '', '', 2), ...(links.unlinked.length ? { texte: `Prémisses OKF du programme : valide, ${links.unlinked.length} prémisse(s) de l’index sans entrée (alerte) → pm catala verifier --programme ${nom}` } : {}) });
     } else add('Programme Catala', 'à écrire', 'skill catala');
     for (const document of suite?.documents ?? []) {
       const state = documentState(folder, document);
@@ -837,7 +828,7 @@ async function okf(api, positional, flags, resolved) {
       ...(contradictions.length ? [`Contradictions : ${contradictions.length}.`] : []),
       ...contradictions.map((entry) => `- ${entry.titre} : ${entry.valeurs.map((item) => `${item.piece} → ${item.valeur}`).join(' ; ')}`),
       ...(manques ? [manques.length ? `Graphe : ${manques.length} élément(s) manquant(s).` : 'Graphe : aucun élément manquant.'] : []),
-      ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}${entry.programmes?.length ? ` (programme ${entry.programmes.join(', ')})` : ''}`),
+      ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}`),
       ...(examinees.length ? [`Examinées sans lien (information, pas un manque) : ${examinees.length}.`] : []),
       ...examinees.map((entry) => `- ${entry.element} : ${entry.motif}`),
     ].join('\n');

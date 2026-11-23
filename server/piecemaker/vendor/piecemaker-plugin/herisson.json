@@ -99,8 +99,6 @@
       "ecriture": "agent",
       "skill": "catala",
       "verifier": ["catala", "verifier", "--programme", "{nom}"],
-      "commande": "\\bpm okf (link|unlink)\\b.*\\b(states|involves)\\b",
-      "cite": "okf:/_premises/",
       "format": "catala",
       "erreur": ": à corriger\\.",
       "delai": 60

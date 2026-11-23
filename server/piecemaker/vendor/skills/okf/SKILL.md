@@ -5,7 +5,7 @@ description: Gérer l'index OKF du dossier (.piecemaker/okf/) — fiches de docu
 
 # Index OKF
 
-> Une prémisse ne se crée que pour une condition Catala qui la demande. On la cherche dans les pièces ; on ne l'invente pas.
+> Une prémisse se cherche dans les pièces ; on ne l'invente pas.
 
 L'index OKF résume le dossier en fiches Markdown. Il vit dans `.piecemaker/okf/`. L'OKF fait autorité : en cas de doute, il l'emporte sur toute autre note.
 
@@ -16,7 +16,7 @@ Chaque fiche a un frontmatter YAML et un corps Markdown.
 | Type | Contenu |
 | --- | --- |
 | Dossier de premier niveau de l'arborescence (par défaut `Pièces`) | Une fiche par document. |
-| `Premise` | Une prémisse : un point établi par des pièces, qui justifie une condition du raisonnement Catala. Un fait du dossier, par exemple « Rupture du contrat ». Une clause d'un contrat, par exemple « Changement de contrôle ». |
+| `Premise` | Une prémisse : un point établi par des pièces. Un fait du dossier, par exemple « Rupture du contrat ». Une clause d'un contrat, par exemple « Changement de contrôle ». |
 | `Partie` | Une personne qualifiée de partie. La fiche porte le code anonymisé, jamais une identité réelle. |
 
 Aucun champ de statut n'existe (projet, signé). Ne l'ajoutez pas.
@@ -37,8 +37,7 @@ La cible de `involves` est le code d'une partie : `pm okf link "<titre de la pr�
 
 ## Chaîne de justification
 
-1. Un fait d'un programme Catala se justifie par une `Premise` : la fiche `_premises/<titre normalisé>.md`.
-2. Une `Premise` se justifie par des pièces citées (`states`) ou par les lignes positives d'une revue tabulaire liée (`pm okf revue`).
+1. Une `Premise` se justifie par des pièces citées (`states`) ou par les lignes positives d'une revue tabulaire liée (`pm okf revue`).
 
 ## Lire et écrire
 

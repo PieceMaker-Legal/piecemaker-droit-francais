@@ -22,7 +22,7 @@ import { reviewRowPieces } from './reviews.js';
 export const OKF_SCHEME = 'okf:';
 export type PremisePiece = { resource: string; title: string; citation: string; value: string; origin: string; author?: ReviewAuthor; review?: string };
 export type PremiseEvidence = { id: string; title: string; pieces: PremisePiece[] };
-export type OkfGap = { element: string; manque: string; programmes?: string[]; avocat?: true };
+export type OkfGap = { element: string; manque: string; avocat?: true };
 export type OkfExamined = { element: string; motif: string; by: string; at: string };
 export const EXAMINED = 'examen_sans_lien';
 /** Revues tabulaires liées à une prémisse, dans sa fiche : leurs lignes positives l'établissent. */

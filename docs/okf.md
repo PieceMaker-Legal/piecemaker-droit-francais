@@ -93,19 +93,7 @@ Une prémisse vit tant qu'un lien `states` ou une revue liée la vise. Retirer l
 
 ## Raisonnement Catala
 
-Le raisonnement Catala se branche sur la prémisse, pas sur la pièce.
-
-```mermaid
-flowchart LR
-  C[Condition Catala] -->|"okf:/_premises/…"| P[Premise]
-  P -->|states, citation| D[Pièce]
-```
-
-1. Un fait de scénario Catala se justifie par une prémisse : `## okf:/_premises/<titre normalisé>.md` juste au-dessus de lui.
-2. Une prémisse se justifie par des pièces citées (`states`) ou par les lignes positives d'une revue tabulaire liée.
-3. Une condition ne cite jamais une pièce directement.
-
-`pm catala verifier` développe chaque lien `okf:/_premises/…` du programme en ses pièces, lignes de revues liées comprises, et contrôle chaque citation. Une ligne d'auteur `agent` passe le contrôle si sa citation est retrouvée, avec un avertissement : elle reste à faire vérifier par l'avocat dans la revue. Le volet Catala affiche ces pièces sous l'étape.
+Catala ne lit pas l'index OKF. Un programme Catala cite ses pièces directement ; l'index se tient seul.
 
 ## Production, sans token
 
@@ -162,14 +150,13 @@ Routes ajoutées : `PUT /api/piecemaker/okf/types`, `POST /api/piecemaker/okf/re
 
 Skill `okf` (`server/piecemaker/vendor/skills/okf/`), déclaré dans chaque dossier.
 
-L'agent principal écrit lui-même l'index, par l'outil `OkfWrite` du MCP `features` ou par `pm okf`. Une prémisse ne se crée que pour une condition Catala qui la demande.
+L'agent principal écrit lui-même l'index, par l'outil `OkfWrite` du MCP `features` ou par `pm okf`.
 
 ## Limites connues
 
 - Un changement de code d'une partie laisse les liens `involves` pendants ; `verify` les signale.
 - Les valeurs sont comparées comme des chaînes, sauf les dates (formats `JJ/MM/AAAA`, `JJ.MM.AAAA`, `AAAA-MM-JJ`, `J mois AAAA`) ramenées au format ISO.
 - Une prémisse créée dans la visionneuse n'est pas `single_value` ; l'agent la pose avec `--single`.
-- `pm okf verify` compare la valeur du scénario Catala (`définition … égal à`) aux valeurs des pièces de la prémisse seulement pour une date `|AAAA-MM-JJ|` ou un nombre ; les autres valeurs ne sont pas comparées.
 - Le renvoi d'une clause à une autre n'a pas de relation propre, sauf si l'avocat en ajoute une à l'ontologie.
 - Le CLI `vibe` exécute les hooks PieceMaker par `~/.vibe/hooks.toml`, écrit au démarrage du serveur (entrées `piecemaker-*` seulement, hooks personnels conservés) ; l'adaptateur `scripts/vibe-hook.mjs` traduit le protocole Vibe. Limite : sous le harnais expérimental de Vibe, `subagent.spawn` est asynchrone, son résultat ne porte pas le compte rendu : `verify-subagent` n'y voit rien. Le chat Mistral de l'app passe par `guard-ontologie`, `protect-originals`, `classify-ai-documents` et `verify-subagent`.
 - Une commande qui fabrique le chemin sans le nommer (concaténation, variable) échappe au hook. Le sceau détecte alors une ontologie modifiée, et `verify` un lien hors ontologie posé dans une fiche.

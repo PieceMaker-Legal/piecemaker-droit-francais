@@ -21,12 +21,10 @@ Un fait est un `contexte` du champ (`format.md`, « Faits du dossier »). Dans l
 
 Les liens fictifs de l’exemple ne constituent pas des références vérifiées. Gardez les étiquettes et exceptions dans Catala.
 
-Au-dessus de chaque fait du scénario, écrivez `## okf:/_premises/<fiche>.md`. La prémisse porte les pièces et leurs citations ; `pm catala verifier` les contrôle.
-
-Chaque entrée du champ métier se calcule à partir des faits ainsi justifiés : qualifiez-la par une règle qui lit ces faits, ne la figez pas à `Inconnu`. Le contrôle `premisses` de `pm catala verifier` refuse une entrée qui n'en dérive pas, et alerte sur chaque prémisse de l'index qui ne fixe aucune entrée.
+Un fait peut citer sa pièce par un lien suivi de l'extrait entre « » ; `pm catala verifier` contrôle l'extrait.
 
 Le graphe est un arbre lu de gauche à droite : la prétention, avec sa conclusion dessous, ses conditions, leurs propres conditions, puis les faits et leurs pièces.
-La couleur donne la valeur du scénario : vert pour rempli ou vrai, orange pour indéterminé, rouge pour non rempli. L’état de la preuve est une étiquette à part (« Pièce à rattacher », « Relevé par l’agent, à relire », « Relu par l’avocat »). La conclusion liste les réserves.
+La couleur donne la valeur du scénario : vert pour rempli ou vrai, orange pour indéterminé, rouge pour non rempli. L’état de la preuve est une étiquette à part (« Pièce à rattacher », « Pièce citée »). La conclusion liste les réserves.
 
 Chaque carte réunit une condition ou une exception, son fondement juridique, le fait invoqué et sa pièce. Chaque définition garde son titre `##`. Le graphe affiche la source d’une condition seulement si elle diffère de celle de la règle. Le graphe signale une règle sans source et un fait sans pièce. Le résultat du scénario reste séparé. Les positions, définitions alternatives et traces natives restent dans la vue Raisonnement.
 

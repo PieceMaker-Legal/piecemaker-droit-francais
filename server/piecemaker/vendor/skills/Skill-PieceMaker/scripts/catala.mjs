@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { cachedArticle, cachedDecision, keepArticle } from './article-cache.mjs';
-import { catalaDocumentation, premiseCoverage, testsWithoutAssertion } from './catala-documentation.mjs';
+import { catalaDocumentation, testsWithoutAssertion } from './catala-documentation.mjs';
 
 export const CATALA_COMMANDS = ['env', 'lister', 'verifier', 'formater', 'preuve', 'catleg', 'expliquer', 'exceptions', 'executer', 'squelette', 'section', 'exec'];
 export const CATALA_TOOLS = ['catala', 'clerk', 'catala-lsp', 'catala-format', 'catala-dap'];
@@ -147,42 +147,6 @@ export function sourcesDigest(directory, files) {
   const hash = crypto.createHash('sha256');
   for (const file of files) hash.update(`${file.split(path.sep).join('/')}\0`).update(fs.readFileSync(path.join(directory, file))).update('\0');
   return hash.digest('hex');
-}
-
-// Inputs of the program not derived from an OKF premise (errors), and premises of the case index
-// whose fact sets no input of any Catala program of the case (warnings).
-export function premiseLinks(root, name) {
-  const read = (program) => {
-    const directory = path.join(programsRoot(root), program);
-    return sourceFiles(directory).map((file) => ({ name: file, content: fs.readFileSync(path.join(directory, file), 'utf8') }));
-  };
-  const exists = (source) => fs.existsSync(path.join(root, '.piecemaker', 'okf', source.replace(/^okf:\/+/, '')));
-  const own = premiseCoverage(read(name), { exists });
-  const used = new Set(own.used);
-  for (const other of listPrograms(root)) if (other !== name) for (const source of premiseCoverage(read(other), { exists }).used) used.add(source);
-  let premises = [];
-  try { premises = fs.readdirSync(path.join(root, '.piecemaker', 'okf', '_premises')).filter((file) => file.endsWith('.md')).sort(); } catch {}
-  const unlinked = premises.filter((file) => !used.has(`okf:/_premises/${file}`));
-  const located = own.warnings.map((entry) => ({ ...entry, message: `[WARNING] ${entry.message}` }));
-  const elsewhere = [];
-  for (const file of unlinked) {
-    const source = `okf:/_premises/${file}`;
-    const cited = own.mentions.filter((mention) => mention.source === source);
-    if (cited.length) for (const mention of cited) located.push({ ...mention, message: `[WARNING] premise ${source} is cited here, but its fact sets no input of a Catala program. Use it to compute the input it establishes.` });
-    else elsewhere.push(`.piecemaker/okf/_premises/${file}:1: [WARNING] premise ${source} is not used by any Catala program.`);
-  }
-  located.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
-  const warnings = [...located.map((entry) => `${entry.file}:${entry.line}: ${entry.message}`), ...elsewhere];
-  return {
-    errors: own.errors.map((entry) => `${entry.file}:${entry.line}: [ERROR] ${entry.message}`),
-    warnings,
-    inputs: own.inputs.length,
-    mentions: own.mentions.length,
-    underived: new Set(own.errors.map((entry) => entry.input)).size,
-    premises: premises.length,
-    used: premises.length - unlinked.length,
-    unlinked,
-  };
 }
 
 function isTestFile(directory, file) {
@@ -363,16 +327,10 @@ async function verifier(context, program, flags = {}) {
   };
   const contents = files.map((file) => ({ name: file, content: fs.readFileSync(path.join(program.directory, file), 'utf8') }));
   const contract = readJson(path.join(program.directory, 'tache.json'))?.type === 'transactional';
-  await record('documentation', 'Titres, sources juridiques des règles, faits justifiés, ouverture des blocs', async () => {
+  await record('documentation', 'Titres, sources juridiques des règles, ouverture des blocs', async () => {
     const errors = contents.flatMap(({ name, content }) => catalaDocumentation(content, { test: /^test_/.test(path.basename(name)), contract }).errors.map((error) => `${name}:${error.line}: ${error.message}`));
     errors.push(...taskErrors(program.directory, files).map((message) => `tache.json:1: ${message}`));
     return { passed: !errors.length, exit_code: errors.length ? 1 : 0, errors };
-  });
-  await record('premisses', 'Inputs derived from OKF premises', async () => {
-    if (contract) return { passed: true, exit_code: 0, message: 'Contrat : les cas de figure posent des hypothèses ; aucune prémisse n’est exigée.' };
-    const links = premiseLinks(program.root, program.name);
-    const message = `${links.inputs - links.underived}/${links.inputs} input(s) derived from OKF premises; ${links.used}/${links.premises} premise(s) of the case index set an input.`;
-    return { passed: !links.errors.length, exit_code: links.errors.length ? 1 : 0, message, errors: links.errors, warnings: links.warnings };
   });
   const missing = (message) => ({ exit_code: null, passed: false, status: 'missing', message });
   const blocked = (message) => ({ exit_code: null, passed: false, status: 'blocked', message });
@@ -472,7 +430,7 @@ async function verifier(context, program, flags = {}) {
   ]);
   const changed = digest !== sourcesDigest(program.directory, sourceFiles(program.directory));
   if (changed) { checks.push({ name: 'sources', command: '', exit_code: 1, seconds: 0, passed: false, status: 'blocked', message: 'Code modifié pendant la vérification : relancez verifier.' }); writeResult(program.directory, 'explication.dot', ''); }
-  const order = ['documentation', 'premisses', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
+  const order = ['documentation', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication', 'sources'];
   checks.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
   const report = { started_utc: started, finished_utc: context.now(), programme: program.name, passed: checks.every((entry) => entry.passed), sources_sha256: digest, checks };
   writeResult(program.directory, 'verification.json', report);
