@@ -21,8 +21,8 @@ dans `server/piecemaker/vendor/mcp/legifrance/` et déclaré dans chaque dossier
 - **Hooks** : `guard-ontologie` (Claude, Codex, Vibe, chat Mistral) refuse toute écriture directe dans
   `~/.piecemaker/ontologie.json`, qui porte les relations, les natures et l'arborescence communes à tous
   les dossiers. Une modification de l'ontologie ou de l'arborescence par Edit, Write ou apply_patch devient une proposition pour l'avocat
-  (`scripts/lib/proposition-edit.mjs`). Les liens des fiches OKF passent par l'outil `OkfWrite` du MCP
-  `features` ou par `pm okf link|unlink|examinee|revue` ; le Hérisson vérifie l'index après chaque écriture.
+  (`scripts/lib/proposition-edit.mjs`). Les concepts du bundle OKF (Context-OKF) s'écrivent avec Write ou Edit
+  sous `.piecemaker/okf/` ; le Hérisson lance le validateur Context-OKF après chaque écriture.
 - **Hooks** (`hooks/hooks.json`) — protection des pièces et mappings
   (`PreToolUse`), suivi Légifrance et commit Git après écriture (`PostToolUse`),
   compilation des recherches et suivi de session local (`Stop`/`TaskCompleted`).

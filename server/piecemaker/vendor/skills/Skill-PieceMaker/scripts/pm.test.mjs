@@ -264,9 +264,9 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     piecesFn: async () => ({ pieces: [{ path: 'Pièces/bail.pdf', status: 'ready', protected: true }] }),
     conversionJob: async () => ({ job: null }),
     okfFn: async (input) => { calls.push(input); return {
-      erreurs: [{ fiche: 'Pièces/bail.md', erreur: 'lien sans citation' }, { fiche: '/Note.docx.md', erreur: 'type « Non classé » hors arborescence (Pièces)' }],
-      contradictions: [],
-      manques: [{ element: '/_lof/creance-de-loyer.md', manque: 'legal position incomplète : « held by »' }, { element: 'JEAN_DUPONT', manque: 'partie sans lien LOF cité' }],
+      erreurs: [{ fiche: 'positions/creance.md', erreur: 'missing required field: type' }],
+      lints: [{ fiche: 'roles/client.md', erreur: 'orphan concept' }, { fiche: 'documents/bail.md', erreur: 'broken link: x.md' }],
+      resume: '5 file(s), 1 error(s), 2 lint(s)',
     }; },
     suiviFn: async ({ suivi }) => (suivi === 'suivi.json' ? '0 erreur(s), 0 manque(s).'
       : `Suivi du dossier (.piecemaker/${suivi})\nÉchéances :\n  02/01/2026 — Conclusions (conclusions) — DÉPASSÉE\n  01/06/2027 — Audience (audience) — à venir\n\n1 erreur(s), 0 manque(s).`),
@@ -278,7 +278,7 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
-    '4° Index : attribuer un type à Note.docx : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence), 1 erreur(s), 2 manque(s) → pm okf verify',
+    '4° Index : 1 erreur(s), 2 lint(s) → pm okf verify',
     '5° Raisonnement',
     '  5.A bail',
     '    5.A.1 Programme Catala (.piecemaker/catala/bail/) : valide',
@@ -314,7 +314,7 @@ test('check sur un dossier à jour ne signale rien', async () => {
     tabularFn: async ({ action }) => (action === 'lister' ? { analyses: [], projets: [] } : {}),
     piecesFn: async () => ({ pieces: [] }),
     conversionJob: async () => ({ job: null }),
-    okfFn: async () => ({ erreurs: [], contradictions: [], manques: [] }),
+    okfFn: async () => ({ erreurs: [], lints: [], resume: '3 file(s), 0 error(s), 0 lint(s)' }),
     suiviFn: async () => { throw new Error('inattendu'); },
   };
   assert.equal(await run(['check', '--dossier', dossier], { deps }), [
@@ -343,11 +343,6 @@ test('check sur un dossier à jour ne signale rien', async () => {
     '1° Conversion : Conversion en cours : phase scan, 8/216 (avancement global 27 %). Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala et suivi, qui ne lisent pas les pièces.',
     '2° Anonymisation : en cours, voir 1°',
   ].join('\n'));
-  const parties = { ...deps, okfFn: async () => ({ erreurs: [], contradictions: [], manques: [
-    { element: '/_lof/creance-de-loyer.md', manque: 'sans titulaire (held by) : attend l’avocat', avocat: true },
-    { element: 'Pièces/avenant.md', manque: 'pièce à examiner' },
-  ] }) };
-  assert.equal((await run(['check', '--dossier', dossier], { deps: parties })).split('\n')[4], '4° Index : 1 manque(s), 1 manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier) → pm okf verify');
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
@@ -423,7 +418,7 @@ test('SKILL.md documente toute la surface d’interface', () => {
   const skill = [path.join(HERE, '..', 'SKILL.md'), ...fs.readdirSync(references).map((name) => path.join(references, name))]
     .map((file) => fs.readFileSync(file, 'utf8')).join('\n');
   const required = [
-    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm suivi_dossiers', 'pm okf', 'link', 'unlink', 'examinee', '--motif', '--retirer', '--citation',
+    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm suivi_dossiers', 'pm okf', '--motif',
     'lister', 'afficher', 'fermer', 'verifier', 'sql', 'conversion', 'arborescence', 'index', 'lire', 'ecrire',
     'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'fichier',
     '--force', '--dossier', '--dossiers', '--suivi', '--json',
@@ -452,28 +447,16 @@ test('sessionDossier suit la session plutôt que le répertoire courant', async 
 });
 
 
-test('okf ontologie lit LOF, son attribution et les libellés des propriétés', async () => {
+test('okf ontologie liste les six patterns LOF et okf verify rend les lignes du validateur', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-lof-'));
-  const lof = [
-    { id: 'C1', label: 'legal position', kind: 'class', subClassOf: [], annotations: [['definition', 'A position.']] },
-    { id: 'C2', label: 'material entity', kind: 'class', subClassOf: [], annotations: [] },
-    { id: 'P1', label: 'held by', kind: 'objprop', domain: ['C1'], range: ['C2'], annotations: [['definition', 'Held.']] },
-  ];
-  const okfFn = async () => ({ lof, attribution: 'Legal Ontologies Foundry, CC BY 4.0', types: ['Pièces'] });
-  assert.deepEqual(JSON.parse(await run(['okf', 'ontologie', '--noms'], { cwd: dossier, deps: { okfFn } })), ['held by']);
+  const okfFn = async ({ action }) => (action === 'verify'
+    ? { erreurs: [{ fiche: 'positions/a.md', erreur: 'missing required field: type' }], lints: [{ fiche: 'roles/b.md', erreur: 'orphan concept' }], resume: '3 file(s), 1 error(s), 1 lint(s)' }
+    : { patterns: [{ id: 'odp-003', title: 'Positions déontiques', description: 'Claim, duty, power.' }], types: ['Pièces'] });
   const listing = await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn } });
-  assert.match(listing, /Legal Ontologies Foundry, CC BY 4\.0/);
-  assert.match(listing, /- held by : legal position → material entity — Held\./);
-  fs.rmSync(dossier, { recursive: true, force: true });
-});
-
-test('okf link exige la pièce et la citation et transmet les classes', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-link-'));
-  const calls = [];
-  const okfFn = async (input) => { calls.push(input); return { source: input.source, relation: input.relation, target: input.target ?? input.piece }; };
-  await assert.rejects(() => run(['okf', 'link', 'Créance', 'held by', 'CLIENT_1', '--citation', 'phrase'], { cwd: dossier, deps: { okfFn } }), /--piece et --citation/);
-  await run(['okf', 'link', 'Créance', 'held by', 'CLIENT_1', '--piece', 'facture.pdf', '--citation', 'phrase', '--source_class', 'legal position'], { cwd: dossier, deps: { okfFn } });
-  assert.deepEqual(calls[0], { action: 'link', folder: path.resolve(dossier), source: 'Créance', relation: 'held by', target: 'CLIENT_1', piece: 'facture.pdf', citation: 'phrase', source_class: 'legal position' });
+  assert.match(listing, /Legal Ontologies Foundry, David R\. Koepsell, CC BY 4\.0/);
+  assert.match(listing, /- odp-003 — Positions déontiques : Claim, duty, power\./);
+  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn } }), 'ERROR  positions/a.md: missing required field: type\nLINT   roles/b.md: orphan concept\n3 file(s), 1 error(s), 1 lint(s)');
+  await assert.rejects(() => run(['okf', 'link', 'a', 'b', 'c'], { cwd: dossier, deps: { okfFn } }), /okf attend verify, ontologie/);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 

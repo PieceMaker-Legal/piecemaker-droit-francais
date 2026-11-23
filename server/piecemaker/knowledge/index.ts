@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import express from 'express';
 
 import { getConnection, getDatabasePath, projectsDb } from '@/modules/database/index.js';
@@ -6,13 +8,12 @@ import { KnowledgeStore } from '../../../plugins/piecemaker-dossier/src/knowledg
 
 import { createOkfBackend } from '../okf/index.js';
 import { migrateArborescence } from '../okf/ontology.js';
-import { createOkfStore } from '../okf/store.js';
 import { createIndexStore } from '../okf/index-store.js';
 
 import { importLegacyKnowledge } from './legacy-import.js';
 import { createKnowledgeLocalRouter, isLoopback } from './local-routes.js';
 import { importDocumentIndexOverrides } from './overrides-import.js';
-import { convertedMarkdown, createKnowledgePipeline, defaultScanFiles } from './pipeline.js';
+import { createKnowledgePipeline, pythonExecutable } from './pipeline.js';
 import { createKnowledgeRouter } from './routes.js';
 import { createKnowledgeService } from './service.js';
 import { createSqlTool } from './sql-tool.js';
@@ -42,27 +43,7 @@ export function createKnowledgeBackend(applicationRoot: string) {
   const getService = () => {
     if (!service) {
       const pipeline = createKnowledgePipeline({ applicationRoot, projects: projectsDb, store: getStore() });
-      const created = createKnowledgeService(getStore(), projectsDb, {
-        ...pipeline,
-        async scan(...scanArguments: Parameters<typeof pipeline.scan>) {
-          const result = await pipeline.scan(...scanArguments);
-          rebuildOkf(scanArguments[0]);
-          return result;
-        },
-        async rename(...renameArguments: Parameters<typeof pipeline.rename>) {
-          const renamed = await pipeline.rename(...renameArguments);
-          if (renamed.current !== renamed.previous) rebuildOkf(renameArguments[0], renamed);
-          return renamed;
-        },
-      });
-      service = {
-        ...created,
-        update(input: Parameters<typeof created.update>[0]) {
-          const result = created.update(input);
-          rebuildOkf(input.projectId);
-          return result;
-        },
-      };
+      service = createKnowledgeService(getStore(), projectsDb, pipeline);
     }
     return service;
   };
@@ -70,19 +51,11 @@ export function createKnowledgeBackend(applicationRoot: string) {
   const okf = createOkfBackend({
     projects: projectsDb,
     snapshot: (projectId) => getStore().snapshot(projectId),
-    store: createOkfStore(getConnection()),
     indexStore: createIndexStore(getConnection()),
-    convertedMarkdown: (projectPath, filePath) => convertedMarkdown(projectPath, { path: filePath }),
-    listDocuments: defaultScanFiles,
+    skillRoot: path.join(applicationRoot, 'server', 'piecemaker', 'vendor', 'skills', 'okf'),
+    python: () => pythonExecutable(undefined),
     isLoopback,
   });
-  const rebuildOkf = (projectId: string, renamed?: { previous: string; current: string }) => {
-    try {
-      okf.build(projectId, renamed);
-    } catch (error) {
-      console.warn(`[piecemaker] index OKF non mis à jour : ${error instanceof Error ? error.message : String(error)}`);
-    }
-  };
 
   try {
     const migrated = migrateArborescence((getConnection().prepare('SELECT project_path FROM projects').all() as Array<{ project_path: string }>).map((row) => row.project_path));

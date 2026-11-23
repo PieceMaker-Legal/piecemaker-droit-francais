@@ -65,7 +65,7 @@ flowchart LR
 | Feature | Fichiers (sous `.piecemaker/`) | Écriture | Avant (PreToolUse) | Après (PostToolUse) | Skill | Délai |
 |---|---|---|---|---|---|---|
 | `ontologie` | `ontologie.json` (dans `~/.piecemaker`), `ontologie.proposition.json` | proposition | devient une proposition (onglet Index › Ontologie) | — | `okf` | — |
-| `okf` | `okf/**` | agent | libre ; outil MCP `OkfWrite` conseillé | après une écriture d'une fiche, `OkfWrite` ou `pm okf link`, `unlink` ou `examinee` : `pm okf verify` (erreurs, contradictions entre valeurs d'une prémisse, manques) | `okf` | 30 s |
+| `okf` | `okf/**` | agent | Write ou Edit | après une écriture d'un concept : `pm okf verify` (validateur Context-OKF strict : erreurs et lints) | `okf` | 30 s |
 | `etapes` | `etapes.json` | serveur | refusée : l'avocat règle les étapes sur le tableau | — | `piecemaker` | — |
 | `protection` | `protection.json` | serveur | refusée : l'avocat lève la protection par le bouclier | — | `piecemaker` | — |
 | `suivi` | `<nom>-suivi.json`, `suivi.json` | agent | refusée si le JSON est illisible ou si la racine n'a pas la forme `matter`, `evenements`, `echeances` | `pm suivi_dossiers verifier --suivi <fichier>` | `piecemaker` | 60 s |

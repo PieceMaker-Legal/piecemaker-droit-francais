@@ -1,0 +1,5 @@
+# Log
+
+- **2026-11-23 — Fix.** Sources LOF revérifiées octet par octet contre le dépôt amont (legal-ontologies-foundry.github.io) : les six pages de registre et la NAO de `assets/`, plus les sept spécifications complètes. Une divergence corrigée dans [lof-nao-source.md](/assets/lof-nao-source.md) : un « and » ajouté dans la copie, absent de l'amont, ligne `domain:`. Les spécifications complètes sont vendées telles quelles dans `skills/okf/references/lof/` : elles font foi pour toute instruction de pattern ; les fiches du bundle restent des distillations marquées comme telles.
+
+- **2026-11-23 — Initialization.** Création du bundle de contexte à partir de la Legal Ontologies Foundry : [BFO](/fondations/bfo.md), [la Foundry](/fondations/lof.md), six [patterns](/patterns/index.md), l'ontologie [NAO](/ontologies/nao.md) et une [méthode de lecture](/lecture/lire-un-contrat.md) dérivée des patterns. Fichiers sources LOF et trois pièces de test (contrat, avenant, courrier de l'essai fictif sources-okf) rangés dans `assets/`. Test de rendu : `tests/rendu.py`.

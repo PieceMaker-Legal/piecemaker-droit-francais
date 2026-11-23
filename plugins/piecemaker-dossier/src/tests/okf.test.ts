@@ -6,7 +6,7 @@ import type { OkfIndex } from '../okf.js';
 import { documentTitle, linksMarkup, shell } from '../views.js';
 import { indexRowResource, isPieceRow } from '../index-analysis.js';
 
-const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', relations });
+const fiche = (resource: string, type: string, title: string, relations: OkfIndex['fiches'][number]['relations'] = []) => ({ id: `/${resource}.md`, type, title, description: '', resource, date: '', lof: 'Document', relations });
 const index: OkfIndex = {
   types: ['Pièces', 'Projets'],
   typesGraphe: ['Pièces'],
@@ -82,9 +82,9 @@ const lofIndex: OkfIndex = {
       { relation: 'held by', target: '/_parties/Jean Dupont.md', piece: '/Pièces/Courrier.pdf.md', citation: 'Jean Dupont réclame le prix.', origin: 'piecemaker/agent' },
     ]), resource: '', lof: 'legal position', description: 'Créance du prix de vente' },
     { ...fiche('_lof/vide', 'legal position', 'Sans pièce'), resource: '', lof: 'legal position' },
-    { ...fiche('_parties/Jean Dupont', 'material entity', 'Jean Dupont'), resource: '', side: 'client' },
-    { ...fiche('_parties/Société Exemple SAS', 'material entity', 'Société Exemple SAS'), resource: '', side: 'adversaire' },
-    { ...fiche('_parties/ZETABIO', 'material entity', 'ZETABIO'), resource: '' },
+    { ...fiche('_parties/Jean Dupont', 'material entity', 'Jean Dupont'), resource: '', side: 'client', lof: 'Rôle' },
+    { ...fiche('_parties/Société Exemple SAS', 'material entity', 'Société Exemple SAS'), resource: '', side: 'adversaire', lof: 'Rôle' },
+    { ...fiche('_parties/ZETABIO', 'material entity', 'ZETABIO'), resource: '', lof: 'Rôle' },
   ],
 };
 
@@ -167,14 +167,14 @@ describe('fiches LOF de l’index OKF', () => {
 
   it('la carte d’une pièce liste les fiches LOF qui la citent', () => {
     const html = ficheCardMarkup(lofIndex, '/Pièces/Courrier.pdf.md');
-    expect(html).toContain('Fiches LOF');
+    expect(html).toContain('Concepts');
     expect(html).toContain('data-open-fiche="/_lof/creance.md"');
     expect(html).toContain('data-chat-kind="Document"');
   });
 
   it('la carte d’une partie liste ses fiches LOF', () => {
     const html = ficheCardMarkup(lofIndex, '/_parties/Jean Dupont.md');
-    expect(html).toContain('Fiches LOF');
+    expect(html).toContain('Concepts');
     expect(html).toContain('data-open-fiche="/_lof/creance.md"');
   });
 });

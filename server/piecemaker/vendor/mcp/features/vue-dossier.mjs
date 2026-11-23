@@ -77,7 +77,7 @@ export function viewGet(root, segments) {
 }
 
 export const VIEW_WRITE_HINT = {
-  okf: 'The index is written through its checked commands: Feature run index link, unlink or mark_examined.',
+  okf: 'Write the concepts of the OKF bundle (.piecemaker/okf/) with Edit or Write, following the okf skill; Le Hérisson runs the Context-OKF validator after each write.',
   deadlines: 'Write goals/<goal>/Timeline.json in the case folder of the brain (pm check gives its path), or .piecemaker/<name>-suivi.json without a brain, with Edit or Write; Le Hérisson verifies it after each write.',
   memories: 'Write goals/<goal>/Memory.md in the case folder of the brain (pm check gives its path), or .piecemaker/memoires/<name>.md without a brain, with Edit or Write; Le Hérisson verifies it after each write.',
 };

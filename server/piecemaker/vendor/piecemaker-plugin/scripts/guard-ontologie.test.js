@@ -127,7 +127,7 @@ test('un segment pm okf ne couvre pas le reste de la commande', async () => {
 
 test('explique la voie autorisée', async () => {
   const { ontologyDecision } = await load();
-  assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /Index › Classement tab\. The ontology itself is the Legal Ontologies Foundry/);
+  assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /Index › Classement tab\. The OKF bundle of the case follows Context-OKF on the Legal Ontologies Foundry/);
   assert.match(ontologyDecision({ tool_name: 'Bash', tool_input: { command: 'cp a.md .piecemaker/etapes.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /case steps/);
 });
 

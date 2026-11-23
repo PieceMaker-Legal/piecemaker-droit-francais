@@ -5,7 +5,7 @@
       "cible": "^ontologie(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "okf",
-      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: the folder tree under the key arborescence), in the Index › Classement tab. The ontology itself is the Legal Ontologies Foundry, fixed: read it with pm okf ontologie. Read the tree with pm dossier arborescence. To propose a change to the tree, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
+      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: the folder tree under the key arborescence), in the Index › Classement tab. The OKF bundle of the case follows Context-OKF on the Legal Ontologies Foundry, fixed: read its six patterns with pm okf ontologie. Read the tree with pm dossier arborescence. To propose a change to the tree, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
     },
     {
       "nom": "okf",
@@ -13,8 +13,7 @@
       "ecriture": "agent",
       "skill": "okf",
       "verifier": ["okf", "verify"],
-      "commande": "\\bpm okf (link|unlink|examinee|revue)\\b",
-      "erreur": "Index OKF : \\d+ erreur|Contradictions : \\d|Graphe : \\d+ élément",
+      "erreur": "[1-9]\\d* error\\(s\\)|[1-9]\\d* lint\\(s\\)|bundle OKF du dossier absent",
       "delai": 30
     },
     {
@@ -232,7 +231,7 @@
       "nom": "index",
       "titre": "Index",
       "volet": "index",
-      "description": "OKF index of the case documents: records typed by the Legal Ontologies Foundry (David Koepsell, CC BY 4.0), linked by its properties, each link proved by a piece and its exact quotation.",
+      "description": "OKF bundle of the case (Context-OKF, OKF 0.3 on the Legal Ontologies Foundry, David Koepsell, CC BY 4.0): Markdown concepts written with Write and Edit, each fact qualified by a LOF pattern and quoted from a piece.",
       "skills": [
         {
           "chemin": "vendor/skills/okf"
@@ -249,7 +248,7 @@
             "okf",
             "verify"
           ],
-          "role": "Rebuild the OKF records and list errors, contradictions and missing elements."
+          "role": "Run the Context-OKF validator in strict mode on the case bundle: errors and lints."
         },
         {
           "nom": "read_ontology",
@@ -257,7 +256,7 @@
             "okf",
             "ontologie"
           ],
-          "role": "Legal Ontologies Foundry (David Koepsell, CC BY 4.0): classes and properties with their definitions (read-only)."
+          "role": "The six Legal Ontologies Foundry patterns (ODP-001 to 006, David Koepsell, CC BY 4.0) and the folder tree (read-only)."
         },
         {
           "nom": "propose_ontology",
@@ -270,74 +269,6 @@
           "parametres": {
             "ontology": "--json",
             "reason": "--motif"
-          }
-        },
-        {
-          "nom": "link",
-          "pm": [
-            "okf",
-            "link"
-          ],
-          "role": "Cited link between LOF records: source \"LOF property\" target, proved by a piece and its exact quotation; a new record needs its LOF class.",
-          "parametres": {
-            "source": "#",
-            "relation": "#",
-            "target": "#?",
-            "piece": "--piece",
-            "citation": "--citation",
-            "source_class": "--source_class",
-            "target_class": "--target_class",
-            "value": "--value"
-          }
-        },
-        {
-          "nom": "unlink",
-          "pm": [
-            "okf",
-            "unlink"
-          ],
-          "role": "Remove a link.",
-          "parametres": {
-            "source": "#",
-            "relation": "#",
-            "target": "#"
-          }
-        },
-        {
-          "nom": "mark_examined",
-          "pm": [
-            "okf",
-            "examinee"
-          ],
-          "role": "Mark a document as read with nothing to link (remove = undo).",
-          "parametres": {
-            "document": "#",
-            "reason": "--motif",
-            "remove": "--retirer"
-          }
-        },
-        {
-          "nom": "list_linkable_reviews",
-          "pm": [
-            "okf",
-            "revues"
-          ],
-          "role": "Tabular reviews of the case documents and their columns, to link to a LOF record.",
-          "parametres": {}
-        },
-        {
-          "nom": "link_review",
-          "pm": [
-            "okf",
-            "revue"
-          ],
-          "role": "Link a tabular review column to a LOF record (created with its class if missing): its positive rows are its pieces, author agent until the lawyer checks them in the review (remove = unlink).",
-          "parametres": {
-            "premise": "#",
-            "class": "--classe",
-            "file": "--fichier",
-            "column": "--colonne",
-            "remove": "--retirer"
           }
         }
       ]

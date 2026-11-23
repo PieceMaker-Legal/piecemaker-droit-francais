@@ -17,19 +17,6 @@ const FILE_LINES = 200;
 
 export const INTENTS = { case: 'case', index: 'index', review: 'tabular_review', stamp: 'exhibits', deadlines: 'deadlines', catala: 'catala', draft: 'projects', other: 'case' };
 
-/**
- * Libellés des propriétés de la Legal Ontologies Foundry, lus par le serveur : le schéma de l'outil OkfWrite.
- * Sans serveur, une chaîne libre que le serveur contrôle à l'écriture.
- */
-export async function okfRelations(root, pm = runPmScript) {
-  try {
-    const result = await pm(['okf', 'ontologie', '--noms', '--dossier', root], root);
-    const names = result.code === 0 ? JSON.parse(result.stdout) : null;
-    if (Array.isArray(names) && names.length) return [...new Set(names.filter((name) => typeof name === 'string' && name))];
-  } catch {}
-  return null;
-}
-
 export function runPmScript(args, cwd) {
   return new Promise((resolve) => {
     execFile(process.execPath, [PM_SCRIPT, ...args], { cwd, timeout: PM_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (error, stdout, stderr) => {
@@ -45,23 +32,6 @@ const pmResult = (result) => text([result.stdout, result.stderr].map((part) => S
 function required(value, name, action) {
   if (value === undefined || value === null || value === '') throw Object.assign(new Error(`${action} needs "${name}".`), { code: 'invalid_argument' });
   return value;
-}
-
-export function okfArgv({ action, source, relation, target, piece, citation, value, source_class, target_class, reason, remove, file, column, class: classe }) {
-  if (action === 'link_review') {
-    required(file, 'file', action);
-    required(column, 'column', action);
-    return pmArgv('index', action, { premise: source, class: classe, file, column: String(column), remove });
-  }
-  if (action === 'mark_examined') {
-    if (!remove) required(reason, 'reason', action);
-    return pmArgv('index', action, { document: source, reason, remove });
-  }
-  required(relation, 'relation', action);
-  if (action === 'unlink') return pmArgv('index', action, { source, relation, target: required(target, 'target', action) });
-  required(piece, 'piece', action);
-  required(citation, 'citation', action);
-  return pmArgv('index', action, { source, relation, target, piece, citation, source_class, target_class, value });
 }
 
 export function caseFiles(root) {
@@ -87,7 +57,7 @@ function featureText(name, root) {
   ].join('\n');
 }
 
-export function createServer({ root = process.cwd(), pm = runPmScript, relations = null } = {}) {
+export function createServer({ root = process.cwd(), pm = runPmScript } = {}) {
   const server = new McpServer({ name: 'features', version: '0.1.0' });
   const store = openStore(root);
   const comments = openComments(root);
@@ -203,47 +173,8 @@ export function createServer({ root = process.cwd(), pm = runPmScript, relations
     }
   });
 
-  server.registerTool('OkfWrite', {
-    description: 'Writes the OKF index of the case with the Legal Ontologies Foundry (David Koepsell, CC BY 4.0): the server enforces the domain and range of each property and checks the quotation in the piece. writes holds one or more operations, run in order; all are validated before the first runs, and the run stops at the first failure. link adds a link source property target, proved by a piece and its exact quotation; a new record needs its LOF class (source_class, target_class); a party is a material entity; has date-time value takes value (YYYY-MM-DD) and no target. unlink removes a link. mark_examined records that a document was read and nothing justifies a link (reason), or undoes it (remove). link_review links a tabular review column (file, column) to the record titled source (class if new): its positive rows become its pieces, author agent until the lawyer checks them in the review; remove unlinks. Read the ontology with Feature run index read_ontology.',
-    inputSchema: {
-      writes: z.array(z.object({
-        action: z.enum(['link', 'unlink', 'mark_examined', 'link_review']),
-        source: z.string().min(1).describe('link, unlink: a document path, a party code or a LOF record title. mark_examined: the document. link_review: the record title.'),
-        relation: (relations ? z.enum(relations) : z.string().min(1)).optional().describe('link, unlink: the label of a LOF property.'),
-        target: z.string().min(1).optional().describe('link, unlink: a document path, a party code or a LOF record title. unlink has date-time value: the piece.'),
-        piece: z.string().min(1).optional().describe('link: the case document that proves the link.'),
-        citation: z.string().min(1).optional().describe('link: the exact sentence of the piece that proves the link.'),
-        source_class: z.string().min(1).optional().describe('link: the LOF class of the source when its record is new.'),
-        target_class: z.string().min(1).optional().describe('link: the LOF class of the target when its record is new.'),
-        class: z.string().min(1).optional().describe('link_review: the LOF class of the record when it is new.'),
-        value: z.string().optional().describe('link has date-time value: the date, YYYY-MM-DD.'),
-        reason: z.string().min(1).optional().describe('mark_examined: why no link is justified.'),
-        remove: z.boolean().optional().describe('mark_examined: undo the mark. link_review: unlink the review.'),
-        file: z.string().min(1).optional().describe('link_review: the review file (.json), from Feature run index list_linkable_reviews.'),
-        column: z.union([z.string().min(1), z.number().int()]).optional().describe('link_review: the column name or index.'),
-      })).min(1).max(50).describe('The operations, run in order.'),
-    },
-  }, async ({ writes }) => {
-    let argvs;
-    try {
-      argvs = writes.map(okfArgv);
-    } catch (error) {
-      return failure(error);
-    }
-    const reports = [];
-    for (const [index, argv] of argvs.entries()) {
-      const result = pmResult(await pm(caseArgs(argv), root));
-      reports.push(`${index + 1}. ${result.content[0].text}`);
-      if (result.isError) {
-        if (index + 1 < argvs.length) reports.push(`Stopped: operations ${index + 2} to ${argvs.length} not run.`);
-        return text(reports.join('\n'), true);
-      }
-    }
-    return text(reports.join('\n'));
-  });
-
   return server;
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
-if (isMain) await createServer({ relations: await okfRelations(process.cwd()) }).connect(new StdioServerTransport());
+if (isMain) await createServer().connect(new StdioServerTransport());

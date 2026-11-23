@@ -48,7 +48,7 @@ Recherche toi-même, avec les outils Légifrance, le texte, la décision ou la c
 }
 ```
 
-- Pas de doublon avec la base ni l'index. Les parties restent dans la base du dossier (onglet Dossier) : le Matter board les y lit, n'écris ni `client` ni `parties` dans `matter` (refusés dans un suivi du brain). Un événement dont la date est déjà portée par une prémisse de l'index y renvoie : `"okf": "<titre de la prémisse>"`, sans `date` ni `preuve` ; la date et sa preuve sont relues dans l'index (la prémisse doit avoir une valeur datée : `pm okf link <pièce> states "<titre>" --citation "…" --value AAAA-MM-JJ`).
+- Pas de doublon avec la base ni l'index. Les parties restent dans la base du dossier (onglet Dossier) : le Matter board les y lit, n'écris ni `client` ni `parties` dans `matter` (refusés dans un suivi du brain). Un événement dont la date est déjà portée par un concept du bundle OKF y renvoie : `"okf": "<titre du concept>"`, sans `date` ni `preuve` ; la date et sa preuve sont relues dans le bundle (le concept porte `date: AAAA-MM-JJ`, `resource` et `citation`, voir le skill okf).
 - Échéance calculée : `de` (après un événement ou une échéance) ou `avant` (à rebours d'une échéance), `delai` en `jours`, `jours_ouvres`, `mois` ou `ans`, `selon` obligatoire, `decompte` avec `depart` (`exclu` : le jour de départ ne compte pas ; `inclus`), `report` si le terme tombe un samedi, un dimanche ou un jour férié (`jour_ouvrable_suivant`, `jour_ouvrable_precedent`, `aucun`) et son `selon`. `prolongation: { delai, selon }` ajoute un délai supplémentaire justifié.
 - Échéance fixée : `date` et la `preuve` qui la porte (calendrier, ordonnance, avis).
 - `kind` d'une échéance : `limitation` (prescription ou forclusion), `hearing` (audience, réunion d'expertise, médiation), `filing` (acte à déposer ou signifier) ou `other`.
@@ -76,4 +76,4 @@ Avec un brain, chaque goal (un acte à produire ou une procédure à mener) a so
 | `Archive.md` | ce qui ne sert plus, sans le perdre | l'agent |
 | `Timeline.json` | `actes` (étape, versions), `evenements`, `echeances`, `matter` | l'avocat (actes), l'agent (le reste) |
 
-Sans frontmatter. Les parties restent dans la base, les dates portées par une prémisse dans l'index. Sans brain : mémoire `.piecemaker/memoires/<nom>.md` et suivi `.piecemaker/<nom>-suivi.json`.
+Sans frontmatter. Les parties restent dans la base, les dates portées par un concept dans le bundle OKF. Sans brain : mémoire `.piecemaker/memoires/<nom>.md` et suivi `.piecemaker/<nom>-suivi.json`.

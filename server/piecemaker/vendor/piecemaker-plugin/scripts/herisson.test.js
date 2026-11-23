@@ -156,20 +156,18 @@ test('la garde refuse un nouveau programme Catala dont le nom n’est pas un rai
   assert.equal(await reason('vieux'), null);
 });
 
-test('une commande pm okf link vérifie l’index, sans relancer les programmes Catala', async (t) => {
+test('une écriture dans le bundle OKF lance le validateur Context-OKF ; les commandes pm okf ne relancent rien', async (t) => {
   const fs = require('node:fs');
   const os = require('node:os');
   const { featureReport } = await load();
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-'));
   t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
-  for (const [nom, contenu] of [['cite', '## okf:/_premises/date-de-depart.md\n'], ['autre', '## Article 1 | LEGIARTI000000000001\n']]) {
-    fs.mkdirSync(path.join(dossier, '.piecemaker', 'catala', nom), { recursive: true });
-    fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', nom, `${nom}.catala_fr`), contenu);
-  }
-  const link = (command) => { const pm = fakePm('Index OKF : 0 erreur(s).'); return featureReport({ tool_name: 'Bash', cwd: dossier, tool_input: { command } }, { run: pm.run }).then(() => pm.calls.map((call) => call.args)); };
-  assert.deepEqual(await link('pm okf link pieces/a.md states "Date de départ" --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`]);
-  assert.deepEqual(await link('pm okf link pieces/a.md amends pieces/b.md --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`]);
-  assert.deepEqual(await link('pm okf verify'), []);
+  const call = (tool_name, tool_input) => { const pm = fakePm('ERROR  positions/a.md: missing required field: type\n3 file(s), 1 error(s), 0 lint(s)'); return featureReport({ tool_name, cwd: dossier, tool_input }, { run: pm.run }).then(() => pm.calls.map((entry) => entry.args)); };
+  assert.deepEqual(await call('Write', { file_path: '.piecemaker/okf/positions/a.md' }), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await call('Bash', { command: 'pm okf verify' }), []);
+  assert.deepEqual(await call('Bash', { command: 'pm okf ontologie' }), []);
+  const erreur = new RegExp(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'herisson.json'), 'utf8')).features.find((feature) => feature.nom === 'okf').erreur);
+  assert.deepEqual(['3 file(s), 1 error(s), 0 lint(s)', '3 file(s), 0 error(s), 2 lint(s)', '3 file(s), 0 error(s), 0 lint(s)'].map((output) => erreur.test(output)), [true, true, false]);
 });
 
 test('un appel MCP Feature run déclenche le même contrôle que la commande pm', async (t) => {
@@ -179,14 +177,12 @@ test('un appel MCP Feature run déclenche le même contrôle que la commande pm'
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-'));
   t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
   fs.mkdirSync(path.join(dossier, '.piecemaker'));
-  const call = (tool_input, tool_name = 'mcp__features__Feature') => { const pm = fakePm('Index OKF : 0 erreur(s).'); return featureReport({ tool_name, cwd: dossier, tool_input }, { run: pm.run }).then(() => pm.calls.map((entry) => entry.args)); };
-  const link = { action: 'run', name: 'index', command: 'link', args: { source: 'pieces/a.md', relation: 'amends', target: 'pieces/b.md', citation: 'Texte fictif.' } };
-  assert.deepEqual(await call(link), [`okf verify --dossier ${dossier}`]);
-  assert.deepEqual(await call({ ...link, action: 'read' }), []);
+  const call = (tool_input, tool_name = 'mcp__features__Feature') => { const pm = fakePm('Revue : 0 erreur(s).'); return featureReport({ tool_name, cwd: dossier, tool_input }, { run: pm.run }).then(() => pm.calls.map((entry) => entry.args)); };
+  const prepare = { action: 'run', name: 'tabular_review', command: 'prepare_review' };
+  assert.deepEqual(await call(prepare), [`tabular_review verifier --dossier ${dossier}`]);
+  assert.deepEqual(await call({ ...prepare, action: 'read' }), []);
   assert.deepEqual(await call({ action: 'run', name: 'index', command: 'verify_index' }), []);
-  assert.deepEqual(await call(link, 'mcp__autre__Feature'), []);
-  assert.deepEqual(await call({ writes: [{ action: 'link', ...link.args }, { action: 'mark_examined', source: 'pieces/a.md', reason: 'Aucun lien' }] }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
-  assert.deepEqual(await call({ writes: [{ action: 'mark_examined', source: 'pieces/a.md', reason: 'Aucun lien' }] }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await call(prepare, 'mcp__autre__Feature'), []);
 });
 
 test('une commande pm tabular_review preparer ou lancer vérifie le brouillon', async () => {

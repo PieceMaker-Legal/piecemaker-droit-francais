@@ -7,7 +7,6 @@ import type { ClassificationFolder } from '../../../plugins/piecemaker-tabular-r
 import { DEFAULT_CLASSIFICATION, REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
 // ~/.piecemaker/ontologie.json, commun à tous les dossiers : l'arborescence, sous un sceau.
-// Classes, relations et natures viennent de la Legal Ontologies Foundry (lof.json).
 
 const home = (): string => process.env.PIECEMAKER_HOME || path.join(os.homedir(), '.piecemaker');
 export const ontologyFile = (): string => path.join(home(), 'ontologie.json');

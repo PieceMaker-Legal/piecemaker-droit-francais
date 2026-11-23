@@ -46,7 +46,7 @@ import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
 import { createSourceConnectors } from './source-connectors.js';
 import { createCatalaCitation } from './catala-citation.js';
-import { premiseDate } from './okf/premise-date.js';
+import { premiseDate } from './okf/index.js';
 import { catalaScriptPath, createCatalaCitationCheck, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';

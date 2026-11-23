@@ -140,7 +140,7 @@ describe('Liens des légendes', () => {
     ['chronology', 'edit-tree', 'tree', '[data-tree-name]'],
     ['graph', 'edit-ontology', 'relations', '[data-lof-view]'],
   ])('ouvre directement l’éditeur depuis %s', async (tab, action, pane, field) => {
-    vi.spyOn(okfApi, 'ontology').mockResolvedValue({ lof: [], attribution: 'LOF', source: 'https://example.org', personnalisee: false, types: [] });
+    vi.spyOn(okfApi, 'ontology').mockResolvedValue({ patterns: [], personnalisee: false, types: [] });
     vi.spyOn(classificationApi, 'read').mockResolvedValue({ folders: [{ name: 'Documents', explanation: 'Documents du dossier', type: 'Pièces' }] });
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
     container.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)!.click();

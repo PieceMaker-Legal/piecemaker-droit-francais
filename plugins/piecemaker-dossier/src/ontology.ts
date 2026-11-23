@@ -1,35 +1,28 @@
 import { editClassification } from './classification.js';
 import { modal } from './editors.js';
-import { okfApi, type LofEntry } from './okf.js';
+import { okfApi, type LofPattern } from './okf.js';
 import { askChat, chatAttributes } from './chat-pick.js';
 import { escapeHtml } from './views.js';
 
-const ASK_NOTE = 'ontologie LOF reprise du dépôt Legal Ontologies Foundry, lue par pm okf ontologie ; elle ne se modifie pas';
-const KINDS: Array<[LofEntry['kind'], string]> = [['class', 'Classes'], ['objprop', 'Object properties'], ['dataprop', 'Data properties'], ['individual', 'Individuals']];
+const ASK_NOTE = 'patterns de la Legal Ontologies Foundry (ODP-001 à 006), lus par pm okf ontologie ; ils ne se modifient pas';
+const ATTRIBUTION = 'Legal Ontologies Foundry, David R. Koepsell, CC BY 4.0.';
 
-function termMarkup(term: LofEntry, labelOf: (id: string) => string): string {
-  const list = (name: string, ids?: string[]) => ids?.length ? `<dt>${name}</dt><dd>${ids.map((id) => escapeHtml(labelOf(id))).join(', ')}</dd>` : '';
-  const notes = term.annotations.map(([name, value]) => `<dt>${escapeHtml(name)}</dt><dd>${escapeHtml(value)}</dd>`).join('');
-  const axioms = (term.axioms || []).map((axiom) => `<dt>${escapeHtml(axiom.k)}</dt><dd>${escapeHtml(axiom.m)}</dd>`).join('');
-  return `<details class="pmd-form-section pmd-ontology-row" data-lof-term="${escapeHtml(term.id)}"${chatAttributes(term.label, 'LOF', ASK_NOTE, {})}>
-    <summary><strong>${escapeHtml(term.label)}</strong> <code>${escapeHtml(term.id)}</code></summary>
-    <dl class="pmd-fact-props"><dt>IRI</dt><dd>${escapeHtml(term.iri)}</dd>${notes}${list('subClassOf', term.subClassOf)}${list('subPropertyOf', term.subPropertyOf)}${list('domain', term.domain)}${list('range', term.range)}${list('inverseOf', term.inverseOf)}${list('type', term.type)}${axioms}</dl>
+function patternMarkup(pattern: LofPattern): string {
+  return `<details class="pmd-form-section pmd-ontology-row" data-lof-term="${escapeHtml(pattern.id)}"${chatAttributes(pattern.title, 'LOF', ASK_NOTE, {})}>
+    <summary><strong>${escapeHtml(pattern.title)}</strong> <code>${escapeHtml(pattern.id)}</code></summary>
+    <p class="pmd-form-note">${escapeHtml(pattern.description)}</p>
+    <pre class="pmd-fact-text">${escapeHtml(pattern.body)}</pre>
   </details>`;
 }
 
 async function showLof(root: HTMLElement, projectId: string): Promise<() => Promise<void>> {
   const state = await okfApi.ontology(projectId);
-  const labels = new Map(state.lof.map((term) => [term.id, term.label]));
-  const labelOf = (id: string) => labels.get(id) || id;
   const layer = modal(root, `
     <div class="pmd-form" data-lof-view>
       <div class="pmd-ontology-change-head"><h2 class="pmd-title piecemaker-display">Legal Ontologies Foundry</h2><span class="pmd-spacer"></span><button type="button" class="pmd-button" data-lof-ask>Demander à l’assistant</button></div>
-      <p class="pmd-form-note">${escapeHtml(state.attribution)} <a href="${escapeHtml(state.source)}" target="_blank" rel="noreferrer">${escapeHtml(state.source)}</a></p>
+      <p class="pmd-form-note">${ATTRIBUTION}</p>
       ${state.erreur ? `<div class="pmd-error" role="alert">${escapeHtml(state.erreur)}</div>` : ''}
-      ${KINDS.map(([kind, title]) => {
-        const terms = state.lof.filter((term) => term.kind === kind);
-        return terms.length ? `<h3>${title} (${terms.length})</h3>${terms.map((term) => termMarkup(term, labelOf)).join('')}` : '';
-      }).join('')}
+      ${state.patterns.map(patternMarkup).join('')}
       <div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Fermer</button></div>
     </div>`, true);
   layer.addEventListener('click', (event) => {
@@ -39,7 +32,7 @@ async function showLof(root: HTMLElement, projectId: string): Promise<() => Prom
 }
 
 export async function editOntology(root: HTMLElement, projectId: string, onSaved: () => void, projectPath = '', initial = 'relations'): Promise<void> {
-  const tabs = [['relations', 'LOF'], ['tree', 'Classement']];
+  const tabs = [['relations', 'Socle LOF'], ['tree', 'Classement']];
   const layer = modal(root, `<h2 class="pmd-title piecemaker-display">Ontologie</h2><div class="pmd-settings-tabs" role="tablist" aria-label="Ontologie">${tabs.map(([id, label]) => `<button type="button" class="pmd-button" role="tab" id="pmd-settings-${id}" aria-controls="pmd-pane-${id}" data-settings-tab="${id}" aria-selected="false">${label}</button>`).join('')}</div>${tabs.map(([id]) => `<section role="tabpanel" id="pmd-pane-${id}" aria-labelledby="pmd-settings-${id}" data-settings-pane="${id}" hidden></section>`).join('')}<div class="pmd-error" data-settings-error role="alert" hidden></div><div class="pmd-form-actions"><button type="button" class="pmd-button" data-close>Annuler</button><button type="button" class="pmd-button pmd-button-primary" data-settings-save>Enregistrer</button></div>`);
   const saved = () => { layer.remove(); onSaved(); };
   const mounted = new Set<string>();
@@ -67,7 +60,6 @@ export async function editOntology(root: HTMLElement, projectId: string, onSaved
     button.disabled = true;
     try {
       for (const save of saves.values()) await save();
-      if (saves.has('tree')) await okfApi.rebuild(projectId);
       saved();
     }
     catch (error) {

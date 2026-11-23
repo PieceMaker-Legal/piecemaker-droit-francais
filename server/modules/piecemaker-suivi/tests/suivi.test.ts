@@ -467,7 +467,7 @@ test('un événement renvoie à la prémisse OKF qui porte sa date, et les parti
   assert.equal(result.echeances[0].date, '2026-11-16');
   const errors = texts(result, 'erreur');
   assert.ok(errors.some((entry) => entry.startsWith('matter.parties : matter.parties vient de la base du dossier')));
-  assert.ok(errors.some((entry) => entry.startsWith('evenements.lettre de relance.okf : prémisse « Prémisse absente » absente de l’index')));
+  assert.ok(errors.some((entry) => entry.startsWith('evenements.lettre de relance.okf : concept « Prémisse absente » absent du bundle OKF')));
   assert.ok(errors.some((entry) => entry.startsWith('evenements.mise en demeure.okf : okf remplace date')));
   const legacy = await verifySuivi({ code, cwd: '/dossier-fictif', connectors, marks: new Map(), today: '2026-10-26' });
   assert.ok(!texts(legacy, 'erreur').some((entry) => entry.startsWith('matter.parties')));

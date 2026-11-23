@@ -57,11 +57,11 @@ test('every command maps to a pm command and its options, with unique English na
       }
     }
   }
-  assert.deepEqual(pmArgv('index', 'link', { source: 'Date de départ', relation: 'has date-time value', piece: 'Pièces/a.md', citation: 'Texte fictif.', value: '2024-01-01' }), ['okf', 'link', 'Date de départ', 'has date-time value', '--piece', 'Pièces/a.md', '--citation', 'Texte fictif.', '--value', '2024-01-01']);
+  assert.deepEqual(pmArgv('index', 'propose_ontology', { ontology: { arborescence: [] }, reason: 'Exemple' }), ['okf', 'ontologie', 'proposer', '--json', '{"arborescence":[]}', '--motif', 'Exemple']);
   assert.deepEqual(pmArgv('case', 'convert_documents', {}), ['dossier', 'conversion']);
   assert.deepEqual(pmArgv('exhibits', 'stamp_exhibits', { exhibits: ['a.pdf', 'b.pdf'] }), ['bordereau', 'a.pdf', 'b.pdf']);
   assert.deepEqual(pmArgv('deadlines', 'write_board', { path: 'projects/cabinet', data: { a: 1 } }), ['suivi_dossiers', 'ecrire', 'projects/cabinet', '--json', '{"a":1}']);
-  assert.throws(() => pmArgv('index', 'link', { source: 'a.md' }), /needs "relation"/);
+  assert.throws(() => pmArgv('case', 'file_document', { document: 'a.md' }), /needs "folder"/);
   assert.throws(() => pmArgv('deadlines', 'verify_deadlines', { file: 'x' }), /unknown parameter/);
   assert.throws(() => pmArgv('deadlines', 'nothing'), /unknown command/);
 });

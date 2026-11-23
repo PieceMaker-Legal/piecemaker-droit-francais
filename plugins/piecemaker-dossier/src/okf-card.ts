@@ -8,7 +8,7 @@ const SIDES: Record<string, string> = { client: 'Client', adversaire: 'Adverse',
 const sideOf = (party: OkfFiche) => party.side === 'adversaire' ? 'adverse' : party.side || 'tiers';
 const ficheFile = (fiche: OkfFiche) => `.piecemaker/okf${fiche.id}`;
 const iconOf = (fiche: OkfFiche) => isParty(fiche) ? 'users' : isEntity(fiche) ? 'diamond' : fiche.icon || 'file';
-const kindOf = (fiche: OkfFiche) => isEntity(fiche) ? 'Fiche LOF' : isParty(fiche) ? 'Partie' : 'Document';
+const kindOf = (fiche: OkfFiche) => isEntity(fiche) ? 'Concept' : isParty(fiche) ? 'Partie' : 'Document';
 const shortTitle = (fiche: OkfFiche) => fiche.title.replace(/\.(?:pdf|docx?|xlsx?|png|jpe?g|txt|md)$/i, '');
 
 function pill(index: OkfIndex, fiche: OkfFiche, prefix = ''): string {
@@ -26,12 +26,10 @@ const signature = (verb: string, by?: string, at?: string) => by || when(at) ? `
 const fileButton = (resource: string) => resource ? `<button type="button" class="pmd-fact-file" data-open-file="${escapeText(resource)}" title="Ouvrir dans le volet Fichier">${escapeText(resource)}</button>` : '';
 const quote = (citation: string) => citation ? `<small class="pmd-fact-quote">« ${escapeText(citation)} »</small>` : '';
 
-const AUTHORS: Record<string, string> = { human: 'vérifiée par l’avocat', agent: 'réponse de l’agent, à vérifier dans la revue' };
-
-function sourceRow(index: OkfIndex, fiche: OkfFiche, label: string, citation: string, link?: { origin: string; at?: string; author?: string; review?: string }): string {
+function sourceRow(index: OkfIndex, fiche: OkfFiche, label: string, citation: string, link?: { origin: string; at?: string }): string {
   const file = isEntity(fiche) || isParty(fiche) ? ficheFile(fiche) : fiche.resource;
   const icon = iconOf(fiche);
-  const signed = link?.author ? `Revue « ${escapeText(link.review || '')} » · ${AUTHORS[link.author] || link.author}${link.author === 'human' && when(link.at) ? ` le ${when(link.at)}` : ''}` : link ? signature('Lien posé', link.origin, link.at) : '';
+  const signed = link ? signature('Lien posé', link.origin, link.at) : '';
   return `<div class="pmd-fact-source"${chatAttributes(fiche.title, kindOf(fiche), citation ? `Citation : « ${citation} »` : '', { fichier: file })}>${iconSvg(icon)}<span class="pmd-fact-source-copy">${label ? `<span class="pmd-fact-source-label">${escapeText(label)}</span>` : ''}<button type="button" class="pmd-fact-source-title" data-open-fiche="${escapeText(fiche.id)}">${escapeText(fiche.title)}</button>${fileButton(fiche.resource)}${quote(citation)}${signed ? `<small class="pmd-fact-signature">${signed}</small>` : ''}</span></div>`;
 }
 
@@ -56,10 +54,10 @@ function entityBody(index: OkfIndex, entity: OkfFiche) {
     sources.length ? '' : '<span class="pmd-fact-warning">⚠ Aucune pièce</span><p class="pmd-fact-text">Aucune pièce ne fonde cette fiche.</p>',
   ].join('');
   return {
-    kind: 'Fiche LOF',
+    kind: 'Concept',
     meta: entity.lof || entity.type,
-    actions: '<button type="button" class="pmd-button piecemaker-button piecemaker-button--black piecemaker-button--sm" data-link-review>Lier une revue tabulaire</button><div class="pmd-review-picker" data-review-picker hidden></div>',
-    props: row('Classe LOF', text(entity.lof || entity.type))
+    actions: '',
+    props: row('Type', text(entity.lof || entity.type))
       + row('Valeurs', values.map((value) => text(value, diverge ? 'warning' : 'value')).join(''))
       + row('Liens', linksRow(index, entity))
       + row('Pièces', text(String(new Set(sources.map((entry) => entry.resource)).size))),
@@ -68,8 +66,7 @@ function entityBody(index: OkfIndex, entity: OkfFiche) {
       + section('Pièces sources', sources.map((entry) => {
         const piece = index.fiches.find((fiche) => fiche.resource === entry.resource);
         return piece ? sourceRow(index, piece, [entry.label, entry.value].filter(Boolean).join(' : '), entry.citation, entry) : '';
-      }).join(''))
-      + section('Revues tabulaires liées', (entity.revues || []).map((review) => `<div class="pmd-fact-source">${iconSvg('list')}<span class="pmd-fact-source-copy"><span class="pmd-fact-source-label">${escapeText(review.question || `Colonne ${review.colonne}`)}</span><span class="pmd-fact-source-title">${escapeText(review.titre)}</span><small class="pmd-fact-signature">${review.erreur ? `⚠ ${escapeText(review.erreur)}` : `${review.lignes.length} ligne${review.lignes.length > 1 ? 's' : ''} positive${review.lignes.length > 1 ? 's' : ''}, dont ${review.lignes.filter((line) => line.author === 'human').length} vérifiée${review.lignes.filter((line) => line.author === 'human').length > 1 ? 's' : ''}`}${signature(' · Liée', review.by, review.at)}</small><button type="button" class="pmd-fact-file" data-unlink-review="${escapeText(review.fichier)}" data-review-column="${review.colonne}">Délier</button></span></div>`).join('')),
+      }).join('')),
   };
 }
 
@@ -82,9 +79,8 @@ function documentBody(index: OkfIndex, fiche: OkfFiche) {
     props: row('Fichier', fileButton(fiche.resource))
       + row('Type de pièce', fiche.nature ? `<span class="pmd-fact-pill pmd-fact-pill-static">${iconSvg(fiche.icon || 'file')}${escapeText(fiche.nature)}</span>` : text('À renseigner', 'muted'))
       + row('Date', fiche.date ? text(fiche.date) : '')
-      + row('Fiches LOF', [...new Set(cited.map(({ other }) => other))].map((other) => pill(index, other)).join(''))
-      + row('Liens', linksRow(index, fiche))
-      + row('Examen', fiche.examen ? text(`Examinée sans lien par ${ACTORS[fiche.examen.by] || fiche.examen.by}${when(fiche.examen.at) ? ` le ${when(fiche.examen.at)}` : ''} : ${fiche.examen.motif}`) : ''),
+      + row('Concepts', [...new Set(cited.map(({ other }) => other))].map((other) => pill(index, other)).join(''))
+      + row('Liens', linksRow(index, fiche)),
     sections: section('Description', fiche.description && fiche.description !== fiche.nature ? `<p class="pmd-fact-text">${escapeText(fiche.description)}</p>` : '')
       + section('Citations', fiche.relations.filter((entry) => entry.citation).map((entry) => {
         const target = byId(index, entry.target);
@@ -104,7 +100,7 @@ function partyBody(index: OkfIndex, party: OkfFiche) {
     meta: ['Partie', party.description].filter(Boolean).join(' · '),
     actions: '<button type="button" class="pmd-button piecemaker-button piecemaker-button--black piecemaker-button--sm" data-edit-fiche>Modifier la partie</button>',
     props: row('Côté', text(SIDES[party.side || 'tiers'] || party.side || 'Tiers', sideOf(party)))
-      + row('Fiches LOF', linked.map((entity) => pill(index, entity)).join(''))
+      + row('Concepts', linked.map((entity) => pill(index, entity)).join(''))
       + row('Liens', linksRow(index, party))
       + row('Pièces', text(String(mentions.length))),
     sections: section('Pièces liées', mentions.map(({ other, entry }) => sourceRow(index, other, '', entry.citation, entry)).join('')),

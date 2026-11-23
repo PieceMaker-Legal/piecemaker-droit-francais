@@ -3,7 +3,7 @@
 1. Formulez la question juridique avant de coder sa réponse.
 2. Décomposez la réponse en qualifications, conditions et exceptions nommées. Gardez les liens dans les expressions Catala.
 3. Une entrée est un fait typé (date, montant, durée, texte d’une clause), jamais une question. La règle le qualifie.
-4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque fait à sa prémisse OKF ; la prémisse porte les pièces et leurs citations.
+4. Rattachez chaque règle à son texte, avec une citation exacte. Rattachez chaque fait à son concept du bundle OKF ; le concept porte la pièce (`resource`) et sa citation.
 5. Établissez chaque fait par les pièces. Un fait que les pièces ne prouvent pas est écarté, faute de preuve, au détriment de la partie qui le supporte (art. 1353 C. civ.). Ne le laissez pas inconnu.
 6. Une notion à apprécier (délai raisonnable, faute grave) est une définition argumentée, sourcée par le texte ou la jurisprudence, pas une entrée.
 7. Écrivez un scénario `#[test]` du dossier, avec les faits établis. Ajoutez un scénario seulement quand un fait contesté change l’issue.
