@@ -4642,7 +4642,7 @@
       "vers": "agent",
       "fichier": "server/piecemaker/vendor/mcp/orchestrateur/server.mjs",
       "guillemet": "'",
-      "ancre": "Fournisseur par défaut des nouveaux fils."
+      "ancre": "Fournisseur par défaut des nouveaux fils ; chat : le même que le chat principal."
     },
     {
       "id": "mcp-orchestrateur--parametre-default-models-de-update-project-setti",
