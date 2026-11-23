@@ -55,6 +55,8 @@ Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA2
 
 `persons.ts` génère `okf/persons/` depuis la base du dossier à chaque `read` et `verify` : une fiche par personne (`cco: Person`) ou organisation (`cco: Organization`), nommée d'après son code, avec désignation, liens, citations et pièces qui la mentionnent. `persons/index.md` classe les fiches par auteur (`gliner` À trier, `agent` À vérifier, `human` Validé) et liste les éléments non rattachés. L'agent complète la base par l'outil `sql`, jamais les fichiers ; un Rôle lie sa fiche `/persons/<code>.md` et en prend le côté.
 
+Un changement de code (`renameNode`) garde l'ancien code dans `data_json.codes_retires`. À la génération suivante, chaque lien du bundle vers l'ancienne fiche (`/persons/…` ou relatif) est réécrit vers la nouvelle, sauf si une fiche actuelle porte encore l'ancien nom.
+
 ## Suivi du dossier
 
 Un événement du suivi renvoie à un concept daté par son titre : `evenements.<nom>.okf` = `title` du concept, qui porte `date`, `resource` et `citation` (`premiseDate`).
@@ -64,7 +66,6 @@ Un événement du suivi renvoie à un concept daté par son titre : `evenements.
 - Un bundle au format 0.2 (fiches LOF, `_parties/`, `relations` en frontmatter) n'est pas repris : `verify` le signale jusqu'à ce que l'agent le reconstruise.
 - Les tables SQLite de l'ancien OKF restent dans les bases existantes, sans lecteur.
 - Les revues tabulaires ne se lient plus à un concept.
-- Une fiche `persons/` change de nom si son code change : les liens des Rôles vers l'ancien nom cassent et `verify` les signale.
 - Délier un élément dans l'onglet Dossier n'empêche pas le scan suivant de recréer le lien.
 - Une commande qui fabrique le chemin de `ontologie.json` sans le nommer échappe au hook ; le sceau détecte alors une arborescence modifiée.
 

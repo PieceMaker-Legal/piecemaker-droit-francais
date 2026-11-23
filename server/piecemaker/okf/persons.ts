@@ -79,11 +79,28 @@ export function renderPersons(snapshot: KnowledgeSnapshot): Map<string, string> 
   return new Map([['index.md', index], ...parties.map((node): [string, string] => [personFile(node), fiche(node)])]);
 }
 
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+function retargetLinks(root: string, snapshot: KnowledgeSnapshot, current: Set<string>): void {
+  const renames = snapshot.nodes.filter(isParty).flatMap((node) => (Array.isArray(node.data.codes_retires) ? node.data.codes_retires : [])
+    .map((code) => personFile({ id: `entity:${text(code)}` }))
+    .filter((retired) => retired !== personFile(node) && !current.has(retired))
+    .map((retired): [RegExp, string] => [new RegExp(`(\\]\\([^)\\s]*${PERSONS}/)${escapeRegExp(retired)}(?=[)#\\s])`, 'g'), `$1${personFile(node)}`]));
+  if (!renames.length) return;
+  const files = (fs.readdirSync(root, { recursive: true }) as string[]).filter((file) => file.endsWith('.md') && !file.startsWith(`${PERSONS}${path.sep}`));
+  for (const file of files) {
+    const content = fs.readFileSync(path.join(root, file), 'utf8');
+    const updated = renames.reduce((value, [pattern, target]) => value.replace(pattern, target), content);
+    if (updated !== content) fs.writeFileSync(path.join(root, file), updated);
+  }
+}
+
 export function writePersons(projectPath: string, snapshot: KnowledgeSnapshot): void {
   const root = bundleRoot(projectPath);
   if (!fs.existsSync(path.join(root, 'index.md'))) return;
   const folder = path.join(root, PERSONS);
   const files = renderPersons(snapshot);
+  retargetLinks(root, snapshot, new Set(files.keys()));
   fs.mkdirSync(folder, { recursive: true });
   for (const name of fs.readdirSync(folder)) if (name.endsWith('.md') && !files.has(name)) fs.rmSync(path.join(folder, name), { force: true });
   for (const [name, content] of files) {

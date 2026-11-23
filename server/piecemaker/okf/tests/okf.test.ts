@@ -126,6 +126,15 @@ test('un Rôle lié à une fiche persons prend son côté, et le bundle reste va
   assert.deepEqual([report.erreurs, report.lints], [[], []]);
 });
 
+test('un pseudonyme changé met à jour ses liens dans tout le bundle', () => {
+  const { projectPath, root } = dossier();
+  write(root, 'roles/prestataire.md', '---\ntype: Rôle\ntitle: Prestataire\ndescription: Prestataire du contrat.\n---\n\n# Prestataire\n\nPorteur : [Jean Dupont](/persons/personne-physique-01.md) et [fiche](../persons/personne-physique-01.md#liens).\n');
+  const renamed = { ...PARTIES, nodes: PARTIES.nodes.map((entry) => entry.id === 'entity:PERSONNE_PHYSIQUE_01' ? { ...entry, id: 'entity:PERSONNE_PHYSIQUE_09', data: { ...entry.data, code: 'PERSONNE_PHYSIQUE_09', codes_retires: ['PERSONNE_PHYSIQUE_01'] } } : entry) };
+  backend(projectPath, () => renamed).read('p');
+  assert.match(fs.readFileSync(path.join(root, 'roles/prestataire.md'), 'utf8'), /\[Jean Dupont\]\(\/persons\/personne-physique-09\.md\) et \[fiche\]\(\.\.\/persons\/personne-physique-09\.md#liens\)/);
+  assert.ok(!fs.existsSync(path.join(root, 'persons/personne-physique-01.md')));
+});
+
 test('l\'ontologie rend les six patterns LOF du contexte', () => {
   const { projectPath } = dossier();
   assert.deepEqual(backend(projectPath).ontology('p').patterns.map((pattern) => pattern.id), ['odp-001', 'odp-002', 'odp-003', 'odp-004', 'odp-005', 'odp-006']);

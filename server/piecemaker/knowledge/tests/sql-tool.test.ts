@@ -427,3 +427,8 @@ test('toute écriture de l\'agent sur une entité ou un lien porte l\'auteur age
   assert.equal(rows(`SELECT json_extract(data_json,'$.auteur') AS a FROM piecemaker_links WHERE relation='dirigeant de'`)[0].a, 'agent');
   assert.equal(rows(`SELECT json_extract(data_json,'$.auteur') AS a FROM piecemaker_nodes WHERE id='document:piece-2'`)[0].a, null);
 }));
+
+test('un changement de code garde l\'ancien code dans codes_retires', () => withFixture(async ({ rows, store }) => {
+  store.update({ projectId: PROJECT_ONE, operations: [{ op: 'renameNode', rename: { fromNodeId: PERSON, toNodeId: 'entity:PERSONNE_PHYSIQUE_09' } }] });
+  assert.deepEqual(JSON.parse(String(rows("SELECT json_extract(data_json,'$.codes_retires') AS c FROM piecemaker_nodes WHERE id='entity:PERSONNE_PHYSIQUE_09'")[0].c)), ['PERSONNE_PHYSIQUE_01']);
+}));
