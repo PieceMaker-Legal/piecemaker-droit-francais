@@ -40,10 +40,9 @@ function excludedRoots() {
     .filter(Boolean);
 }
 
-function isEligibleProjectFolder(folder) {
-  const home = realDirectory(os.homedir());
+function isEligibleProjectFolder(folder, home, excluded) {
   if (home && isInsideOrEqualPath(folder, home)) return false;
-  return !excludedRoots().some((root) => isInsideOrEqualPath(root, folder));
+  return !excluded.some((root) => isInsideOrEqualPath(root, folder));
 }
 
 function readSources(file) {
@@ -56,8 +55,10 @@ function readSources(file) {
 }
 
 function publishedFolders(file) {
-  const folders = Object.values(readSources(file)).flatMap((list) => (Array.isArray(list) ? list : []));
-  return [...new Set(folders.map(realDirectory).filter(Boolean))].filter(isEligibleProjectFolder);
+  const folders = new Set(Object.values(readSources(file)).flatMap((list) => (Array.isArray(list) ? list : [])));
+  const home = realDirectory(os.homedir());
+  const excluded = excludedRoots();
+  return [...new Set([...folders].map(realDirectory).filter(Boolean))].filter((folder) => isEligibleProjectFolder(folder, home, excluded));
 }
 
 /** Absolute, existing and de-duplicated project folders, across every publishing server. */
