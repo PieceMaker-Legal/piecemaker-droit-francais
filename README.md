@@ -1,89 +1,39 @@
-# PieceMaker
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/logo-sources/logo-white.png">
+    <source media="(prefers-color-scheme: light)" srcset="public/logo-sources/logo-black.png">
+    <img src="public/logo-sources/logo-black.png" alt="PieceMaker" width="140">
+  </picture>
+</p>
 
-PieceMaker is a browser/PWA interface backed by a local Node.js server.
+<h1 align="center">PieceMaker</h1>
 
-## Install
+<p align="center">L'assistant IA de l'avocat en droit français, installé sur son poste, qui travaille sur les pièces du dossier.</p>
 
-Application de bureau (voie principale, sans Node ni git) :
+- **Anonymiser les pièces** avant tout envoi à l'IA, et protéger les originaux du dossier.
+- **Rechercher dans Légifrance et Judilibre**, avec vérification des citations.
+- **Rédiger et réviser des documents Word**, avec propositions en suivi des modifications et playbooks de négociation.
+- **Analyser un ensemble de documents** sous forme de tableau : une ligne par document, une colonne par question.
+- **Suivre les échéances** de procédure ou de contrat de tous les dossiers, calculées et justifiées.
+- **Préparer le bordereau** : tampon du cabinet et numérotation des pièces.
+- **Suivre le temps passé** par dossier, avec Claude, Codex ou Mistral au choix.
 
-macOS :
+## Installation
+
+**Windows** (PowerShell) :
+
+```powershell
+$ProgressPreference = 'SilentlyContinue'; $r = Invoke-RestMethod https://api.github.com/repos/PieceMaker-Legal/piecemaker-droit-francais/releases/latest; $a = $r.assets | Where-Object name -like 'piecemaker-droit-francais-desktop-*-win-x64.exe' | Select-Object -First 1; $f = Join-Path $env:TEMP $a.name; Invoke-WebRequest $a.browser_download_url -OutFile $f -UseBasicParsing; Start-Process $f
+```
+
+**macOS** (Terminal) :
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/desktop-bootstrap/install.sh | sh
+url=$(curl -fsSL https://api.github.com/repos/PieceMaker-Legal/piecemaker-droit-francais/releases/latest | grep -o '"browser_download_url": *"[^"]*\.dmg"' | sed 's/.*"\(https[^"]*\)"/\1/' | head -n 1) && curl -fL "$url" -o /tmp/PieceMaker.dmg && open /tmp/PieceMaker.dmg
 ```
 
-Windows (PowerShell) :
+Ou téléchargez l'installeur depuis la [page Releases](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/releases/latest).
 
-```powershell
-irm https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/desktop-bootstrap/install.ps1 | iex
-```
+## Licence et attribution
 
-Développeur / PWA (clone git + Node) :
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.sh | sh && piecemaker
-```
-
-```powershell
-irm https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/scripts/piecemaker/cli/piecemaker.ps1 | iex; piecemaker
-```
-
-## Install from GitHub Packages
-
-The same package can also be published publicly to GitHub Packages:
-
-```bash
-npm install -g @piecemaker-legal/piecemaker --registry=https://npm.pkg.github.com
-piecemaker
-```
-
-GitHub Packages uses a separate registry from npmjs. Maintainers need GitHub
-publishing credentials; no credential is stored in this repository.
-
-## Build and test the package locally
-
-```bash
-npm ci
-npm run build
-npm pack
-npm install -g ./piecemaker-1.37.2.tgz
-```
-
-## Attribution
-
-PieceMaker is a French-law-focused fork of [CloudCLI UI](https://github.com/siteboon/claudecodeui), the open-source web interface for Claude Code, Cursor CLI, and Codex. It retains the upstream CloudCLI architecture and licensing while adding PieceMaker-specific branding and legal-work features.
-
-The package is licensed under AGPL-3.0-or-later. Upstream CloudCLI notices and license terms remain applicable to the corresponding code.
-
-## Regenerate the package
-
-From a clean checkout, this pulls the latest fast-forwardable commits from
-`origin`, increments the patch version, builds the client and server, and
-creates a package archive under `release/npm/`:
-
-```bash
-npm run package:release
-```
-
-Use `minor`, `major`, or an explicit version instead of `patch` when needed:
-
-```bash
-npm run package:release -- minor
-npm run package:release -- 1.38.0
-```
-
-Publishing and pushing the version bump are explicit:
-
-```bash
-PUBLISH=1 PUSH=1 npm run package:release
-```
-
-`PUBLISH=1` publishes to the public npm registry using the maintainer's local
-npm authentication. The script never creates or stores credentials.
-
-To publish through GitHub Packages instead:
-
-```bash
-npm run package:github:release
-PUBLISH=1 PUSH=1 npm run package:github:release
-```
+PieceMaker est un fork orienté droit français de [CloudCLI UI](https://github.com/siteboon/claudecodeui), l'interface web open source pour Claude Code, Cursor CLI et Codex. Il est distribué sous licence AGPL-3.0-or-later ; les mentions et conditions de licence de CloudCLI restent applicables au code correspondant.
