@@ -144,7 +144,8 @@ export async function mountGraph(container: HTMLElement, index: OkfIndex, withEn
 
   const pill = (x: number, y: number, w: number, h: number) => {
     ctx!.beginPath();
-    ctx!.roundRect ? ctx!.roundRect(x, y, w, h, h / 2) : ctx!.rect(x, y, w, h);
+    if (typeof ctx!.roundRect === 'function') ctx!.roundRect(x, y, w, h, h / 2);
+    else ctx!.rect(x, y, w, h);
   };
 
   const draw = () => {

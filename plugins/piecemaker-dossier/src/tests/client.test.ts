@@ -188,7 +188,7 @@ describe('Index : classement', () => {
     container.querySelector<HTMLButtonElement>('[data-tree-remove="2"]')!.click();
     const submit = () => container.querySelector('form[data-tree-form]')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
     submit();
-    await vi.waitFor(() => expect(container.querySelector('[data-settings-error]')!.textContent).toContain('Nom de dossier invalide'));
+    await vi.waitFor(() => expect(container.querySelector('[data-tree-error]')!.textContent).toContain('Nom de dossier invalide'));
     expect(container.querySelector<HTMLInputElement>('[data-tree-name]')!.value).toBe('Contrats/Signés');
     rejectSave = false;
     submit();
