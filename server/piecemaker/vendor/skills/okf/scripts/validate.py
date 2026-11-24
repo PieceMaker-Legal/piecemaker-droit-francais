@@ -25,7 +25,9 @@ Under --strict the validator additionally reports producer-quality LINTs:
     carry the Foundry's own objects -- BFO, the Foundry, the six published
     patterns ODP-001..006 -- and every pattern or ontology concept carries its
     LOF source asset through `resource` (no link-only knowledge); the asset
-    must exist in the bundle.
+    must exist in the bundle;
+  - concision (Context-OKF house rule): every .md file of the bundle, assets
+    included, stays within MAX_LINES lines.
 None of these are spec violations -- consumers MUST tolerate them -- but they
 still fail the --strict gate (exit 1) so producers can keep a bundle tidy.
 
@@ -63,6 +65,7 @@ except ImportError:
 
 RESERVED = {"index.md", "log.md"}
 RECOMMENDED_FIELDS = ("title", "description")
+MAX_LINES = 500  # house rule: no bundle file longer than this (keep in sync with SKILL.md)
 
 
 def iter_markdown_files(root):
@@ -275,6 +278,16 @@ def main(argv=None):
 
     # Pass 2 (--strict only): links + orphans (producer-quality lints).
     if args.strict:
+        for md in iter_markdown_files(root):
+            try:
+                count = len(md.read_text(encoding="utf-8").splitlines())
+            except UnicodeDecodeError:
+                continue
+            if count > MAX_LINES:
+                lints.append((md.relative_to(root).as_posix(),
+                              f"file has {count} lines, over the {MAX_LINES}-line maximum; "
+                              "split it or make it more concise"))
+
         for md in files:
             rel = md.relative_to(root).as_posix()
             text = text_by_rel.get(rel)

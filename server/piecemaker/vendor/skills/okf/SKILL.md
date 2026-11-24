@@ -65,6 +65,11 @@ Corrélatif : [devoir de payer](devoir-de-payer.md). Titulaire : [prestataire](.
 - Chaque fait relevé cite le pattern qui le qualifie, dans la phrase « — qualifié par ODP-00X — … (Concept ID patterns/odp-00X du Context OKF) ». N'écrivez pas de lien vers le pattern : il n'est pas dans le bundle.
 - Un lien est un lien Markdown relatif vers un autre concept. Un maillon de chaîne manquant se signale dans le corps ; il ne se devine pas.
 
+## Concision
+
+- Soyez concis : une phrase par fait, sans paraphrase de la pièce ni répétition d'un autre concept.
+- Aucun fichier du bundle ne dépasse 500 lignes. Le validateur rend un `LINT` au-delà. Scindez un fichier trop long en concepts liés.
+
 ## Écrire et vérifier
 
 1. Écrivez les concepts directement avec Write et Edit dans `.piecemaker/okf/`.
