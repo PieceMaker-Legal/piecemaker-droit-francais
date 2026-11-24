@@ -59,7 +59,7 @@ Corrélatif : [devoir de payer](devoir-de-payer.md). Titulaire : [prestataire](.
 ```
 
 - `type`, `title` et `description` sont obligatoires.
-- `resource` est le chemin de la pièce depuis la racine du dossier, précédé de `/`. Un Document, un Acte et un Contenu portent `resource`. Ne copiez jamais une pièce dans le bundle.
+- `resource` est le chemin de la pièce depuis la racine du dossier, précédé de `/`. Un Document, un Acte et un Contenu portent `resource`. Ne copiez jamais une pièce dans le bundle. `resource` doit être une pièce existante d'un dossier de premier niveau de l'arborescence (jamais `..` ni `.piecemaker/`) : `pm okf verify` refuse sinon.
 - `citation` est un extrait littéral de la pièce de `resource`.
 - `date` (`AAAA-MM-JJ`) date un événement. Le suivi du dossier renvoie à un concept daté par son titre : `evenements.<nom>.okf` = `title` du concept, qui porte `date`, `resource` et `citation`.
 - Chaque fait relevé cite le pattern qui le qualifie, dans la phrase « — qualifié par ODP-00X — … (Concept ID patterns/odp-00X du Context OKF) ». N'écrivez pas de lien vers le pattern : il n'est pas dans le bundle.

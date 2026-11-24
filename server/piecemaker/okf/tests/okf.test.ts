@@ -29,6 +29,7 @@ function dossier() {
   write(root, 'documents/contrat.md', `---\ntype: Document\ntitle: Contrat de prestation\ndescription: Contrat entre Jean Dupont et la Société Exemple SAS.\nresource: "/${CONTRACT}"\n---\n\n# Contrat\n\nFonde [la créance](../positions/creance.md).\n`);
   write(root, 'positions/creance.md', `---\ntype: Position\ntitle: Créance de paiement du prix\ndescription: Le client doit payer le prix.\nresource: "/${CONTRACT}"\ndate: 2026-03-01\ncitation: "Le Client paie le prix."\n---\n\n# Créance\n\nTitulaire : [prestataire](../roles/prestataire.md). Exemple : \`[ignoré](../roles/absent.md)\`.\n`);
   write(root, 'roles/prestataire.md', '---\ntype: Rôle\ntitle: Prestataire\ndescription: Société Exemple SAS.\n---\n\n# Prestataire\n');
+  write(projectPath, CONTRACT, 'Le Client paie le prix.');
   return { projectPath, root };
 }
 
@@ -101,6 +102,17 @@ test('verify lance le validateur Context-OKF en mode strict', async () => {
   assert.ok(report.lints.some((finding) => finding.fiche === 'roles/client.md'));
   fs.rmSync(path.join(root, 'index.md'));
   assert.match((await okf.verify('p')).erreurs[0].erreur, /bundle OKF du dossier absent/);
+});
+
+test('verify refuse une resource hors des pièces de l\'arborescence', async () => {
+  const { projectPath, root } = dossier();
+  const okf = backend(projectPath);
+  const resources = ['/../secret.pdf', '/.piecemaker/okf/index.md', '/Autre/Contrat.pdf', '/Pièces/Absent.pdf', 'Pièces/Contrat.pdf'];
+  resources.forEach((resource, index) => write(root, `positions/p${index}.md`, `---\ntype: Position\ntitle: P${index}\ndescription: Test.\nresource: "${resource}"\n---\n\n# P${index}\n\nVoir [créance](creance.md).\n`));
+  const erreurs = (await okf.verify('p')).erreurs.filter((finding) => finding.fiche.startsWith('positions/p'));
+  assert.deepEqual(erreurs.map((finding) => finding.fiche), resources.map((_, index) => `positions/p${index}.md`));
+  assert.match(erreurs[0].erreur, /hors des pièces de l'arborescence/);
+  assert.match(erreurs[3].erreur, /introuvable/);
 });
 
 test('persons rend une fiche par personne ou organisation, classée par auteur', () => {

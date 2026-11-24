@@ -8,8 +8,9 @@ import { DEFAULT_DOCUMENT_TYPES, documentIcon } from '../../../plugins/piecemake
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
 import { REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
-import { DOCUMENT, bundleRoot, linksOf, parseConcept, pieceOf, readBundle, readTypes, resourceOf, text, typeOf } from './bundle.js';
+import { DOCUMENT, bundleRoot, linksOf, parseConcept, pieceOf, readBundle, readTypes, resourceError, resourceOf, text, typeOf } from './bundle.js';
 import { PERSONS, writePersons } from './persons.js';
+import { readArborescence } from './sealed.js';
 import { graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
 import { dropProposal, proposeOntology, readProposal } from './ontology-proposal.js';
 import type { IndexStore } from './index-store.js';
@@ -67,6 +68,12 @@ export function createOkfBackend(options: OkfOptions) {
     return new Promise((resolve, reject) => {
       execFile(options.python(), ['-E', '-s', path.join(options.skillRoot, 'scripts', 'validate.py'), root, '--strict'], { timeout: 25_000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
         const report = parseValidation(stdout);
+        const folders = readArborescence();
+        for (const concept of readBundle(projectPath)) {
+          const resource = text(concept.frontmatter.resource);
+          const message = resource ? resourceError(projectPath, resource, folders) : null;
+          if (message) report.erreurs.push({ fiche: concept.id.slice(1), erreur: message });
+        }
         if (error && !report.resume) reject(new Error(`validateur OKF indisponible : ${(stderr || error.message).trim()}`));
         else resolve(report);
       });
