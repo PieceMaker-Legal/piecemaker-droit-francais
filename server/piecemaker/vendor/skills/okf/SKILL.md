@@ -1,59 +1,102 @@
 ---
 name: okf
-description: Gérer l'index OKF du dossier (.piecemaker/okf/) — fiches de documents, fiches Premise (prémisse : fait ou clause) et Partie, liens cités entre pièces selon l'ontologie commune aux dossiers (par défaut amends, responds-to, refers-to, supersedes), vérification de l'index et du graphe. Use when the user asks to read, build, complete or check the case index, the links between documents, the facts, premises, clauses or parties of the case, or the OKF index.
+description: Construire, lire et vérifier le bundle OKF du dossier (.piecemaker/okf/) au format Context-OKF (Open Knowledge Format 0.3 sur le socle de la Legal Ontologies Foundry) — documents, actes, contenus, rôles, positions, chaînes, versions, conflits et déterminations, chaque fait qualifié par un pattern LOF (ODP-001 à 006) et cité dans une pièce. Use when the user asks to read, build, complete or check the case index, the links between documents, the legal positions, roles, acts, clauses or parties of the case, or the OKF index.
 ---
 
-# Index OKF
+# Bundle OKF du dossier
 
-> Une prémisse ne se crée que pour une condition Catala qui la demande. On la cherche dans les pièces ; on ne l'invente pas.
+> Un lien se cherche dans les pièces ; on ne l'invente pas.
 
-L'index OKF résume le dossier en fiches Markdown. Il vit dans `.piecemaker/okf/`. L'OKF fait autorité : en cas de doute, il l'emporte sur toute autre note.
+Le bundle OKF résume les pièces du dossier en concepts Markdown liés. Il ne porte que les documents rangés dans un dossier de type `Pièces` de l'arborescence : ignorez les projets, notes et autres dossiers. Il vit dans `.piecemaker/okf/` et fait autorité : en cas de doute, il l'emporte sur toute autre note.
 
-## Fiches
+## Socle
 
-Chaque fiche a un frontmatter YAML et un corps Markdown.
+Le bundle suit Context-OKF : l'OKF 0.3 dit comment représenter, la Legal Ontologies Foundry (LOF, David R. Koepsell, CC BY 4.0) dit quoi représenter.
 
-| Type | Contenu |
-| --- | --- |
-| Dossier de premier niveau de l'arborescence (par défaut `Pièces`) | Une fiche par document. |
-| `Premise` | Une prémisse : un point établi par des pièces, qui justifie une condition du raisonnement Catala. Un fait du dossier, par exemple « Rupture du contrat ». Une clause d'un contrat, par exemple « Changement de contrôle ». |
-| `Partie` | Une personne qualifiée de partie. La fiche porte le code anonymisé, jamais une identité réelle. |
+1. Lisez [references/socle-lof-okf.md](references/socle-lof-okf.md) avant la première écriture.
+2. Lisez la méthode de lecture [contexte/lecture/lire-un-contrat.md](contexte/lecture/lire-un-contrat.md).
+3. Lisez la fiche du pattern dans [contexte/patterns/](contexte/patterns/) avant de qualifier un fait. La spécification complète du pattern est dans [references/lof/](references/lof/).
+4. Le bundle [contexte/](contexte/) est l'exemple de référence, sur des pièces fictives.
 
-Aucun champ de statut n'existe (projet, signé). Ne l'ajoutez pas.
+Ne copiez ni les patterns ni les fondations dans le bundle du dossier.
 
-Les prémisses viennent des sélections de texte de l'avocat dans la visionneuse et de `pm okf link`. La revue tabulaire n'en crée pas.
+## Structure
 
-## Liens
+```text
+.piecemaker/okf/
+├── index.md          okf_version: "0.3", liste des dossiers
+├── log.md            un acte de maintenance daté par entrée
+├── documents/        type: Document — une pièce du Case index, générée par le serveur
+├── actes/            type: Acte — signature, modification, notification
+├── contenus/         type: Contenu — clause, obligation établie par l'acte
+├── roles/            type: Rôle — partie et rôle conféré (ODP-002)
+├── positions/        type: Position — claim, duty, power, liability (ODP-003)
+├── chaines/          type: Chaîne — norme, rôle, déclencheur, acte, cible, effet, remède (ODP-004)
+├── versions/         type: Version — acte modificatif, dates de vigueur (ODP-005)
+├── conflits/         type: Conflit — deux normes opposées (ODP-006)
+└── determinations/   type: Détermination — précédence émise par l'autorité (ODP-006)
+```
 
-1. Un lien part d'une fiche source et pointe vers une fiche cible.
-2. Un lien qui part d'une pièce porte une citation mot pour mot de cette pièce. Seul `involves` n'a pas de citation.
-3. Le serveur refuse une citation absente de la pièce.
+Chaque dossier a son `index.md`, qui liste ses concepts par lien. Créez seulement les dossiers utiles.
 
-Entre pièces, seules les relations de l'ontologie existent. Elle est commune à tous les dossiers. Lisez-la avec `pm okf ontologie` : chaque relation y donne les types de documents source et cible admis. Par défaut : `amends`, `responds-to`, `refers-to`, `supersedes` (une version remplace une autre). L'avocat seul modifie l'ontologie (onglet Index › Ontologie). Pour suggérer un changement, modifiez `~/.piecemaker/ontologie.json` avec l'outil Edit ou Write (Codex : apply_patch), jamais par le shell : le hook `guard-ontologie` refuse l'écriture, fusionne la modification dans la proposition en attente (`ontologie.proposition.json`) et vous répond ce qui a changé. L'avocat accepte, refuse ou modifie chaque changement. Le serveur refuse un lien hors ontologie.
+`documents/` et `persons/` sont générés par le serveur à chaque lecture et vérification : n'y écrivez jamais, la génération suivante écrase vos modifications.
 
-Une pièce établit une `Premise` par `states` (citation, valeur facultative). Le scan relie une pièce à une `Partie` par `mentions`. Une `Premise` concerne une `Partie` par `involves`, sans citation.
+## Concept
 
-La cible de `involves` est le code d'une partie : `pm okf link "<titre de la prémisse>" involves PERSONNE_PHYSIQUE_01`. Les parties existantes sont les fiches du dossier `_parties/` de l'index. La qualification d'une partie attend l'avocat : il désigne une partie cliente ou adverse dans l'onglet Dossier, vue générale (colonnes Parties clientes et Parties adverses, ou champ Rôle de la fiche). Le `pm okf link` suivant crée la fiche `Partie`. Ne qualifiez pas une personne de partie vous-même ; signalez à l'avocat celle qu'une pièce montre partie.
+```markdown
+---
+type: Position
+title: Créance de paiement du prix
+description: Le client doit payer le prix au prestataire à trente jours.
+resource: "/Pièces/Contrat de prestation.pdf"
+date: 2026-03-01
+citation: "Le Client paie le prix dans un délai de trente jours."
+---
 
-## Chaîne de justification
+# Créance de paiement du prix
 
-1. Un fait d'un programme Catala se justifie par une `Premise` : la fiche `_premises/<titre normalisé>.md`.
-2. Une `Premise` se justifie par des pièces citées (`states`) ou par les lignes positives d'une revue tabulaire liée (`pm okf revue`).
+Le prestataire tient une créance contre le client — qualifié par ODP-003 — LOF-ODP-003 : positions déontiques corrélatives (Concept ID patterns/odp-003 du Context OKF).
 
-## Lire et écrire
+Corrélatif : [devoir de payer](devoir-de-payer.md). Titulaire : [prestataire](../roles/prestataire.md). Fondée sur [la clause de prix](../contenus/clause-prix.md) du [contrat](../documents/pieces-contrat-de-prestation.md).
+```
 
-1. Lisez les fiches directement avec Read et Grep dans `.piecemaker/okf/`.
-2. N'écrivez pas une fiche à la main. Posez et retirez les liens avec l'outil MCP `OkfWrite` (`link`, `unlink`, `mark_examined`, `link_review`), plusieurs liens en un appel par la liste `writes`, ou `pm okf` sans MCP : le schéma impose une relation de l'ontologie et la citation. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json`, qui porte aussi l'arborescence commune à tous les dossiers.
-3. Avant la première écriture, lisez `references/okf.md` du skill `piecemaker` (`.agents/skills/Skill-PieceMaker/references/okf.md`). Cette référence décrit les sous-commandes à jour.
-4. Pour régler les natures et icônes, lisez `pm okf ontologie`. Proposez la liste complète avec `pm okf types --json`. Comme les relations, elle reste une proposition jusqu’à la décision de l’avocat.
-5. Le Hérisson lance `pm okf verify` après chaque `pm okf link` ou `unlink` : corrigez chaque erreur qu'il rend, sans relancer la commande.
-6. Pour compléter le graphe, lancez `pm okf verify`. La commande liste chaque élément manquant : pièce à examiner, prémisse sans pièce, sans valeur ou sans partie, partie isolée.
-7. Pour une pièce à examiner, lisez la pièce entière. Posez le lien qu'un passage justifie. Si aucun passage ne justifie de lien, lancez `pm okf examinee <pièce> --motif "raison en une phrase"`. `pm okf verify` liste alors la pièce en information, plus en manque. Le manque revient si le document change. `pm okf examinee <pièce> --retirer` annule la marque. Ne marquez jamais une pièce que vous n'avez pas lue.
-8. Quand une revue tabulaire répond à la question d'une prémisse sur plusieurs pièces, liez sa colonne à la prémisse plutôt que de recopier chaque ligne : `pm okf revues`, puis `pm okf revue "<titre>" --fichier <revue.json> --colonne <nom|index>`. Ses lignes positives deviennent des pièces d'auteur agent. Seul l'avocat les fait passer à humain, en les vérifiant dans la revue : ne les présentez pas comme vérifiées.
+- `type`, `title` et `description` sont obligatoires.
+- `resource` est le chemin de la pièce depuis la racine du dossier, précédé de `/`. Un Document, un Acte et un Contenu portent `resource`. Ne copiez jamais une pièce dans le bundle. `resource` doit être une pièce existante d'un dossier de type `Pièces` de l'arborescence (jamais `..` ni `.piecemaker/`) : `pm okf verify` refuse sinon.
+- `citation` est un extrait littéral de la pièce de `resource`.
+- `date` (`AAAA-MM-JJ`) date un événement. Le suivi du dossier renvoie à un concept daté par son titre : `evenements.<nom>.okf` = `title` du concept, qui porte `date`, `resource` et `citation`.
+- Chaque fait relevé cite le pattern qui le qualifie, dans la phrase « — qualifié par ODP-00X — … (Concept ID patterns/odp-00X du Context OKF) ». N'écrivez pas de lien vers le pattern : il n'est pas dans le bundle.
+- Un lien est un lien Markdown relatif vers un autre concept. Un maillon de chaîne manquant se signale dans le corps ; il ne se devine pas.
+
+## Concision
+
+- Soyez concis : une phrase par fait, sans paraphrase de la pièce ni répétition d'un autre concept.
+- Aucun fichier du bundle ne dépasse 500 lignes. Le validateur rend un `LINT` au-delà. Scindez un fichier trop long en concepts liés.
+
+## Écrire et vérifier
+
+1. Écrivez les concepts directement avec Write et Edit dans `.piecemaker/okf/`.
+2. Après chaque écriture, le Hérisson lance le validateur en mode strict. Corrigez chaque `ERROR` et chaque `LINT` qu'il rend : lien cassé, concept orphelin, frontmatter incomplet.
+3. Pour vérifier tout le bundle, lancez `pm okf verify`.
+4. Partez du Case index : `pm dossier case-index lire` rend la revue tabulaire, une ligne par pièce avec ses informations principales et son classement. Le serveur en tire `documents/` : une fiche Document par pièce d'un dossier de type `Pièces`. Pour corriger un Document, corrigez le Case index (`pm dossier case-index`), jamais la fiche.
+5. Liez une pièce par sa fiche : `../documents/<nom>.md`, nom listé dans `documents/index.md`, tiré du chemin de la pièce (`Pièces/Contrat de prestation.pdf` → `pieces-contrat-de-prestation.md`).
+6. Lisez la pièce entière seulement pour ce que le Case index ne donne pas : actes, contenus, rôles, positions, chaînes, versions, conflits, dans l'ordre de la méthode de lecture. Ne réécrivez pas ce que le Case index donne déjà (date, nature, résumé, classement). Le Case index oriente ; il ne remplace pas la citation.
+7. Ajoutez une entrée datée à `log.md` à chaque création, modification ou extinction.
+8. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json`, qui porte l'arborescence commune à tous les dossiers. Proposez un changement par `pm okf ontologie proposer`.
+
+## Parties
+
+Le dossier `persons/` contient une fiche par personne (CCO *Person*) et par organisation (CCO *Organization*) de la base du dossier. Le serveur génère ces fiches depuis la base. N'écrivez jamais dans `persons/` : la génération suivante écrase vos modifications.
+
+1. Pour compléter une fiche, écrivez dans la base avec l'outil `sql` : nœud, lien entre éléments (dirigeant, SIREN, adresse), citation avec `piece_id` ou `source`.
+2. Rapprochez les éléments trouvés par l'anonymisation : un SIREN à sa société, une adresse à sa personne. Vérifiez une société dans le registre public ou le BODACC ; citez la source.
+3. Seuls un acte ou un registre établissent un dirigeant. Ne déduisez jamais un rôle d'une simple mention.
+4. Un Rôle a un seul porteur. Liez le Rôle à sa fiche : `[Jean Dupont](/persons/personne-physique-01.md)`.
+
+Chaque écriture de l'agent porte l'auteur `agent` (« À vérifier »). Le scan porte l'auteur `gliner` (« À trier »). L'avocat valide une fiche dans l'onglet Dossier : l'auteur devient `human` (« Validé »). La qualification d'une partie cliente ou adverse appartient à l'avocat. Signalez-lui une personne qu'une pièce montre partie ; ne la qualifiez pas vous-même.
 
 ## Règles de conduite
 
-- Conservez les pseudonymes tels qu'ils apparaissent. Ne cherchez jamais l'identité réelle.
+- Ne recopiez pas une personne dans un concept : liez sa fiche `persons/`.
 - Ne citez jamais sans extrait littéral de la pièce.
-- Si deux pièces se contredisent, signalez la contradiction. Ne tranchez pas.
-- Si l'index ne contient pas l'information, répondez « je ne sais pas ». N'inventez ni prémisse ni lien.
+- Si deux pièces se contredisent, créez un Conflit. Ne tranchez pas sans Détermination de l'autorité compétente.
+- Si le bundle ne contient pas l'information, répondez « je ne sais pas ». N'inventez ni concept ni lien.

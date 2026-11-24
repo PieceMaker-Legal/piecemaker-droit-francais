@@ -10,6 +10,7 @@ import type { ServerEvent,
   ProjectSession,IsSessionProcessing } from '@/shared/types';
 import { mergeProjectSelectionMetadata } from '@/modules/project-workspace/utils/projectSelectionMetadata';
 import { readSelectedProvider } from '@/shared/selectedProvider';
+import { useOpenCentralAtStartup } from '@/modules/project-workspace/hooks/useOpenCentralAtStartup';
 
 type UseProjectsStateArgs = {
   sessionId?: string;
@@ -733,6 +734,9 @@ export function useProjectsState({
       setSelectedProject(projects[0]);
     }
   }, [isLoadingProjects, projects, selectedProject, sessionId]);
+
+  // PieceMaker : au démarrage, sans session ni dossier dans l'adresse, l'agent central s'ouvre.
+  useOpenCentralAtStartup(navigate, !isLoadingProjects, !sessionId && !selectedProject);
 
   // Realtime sidebar updates. The backend pushes per-session deltas
   // (`session_upserted`) instead of full project snapshots, so each event is

@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import express from 'express';
 
-import { brainSuiviCopy, readEtapesOf, writeEtapesOf } from './case-store.js';
+import { brainSuiviOfActe, readEtapesOf, roadmapOf, writeEtapesOf } from './case-store.js';
 import { SUIVI_NAME, suiviPath } from './suivi.js';
 import { dossierMatterId } from './suivi-board.js';
 import type { createSuiviService } from './suivi-service.js';
@@ -175,13 +175,14 @@ export function createEtapesService(deps: EtapesDependencies) {
     return [...known, ...skills.map((skill) => ({ nom: skill.slice('redaction-'.length).replace(/-/g, ' ').replace(/^./, (first) => first.toUpperCase()), skill }))];
   };
 
+  const ownSuivi = (root: string, nom: string) => brainSuiviOfActe(root, nom) ?? `${nom}-${SUIVI_NAME}`;
   const suiviOf = async (root: string, nom: string) => {
     const files = await deps.suivi.files(root);
-    return files.includes(`${nom}-${SUIVI_NAME}`) ? `${nom}-${SUIVI_NAME}` : files.includes(SUIVI_NAME) ? SUIVI_NAME : null;
+    return files.includes(ownSuivi(root, nom)) ? ownSuivi(root, nom) : files.includes(SUIVI_NAME) ? SUIVI_NAME : null;
   };
   const matterOf = async (root: string, nom?: string) => {
     const files = await deps.suivi.files(root).catch(() => [] as string[]);
-    const fichier = (nom && files.includes(`${nom}-${SUIVI_NAME}`) ? `${nom}-${SUIVI_NAME}` : null) ?? (files.includes(SUIVI_NAME) ? SUIVI_NAME : files.length === 1 ? files[0] : null);
+    const fichier = (nom && files.includes(ownSuivi(root, nom)) ? ownSuivi(root, nom) : null) ?? (files.includes(SUIVI_NAME) ? SUIVI_NAME : files.length === 1 ? files[0] : null);
     return fichier ? dossierMatterId(root, fichier) : null;
   };
   const nextAction = async (root: string, nom: string): Promise<Action | null> => {
@@ -364,7 +365,7 @@ export function createEtapesService(deps: EtapesDependencies) {
         await cp(source, destination, { recursive: true, errorOnExist: true, force: false, filter: (file) => path.relative(source, file) !== 'resultats' });
         copies.push(destination);
         const fichier = await suiviOf(root, precedent);
-        if (fichier && fichier !== SUIVI_NAME && !brainSuiviCopy(root, fichier, `${next}-${SUIVI_NAME}`)) {
+        if (fichier && fichier !== SUIVI_NAME && !roadmapOf(root)) {
           const destinationSuivi = path.join(root, suiviPath(`${next}-${SUIVI_NAME}`));
           await copyFile(path.join(root, suiviPath(fichier)), destinationSuivi, constants.COPYFILE_EXCL);
           copies.push(destinationSuivi);
@@ -400,19 +401,19 @@ export function createEtapesService(deps: EtapesDependencies) {
       case 'conversion':
         return { titre: 'Conversion et anonymisation', prompt: `Lance pm dossier conversion, puis pm check. Indique à l’avocat de relire et valider le mapping dans l’onglet Dossier (bouton Mapping) : ne le valide pas à sa place.${consignes(instructions)}` };
       case 'index':
-        return { titre: 'Index du dossier', prompt: `Supervise l’index du dossier.\n1. Lis l’arborescence commune avec pm dossier arborescence. Si elle reste ambiguë pour ce dossier, propose une arborescence à partir des dossiers existants. Propose-la en modifiant la clé « arborescence » de ~/.piecemaker/ontologie.json avec l’outil Edit ou Write : le hook en fait une proposition, l’avocat la valide dans Index › Classement.\n2. Demande à l’avocat s’il veut ajouter des questions en colonnes de l’index. Ajoute celles qu’il valide avec pm dossier index colonnes --questions.\n3. Lance pm dossier index lancer --ia ${provider} --modele-ia ${model}.\n4. Termine par pm check et résume ce qui reste à faire.${consignes(instructions)}` };
+        return { titre: 'Case index', prompt: `Supervise le Case index.\n1. Lis l’arborescence commune avec pm dossier arborescence. Si elle reste ambiguë pour ce dossier, propose une arborescence à partir des dossiers existants. Propose-la en modifiant la clé « arborescence » de ~/.piecemaker/ontologie.json avec l’outil Edit ou Write : le hook en fait une proposition, l’avocat la valide dans Case index › Classement.\n2. Demande à l’avocat s’il veut ajouter des questions en colonnes de l’index. Ajoute celles qu’il valide avec pm dossier case-index colonnes --questions.\n3. Lance pm dossier case-index lancer --ia ${provider} --modele-ia ${model}.\n4. Termine par pm check et résume ce qui reste à faire.${consignes(instructions)}` };
       case 'raisonnement':
         return { titre: 'Nouveau raisonnement', prompt: `Démarre le raisonnement juridique du dossier. Objectif(s) : ${instructions || 'à demander à l’avocat'}.\nLance pm check. Écris le programme Catala dans .piecemaker/catala/<nom>/ (nom en minuscules et tirets, d’après le sujet), selon le skill catala. Lance pm catala verifier --programme <nom> jusqu’à zéro erreur.` };
       case 'lever': {
         const nom = await assertReasoning(root, body.raisonnement);
-        return { titre: `Lever manques et erreurs — ${nom}`, prompt: `Lève les erreurs du programme Catala ${nom}.\n1. Lance pm catala verifier --programme ${nom}.\n2. Corrige chaque erreur dans .piecemaker/catala/${nom}/. Complète les prémisses à partir des pièces (pm dossier sql).\n3. Relance la vérification jusqu’à zéro erreur.\n4. Liste à la fin ce qui demande une décision de l’avocat.${consignes(instructions)}` };
+        return { titre: `Lever manques et erreurs — ${nom}`, prompt: `Lève les erreurs du programme Catala ${nom}.\n1. Lance pm catala verifier --programme ${nom}.\n2. Corrige chaque erreur dans .piecemaker/catala/${nom}/. Complète les faits à partir des pièces (pm dossier sql).\n3. Relance la vérification jusqu’à zéro erreur.\n4. Liste à la fin ce qui demande une décision de l’avocat.${consignes(instructions)}` };
       }
       case 'redaction': {
         const nom = await assertReasoning(root, body.raisonnement);
         const document = ((await read(root)).raisonnements?.[nom]?.documents ?? [])[Number(body.document)];
         if (!document) throw new TypeError('Document introuvable : ajoutez-le à la carte.');
         const type = (await typesOf(root)).find((entry) => entry.nom === document.type);
-        return { titre: `Rédaction — ${document.nom}`, prompt: `Rédige « ${document.nom} » (${document.type}) à partir du programme Catala .piecemaker/catala/${nom}/. Enregistre-le sous ${document.chemin}.\n${skillLine(root, type, document.type)}\nÀ la fin, inscris la prochaine action (par exemple : envoyer le projet à l’autre partie) dans matter.nextStep du suivi .piecemaker/${nom}-suivi.json, avec ses échéances, puis lance pm suivi_dossiers verifier --suivi ${nom}-suivi.json.${consignes(instructions)}` };
+        return { titre: `Rédaction — ${document.nom}`, prompt: `Rédige « ${document.nom} » (${document.type}) à partir du programme Catala .piecemaker/catala/${nom}/. Enregistre-le sous ${document.chemin}.\n${skillLine(root, type, document.type)}\nÀ la fin, inscris la prochaine action (par exemple : envoyer le projet à l’autre partie) dans matter.nextStep du Timeline.json de son goal, avec ses échéances, puis lance pm suivi_dossiers verifier --suivi ${ownSuivi(root, nom)}.${consignes(instructions)}` };
       }
       case 'reprise': {
         const nom = await assertReasoning(root, body.raisonnement);

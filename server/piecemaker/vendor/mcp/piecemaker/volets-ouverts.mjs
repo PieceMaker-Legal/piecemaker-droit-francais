@@ -33,7 +33,7 @@ function readEntry(file, cwd) {
   return project ? { project, entry: store[project] } : null;
 }
 
-// L'analyse tabulaire de l'Index est l'onglet Index même : « index-analysis » en reste un alias.
+// L'analyse tabulaire du Case index est l'onglet Case index même : « index-analysis » en reste un alias.
 const viewOf = (view) => view === 'index-analysis' ? 'chronology' : view;
 const sameView = (left, right) => viewOf(left) === viewOf(right);
 

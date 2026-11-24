@@ -8,7 +8,7 @@ import type { Cell, Review, ReviewColumn, ReviewRow } from '../../../plugins/pie
 
 type Connection = InstanceType<typeof Database>;
 
-/** L'Index du dossier, tel que l'analyse tabulaire le remplit : SQLite fait foi, le .json du dossier « Tabular Review » en est une vue régénérée. */
+/** Le Case index, tel que l'analyse tabulaire le remplit : SQLite fait foi, le .json du dossier « Tabular Review » en est une vue régénérée. */
 export type StoredIndex = { file: string; review: Review; revision: number };
 
 const SCHEMA = `
@@ -59,17 +59,17 @@ CREATE TABLE IF NOT EXISTS piecemaker_index_cells (
 
 export class IndexConflictError extends Error {
   constructor() {
-    super('Index modifié entre-temps : relire puis réessayer.');
+    super('Case index modifié entre-temps : relire puis réessayer.');
   }
 }
 
 const json = (value: unknown) => JSON.stringify(value ?? null);
 const parse = <T>(value: unknown): T => JSON.parse(String(value)) as T;
 
-/** Nom du .json de l'Index : un nom de fichier simple posé dans « Tabular Review ». */
+/** Nom du .json du Case index : un nom de fichier simple posé dans « Tabular Review ». */
 export function indexFileName(value: unknown): string {
   const name = typeof value === 'string' ? value.trim() : '';
-  if (!name.endsWith('.json') || name.startsWith('.') || /[\\/]/.test(name)) throw new TypeError('fichier : nom du .json de l’Index attendu.');
+  if (!name.endsWith('.json') || name.startsWith('.') || /[\\/]/.test(name)) throw new TypeError('fichier : nom du .json du Case index attendu.');
   return name;
 }
 
@@ -77,7 +77,7 @@ function isReview(value: unknown): value is Review {
   return Boolean(value) && typeof value === 'object' && Array.isArray((value as Review).columns) && Array.isArray((value as Review).rows);
 }
 
-/** La vue .json de l'Index, réécrite d'un bloc après chaque écriture dans SQLite. */
+/** La vue .json du Case index, réécrite d'un bloc après chaque écriture dans SQLite. */
 export function writeIndexView(projectPath: string, file: string, review: Review): void {
   const directory = path.join(projectPath, REVIEW_FOLDER);
   fs.mkdirSync(directory, { recursive: true });
@@ -87,7 +87,7 @@ export function writeIndexView(projectPath: string, file: string, review: Review
   fs.renameSync(temporary, target);
 }
 
-/** L'Index d'un dossier encore tenu dans un .json : le plus récent de ceux qui sont l'Index. */
+/** Le Case index d'un dossier encore tenu dans un .json : le plus récent de ceux qui sont le Case index. */
 export function legacyIndexFile(projectPath: string): { file: string; review: Review } | null {
   const directory = path.join(projectPath, REVIEW_FOLDER);
   if (!fs.existsSync(directory)) return null;
@@ -164,9 +164,9 @@ export function createIndexStore(database: Connection) {
 
   return {
     read,
-    /** Remplace l'Index du dossier ; `expected` refuse l'écriture si un autre l'a modifié depuis la lecture. */
+    /** Remplace le Case index ; `expected` refuse l'écriture si un autre l'a modifié depuis la lecture. */
     write(projectId: string, file: string, review: Review, expected?: number): number {
-      if (!isReview(review)) throw new TypeError('review : Index attendu (colonnes, lignes, cellules).');
+      if (!isReview(review)) throw new TypeError('review : Case index attendu (colonnes, lignes, cellules).');
       return write(projectId, indexFileName(file), review, expected);
     },
     remove(projectId: string): void {
@@ -180,7 +180,7 @@ export function createIndexStore(database: Connection) {
 
 export type IndexStore = ReturnType<typeof createIndexStore>;
 
-/** L'Index du dossier, repris une fois du .json s'il n'est pas encore dans SQLite. */
+/** Le Case index, repris une fois du .json s'il n'est pas encore dans SQLite. */
 export function loadIndex(store: IndexStore, projectId: string, projectPath: string): StoredIndex | null {
   const stored = store.read(projectId);
   if (stored) return stored;

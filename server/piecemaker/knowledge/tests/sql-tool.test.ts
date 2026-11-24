@@ -418,3 +418,17 @@ test('refuse une requête vide et relaie les erreurs SQL sans noms réels', () =
   await assert.rejects(run('   '), { message: 'requête vide' });
   await assert.rejects(run("SELECT * FROM piecemaker_nodes WHERE label = 'PERSONNE_PHYSIQUE_01' AND colonne_inconnue = 1"), (error: Error) => /colonne_inconnue/.test(error.message) && !error.message.includes('Jean Dupont'));
 }));
+
+test('toute écriture de l\'agent sur une entité ou un lien porte l\'auteur agent', () => withFixture(async ({ run, rows }) => {
+  await run(`UPDATE piecemaker_nodes SET data_json=json_set(data_json,'$.auteur','human') WHERE id='${COMPANY}'`);
+  await run(`INSERT INTO piecemaker_links(project_id,from_node_id,to_node_id,relation) VALUES(dossier(),'${PERSON}','${COMPANY}','dirigeant de')`);
+  await run(`UPDATE piecemaker_nodes SET data_json='{"nature":"courrier"}' WHERE id='document:piece-2'`);
+  assert.equal(rows(`SELECT json_extract(data_json,'$.auteur') AS a FROM piecemaker_nodes WHERE id='${COMPANY}'`)[0].a, 'agent');
+  assert.equal(rows(`SELECT json_extract(data_json,'$.auteur') AS a FROM piecemaker_links WHERE relation='dirigeant de'`)[0].a, 'agent');
+  assert.equal(rows(`SELECT json_extract(data_json,'$.auteur') AS a FROM piecemaker_nodes WHERE id='document:piece-2'`)[0].a, null);
+}));
+
+test('un changement de code garde l\'ancien code dans codes_retires', () => withFixture(async ({ rows, store }) => {
+  store.update({ projectId: PROJECT_ONE, operations: [{ op: 'renameNode', rename: { fromNodeId: PERSON, toNodeId: 'entity:PERSONNE_PHYSIQUE_09' } }] });
+  assert.deepEqual(JSON.parse(String(rows("SELECT json_extract(data_json,'$.codes_retires') AS c FROM piecemaker_nodes WHERE id='entity:PERSONNE_PHYSIQUE_09'")[0].c)), ['PERSONNE_PHYSIQUE_01']);
+}));

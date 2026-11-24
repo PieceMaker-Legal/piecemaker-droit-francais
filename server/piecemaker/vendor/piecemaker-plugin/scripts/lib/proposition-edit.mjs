@@ -8,15 +8,15 @@ const PM = path.resolve(HERE, '..', '..', '..', 'skills', 'Skill-PieceMaker', 's
 const EDIT_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
 const PANEL_NOTICE = /^(Visible|Déjà visible|Le volet)/;
 
-// ~/.piecemaker/ontologie.json porte les relations, les natures et l'arborescence, communes à tous les dossiers.
-const PARTS = ['relations', 'documentTypes', 'arborescence'];
+// ~/.piecemaker/ontologie.json porte l'arborescence, commune à tous les dossiers ; l'ontologie est la LOF, fixe.
+const PARTS = ['arborescence'];
 
 const KINDS = {
   ontologie: {
     pattern: /(^|[\\/])\.piecemaker[\\/]ontologie\.json$/,
     label: 'ontology',
-    place: 'Index › Ontologie',
-    list: (value) => (Array.isArray(value) ? value : value?.relations ?? value?.arborescence),
+    place: 'Case index › Ontologie',
+    list: (value) => value?.arborescence,
     stored: (proposal, current) => (PARTS.some((part) => proposal?.[part]) ? {
       ...Object.fromEntries(PARTS.map((part) => [part, proposal[part] ?? current?.[part]]).filter(([, entries]) => entries)),
       ...(current?.sceau ? { sceau: current.sceau } : {}),
@@ -149,7 +149,7 @@ export function runPm(args, cwd) {
 }
 
 function pmArguments(value, cwd) {
-  const { sceau, ...proposed } = Array.isArray(value) ? { relations: value } : value;
+  const { sceau, ...proposed } = value;
   return { cwd, args: ['okf', 'ontologie', 'proposer', '--dossier', cwd, '--json', JSON.stringify(proposed)] };
 }
 
@@ -165,14 +165,14 @@ export async function proposalMessage(payload, run = runPm) {
   try { result = edited(edit); } catch (error) { return refused(error.message); }
   let value;
   try { value = JSON.parse(result.text); } catch (error) { return refused(`invalid JSON after the edit (${error.message})`); }
-  if (!Array.isArray(list(value))) return refused('the file must contain "relations", the list of relations, or "arborescence", the list of folders');
+  if (!Array.isArray(list(value))) return refused('the file must contain "arborescence", the list of folders');
   const { cwd, args } = pmArguments(value, payload?.cwd || process.cwd());
   const answer = await run(args, cwd);
   if (!answer.ok) return refused(/ECONNREFUSED/.test(answer.output) ? 'PieceMaker is not running, the proposal cannot be checked; ask the lawyer to start PieceMaker' : answer.output.split('\n').filter(Boolean).pop() || 'pm failed');
   const notice = answer.output.split('\n').filter((line) => PANEL_NOTICE.test(line)).pop();
   const current = readJson(file);
-  const proposed = Array.isArray(value) ? { relations: value } : value;
-  const summary = [['relations', 'relations'], ['document types', 'documentTypes'], ['folder tree', 'arborescence']]
+  const proposed = value;
+  const summary = [['folder tree', 'arborescence']]
     .map(([title, part]) => `${title} — ${changes(kind, current?.[part], proposed[part] ?? current?.[part])}`).join('; ');
   return [
     `Edit saved as a proposal in ${name.replace(/\.json$/, '.proposition.json')}. ${name} does not change, this is normal: the lawyer accepts, refuses or modifies each change in the ${place} tab.`,

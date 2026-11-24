@@ -127,7 +127,7 @@ test('un segment pm okf ne couvre pas le reste de la commande', async () => {
 
 test('explique la voie autorisée', async () => {
   const { ontologyDecision } = await load();
-  assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /Index › Ontologie and Index › Classement tabs/);
+  assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /Case index › Classement tab\. The OKF bundle of the case follows Context-OKF on the Legal Ontologies Foundry/);
   assert.match(ontologyDecision({ tool_name: 'Bash', tool_input: { command: 'cp a.md .piecemaker/etapes.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /case steps/);
 });
 
@@ -138,13 +138,13 @@ const os = require('node:os');
 function caseFolder(tree, proposal) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-home '));
   fs.mkdirSync(path.join(root, '.piecemaker'));
-  fs.writeFileSync(path.join(root, '.piecemaker', 'ontologie.json'), `${JSON.stringify({ relations: [], arborescence: tree, sceau: 'abc' }, null, 2)}\n`);
+  fs.writeFileSync(path.join(root, '.piecemaker', 'ontologie.json'), `${JSON.stringify({ arborescence: tree, sceau: 'abc' }, null, 2)}\n`);
   if (proposal) fs.writeFileSync(path.join(root, '.piecemaker', 'ontologie.proposition.json'), JSON.stringify(proposal));
   return root;
 }
 const treeFile = (root) => path.join(root, '.piecemaker', 'ontologie.json');
 
-const recorder = (answer = { ok: true, output: 'Visible dans Index › Classement.' }) => {
+const recorder = (answer = { ok: true, output: 'Visible dans Case index › Classement.' }) => {
   const calls = [];
   const run = async (args, where) => { calls.push({ args, where }); return answer; };
   return { calls, run };
@@ -160,7 +160,7 @@ test('transforme un Edit de l’arborescence en proposition et avertit l’agent
   const reason = result.hookSpecificOutput.permissionDecisionReason;
   assert.match(reason, /saved as a proposal in ontologie\.proposition\.json/);
   assert.match(reason, /folder tree — added: Correspondance; removed: Procédure/);
-  assert.match(reason, /Visible dans Index › Classement/);
+  assert.match(reason, /Visible dans Case index › Classement/);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].args.slice(0, 3), ['okf', 'ontologie', 'proposer']);
   assert.deepEqual(JSON.parse(calls[0].args[6]).arborescence, [{ name: 'Pièces', explanation: 'Pièces du dossier' }, { name: 'Correspondance', explanation: '' }]);
@@ -198,23 +198,22 @@ test('signale une modification impossible sans appeler pm', async () => {
 test('relaie le refus de pm', async () => {
   const root = caseFolder(tree);
   const { run } = recorder({ ok: false, output: 'Erreur : 31 dossiers, 30 au plus.' });
-  const reason = (await (await load()).hookDecision({ tool_name: 'Write', tool_input: { file_path: treeFile(root), content: '{"relations":[],"arborescence":[]}' }, cwd: root }, run)).hookSpecificOutput.permissionDecisionReason;
+  const reason = (await (await load()).hookDecision({ tool_name: 'Write', tool_input: { file_path: treeFile(root), content: '{"arborescence":[]}' }, cwd: root }, run)).hookSpecificOutput.permissionDecisionReason;
   assert.match(reason, /Proposal not saved.*30 au plus/);
 });
 
 test('transforme un patch Codex de l’ontologie en proposition', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-home '));
   fs.mkdirSync(path.join(home, '.piecemaker'));
-  const relation = { name: 'amends', label: 'modifie', inverse: 'modifié par', description: '', source: ['Pièces'], target: ['Pièces'] };
-  fs.writeFileSync(path.join(home, '.piecemaker', 'ontologie.json'), `${JSON.stringify({ relations: [relation], sceau: 'abc' }, null, 2)}\n`);
+  fs.writeFileSync(path.join(home, '.piecemaker', 'ontologie.json'), `${JSON.stringify({ arborescence: [{ name: 'Pièces', explanation: 'Pièces du dossier', type: 'Pièces' }], sceau: 'abc' }, null, 2)}\n`);
   const file = path.join(home, '.piecemaker', 'ontologie.json');
-  const patch = `*** Begin Patch\n*** Update File: ${file}\n@@\n-      "label": "modifie",\n+      "label": "amende",\n*** End Patch`;
+  const patch = `*** Begin Patch\n*** Update File: ${file}\n@@\n-      "explanation": "Pièces du dossier",\n+      "explanation": "Pièces communiquées",\n*** End Patch`;
   const { calls, run } = recorder({ ok: true, output: '{}' });
   const reason = (await (await load()).hookDecision({ tool_name: 'apply_patch', tool_input: { command: patch }, cwd: '/tmp/Dossier Exemple' }, run)).hookSpecificOutput.permissionDecisionReason;
   assert.match(reason, /ontologie\.proposition\.json/);
-  assert.match(reason, /changed: amends/);
+  assert.match(reason, /folder tree — changed: Pièces/);
   assert.deepEqual(calls[0].args.slice(0, 3), ['okf', 'ontologie', 'proposer']);
-  assert.equal(JSON.parse(calls[0].args[6]).relations[0].label, 'amende');
+  assert.equal(JSON.parse(calls[0].args[6]).arborescence[0].explanation, 'Pièces communiquées');
 });
 
 test('refuse un patch qui mêle l’ontologie à d’autres fichiers', async () => {
@@ -233,20 +232,4 @@ test('garde le refus simple pour le shell et la clé', async () => {
   assert.match((await hookDecision({ tool_name: 'Write', tool_input: { file_path: '~/.piecemaker/ontologie.cle'.replace('~', os.homedir()) }, cwd }, run)).hookSpecificOutput.permissionDecisionReason, /seal key/);
   assert.equal(await hookDecision({ tool_name: 'Write', tool_input: { file_path: 'notes.md', content: 'x' }, cwd }, run), null);
   assert.equal(calls.length, 0);
-});
-
-test('propose les types de documents en gardant les relations en attente', async () => {
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-home '));
-  fs.mkdirSync(path.join(home, '.piecemaker'));
-  const relation = { name: 'amends', label: 'modifie', inverse: 'modifié par', description: '', source: ['Pièces'], target: ['Pièces'] };
-  const file = path.join(home, '.piecemaker', 'ontologie.json');
-  fs.writeFileSync(file, `${JSON.stringify({ relations: [relation], documentTypes: [{ name: 'Contrat', icon: 'pen' }], sceau: 'abc' }, null, 2)}\n`);
-  fs.writeFileSync(path.join(home, '.piecemaker', 'ontologie.proposition.json'), JSON.stringify({ relations: [{ ...relation, label: 'amende' }], motif: '', date: '' }));
-  const { calls, run } = recorder({ ok: true, output: '{}' });
-  const reason = (await (await load()).hookDecision({ tool_name: 'Edit', tool_input: { file_path: file, old_string: '"icon": "pen"', new_string: '"icon": "scroll"' }, cwd: '/tmp/Dossier Exemple' }, run)).hookSpecificOutput.permissionDecisionReason;
-  assert.match(reason, /relations — changed: amends; document types — changed: Contrat; folder tree — no change/);
-  const sent = JSON.parse(calls[0].args[6]);
-  assert.equal(sent.relations[0].label, 'amende');
-  assert.deepEqual(sent.documentTypes, [{ name: 'Contrat', icon: 'scroll' }]);
-  assert.equal(sent.sceau, undefined);
 });

@@ -78,6 +78,22 @@ CREATE TEMP TRIGGER IF NOT EXISTS pm_masques_maj AFTER UPDATE ON main.piecemaker
   UPDATE main.piecemaker_mappings SET updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE project_id=NEW.project_id AND node_id=NEW.node_id AND real_value=NEW.real_value;
   SELECT tic(1);
 END;
+CREATE TEMP TRIGGER IF NOT EXISTS pm_auteur_noeud_ajout AFTER INSERT ON main.piecemaker_nodes WHEN suivi() AND NEW.kind<>'document' AND NEW.id NOT LIKE 'system:%' AND json_extract(NEW.data_json, '$.auteur') IS NOT 'agent' BEGIN
+  UPDATE main.piecemaker_nodes SET data_json=json_set(data_json, '$.auteur', 'agent') WHERE project_id=NEW.project_id AND id=NEW.id;
+  SELECT tic(1);
+END;
+CREATE TEMP TRIGGER IF NOT EXISTS pm_auteur_noeud_maj AFTER UPDATE OF kind, label, aliases_json, data_json ON main.piecemaker_nodes WHEN suivi() AND NEW.kind<>'document' AND NEW.id NOT LIKE 'system:%' AND json_extract(NEW.data_json, '$.auteur') IS NOT 'agent' BEGIN
+  UPDATE main.piecemaker_nodes SET data_json=json_set(data_json, '$.auteur', 'agent') WHERE project_id=NEW.project_id AND id=NEW.id;
+  SELECT tic(1);
+END;
+CREATE TEMP TRIGGER IF NOT EXISTS pm_auteur_lien_ajout AFTER INSERT ON main.piecemaker_links WHEN suivi() AND json_extract(NEW.data_json, '$.auteur') IS NOT 'agent' BEGIN
+  UPDATE main.piecemaker_links SET data_json=json_set(data_json, '$.auteur', 'agent') WHERE project_id=NEW.project_id AND from_node_id=NEW.from_node_id AND to_node_id=NEW.to_node_id AND relation=NEW.relation;
+  SELECT tic(1);
+END;
+CREATE TEMP TRIGGER IF NOT EXISTS pm_auteur_lien_maj AFTER UPDATE OF from_node_id, to_node_id, relation, data_json ON main.piecemaker_links WHEN suivi() AND json_extract(NEW.data_json, '$.auteur') IS NOT 'agent' BEGIN
+  UPDATE main.piecemaker_links SET data_json=json_set(data_json, '$.auteur', 'agent') WHERE project_id=NEW.project_id AND from_node_id=NEW.from_node_id AND to_node_id=NEW.to_node_id AND relation=NEW.relation;
+  SELECT tic(1);
+END;
 CREATE TEMP TRIGGER IF NOT EXISTS pm_nouvelle_entite AFTER INSERT ON main.piecemaker_nodes WHEN suivi() AND NEW.kind IN ('person','company') AND NEW.id NOT LIKE 'system:%' BEGIN
   INSERT INTO temp.nouvelles_entites VALUES(NEW.project_id, NEW.id);
   SELECT tic(1);

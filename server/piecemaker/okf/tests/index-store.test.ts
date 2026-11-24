@@ -11,11 +11,8 @@ import express from 'express';
 import { REVIEW_FOLDER } from '../../../../plugins/piecemaker-tabular-review/src/shared.js';
 import type { Review } from '../../../../plugins/piecemaker-tabular-review/src/shared.js';
 
-import { documentsFromIndex, indexDate, mergeDocuments } from '../build.js';
-import { readBundle } from '../bundle.js';
 import { createOkfBackend } from '../index.js';
 import { IndexConflictError, createIndexStore, loadIndex } from '../index-store.js';
-import { createOkfStore } from '../store.js';
 
 process.env.PIECEMAKER_HOME ??= fs.mkdtempSync(path.join(os.tmpdir(), 'okf-index-home-'));
 
@@ -33,7 +30,7 @@ function dossier() {
 
 function review(): Review {
   return {
-    version: 1, title: 'Index', templateName: 'Index', category: 'documents', projectPath: '/dossier', createdAt: '2026-11-18T10:00:00.000Z', updatedAt: '2026-11-18T10:00:00.000Z',
+    version: 1, title: 'Case index', templateName: 'Case index', category: 'documents', projectPath: '/dossier', createdAt: '2026-11-18T10:00:00.000Z', updatedAt: '2026-11-18T10:00:00.000Z',
     provider: 'codex', model: 'exemple', concurrency: 3,
     columns: [{ index: 0, name: 'Date', prompt: 'Date du document', format: 'date' }, { index: 1, name: 'Nature', prompt: 'Nature', format: 'text', tags: ['contrat', 'courrier'] }],
     rows: [
@@ -74,29 +71,14 @@ test('un Index encore en .json est repris une fois dans SQLite', () => {
   assert.equal(loadIndex(index, 'p', projectPath)!.file, FILE);
 });
 
-test('les pièces de l’OKF viennent de l’Index, même sans scan ; le scan n’y ajoute que ses parties', () => {
-  const { projectPath } = dossier();
-  assert.equal(indexDate('2021-03-12'), '2021-03-12');
-  assert.equal(indexDate('12 mars 2021'), '2021-03-12');
-  assert.equal(indexDate('Non trouvé'), '');
-  const documents = documentsFromIndex(projectPath, review());
-  assert.deepEqual(documents.map(({ resource, title, nature, date }) => ({ resource, title, nature, date })), [
-    { resource: 'Pièces/Contrat.md', title: 'Convention de prestation', nature: 'contrat', date: '2021-03-12' },
-    { resource: 'Pièces/Courrier.md', title: 'Courrier', nature: '', date: '' },
-  ]);
-  const merged = mergeDocuments(documents, [{ resource: 'Pièces/Contrat.md', title: 'Contrat.md', nature: 'facture', date: '', parties: [{ code: 'SOCIETE_01', citation: 'la Société' }] }, { resource: 'Pièces/Annexe.md', title: 'Annexe', nature: '', date: '', parties: [] }]);
-  assert.deepEqual(merged.map((document) => [document.resource, document.nature, document.parties.length]), [['Pièces/Annexe.md', '', 0], ['Pièces/Contrat.md', 'contrat', 1], ['Pièces/Courrier.md', '', 0]]);
-});
-
-test('la Tabular Review lit et écrit l’Index par l’hôte, qui en régénère le .json et les fiches', async () => {
-  const { projectPath, database, index } = dossier();
+test('la Tabular Review lit et écrit l’Index par l’hôte, qui en régénère le .json', async () => {
+  const { projectPath, index } = dossier();
   const backend = createOkfBackend({
     projects: { getProjectById: () => ({ project_path: projectPath }), getProjectPath: (folder) => folder === projectPath ? { project_id: 'p', project_path: projectPath } : null },
     snapshot: (projectId) => ({ projectId, nodes: [], links: [], mappings: [], citations: [] }),
-    store: createOkfStore(database),
     indexStore: index,
-    convertedMarkdown: (_projectPath, filePath) => fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : null,
-    listDocuments: async () => [path.join(projectPath, 'Pièces', 'Contrat.md'), path.join(projectPath, 'Pièces', 'Courrier.md')],
+    skillRoot: '',
+    python: () => 'python3',
     isLoopback: () => true,
   });
   const app = express().use('/api/piecemaker/local', backend.localRouter);
@@ -119,7 +101,4 @@ test('la Tabular Review lit et écrit l’Index par l’hôte, qui en régénèr
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }
-  backend.build('p');
-  const fiches = readBundle(projectPath).filter((concept) => !concept.error).map((concept) => [concept.frontmatter.resource, concept.frontmatter.title, concept.frontmatter.date]);
-  assert.deepEqual(fiches.filter(([resource]) => resource), [['Pièces/Contrat.md', 'Convention de prestation', '2021-03-12'], ['Pièces/Courrier.md', 'Courrier', undefined]]);
 });

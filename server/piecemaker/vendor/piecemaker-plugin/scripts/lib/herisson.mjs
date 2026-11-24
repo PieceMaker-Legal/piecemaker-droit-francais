@@ -1,13 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { caseOfBrainFile, ROADMAP_KEYS, SUIVI_FILE } from './brain-case.mjs';
+import { caseDirectory, caseOfBrainFile, GOAL_LIMIT, GOAL_TIMELINE_KEYS, readRoadmap, suiviOfGoal } from './brain-case.mjs';
 
 const REGISTRY = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'herisson.json');
 
 const REGISTRY_DATA = JSON.parse(fs.readFileSync(REGISTRY, 'utf8'));
 
-export const FEATURES = REGISTRY_DATA.features.map((feature) => ({ ...feature, pattern: new RegExp(feature.cible) }));
+export const FEATURES = REGISTRY_DATA.features.map((feature) => ({ ...feature, pattern: new RegExp(feature.cible), brainPattern: feature.brain ? new RegExp(feature.brain) : null }));
 
 export const CATALOGUE = REGISTRY_DATA.catalogue;
 
@@ -47,8 +47,10 @@ export function featureOf(absolute) {
   let brainCase = null;
   try { brainCase = caseOfBrainFile(String(absolute)); } catch {}
   if (brainCase?.folder) {
-    const feature = FEATURES.find((entry) => entry.brain && entry.brain === brainCase.rest);
-    if (feature) return { feature, root: brainCase.folder, nom: '' };
+    for (const feature of FEATURES) {
+      const match = feature.brainPattern?.exec(brainCase.rest);
+      if (match) return { feature, root: brainCase.folder, nom: match.groups?.nom ?? '' };
+    }
   }
   const parts = String(absolute).replace(/\\/g, '/').split('/.piecemaker/');
   if (parts.length < 2) return null;
@@ -62,14 +64,14 @@ export function featureOf(absolute) {
 }
 
 export function verifierArgs(found) {
-  return found.feature.verifier.map((arg) => arg.replace('{nom}', found.nom));
+  return found.feature.verifier.map((arg) => arg.replace('{suivi}', suiviOfGoal(found.nom)).replace('{nom}', found.nom));
 }
 
 const PATCH_SECTION = /^\*\*\* (Add|Update|Delete) File: (.+)$/;
 const SUIVI_KEYS = ['matter', 'evenements', 'echeances'];
 const lineOf = (content, index) => content.slice(0, Math.max(0, index)).split('\n').length;
 
-function suiviErrors(content) {
+function suiviErrors(content, keys = SUIVI_KEYS) {
   let value;
   try { value = JSON.parse(content); } catch (error) {
     const position = /position (\d+)/.exec(error.message);
@@ -80,36 +82,25 @@ function suiviErrors(content) {
   const errors = [];
   for (const key of Object.keys(value)) {
     const line = lineOf(content, content.indexOf(JSON.stringify(key)));
-    if (!SUIVI_KEYS.includes(key)) errors.push({ line, message: `unknown key "${key}" at the root of the tracking file. Permitted keys: ${SUIVI_KEYS.join(', ')}. Move its content under one of them or remove it.` });
+    if (!keys.includes(key)) errors.push({ line, message: `unknown key "${key}" at the root of the tracking file. Permitted keys: ${keys.join(', ')}. Move its content under one of them or remove it.` });
     else if (!value[key] || typeof value[key] !== 'object' || Array.isArray(value[key])) errors.push({ line, message: `"${key}" must be an object ${key === 'matter' ? '{ "client": …, "summary": … }' : `{ "name in French": {…} }`}, not ${Array.isArray(value[key]) ? 'a list' : 'a single value'}.` });
   }
   return errors;
 }
 
-const ROADMAP_OWNED = { etapes: 'the case steps (etapes) are set by the lawyer on the board of the Suivi des dossiers tab', synthese: 'the synthesis (synthese) is written by the script synthese.mjs next to Roadmap.json, run by pm check; change the script to change what it records' };
-
-export function roadmapErrors(file, content) {
+export function timelineErrors(file, content) {
   let value;
   try { value = content.trim() ? JSON.parse(content) : {}; } catch (error) {
     const position = /position (\d+)/.exec(error.message);
     return [{ line: position ? lineOf(content, Number(position[1])) : 1, message: `invalid JSON: ${error.message.replace(/ in JSON at position.*$/, '')}. Write valid JSON: double quotes, no trailing comma, no comment.` }];
   }
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return [{ line: 1, message: `Roadmap.json must be an object { ${ROADMAP_KEYS.map((key) => `"${key}": {…}`).join(', ')} }.` }];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [{ line: 1, message: `Timeline.json must be an object { ${GOAL_TIMELINE_KEYS.map((key) => `"${key}": {…}`).join(', ')} }.` }];
   let before = {};
-  try { before = JSON.parse(current(file) || '{}') ?? {}; } catch {}
-  const errors = [];
+  try { before = JSON.parse(current(file) || '{}')?.actes ?? {}; } catch {}
+  const actes = value.actes ?? {};
+  const errors = suiviErrors(content, GOAL_TIMELINE_KEYS);
   const at = (key) => lineOf(content, content.indexOf(JSON.stringify(key)));
-  for (const key of Object.keys(value)) if (!ROADMAP_KEYS.includes(key)) errors.push({ line: at(key), message: `unknown key "${key}" at the root of Roadmap.json. Permitted keys: ${ROADMAP_KEYS.join(', ')}. The reasoning, decisions and memories go in About.md.` });
-  for (const [key, reason] of Object.entries(ROADMAP_OWNED)) if (JSON.stringify(value[key] ?? null) !== JSON.stringify(before?.[key] ?? null)) errors.push({ line: value[key] === undefined ? 1 : at(key), message: `"${key}" cannot be changed by the agent: ${reason}. Keep it as it is.` });
-  for (const group of ['suivis', 'suivisSupprimes']) {
-    if (value[group] === undefined) continue;
-    if (!value[group] || typeof value[group] !== 'object' || Array.isArray(value[group])) { errors.push({ line: at(group), message: `"${group}" must be an object { "<nom>-suivi.json": { "matter": …, "evenements": …, "echeances": … } }.` }); continue; }
-    for (const [name, suivi] of Object.entries(value[group])) {
-      const line = at(name);
-      if (!SUIVI_FILE.test(name)) errors.push({ line, message: `tracking name "${name}" must be "<nom>-suivi.json", <nom> being the act it follows.` });
-      for (const error of suiviErrors(JSON.stringify(suivi))) errors.push({ line, message: `${name}: ${error.message}` });
-    }
-  }
+  if (actes && typeof actes === 'object' && !Array.isArray(actes)) for (const [name, entry] of Object.entries(before)) if (JSON.stringify(actes[name] ?? null) !== JSON.stringify(entry)) errors.push({ line: actes[name] === undefined ? 1 : at(name), message: `act "${name}" cannot be changed by the agent: the lawyer sets its step on the board of the Suivi des dossiers tab. Keep it as it is.` });
   return errors;
 }
 
@@ -117,12 +108,21 @@ function memoireErrors(content) {
   return /^---\r?\n/.test(content) ? [{ line: 1, message: 'frontmatter is not permitted: the memory starts with a block between two "---" lines. Remove this block. Deadlines go in .piecemaker/<name>-suivi.json. The lawyer sets the current step and the document to produce on the board of the Suivi des dossiers tab: read them with pm check.' }] : [];
 }
 
+export function goalErrors(file, content) {
+  const lines = content.replace(/\n$/, '').split('\n').length;
+  return [
+    ...(/^---\r?\n/.test(content) ? [{ line: 1, message: 'frontmatter is not permitted. Write plain Markdown.' }] : []),
+    ...(lines > GOAL_LIMIT ? [{ line: GOAL_LIMIT + 1, message: `${path.basename(file)} has ${lines} lines; the limit is ${GOAL_LIMIT}. Move what is no longer useful to Archive.md.` }] : []),
+  ];
+}
+
 function programNameErrors(file, content) {
   const directory = path.dirname(file);
   const nom = path.basename(directory);
   if (!content || (fs.existsSync(directory) && fs.readdirSync(directory).some((entry) => entry.endsWith('.catala_fr') && path.join(directory, entry) !== file))) return [];
+  const target = caseDirectory(path.resolve(directory, '..', '..', '..'), { create: false });
   let etapes = {};
-  try { etapes = JSON.parse(fs.readFileSync(path.join(directory, '..', '..', 'etapes.json'), 'utf8')); } catch {}
+  try { etapes = target ? readRoadmap(target.roadmap).etapes ?? {} : JSON.parse(fs.readFileSync(path.join(directory, '..', '..', 'etapes.json'), 'utf8')); } catch {}
   const expected = Object.entries(etapes.raisonnements ?? {}).filter(([, suite]) => !suite?.remplacePar).map(([name]) => name);
   if (!expected.length || expected.includes(nom)) return [];
   return [{ line: 1, message: `program name "${nom}" is not a reasoning of the case. Use the exact name given by pm check: ${expected.map((name) => `.piecemaker/catala/${name}/`).join(' or ')}.` }];
@@ -132,12 +132,14 @@ const REFUSALS = {
   catala: ['the program does not follow the Catala format or does not compile. Nothing was written.', 'Correct only the lines shown, keep the rest of the file, then write again. Start from the model of references/format.md (Feature read catala path=catala/references/format.md), which compiles; its table "Fautes fréquentes" gives the fix of common errors.'],
   suivi: ['the tracking file does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Full model: Feature read deadlines path=piecemaker/references/suivi.md.'],
   memoire: ['the project memory does not have the expected structure. Nothing was written.', 'Correct the memory, then write it again: plain Markdown, no frontmatter.'],
-  roadmap: ['Roadmap.json does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Each tracking file follows Feature read deadlines path=piecemaker/references/suivi.md, under "suivis".'],
+  timeline: ['Timeline.json does not have the expected structure. Nothing was written.', 'Correct these lines, then write the file again. Deadlines follow Feature read deadlines path=piecemaker/references/suivi.md.'],
+  goal: ['the goal file does not have the expected structure. Nothing was written.', 'Correct the file, then write it again.'],
 };
 const FORMATS = {
   suivi: async (file, content) => suiviErrors(content),
   memoire: async (file, content) => memoireErrors(content),
-  roadmap: async (file, content) => roadmapErrors(file, content),
+  timeline: async (file, content) => timelineErrors(file, content),
+  goal: async (file, content) => goalErrors(file, content),
   catala: async (file, content) => [
     ...programNameErrors(file, content),
     ...(file.endsWith('.catala_fr') ? (await import('../../../skills/Skill-PieceMaker/scripts/catala-documentation.mjs')).catalaDocumentation(content, { test: /^test_/.test(path.basename(file)) }).errors : []),

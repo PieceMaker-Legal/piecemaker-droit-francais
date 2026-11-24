@@ -1,9 +1,9 @@
-import { ChevronDown, ChevronRight, FileJson, FileText, Folder, Plus, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, FileJson, FileText, Folder, Plus, Target, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 import { agentApi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
-import type { AgentSettings, AgentState, CasePair, CaseRoadmap, CaseRoadmapLine, CaseSuivi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
+import type { AgentSettings, AgentState, CaseGoal, CaseGoalFile, CasePair, CaseRoadmap, CaseRoadmapLine, CaseSuivi } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 
 const ABOUT_LIMIT = 200;
 const KINDS: Array<[string, string]> = [['filing', 'Acte à déposer'], ['hearing', 'Audience'], ['limitation', 'Prescription'], ['other', 'Autre']];
@@ -24,19 +24,51 @@ function describe(line: CaseRoadmapLine) {
   return '';
 }
 
-function AboutEditor({ project, pair, onSaved }: { project: string; pair: CasePair; onSaved: (pair: CasePair) => void }) {
-  const [text, setText] = useState(pair.about);
+function TextEditor({ label, value, limit, onSave }: { label: string; value: string; limit: number | null; onSave: (text: string) => Promise<void> }) {
+  const [text, setText] = useState(value);
   const [error, setError] = useState<string | null>(null);
   const lines = lineCount(text);
+  const over = limit !== null && lines > limit;
   async function save() {
-    try { onSaved(await agentApi.saveAbout(project, pair.folder, text)); setError(null); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    try { await onSave(text); setError(null); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
   }
   return <div className="space-y-2 px-2 py-2">
-    <textarea aria-label={`About.md de ${pair.name}`} className={`${inputClass} min-h-48 font-mono`} value={text} onChange={(event) => setText(event.target.value)} />
+    <textarea aria-label={label} className={`${inputClass} min-h-48 font-mono`} value={text} onChange={(event) => setText(event.target.value)} />
     <div className="flex items-center gap-2">
-      <span className={`flex-1 text-xs ${lines > ABOUT_LIMIT ? 'text-red-500' : 'text-muted-foreground'}`}>{lines} / {ABOUT_LIMIT} lignes</span>
-      <button type="button" className={buttonClass} disabled={text === pair.about} onClick={() => setText(pair.about)}>Annuler</button>
-      <button type="button" className={buttonClass} disabled={text === pair.about || lines > ABOUT_LIMIT} onClick={() => void save()}>Enregistrer</button>
+      <span className={`flex-1 text-xs ${over ? 'text-red-500' : 'text-muted-foreground'}`}>{limit === null ? `${lines} lignes` : `${lines} / ${limit} lignes`}</span>
+      <button type="button" className={buttonClass} disabled={text === value} onClick={() => setText(value)}>Annuler</button>
+      <button type="button" className={buttonClass} disabled={text === value || over} onClick={() => void save()}>Enregistrer</button>
+    </div>
+    {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
+  </div>;
+}
+
+const GOAL_FILES: Array<[CaseGoalFile, keyof CaseGoal, number | null]> = [['Goal.md', 'goal', ABOUT_LIMIT], ['Memory.md', 'memory', ABOUT_LIMIT], ['Archive.md', 'archive', null]];
+
+function GoalItem({ project, pair, goal, onSaved }: { project: string; pair: CasePair; goal: CaseGoal; onSaved: (pair: CasePair) => void }) {
+  const [file, setFile] = useState<CaseGoalFile | null>(null);
+  return <li data-goal={goal.name}>
+    <p className="flex items-center gap-2 px-2 py-1 text-sm text-foreground"><Target className="h-3.5 w-3.5 text-muted-foreground" />{goal.name}</p>
+    <div className="flex gap-1 pl-6">{GOAL_FILES.map(([name]) => <button key={name} type="button" aria-expanded={file === name} aria-label={`${name} de ${goal.name}`}
+      className={`rounded-md px-2 py-0.5 text-xs hover:bg-accent ${file === name ? 'bg-muted text-foreground' : 'text-muted-foreground'}`} onClick={() => setFile(file === name ? null : name)}>{name}</button>)}</div>
+    {GOAL_FILES.filter(([name]) => name === file).map(([name, key, limit]) => <TextEditor key={`${name}:${goal[key]}`} label={`${name} de ${goal.name}`} value={goal[key]} limit={limit}
+      onSave={async (text) => onSaved(await agentApi.saveGoal(project, pair.folder, goal.name, name, text))} />)}
+  </li>;
+}
+
+function GoalsEditor({ project, pair, onSaved }: { project: string; pair: CasePair; onSaved: (pair: CasePair) => void }) {
+  const [name, setName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const slug = lineName(name).replace(/ /g, '-');
+  async function create() {
+    try { onSaved(await agentApi.saveGoal(project, pair.folder, slug, 'Goal.md', `# ${name.trim()}\n`)); setName(''); setError(null); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+  }
+  return <div className="space-y-2 px-2 py-2">
+    {pair.goals.length ? <ul className="space-y-1" aria-label={`Goals de ${pair.name}`}>{pair.goals.map((goal) => <GoalItem key={goal.name} project={project} pair={pair} goal={goal} onSaved={onSaved} />)}</ul>
+      : <p className="text-xs text-muted-foreground">Aucun goal.</p>}
+    <div className="flex gap-2">
+      <input aria-label="Nouveau goal" placeholder="Nouveau goal : acte ou procédure" className={inputClass} value={name} onChange={(event) => setName(event.target.value)} />
+      <button type="button" className={buttonClass} disabled={!slug} onClick={() => void create()}>Créer</button>
     </div>
     {error && <p role="alert" className="text-xs text-red-500">{error}</p>}
   </div>;
@@ -117,14 +149,14 @@ function RoadmapEditor({ project, pair, onSaved }: { project: string; pair: Case
 
 function CaseFolder({ project, folder }: { project: string; folder: string }) {
   const [open, setOpen] = useState(false);
-  const [view, setView] = useState<'about' | 'roadmap' | null>(null);
+  const [view, setView] = useState<'about' | 'goals' | 'roadmap' | null>(null);
   const [pair, setPair] = useState<CasePair | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!open || pair) return;
     agentApi.casePair(project, folder).then(setPair, (cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
   }, [open, pair, project, folder]);
-  const item = (key: 'about' | 'roadmap', label: string, icon: ReactNode) => <button type="button" aria-expanded={view === key}
+  const item = (key: 'about' | 'goals' | 'roadmap', label: string, icon: ReactNode) => <button type="button" aria-expanded={view === key}
     className="flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left text-[15px] text-foreground hover:bg-accent" onClick={() => setView(view === key ? null : key)}>
     <span className="text-muted-foreground">{icon}</span>{label}
   </button>;
@@ -137,8 +169,10 @@ function CaseFolder({ project, folder }: { project: string; folder: string }) {
       {error && <p role="alert" className="px-2 text-xs text-red-500">{error}</p>}
       {pair && <>
         {item('about', 'About', <FileText className="h-4 w-4" />)}
-        {view === 'about' && <AboutEditor key={pair.about} project={project} pair={pair} onSaved={setPair} />}
-        {item('roadmap', 'Roadmap', <FileJson className="h-4 w-4" />)}
+        {view === 'about' && <TextEditor key={pair.about} label={`About.md de ${pair.name}`} value={pair.about} limit={ABOUT_LIMIT} onSave={async (text) => setPair(await agentApi.saveAbout(project, pair.folder, text))} />}
+        {item('goals', 'Goals', <Target className="h-4 w-4" />)}
+        {view === 'goals' && <GoalsEditor project={project} pair={pair} onSaved={setPair} />}
+        {item('roadmap', 'Timeline', <FileJson className="h-4 w-4" />)}
         {view === 'roadmap' && <RoadmapEditor project={project} pair={pair} onSaved={setPair} />}
       </>}
     </div>}
@@ -167,5 +201,18 @@ export function CaseFolders({ state, projectPath, save }: { state: AgentState; p
       {state.settings.folders.length ? state.settings.folders.map((folder) => <CaseFolder key={folder} project={projectPath} folder={folder} />)
         : <li className="px-2 text-sm text-muted-foreground">Aucun dossier. Ajoutez-en un avec +.</li>}
     </ul>
+  </section>;
+}
+
+export function CaseGoals({ project }: { project: string }) {
+  const [pair, setPair] = useState<CasePair | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    agentApi.casePair(project, project).then(setPair, (cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)));
+  }, [project]);
+  return <section className="py-1" aria-label="Goals">
+    <p className="px-2 py-2 text-[15px] text-foreground">Goals</p>
+    {error && <p className="px-2 text-xs text-muted-foreground">{error}</p>}
+    {pair && <GoalsEditor project={project} pair={pair} onSaved={setPair} />}
   </section>;
 }

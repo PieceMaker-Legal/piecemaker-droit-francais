@@ -467,13 +467,13 @@ test('un événement renvoie à la prémisse OKF qui porte sa date, et les parti
   assert.equal(result.echeances[0].date, '2026-11-16');
   const errors = texts(result, 'erreur');
   assert.ok(errors.some((entry) => entry.startsWith('matter.parties : matter.parties vient de la base du dossier')));
-  assert.ok(errors.some((entry) => entry.startsWith('evenements.lettre de relance.okf : prémisse « Prémisse absente » absente de l’index')));
+  assert.ok(errors.some((entry) => entry.startsWith('evenements.lettre de relance.okf : concept « Prémisse absente » absent du bundle OKF')));
   assert.ok(errors.some((entry) => entry.startsWith('evenements.mise en demeure.okf : okf remplace date')));
   const legacy = await verifySuivi({ code, cwd: '/dossier-fictif', connectors, marks: new Map(), today: '2026-10-26' });
   assert.ok(!texts(legacy, 'erreur').some((entry) => entry.startsWith('matter.parties')));
 });
 
-test('avec un brain, le suivi vit dans Roadmap.json et le tableau tire les parties de la base du dossier', async (context) => {
+test('avec un brain, le suivi vit dans le Timeline.json de son goal et le tableau tire les parties de la base du dossier', async (context) => {
   context.mock.timers.enable({ apis: ['Date'], now: new Date('2026-10-26T12:00:00Z') });
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'suivi-brain-')));
   const root = path.join(base, 'Dossier Dupont');
@@ -481,6 +481,8 @@ test('avec un brain, le suivi vit dans Roadmap.json et le tableau tire les parti
   fs.mkdirSync(path.join(root, '.piecemaker'), { recursive: true });
   fs.mkdirSync(path.join(base, 'home'), { recursive: true });
   fs.writeFileSync(path.join(base, 'home', 'brain.json'), JSON.stringify({ path: brain }));
+  fs.mkdirSync(path.join(brain, '.piecemaker'), { recursive: true });
+  fs.writeFileSync(path.join(brain, '.piecemaker', 'dossiers.json'), JSON.stringify({ [root]: 'Dossier Dupont' }));
   fs.writeFileSync(path.join(root, '.piecemaker', 'appel-suivi.json'), toJson(CONTENTIEUX));
   const previous = process.env.PIECEMAKER_HOME;
   process.env.PIECEMAKER_HOME = path.join(base, 'home');
@@ -493,15 +495,15 @@ test('avec un brain, le suivi vit dans Roadmap.json et le tableau tire les parti
   const board = createBoardService(() => db, service);
   const snapshot = await service.read(root, 'appel-suivi.json');
   assert.ok(snapshot.echeances.length > 0);
-  const roadmap = JSON.parse(fs.readFileSync(path.join(brain, 'projects', 'Dossier Dupont', 'Roadmap.json'), 'utf8'));
-  assert.deepEqual(Object.keys(roadmap.suivis), ['appel-suivi.json']);
+  const timeline = path.join(brain, 'projects', 'Dossier Dupont', 'goals', 'appel', 'Timeline.json');
+  assert.ok(JSON.parse(fs.readFileSync(timeline, 'utf8')).echeances);
   assert.ok(fs.existsSync(path.join(root, '.piecemaker', 'appel-suivi.json.migre')));
   const matterPath = `projects/cabinet/matters/${dossierMatterId(root, 'appel-suivi.json')}`;
   const matter = (await board.current()).docs[matterPath] as { client?: string; parties?: Array<Record<string, string>> };
   assert.equal(matter.client, 'Société Exemple SAS');
   assert.deepEqual(matter.parties, [{ name: 'Jean Dupont', role: 'adverse', entityType: 'person' }, { name: 'Société Exemple SAS', role: 'client', entityType: 'organisation' }]);
   await board.write('update', matterPath, { client: 'Autre', summary: 'Appel du jugement.' });
-  const written = JSON.parse(fs.readFileSync(path.join(brain, 'projects', 'Dossier Dupont', 'Roadmap.json'), 'utf8')).suivis['appel-suivi.json'].matter;
+  const written = JSON.parse(fs.readFileSync(timeline, 'utf8')).matter;
   assert.equal(written.summary, 'Appel du jugement.');
   assert.equal(written.client, undefined);
 });

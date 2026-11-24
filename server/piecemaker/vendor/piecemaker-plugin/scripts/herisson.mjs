@@ -47,24 +47,11 @@ export function touchedFiles(payload) {
   return writtenTexts(String(payload?.tool_name || ''), payload?.tool_input || {}, payload?.cwd || process.cwd()).map((entry) => entry.file);
 }
 
-function citingPrograms(root, cite) {
-  const folder = path.join(root, '.piecemaker', 'catala');
-  const names = fs.existsSync(folder) ? fs.readdirSync(folder, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name) : [];
-  return names.filter((name) => fs.readdirSync(path.join(folder, name)).some((file) => file.endsWith('.catala_fr') && fs.readFileSync(path.join(folder, name, file), 'utf8').includes(cite)));
-}
-
 const FEATURE_TOOL = /^mcp__features__Feature$/;
-const OKF_TOOL = 'mcp__features__OkfWrite';
 
 function issuedCommand(payload) {
   const input = payload?.tool_input || {};
   if (payload?.tool_name === 'Bash') return String(Array.isArray(input.command) ? input.command.join(' ') : input.command || '');
-  if (payload?.tool_name === OKF_TOOL) {
-    return (Array.isArray(input.writes) ? input.writes : []).map(({ action, source, reason, remove, ...link }) => {
-      const args = action === 'mark_examined' ? { document: source, reason, remove } : action === 'link_review' ? { premise: source, file: link.file, column: link.column === undefined ? undefined : String(link.column), remove } : { source, ...link };
-      try { return `pm ${pmArgv('index', action, args).join(' ')}`; } catch { return ''; }
-    }).join('; ');
-  }
   if (!FEATURE_TOOL.test(String(payload?.tool_name || '')) || input.action !== 'run') return '';
   try { return `pm ${pmArgv(input.name, input.command, input.args ?? {}).join(' ')}`; } catch { return ''; }
 }
@@ -75,7 +62,7 @@ export function commandChecks(payload) {
   const root = payload.cwd || process.cwd();
   if (!fs.existsSync(path.join(root, '.piecemaker'))) return [];
   return FEATURES.filter((feature) => feature.commande && feature.verifier && new RegExp(feature.commande).test(command))
-    .flatMap((feature) => (feature.cite ? citingPrograms(root, feature.cite) : ['']).map((nom) => ({ feature, root, nom })));
+    .map((feature) => ({ feature, root, nom: '' }));
 }
 
 export async function workReport(root, calls, { run = runPm } = {}) {

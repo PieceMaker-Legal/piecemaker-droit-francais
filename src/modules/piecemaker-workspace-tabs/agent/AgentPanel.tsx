@@ -8,7 +8,8 @@ import { ACTIVE_THREAD_STATES, agentApi } from '@/modules/piecemaker-workspace-t
 import type { AgentDeliverable, AgentDreamSettings, AgentProvider, AgentSettings, AgentState, AgentThread, AgentThreadState } from '@/modules/piecemaker-workspace-tabs/agent/agentApi';
 import { AgentCards, pendingCards } from '@/modules/piecemaker-workspace-tabs/agent/AgentCards';
 import { AgentScheduled } from '@/modules/piecemaker-workspace-tabs/agent/AgentScheduled';
-import { CaseFolders } from '@/modules/piecemaker-workspace-tabs/agent/CaseFolders';
+import { CaseFolders, CaseGoals } from '@/modules/piecemaker-workspace-tabs/agent/CaseFolders';
+import { Library } from '@/modules/piecemaker-workspace-tabs/agent/Library';
 import { Section } from '@/modules/piecemaker-workspace-tabs/agent/AgentSection';
 import { age, bytes, DELIVERABLE_LABELS, PROVIDER_LABELS, THREAD_STATE_COLORS, THREAD_STATE_LABELS } from '@/modules/piecemaker-workspace-tabs/agent/agentFormat';
 import { ProjectArtifactDialog } from '@/modules/piecemaker-artifacts';
@@ -19,11 +20,13 @@ import type { AgentActions } from '@/modules/piecemaker-workspace-tabs/agent/use
 const ThreadConversation = lazy(() => import('@/modules/piecemaker-workspace-tabs/agent/ThreadConversation'));
 const threadLoading = <p role="status" className="p-4 text-sm">Chargement de la session…</p>;
 
-type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled';
+type AgentPanelTab = 'threads' | 'context' | 'settings' | 'scheduled' | 'library';
 type SettingsTab = 'general' | 'instructions' | 'dream' | 'brain' | 'folders';
 const SETTINGS_TABS: Array<[SettingsTab, string]> = [['general', 'Général'], ['instructions', 'Instructions'], ['dream', 'Dream'], ['brain', 'Brain'], ['folders', 'Dossiers actifs']];
 
 const TABS: Array<[AgentPanelTab, string, string]> = [['threads', 'Fils', 'Fils de discussion'], ['context', 'Contexte', 'Contexte'], ['scheduled', 'Planifiées', 'Tâches planifiées']];
+/** La Library (Legal-OKF, clients et projets des dossiers) n'existe qu'au niveau de l'agent central. */
+const CENTRAL_TABS: Array<[AgentPanelTab, string, string]> = [...TABS, ['library', 'Library', 'Library : templates, guidelines, projets et clients']];
 const PROVIDERS: AgentProvider[] = ['claude', 'codex', 'mistral'];
 const VIEW_KEY = 'pm-agent-view';
 const inputClass = 'w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-ring';
@@ -104,7 +107,7 @@ function Context({ state, act, projectPath, onTab, onOpenArtifact }: { state: Ag
   return <div className="flex h-full flex-col">
     <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
       <div className="px-2 pb-2"><select aria-label="Visibilité" className="rounded-lg bg-transparent text-[15px] text-foreground" defaultValue="me"><option value="me">Vous uniquement</option></select></div>
-      {state.central && <CaseFolders state={state} projectPath={projectPath} save={(patch) => void act('settings', patch, 'PUT')} />}
+      {state.central ? <CaseFolders state={state} projectPath={projectPath} save={(patch) => void act('settings', patch, 'PUT')} /> : <CaseGoals project={projectPath} />}
       <Section title="Instructions" count={state.settings.instructions.trim() ? 1 : 0}>
         <Row icon={<NotebookPen className="h-4 w-4" />} title="Instructions du projet" detail={state.settings.instructions.trim() || 'Aucune pour l’instant'} onClick={() => onTab('settings')} />
       </Section>
@@ -309,7 +312,7 @@ export function AgentPanel({ projectPath, projectId, panelActions, onShowSetting
   return <div className={panelClass} aria-label="Volet de l’agent">
     <header className="relative flex min-h-12 shrink-0 flex-wrap items-center gap-1 border-b border-border px-3 py-1">
       <nav role="tablist" className="flex min-w-0 flex-wrap items-center gap-1">
-        {TABS.map(([value, label, name]) => <button key={value} role="tab" type="button" aria-label={name} title={name} aria-selected={tab === value} onClick={() => onTab(value)}
+        {(state?.central ? CENTRAL_TABS : TABS).map(([value, label, name]) => <button key={value} role="tab" type="button" aria-label={name} title={name} aria-selected={tab === value} onClick={() => onTab(value)}
           className={`flex min-w-0 items-center gap-2 rounded-xl px-3 py-1.5 text-left text-sm font-medium ${tab === value ? 'bg-muted text-foreground' : 'text-foreground/80 hover:text-foreground'}`}>
           <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>{value === 'threads' && active > 0 && <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-500 px-1.5 text-xs text-white" aria-label={`${active} fils actifs`}>{active}</span>}
         </button>)}
@@ -350,6 +353,7 @@ export function AgentPanel({ projectPath, projectId, panelActions, onShowSetting
           </> : <><Instructions state={state} act={act} /><Settings state={state} act={act} /></>}
         </>}
         {tab === 'scheduled' && <AgentScheduled state={state} act={act} onOpenArtifact={onOpenArtifact} />}
+        {tab === 'library' && state.central && <Library />}
       </div>
     </>}
   </div>;

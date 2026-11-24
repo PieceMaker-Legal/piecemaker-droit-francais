@@ -64,13 +64,16 @@ flowchart LR
 
 | Feature | Fichiers (sous `.piecemaker/`) | Écriture | Avant (PreToolUse) | Après (PostToolUse) | Skill | Délai |
 |---|---|---|---|---|---|---|
-| `ontologie` | `ontologie.json` (dans `~/.piecemaker`), `ontologie.proposition.json` | proposition | devient une proposition (onglet Index › Ontologie) | — | `okf` | — |
-| `okf` | `okf/**` | agent | libre ; outil MCP `OkfWrite` conseillé | après une écriture d'une fiche, `OkfWrite` ou `pm okf link`, `unlink` ou `examinee` : `pm okf verify` (erreurs, contradictions entre valeurs d'une prémisse, manques) | `okf` | 30 s |
+| `ontologie` | `ontologie.json` (dans `~/.piecemaker`), `ontologie.proposition.json` | proposition | devient une proposition (onglet Case index › Ontologie) | — | `okf` | — |
+| `okf` | `okf/**` | agent | Write ou Edit | après une écriture d'un concept : `pm okf verify` (validateur Context-OKF strict : erreurs et lints) | `okf` | 30 s |
 | `etapes` | `etapes.json` | serveur | refusée : l'avocat règle les étapes sur le tableau | — | `piecemaker` | — |
 | `protection` | `protection.json` | serveur | refusée : l'avocat lève la protection par le bouclier | — | `piecemaker` | — |
 | `suivi` | `<nom>-suivi.json`, `suivi.json` | agent | refusée si le JSON est illisible ou si la racine n'a pas la forme `matter`, `evenements`, `echeances` | `pm suivi_dossiers verifier --suivi <fichier>` | `piecemaker` | 60 s |
+| `timeline` | brain : `goals/<goal>/Timeline.json` | agent | refusée si la racine n'a pas la forme `actes`, `matter`, `evenements`, `echeances` ou si un acte existant change | `pm suivi_dossiers verifier --suivi <goal>-suivi.json` | `piecemaker` | 60 s |
+| `goal` | brain : `goals/<goal>/Goal.md`, `Memory.md` | agent | refusée avec un frontmatter ou au-delà de 200 lignes (renvoi vers `Archive.md`) | — | `piecemaker` | — |
+| `case-timeline` | brain : `Timeline.json` du dossier | serveur | refusée : étape et synthèse sont écrites par le serveur | — | `piecemaker` | — |
 | `memoire` | `memoires/<nom>.md` (mémoire projet, règle 4°) | agent | refusée si l'écriture ajoute un frontmatter | `pm memoire verifier --memoire <nom>` : un acte du même nom (voir [suivi-dossier.md](suivi-dossier.md)) | `piecemaker` | 10 s |
-| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si l'écriture ajoute une faute de format (`.catala_fr` seulement) ou une erreur de compilation, ou crée un programme au nom absent des raisonnements de `etapes.json` | `pm catala verifier --programme <nom>` ; aussi après `pm okf link` ou `unlink` avec `states` ou `involves`, pour chaque programme qui cite une prémisse `okf:/_premises/` | `catala` | 60 s |
+| `catala` | `catala/<nom>/*.catala_fr`, `*.toml` | agent | refusée si l'écriture ajoute une faute de format (`.catala_fr` seulement) ou une erreur de compilation, ou crée un programme au nom absent des raisonnements de `etapes.json` | `pm catala verifier --programme <nom>` | `catala` | 60 s |
 | `revue` | aucun fichier : brouillon de revue tabulaire | agent | libre | après `pm tabular_review preparer` ou `lancer` : `pm tabular_review verifier` (recherches en erreur ou à compléter) | `piecemaker` | 30 s |
 
 ## Messages renvoyés à l'agent
@@ -83,11 +86,11 @@ vérificateurs `pm`, reprise telle quelle, reste en français.
 
 | Feature | Moment | Cas | Texte exact |
 |---|---|---|---|
-| `ontologie` | PreToolUse | Edit, Write ou apply_patch accepté | `Edit saved as a proposal in ontologie.proposition.json. ontologie.json does not change, this is normal: the lawyer accepts, refuses or modifies each change in the Index › Ontologie tab.⏎Compared with the current ontology: relations — <changes>; document types — <changes>.⏎To add to it, edit ontologie.json again: each edit is added to the pending proposal.` |
+| `ontologie` | PreToolUse | Edit, Write ou apply_patch accepté | `Edit saved as a proposal in ontologie.proposition.json. ontologie.json does not change, this is normal: the lawyer accepts, refuses or modifies each change in the Case index › Ontologie tab.⏎Compared with the current ontology: relations — <changes>; document types — <changes>.⏎To add to it, edit ontologie.json again: each edit is added to the pending proposal.` |
 | `ontologie` | PreToolUse | proposition partie du fichier actuel (3e ligne remplacée) | `The pending proposal did not contain the replaced text: the new proposal starts from the current file and replaces the old proposal.` |
 | `ontologie` | PreToolUse | proposition invalide | `Proposal not saved, nothing changed: <reason>. Correct the cause, then edit <file> again.` |
 | `ontologie` | PreToolUse | serveur arrêté (raison) | `PieceMaker is not running, the proposal cannot be checked; ask the lawyer to start PieceMaker` |
-| `ontologie` | PreToolUse | écriture par le shell | `Only the lawyer sets the link ontology (~/.piecemaker/ontologie.json, common to all cases), in the Index › Ontologie tab. Read it with pm okf ontologie. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides.` |
+| `ontologie` | PreToolUse | écriture par le shell | `Only the lawyer sets the link ontology (~/.piecemaker/ontologie.json, common to all cases), in the Case index › Ontologie tab. Read it with pm okf ontologie. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides.` |
 | `ontologie` | PreToolUse | accès à la clé de sceau `ontologie.cle` | `Only the PieceMaker server can access the seal key of the ontology (~/.piecemaker/ontologie.cle).` |
 | `ontologie` | PreToolUse | écriture d'une proposition en attente (`*.proposition.json`) | le texte « écriture par le shell » de la feature |
 | `etapes` | PreToolUse | toute écriture | `Only the lawyer sets the case steps (.piecemaker/etapes.json), on the board of the Suivi des dossiers tab. Read the current step and the document to produce with pm check. Never write this file. To change a step, ask the lawyer.` |
@@ -133,7 +136,6 @@ Fautes de format Catala (`<faute>` ci-dessus), données par
 | titre trop court ou trop long | `titre « <titre> » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».` |
 | étiquette d'article incomplète | `étiquette « <étiquette> » : ajoutez le texte après le numéro (ex. article_2_code_civil).` |
 | entrée sans titre | `titre manquant pour cette entrée. Écrivez ## texte court au-dessus.` |
-| fait de test sans prémisse | `fait du scénario sans justification : écrivez ## okf:/_premises/<fiche>.md juste au-dessus de <variable>.` |
 
 Le message part dans `permissionDecisionReason` et `systemMessage` en
 PreToolUse, dans `additionalContext` en PostToolUse, dans `reason` avec
@@ -202,9 +204,7 @@ Limites des mesures :
      fichiers s'écrit fichier par fichier. Sans pack, après 10 s ou si le
      compilateur plante sans ligne `[ERROR]`, l'écriture passe ;
    - `commande` : expression régulière sur une commande shell, qui lance
-     `verifier` dans le dossier courant ;
-   - `cite` : avec `commande`, lance `verifier` pour chaque programme
-     `catala/<nom>/` dont un fichier `.catala_fr` contient ce texte.
+     `verifier` dans le dossier courant.
 2. Ajoutez un cas dans `scripts/herisson.test.js`.
 3. Ajoutez ses messages au tableau « Messages renvoyés à l'agent ».
 

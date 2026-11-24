@@ -4,7 +4,7 @@ Le tableau peut te transmettre une demande : un texte qui cite `projects/cabinet
 
 1. Lis-la : `pm suivi_dossiers lire projects/cabinet/requests/<id>`.
 2. Lis les documents qu'elle cite : `pm suivi_dossiers lire projects/cabinet/docs/<id>/text`.
-3. Écris la fiche dans le suivi `<nom>-suivi.json` (sous `suivis` de la Roadmap.json du dossier ; sans brain, `.piecemaker/<nom>-suivi.json`), puis lance `pm suivi_dossiers verifier`. Le tableau lit lui-même les dossiers PieceMaker : un dossier sans fichier de suivi n'y figure pas, et aucune carte ne s'y ajoute à la main.
+3. Écris la fiche dans le suivi `<nom>-suivi.json` (`goals/<goal>/Timeline.json` du dossier ; sans brain, `.piecemaker/<nom>-suivi.json`), puis lance `pm suivi_dossiers verifier`. Le tableau lit lui-même les dossiers PieceMaker : un dossier sans fichier de suivi n'y figure pas, et aucune carte ne s'y ajoute à la main.
 4. Termine la demande : `pm suivi_dossiers ecrire projects/cabinet/requests/<id> --json '{"status":"done","result":"une ligne de 600 caractères au plus"}'`.
 
 `pm suivi_dossiers ecrire` fusionne les objets et remplace les listes entières : envoie la liste complète.

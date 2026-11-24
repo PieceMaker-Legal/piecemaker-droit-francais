@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import * as volets from '../../../mcp/piecemaker/volets.mjs';
@@ -11,6 +11,10 @@ import { CASSATION_MATIERES, COLUMN_FORMATS, PREMIERE_INSTANCE_TYPES, RESEARCH_S
 import { etatDossier, findVendor, parseArgv, run, sessionDossier } from './pm.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+const TEST_HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-home-'));
+fs.writeFileSync(path.join(TEST_HOME, 'brain.json'), JSON.stringify({ path: path.join(TEST_HOME, 'brain') }));
+process.env.PIECEMAKER_HOME = TEST_HOME;
+after(() => fs.rmSync(TEST_HOME, { recursive: true, force: true }));
 
 test('parseArgv sépare drapeaux, booléens et positionnels', () => {
   assert.deepEqual(parseArgv(['dossier', 'sql', 'SELECT 1', '--dossier', '/tmp']), {
@@ -179,7 +183,7 @@ test('tabular_review transmet les actions et refuse les actions retirées', asyn
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
-test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', async () => {
+test('dossier case-index garde le Case index dans l’onglet Dossier, crée ou relance', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-skill-index-'));
   const calls = [];
   const opened = [];
@@ -200,21 +204,21 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
       return { ok: true };
     },
   };
-  await assert.rejects(() => run(['dossier', 'index', 'lire', '--dossier', dossier], { deps }), /pm dossier index lancer/);
+  await assert.rejects(() => run(['dossier', 'case-index', 'lire', '--dossier', dossier], { deps }), /pm dossier case-index lancer/);
   await run(['dossier', 'index', 'lancer', '--ia', 'mistral', '--dossier', dossier], { deps });
   assert.deepEqual(calls.filter((call) => call.action !== 'index').map((call) => [call.action, call.projet, call.ia]), [['preparer', 'p-index', 'mistral'], ['lancer', 'p-index', 'mistral']]);
   found = { fichier: 'index.json', absentes: 2 };
   await run(['dossier', 'index', 'lancer', '--dossier', dossier], { deps });
   assert.deepEqual([calls.at(-1).action, calls.at(-1).fichier], ['relancer', 'index.json']);
-  const read = await run(['dossier', 'index', 'lire', '--dossier', dossier], { deps });
+  const read = await run(['dossier', 'case-index', 'lire', '--dossier', dossier], { deps });
   assert.equal(calls.at(-1).fichier, 'index.json');
   assert.equal(opened[0].tab, 'plugin:piecemaker-dossier');
   assert.equal(opened[0].view, 'index-analysis');
-  assert.match(read, /visible : Dossier \(analyse tabulaire de l’index\)\./i);
+  assert.match(read, /visible : Dossier \(analyse tabulaire du Case index\)\./i);
   for (const action of ['preparer', 'relancer', 'ouvrir', 'classement', 'lister', 'modifier']) {
     await assert.rejects(() => run(['dossier', 'index', action, '--dossier', dossier], { deps }), (error) => error.exitCode === 2);
   }
-  await assert.rejects(() => run(['tabular_review', 'relancer', '--fichier', 'Tabular Review/index.json', '--dossier', dossier], { deps }), /pm dossier index/);
+  await assert.rejects(() => run(['tabular_review', 'relancer', '--fichier', 'Tabular Review/index.json', '--dossier', dossier], { deps }), /pm dossier case-index/);
   await run(['dossier', 'arborescence', '--dossiers', '[{"nom":"Contrats","explication":"Baux"}]', '--dossier', dossier], { deps });
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier, dossiers: [{ nom: 'Contrats', explication: 'Baux' }] });
   await run(['dossier', 'arborescence', '--dossiers', '[{"nom":"Contrats"}]', '--motif', 'Regrouper les baux', '--dossier', dossier], { deps });
@@ -260,9 +264,9 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
     piecesFn: async () => ({ pieces: [{ path: 'Pièces/bail.pdf', status: 'ready', protected: true }] }),
     conversionJob: async () => ({ job: null }),
     okfFn: async (input) => { calls.push(input); return {
-      erreurs: [{ fiche: 'Pièces/bail.md', erreur: 'lien sans citation' }, { fiche: '/Note.docx.md', erreur: 'type « Non classé » hors arborescence (Pièces)' }],
-      contradictions: [],
-      manques: [{ element: '/_premises/date-de-rupture.md', manque: 'prémisse sans valeur', programmes: ['rupture'] }, { element: 'Pièces/avenant.md', manque: 'pièce sans prémisse ni lien' }],
+      erreurs: [{ fiche: 'positions/creance.md', erreur: 'missing required field: type' }],
+      lints: [{ fiche: 'roles/client.md', erreur: 'orphan concept' }, { fiche: 'documents/bail.md', erreur: 'broken link: x.md' }],
+      resume: '5 file(s), 1 error(s), 2 lint(s)',
     }; },
     suiviFn: async ({ suivi }) => (suivi === 'suivi.json' ? '0 erreur(s), 0 manque(s).'
       : `Suivi du dossier (.piecemaker/${suivi})\nÉchéances :\n  02/01/2026 — Conclusions (conclusions) — DÉPASSÉE\n  01/06/2027 — Audience (audience) — à venir\n\n1 erreur(s), 0 manque(s).`),
@@ -270,47 +274,24 @@ test('check numérote préparation, index, raisonnements reliés par leur nom et
   const text = await run(['check', '--dossier', dossier], { deps });
   assert.deepEqual(calls, [{ action: 'verify', folder: dossier }]);
   assert.equal(text, [
-    'Dossier : 8 point(s) à traiter.',
+    'Dossier : 6 point(s) à traiter.',
     '1° Conversion : valide',
     '2° Anonymisation : valide',
     '3° Mapping : valide',
-    '4° Index : attribuer un type à Note.docx : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence), 1 erreur(s), 1 manque(s) → pm okf verify',
+    '4° Index : 1 erreur(s), 2 lint(s) → pm okf verify',
     '5° Raisonnement',
     '  5.A bail',
     '    5.A.1 Programme Catala (.piecemaker/catala/bail/) : valide',
-    '    5.A.2 Prémisses OKF du programme : aucune → skill okf',
     '  5.B rupture (rédaction)',
     '    5.B.1 Programme Catala (.piecemaker/catala/rupture/) : jamais vérifié → pm catala verifier --programme rupture',
-    '    5.B.2 Prémisses OKF du programme : 1 manque(s) → pm okf verify',
-    '    5.B.3 Conclusions en défense : en cours de rédaction',
-    '    5.B.4 Lettre fictive : validé',
-    '    5.B.5 Assignation fictive : à rédiger',
-    '    5.B.6 Suivi : 1 erreur(s), 0 manque(s), 1 échéance(s) dépassée(s), du jour ou sans date → pm suivi_dossiers verifier --suivi rupture-suivi.json',
+    '    5.B.2 Conclusions en défense : en cours de rédaction',
+    '    5.B.3 Lettre fictive : validé',
+    '    5.B.4 Assignation fictive : à rédiger',
+    '    5.B.5 Suivi : 1 erreur(s), 0 manque(s), 1 échéance(s) dépassée(s), du jour ou sans date → pm suivi_dossiers verifier --suivi rupture-suivi.json',
     '6° Recherche « Rupture fictive » : bloquée → pm tabular_review lister',
     '7° Suivi suivi.json : valide',
   ].join('\n'));
   assert.doesNotMatch(text, /ancien|yaml/i);
-  write('.piecemaker/catala/bail/bail.catala_fr', '## okf:/_premises/date-du-bail.md\n');
-  write('.piecemaker/okf/_premises/date-du-bail.md', '');
-  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : valide/);
-  write('.piecemaker/catala/bail/bail.catala_fr', [
-    'déclaration champ d\'application Bail:',
-    '  contexte bail_signé condition',
-    '  contexte congé_donné condition',
-    '  contexte loyer_impayé condition',
-    '  contexte caution_versée condition',
-    '  contexte loyer contenu argent',
-  ].join('\n'));
-  write('.piecemaker/catala/bail/test_bail.catala_fr', [
-    'champ d\'application Exemple:',
-    '  ## okf:/_premises/date-du-bail.md',
-    '  règle calcul.bail_signé rempli',
-    '  ## okf:/_premises/fiche-absente.md',
-    '  règle calcul.congé_donné rempli',
-    '  règle calcul.loyer_impayé rempli',
-    '  règle calcul.caution_versée non rempli',
-  ].join('\n'));
-  assert.match(await run(['check', '--dossier', dossier], { deps }), /5\.A\.2 Prémisses OKF du programme : 3 entrée\(s\) sans prémisse : loyer, congé_donné, loyer_impayé → pm catala verifier --programme bail\n/);
   await assert.rejects(() => run(['dossier', 'verifier', '--dossier', dossier], { deps }), /dossier attend/);
   await assert.rejects(() => run(['okf', 'verify-graph', '--dossier', dossier], { deps }), /okf attend/);
   fs.rmSync(dossier, { recursive: true, force: true });
@@ -333,7 +314,7 @@ test('check sur un dossier à jour ne signale rien', async () => {
     tabularFn: async ({ action }) => (action === 'lister' ? { analyses: [], projets: [] } : {}),
     piecesFn: async () => ({ pieces: [] }),
     conversionJob: async () => ({ job: null }),
-    okfFn: async () => ({ erreurs: [], contradictions: [], manques: [] }),
+    okfFn: async () => ({ erreurs: [], lints: [], resume: '3 file(s), 0 error(s), 0 lint(s)' }),
     suiviFn: async () => { throw new Error('inattendu'); },
   };
   assert.equal(await run(['check', '--dossier', dossier], { deps }), [
@@ -362,11 +343,6 @@ test('check sur un dossier à jour ne signale rien', async () => {
     '1° Conversion : Conversion en cours : phase scan, 8/216 (avancement global 27 %). Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala et suivi, qui ne lisent pas les pièces.',
     '2° Anonymisation : en cours, voir 1°',
   ].join('\n'));
-  const parties = { ...deps, okfFn: async () => ({ erreurs: [], contradictions: [], manques: [
-    { element: '/_premises/date-de-rupture.md', manque: 'prémisse sans partie concernée (involves) : attend l’avocat', avocat: true },
-    { element: 'Pièces/avenant.md', manque: 'pièce à examiner' },
-  ] }) };
-  assert.equal((await run(['check', '--dossier', dossier], { deps: parties })).split('\n')[4], '4° Index : 1 manque(s), 1 manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier) → pm okf verify');
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
@@ -402,7 +378,7 @@ test('dossier conversion lance le CLI, ou renvoie l’avancée d’un travail en
 
 const ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
   + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala et suivi.\n'
-  + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
+  + 'L’index et ses liens attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
   + 'Revenez à la fin avec pm dossier conversion.';
 
 test('dossier conversion attend un travail déjà en cours sans relancer le CLI', async () => {
@@ -442,7 +418,7 @@ test('SKILL.md documente toute la surface d’interface', () => {
   const skill = [path.join(HERE, '..', 'SKILL.md'), ...fs.readdirSync(references).map((name) => path.join(references, name))]
     .map((file) => fs.readFileSync(file, 'utf8')).join('\n');
   const required = [
-    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm suivi_dossiers', 'pm okf', 'link', 'unlink', 'examinee', '--motif', '--retirer', '--citation',
+    'pm tab', 'pm dossier', 'pm tabular_review', 'pm bordereau', 'pm suivi_dossiers', 'pm okf', '--motif',
     'lister', 'afficher', 'fermer', 'verifier', 'sql', 'conversion', 'arborescence', 'index', 'lire', 'ecrire',
     'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'fichier',
     '--force', '--dossier', '--dossiers', '--suivi', '--json',
@@ -471,23 +447,16 @@ test('sessionDossier suit la session plutôt que le répertoire courant', async 
 });
 
 
-test('okf types propose la liste complète à l’avocat', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-types-'));
-  const calls = [];
-  const documentTypes = [{ name: 'contrat', icon: 'pen' }];
-  const result = await run(['okf', 'types', '--json', JSON.stringify(documentTypes)], { cwd: dossier, deps: {
-    okfFn: async (input) => { calls.push(input); return { documentTypes, motif: '', date: '' }; },
-  } });
-  assert.deepEqual(calls, [{ action: 'proposer', folder: path.resolve(dossier), ontologie: { documentTypes } }]);
-  assert.match(result, /Proposition enregistrée \(1 type\(s\) de documents\)/);
-  assert.equal(await run(['okf', 'types', '--json', '[]'], { cwd: dossier, deps: { okfFn: async () => ({ motif: '', date: '' }) } }), 'Aucun changement par rapport à l’ontologie actuelle : aucune proposition en attente.');
-  fs.rmSync(dossier, { recursive: true, force: true });
-});
-
-test('okf ontologie --noms donne les relations de l’ontologie scellée lue par le serveur', async () => {
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-noms-'));
-  const okfFn = async () => ({ relations: [{ name: 'contests', label: 'conteste', source: ['Pièces'], target: ['Pièces'] }], systeme: [{ name: 'states' }, { name: 'mentions' }, { name: 'involves' }] });
-  assert.deepEqual(JSON.parse(await run(['okf', 'ontologie', '--noms'], { cwd: dossier, deps: { okfFn } })), ['contests', 'states', 'involves']);
+test('okf ontologie liste les six patterns LOF et okf verify rend les lignes du validateur', async () => {
+  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-lof-'));
+  const okfFn = async ({ action }) => (action === 'verify'
+    ? { erreurs: [{ fiche: 'positions/a.md', erreur: 'missing required field: type' }], lints: [{ fiche: 'roles/b.md', erreur: 'orphan concept' }], resume: '3 file(s), 1 error(s), 1 lint(s)' }
+    : { patterns: [{ id: 'odp-003', title: 'Positions déontiques', description: 'Claim, duty, power.' }], types: ['Pièces'] });
+  const listing = await run(['okf', 'ontologie'], { cwd: dossier, deps: { okfFn } });
+  assert.match(listing, /Legal Ontologies Foundry, David R\. Koepsell, CC BY 4\.0/);
+  assert.match(listing, /- odp-003 — Positions déontiques : Claim, duty, power\./);
+  assert.equal(await run(['okf', 'verify'], { cwd: dossier, deps: { okfFn } }), 'ERROR  positions/a.md: missing required field: type\nLINT   roles/b.md: orphan concept\n3 file(s), 1 error(s), 1 lint(s)');
+  await assert.rejects(() => run(['okf', 'link', 'a', 'b', 'c'], { cwd: dossier, deps: { okfFn } }), /okf attend verify, ontologie/);
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 

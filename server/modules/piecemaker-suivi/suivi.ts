@@ -168,10 +168,10 @@ export function readSuivi(value: unknown, premise?: (title: string) => PremiseDa
       if (raw.intitule !== undefined && !text(raw.intitule)) problem(`${at}.intitule`, 'intitule : texte');
       if (raw.hypothese !== undefined && typeof raw.hypothese !== 'boolean') problem(`${at}.hypothese`, 'hypothese : true ou false');
       if (raw.okf !== undefined) {
-        if (!text(raw.okf)) { problem(`${at}.okf`, 'okf : titre de la prémisse de l’index qui porte la date'); continue; }
-        if (raw.date !== undefined || raw.preuve !== undefined || raw.hypothese !== undefined) { problem(`${at}.okf`, 'okf remplace date, preuve et hypothese : la date et sa preuve viennent de la prémisse, ne les recopie pas'); continue; }
+        if (!text(raw.okf)) { problem(`${at}.okf`, 'okf : titre du concept daté du bundle OKF'); continue; }
+        if (raw.date !== undefined || raw.preuve !== undefined || raw.hypothese !== undefined) { problem(`${at}.okf`, 'okf remplace date, preuve et hypothese : la date et sa preuve viennent du concept OKF, ne les recopie pas'); continue; }
         const found = premise?.(raw.okf.trim()) ?? null;
-        if (!found) { problem(`${at}.okf`, `prémisse « ${raw.okf.trim()} » absente de l’index ou sans date : relie la pièce avec pm okf link <pièce> states "${raw.okf.trim()}" --citation "…" --value AAAA-MM-JJ`); continue; }
+        if (!found) { problem(`${at}.okf`, `concept « ${raw.okf.trim()} » absent du bundle OKF ou sans date : dans .piecemaker/okf/, donne au concept de ce titre date: AAAA-MM-JJ, resource et citation (skill okf)`); continue; }
         events.set(nom, { nom, intitule: text(raw.intitule) ? raw.intitule : found.intitule || human(nom), date: found.date, hypothese: false, preuve: found.preuve, selon: sources(raw.selon, `${at}.selon`), okf: raw.okf.trim() });
         continue;
       }

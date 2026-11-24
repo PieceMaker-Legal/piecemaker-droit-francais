@@ -2,6 +2,19 @@
 
 Le suivi relève les étapes d'un dossier qu'il ne faut pas manquer. Il se distingue du programme Catala : le programme raisonne dans un acte (`.piecemaker/catala/<nom>/`, plusieurs par dossier), le suivi liste les dates qui comptent pour le dossier (`.piecemaker/<nom>-suivi.json`, un fichier par acte ou procédure suivi, `suivi.json` reste valide). Ce n'est pas une chronologie : n'y entrent que les actes à valeur procédurale (contentieux) et les dates liées à la validité du contrat (contrat), avec les échéances qui en découlent.
 
+## Avec un brain : les goals
+
+Avec un brain, chaque dossier a `goals/<goal>/` dans le brain. Un goal est un acte à produire ou une procédure à mener ; il contient un ou plusieurs actes.
+
+| Fichier | Contenu | Écrit par |
+|---|---|---|
+| `Goal.md` | l'objectif (200 lignes, sans frontmatter) | l'agent, l'avocat (onglet Contexte) |
+| `Memory.md` | stratégie, décisions, consignes, fait et à faire (200 lignes, sans frontmatter) | l'agent, l'avocat |
+| `Archive.md` | ce qui ne sert plus (sans limite) | l'agent, l'avocat |
+| `Timeline.json` | `actes` (étape, versions), `evenements`, `echeances`, `matter` | l'avocat (actes), l'agent (le reste) |
+
+Le goal `principal` répond à `suivi.json`, un goal `<g>` à `<g>-suivi.json` : le moteur, le Matter board et `pm suivi_dossiers --suivi` gardent ces noms. Une nouvelle version d'acte (`-vN`, `precedent`) reste dans le goal de son acte. Le tableau ci-dessous décrit le fonctionnement sans brain.
+
 ## Mémoire projet, suivi et étapes : une place par information
 
 La règle 4° de l'`AGENTS.md` livré dans chaque dossier (`server/piecemaker/agent-instructions.ts`) fait tenir à l'agent une mémoire par projet. Un projet est un acte précis ; son `<nom>` est la clé commune du programme Catala, du suivi, de la carte du tableau et de la mémoire.

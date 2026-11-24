@@ -19,14 +19,7 @@ export const DOCUMENT_ICONS: Record<string, { label: string; paths: string }> = 
   diamond: { label: 'Prémisse', paths: '<path d="m12 2 10 10-10 10L2 12z"/>' },
 };
 
-export const DEFAULT_DOCUMENT_TYPES: DocumentType[] = [
-  ['acte de procédure', 'scroll'], ['courrier', 'mail'], ['courriel', 'at'],
-  ['mise en demeure', 'file'], ['contrat', 'pen'], ['facture', 'receipt'],
-  ['devis', 'calculator'], ['attestation', 'badge'], ['décision judiciaire', 'scale'],
-  ['procès-verbal', 'list'], ['constat', 'search'], ['expertise', 'search'],
-  ['statuts de société', 'building'], ['extrait Kbis', 'building'],
-  ['relevé bancaire', 'bank'], ['acte notarié', 'pen'], ['bordereau de pièces', 'list'],
-].map(([name, icon]) => ({ name, icon }));
+export const DEFAULT_DOCUMENT_TYPES: DocumentType[] = [['legal document', 'scroll'], ['material entity', 'search']].map(([name, icon]) => ({ name, icon }));
 
 export function documentTypeNames(types = DEFAULT_DOCUMENT_TYPES): string[] {
   return [...new Set([...types.map((type) => type.name), 'indéterminé'])];

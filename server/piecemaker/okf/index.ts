@@ -1,25 +1,21 @@
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 
 import express from 'express';
 
-import { DEFAULT_DOCUMENT_TYPES, DOCUMENT_ICONS, documentIcon } from '../../../plugins/piecemaker-dossier/src/document-types.js';
+import { DEFAULT_DOCUMENT_TYPES, documentIcon } from '../../../plugins/piecemaker-dossier/src/document-types.js';
 import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/types.js';
 import { REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
-import type { Renamed } from './build.js';
-import { buildBundle, documentsFromIndex, documentsFromSnapshot, legacyRecords, mergeDocuments, partiesFromSnapshot } from './build.js';
-import { LAWYER_ACTOR, conceptId, readBundle, readTypes, relationsOf, resourceOf, text } from './bundle.js';
-import type { ExamInput, LinkInput, ReviewLinkInput } from './links.js';
-import { addLink, linkReview, markExamined, removeLink, unlinkReview, unmarkExamined } from './links.js';
-import { SYSTEM_RELATIONS, graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
-import { dropProposal, ontologyLines, proposeOntology, readProposal } from './ontology-proposal.js';
-import { EXAMINED, graphReport, linkedReviews } from './premises.js';
-import { documentMetadataFromReviews, reviewCatalog, reviewRowPieces } from './reviews.js';
+import { DOCUMENT, bundleRoot, linksOf, parseConcept, pieceOf, readBundle, readTypes, resourceError, resourceOf, text, typeOf } from './bundle.js';
+import { writeDocuments } from './documents.js';
+import { PERSONS, writePersons } from './persons.js';
+import { readArborescence } from './sealed.js';
+import { graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
+import { dropProposal, proposeOntology, readProposal } from './ontology-proposal.js';
 import type { IndexStore } from './index-store.js';
 import { IndexConflictError, loadIndex, writeIndexView } from './index-store.js';
-import type { OkfStore } from './store.js';
-import { contradictions, verifyBundle } from './verify.js';
 
 type OkfOptions = {
   projects: {
@@ -27,13 +23,36 @@ type OkfOptions = {
     getProjectPath(projectPath: string): { project_id: string; project_path: string } | null;
   };
   snapshot(projectId: string): KnowledgeSnapshot;
-  store: OkfStore;
-  /** L'Index du dossier, rempli par l'analyse tabulaire : il fait la liste des pièces. */
   indexStore?: IndexStore;
-  convertedMarkdown(projectPath: string, filePath: string): string | null;
-  listDocuments(projectPath: string): Promise<string[]>;
+  skillRoot: string;
+  python(): string;
   isLoopback(request: express.Request): boolean;
 };
+
+export type OkfFinding = { fiche: string; erreur: string };
+export type OkfReport = { erreurs: OkfFinding[]; lints: OkfFinding[]; resume: string };
+
+const FINDING = /^(ERROR|LINT)\s+(\S.*?): (.*)$/;
+
+export function parseValidation(output: string): OkfReport {
+  const report: OkfReport = { erreurs: [], lints: [], resume: '' };
+  for (const line of output.split(/\r?\n/)) {
+    const match = FINDING.exec(line);
+    if (match) (match[1] === 'ERROR' ? report.erreurs : report.lints).push({ fiche: match[2], erreur: match[3] });
+    else if (/^\d+ file\(s\)/.test(line)) report.resume = line.trim();
+  }
+  return report;
+}
+
+export function premiseDate(projectPath: string, title: string) {
+  const wanted = title.trim().normalize('NFC');
+  const concept = readBundle(projectPath).find((entry) => !entry.error && text(entry.frontmatter.title).normalize('NFC') === wanted);
+  const date = text(concept?.frontmatter.date);
+  const piece = pieceOf(concept?.frontmatter.resource);
+  const citation = text(concept?.frontmatter.citation);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !piece || !citation) return null;
+  return { date, intitule: wanted, preuve: [{ piece, citation }] };
+}
 
 export function createOkfBackend(options: OkfOptions) {
   const projectPathOf = (projectId: unknown): string => {
@@ -41,117 +60,89 @@ export function createOkfBackend(options: OkfOptions) {
     if (!project) throw new Error('Project not found.');
     return fs.realpathSync(project.project_path);
   };
-  const markdownOf = (projectPath: string) => (resource: string) => options.convertedMarkdown(projectPath, path.join(projectPath, resource));
 
-  const { store } = options;
-  // SQLite is the source: fiches are regenerated from it after each write.
-  const build = (projectId: string, renamed?: Renamed) => {
-    const projectPath = projectPathOf(projectId);
-    const now = new Date().toISOString();
-    store.importOnce(projectId, legacyRecords(projectPath), now);
-    if (renamed) store.rename(projectId, conceptId(renamed.previous), conceptId(renamed.current));
-    const snapshot = options.snapshot(projectId);
-    const documents = mergeDocuments(documentsFromIndex(projectPath, options.indexStore ? loadIndex(options.indexStore, projectId, projectPath)?.review : null), documentsFromSnapshot(projectPath, snapshot));
-    return buildBundle({ projectPath, documents, parties: partiesFromSnapshot(snapshot), records: store.records(projectId), markdownOf: markdownOf(projectPath), now });
+  /** persons/ et documents/ sont régénérés à chaque lecture : la base et le Case index font foi. */
+  const regenerate = (projectId: string, projectPath: string, snapshot: KnowledgeSnapshot): void => {
+    writePersons(projectPath, snapshot);
+    writeDocuments(projectPath, options.indexStore ? loadIndex(options.indexStore, projectId, projectPath)?.review : null, graphTypesOf(projectPath));
   };
-  const target = (projectId: string) => ({ projectPath: projectPathOf(projectId), projectId, store });
 
-  const verify = async (projectId: string) => {
+  const verify = (projectId: string): Promise<OkfReport> => {
     const projectPath = projectPathOf(projectId);
-    const resources = (await options.listDocuments(projectPath)).map((filePath) => resourceOf(projectPath, filePath));
-    return { erreurs: verifyBundle({ projectPath, resources, markdownOf: markdownOf(projectPath) }), contradictions: contradictions(projectPath), ...graphReport(projectPath) };
+    regenerate(projectId, projectPath, options.snapshot(projectId));
+    const root = bundleRoot(projectPath);
+    if (!fs.existsSync(path.join(root, 'index.md'))) return Promise.resolve({ erreurs: [{ fiche: 'index.md', erreur: 'bundle OKF du dossier absent : créez .piecemaker/okf/index.md (skill okf)' }], lints: [], resume: '' });
+    return new Promise((resolve, reject) => {
+      execFile(options.python(), ['-E', '-s', path.join(options.skillRoot, 'scripts', 'validate.py'), root, '--strict'], { timeout: 25_000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
+        const report = parseValidation(stdout);
+        const folders = readArborescence();
+        const pieceTypes = graphTypesOf(projectPath);
+        for (const concept of readBundle(projectPath)) {
+          const resource = text(concept.frontmatter.resource);
+          const message = resource ? resourceError(projectPath, resource, folders, pieceTypes) : null;
+          if (message) report.erreurs.push({ fiche: concept.id.slice(1), erreur: message });
+        }
+        if (error && !report.resume) reject(new Error(`validateur OKF indisponible : ${(stderr || error.message).trim()}`));
+        else resolve(report);
+      });
+    });
+  };
+
+  const patterns = () => {
+    const folder = path.join(options.skillRoot, 'contexte', 'patterns');
+    return fs.readdirSync(folder).filter((name) => /^odp-\d+\.md$/.test(name)).sort().map((name) => {
+      const { frontmatter, body } = parseConcept(fs.readFileSync(path.join(folder, name), 'utf8'));
+      return { id: name.replace(/\.md$/, ''), title: text(frontmatter.title), description: text(frontmatter.description), body: body.trim() };
+    });
   };
 
   const ontology = (projectId: string) => {
     const projectPath = projectPathOf(projectId);
-    const current = readOntology(projectPath);
-    const lines = current.erreur ? { lignes: {}, total: 0 } : ontologyLines(current.relations.map((relation) => relation.name));
-    return { ...current, documentTypes: current.documentTypes || DEFAULT_DOCUMENT_TYPES, icones: Object.keys(DOCUMENT_ICONS), systeme: SYSTEM_RELATIONS, types: readTypes(projectPath), fichier: ontologyFile(), ...lines, proposition: readProposal() };
+    return { ...readOntology(projectPath), patterns: patterns(), types: readTypes(projectPath), fichier: ontologyFile(), proposition: readProposal() };
   };
 
   const propose = (projectId: string, body: { ontologie?: unknown }) => proposeOntology(projectPathOf(projectId), body.ontologie);
 
   const saveOntologyOf = (projectId: string, value: unknown) => {
     saveOntology(projectPathOf(projectId), value);
-    dropProposal('relations');
-    build(projectId);
-    return ontology(projectId);
-  };
-
-  const saveTypes = (projectId: string, value: { documentTypes?: unknown }) => {
-    const projectPath = projectPathOf(projectId);
-    if (value.documentTypes === undefined) throw new TypeError('documentTypes : liste obligatoire.');
-    saveOntology(projectPath, { relations: readOntology(projectPath).relations, documentTypes: value.documentTypes });
-    dropProposal('documentTypes');
+    dropProposal();
     return ontology(projectId);
   };
 
   const read = (projectId: string) => {
     const projectPath = projectPathOf(projectId);
-    const metadata = documentMetadataFromReviews(projectPath);
-    const nodes = new Map(options.snapshot(projectId).nodes.filter((node) => node.kind === 'document' && text(node.data.path)).map((node) => [resourceOf(projectPath, text(node.data.path)), node]));
-    const current = readOntology(projectPath);
+    const types = readTypes(projectPath);
+    const snapshot = options.snapshot(projectId);
+    regenerate(projectId, projectPath, snapshot);
+    const nodes = new Map(snapshot.nodes.filter((node) => node.kind === 'document' && text(node.data.path)).map((node) => [resourceOf(projectPath, text(node.data.path)), node]));
+    const concepts = readBundle(projectPath).filter((concept) => !concept.error);
+    const kindOf = new Map(concepts.map((concept) => [concept.id, text(concept.frontmatter.type)]));
+    const sideOf = new Map(concepts.filter((concept) => concept.id.startsWith(`/${PERSONS}/`)).map((concept) => [concept.id, text(concept.frontmatter.side)]));
+    const documentOf = new Map(concepts.filter((concept) => text(concept.frontmatter.type) === DOCUMENT).map((concept) => [pieceOf(concept.frontmatter.resource), concept.id]));
     return {
-      documentTypes: current.documentTypes || DEFAULT_DOCUMENT_TYPES,
-      types: readTypes(projectPath),
-      typesGraphe: graphTypesOf(projectPath, current),
-      ontologie: [...current.relations, ...SYSTEM_RELATIONS].map(({ name, label, inverse }) => ({ name, label, inverse })),
-      fiches: readBundle(projectPath).filter((concept) => !concept.error).map((concept) => {
-        const resource = text(concept.frontmatter.resource);
-        const nature = text(nodes.get(resource)?.data.nature) || metadata.get(resource)?.nature || text(concept.frontmatter.nature);
-        const exam = concept.frontmatter[EXAMINED] as Record<string, unknown> | undefined;
+      documentTypes: DEFAULT_DOCUMENT_TYPES,
+      types,
+      typesGraphe: graphTypesOf(projectPath),
+      fiches: concepts.map((concept) => {
+        const kind = text(concept.frontmatter.type);
+        const resource = pieceOf(concept.frontmatter.resource);
+        const document = kind === DOCUMENT;
+        const nature = text(nodes.get(resource)?.data.nature) || (document ? text(concept.frontmatter.nature) : '');
         return {
           id: concept.id,
-          type: text(concept.frontmatter.type),
-          title: metadata.get(resource)?.title || text(concept.frontmatter.title),
-          titleCitation: metadata.get(resource)?.titleCitation || '',
+          type: document ? typeOf(resource, types) : kind,
+          title: text(concept.frontmatter.title),
           description: text(concept.frontmatter.description),
           resource,
           date: text(concept.frontmatter.date),
           nature,
-          icon: documentIcon(nature, current.documentTypes || DEFAULT_DOCUMENT_TYPES),
-          side: text(concept.frontmatter.side),
-          single: concept.frontmatter.single_value === true,
-          generated: { by: text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.by), at: text((concept.frontmatter.generated as Record<string, unknown> | undefined)?.at) },
-          examen: exam ? { motif: text(exam.motif), by: text(exam.by), at: text(exam.at) } : null,
-          revues: linkedReviews(concept).map((link) => {
-            const stored = (concept.frontmatter.revues as Array<Record<string, unknown>>).find((entry) => text(entry.fichier) === link.fichier && Number(entry.colonne) === link.colonne) || {};
-            return { fichier: link.fichier, colonne: link.colonne, by: text(stored.by), at: text(stored.at), ...reviewRowPieces(projectPath, link.fichier, link.colonne) };
-          }),
-          relations: Object.entries(relationsOf(concept.frontmatter)).flatMap(([relation, entries]) => entries
-            .filter((entry) => !entry.dismissed)
-            .map((entry) => ({ relation, target: entry.target, citation: entry.citation, origin: entry.origin, at: entry.at || '', value: entry.value || '' }))),
+          lof: kind,
+          icon: document ? documentIcon(nature || 'legal document') : 'diamond',
+          side: text(concept.frontmatter.side) || linksOf(concept.id, concept.body).map((target) => sideOf.get(target)).find(Boolean) || '',
+          relations: linksOf(concept.id, concept.body).filter((target) => kindOf.has(target)).map((target) => ({ relation: kindOf.get(target)!, target, piece: documentOf.get(resource) || '', citation: text(concept.frontmatter.citation), origin: 'okf' })),
         };
       }),
     };
-  };
-
-  const link = (projectId: string, input: LinkInput, origin?: string) => {
-    build(projectId);
-    const added = addLink(target(projectId), input, markdownOf(projectPathOf(projectId)), origin);
-    build(projectId);
-    return added;
-  };
-
-  const unlink = (projectId: string, input: LinkInput) => {
-    build(projectId);
-    const removed = removeLink(target(projectId), input);
-    build(projectId);
-    return removed;
-  };
-
-  const review = (projectId: string, input: ReviewLinkInput & { retirer?: unknown }, origin?: string) => {
-    build(projectId);
-    const result = input.retirer === true ? unlinkReview(target(projectId), input) : linkReview(target(projectId), input, origin);
-    build(projectId);
-    return result;
-  };
-
-  const examine = (projectId: string, input: ExamInput & { retirer?: unknown }) => {
-    build(projectId);
-    const result = input.retirer === true ? unmarkExamined(target(projectId), input) : markExamined(target(projectId), input);
-    build(projectId);
-    return result;
   };
 
   const statusFor = (error: unknown): number => error instanceof TypeError ? 400 : error instanceof Error && error.message === 'Project not found.' ? 404 : 500;
@@ -165,16 +156,10 @@ export function createOkfBackend(options: OkfOptions) {
   router.get('/okf', (request, response) => respond(() => read(String(request.query.projectId || '')), response));
   router.get('/okf/ontologie', (request, response) => respond(() => ontology(String(request.query.projectId || '')), response));
   router.put('/okf/ontologie', express.json(), (request, response) => respond(() => saveOntologyOf(String(request.body?.projectId || ''), request.body), response));
-  router.delete('/okf/ontologie/proposition', (request, response) => respond(() => { projectPathOf(String(request.query.projectId || '')); dropProposal(request.query.partie === 'documentTypes' ? 'documentTypes' : request.query.partie === 'relations' ? 'relations' : undefined); return ontology(String(request.query.projectId || '')); }, response));
-  router.put('/okf/types', express.json(), (request, response) => respond(() => saveTypes(String(request.body?.projectId || ''), request.body), response));
+  router.delete('/okf/ontologie/proposition', (request, response) => respond(() => { projectPathOf(String(request.query.projectId || '')); dropProposal(); return ontology(String(request.query.projectId || '')); }, response));
   router.get('/okf/verify', (request, response) => respond(() => verify(String(request.query.projectId || '')), response));
-  router.post('/okf/rebuild', express.json(), (request, response) => respond(() => build(String(request.body?.projectId || '')), response));
-  router.post('/okf/link', express.json(), (request, response) => respond(() => link(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
-  router.get('/okf/revues', (request, response) => respond(() => ({ revues: reviewCatalog(projectPathOf(String(request.query.projectId || ''))) }), response));
-  router.post('/okf/revue', express.json(), (request, response) => respond(() => review(String(request.body?.projectId || ''), request.body, LAWYER_ACTOR), response));
-  router.post('/okf/unlink', express.json(), (request, response) => respond(() => unlink(String(request.body?.projectId || ''), request.body), response));
 
-  const actions: Record<string, (projectId: string, body: LinkInput) => unknown> = { verify, read, ontologie: ontology, proposer: (projectId, body) => propose(projectId, body as { ontologie?: unknown }), link: (projectId, body) => link(projectId, body), unlink, revue: (projectId, body) => review(projectId, body as ReviewLinkInput & { retirer?: unknown }), revues: (projectId) => reviewCatalog(projectPathOf(projectId)), examinee: (projectId, body) => examine(projectId, body as ExamInput & { retirer?: unknown }) };
+  const actions: Record<string, (projectId: string, body: Record<string, unknown>) => unknown> = { verify, read, ontologie: ontology, proposer: (projectId, body) => propose(projectId, body) };
   const localRouter = express.Router();
   localRouter.post('/okf', express.json(), (request, response) => {
     if (!options.isLoopback(request)) {
@@ -190,21 +175,8 @@ export function createOkfBackend(options: OkfOptions) {
     }, response);
   });
 
-  // L'Index : la Tabular Review le lit et l'écrit ici, SQLite fait foi et le .json en est régénéré.
-  const rebuilds = new Map<string, ReturnType<typeof setTimeout>>();
-  const rebuildSoon = (projectId: string) => {
-    clearTimeout(rebuilds.get(projectId));
-    rebuilds.set(projectId, setTimeout(() => {
-      rebuilds.delete(projectId);
-      try {
-        build(projectId);
-      } catch (error) {
-        console.warn(`[piecemaker] index OKF non mis à jour : ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }, 1000));
-  };
   const indexStoreOf = (): IndexStore => {
-    if (!options.indexStore) throw new Error('Index indisponible.');
+    if (!options.indexStore) throw new Error('Case index indisponible.');
     return options.indexStore;
   };
   const indexProject = (folder: unknown) => {
@@ -224,27 +196,25 @@ export function createOkfBackend(options: OkfOptions) {
     const revision = indexStoreOf().write(projectId, String(body.fichier || ''), body.review as Parameters<IndexStore['write']>[2], expected);
     const stored = indexStoreOf().read(projectId)!;
     writeIndexView(projectPath, stored.file, stored.review);
-    rebuildSoon(projectId);
     return { fichier: stored.file, revision };
   };
   const removeIndex = (folder: unknown) => {
     const { projectId } = indexProject(folder);
     indexStoreOf().remove(projectId);
-    rebuildSoon(projectId);
     return { ok: true };
   };
   const loopbackOnly = (request: express.Request, response: express.Response, next: express.NextFunction) => {
     if (options.isLoopback(request)) return next();
-    response.status(403).json({ error: 'L’Index est réservé aux appels locaux.' });
+    response.status(403).json({ error: 'Le Case index est réservé aux appels locaux.' });
   };
   const respondIndex = (operation: () => unknown, response: express.Response) => {
     Promise.resolve().then(operation).then((result) => response.json(result)).catch((error: unknown) => {
-      response.status(error instanceof IndexConflictError ? 409 : statusFor(error)).json({ error: error instanceof Error ? error.message : 'Index indisponible.' });
+      response.status(error instanceof IndexConflictError ? 409 : statusFor(error)).json({ error: error instanceof Error ? error.message : 'Case index indisponible.' });
     });
   };
   localRouter.get('/index-review', loopbackOnly, (request, response) => respondIndex(() => readIndex(request.query.folder), response));
   localRouter.put('/index-review', loopbackOnly, express.json({ limit: '64mb' }), (request, response) => respondIndex(() => writeIndex(request.body ?? {}), response));
   localRouter.delete('/index-review', loopbackOnly, (request, response) => respondIndex(() => removeIndex(request.query.folder), response));
 
-  return { build, verify, read, readIndex, writeIndex, ontology, saveOntology: saveOntologyOf, link, unlink, router, localRouter };
+  return { verify, read, readIndex, writeIndex, ontology, saveOntology: saveOntologyOf, router, localRouter };
 }

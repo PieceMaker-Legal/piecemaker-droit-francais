@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 import type { ClassificationFolder, Draft, Provider, Review, ReviewDetail, ReviewSummary, RowRequest, Template, TemplateColumn } from '../shared.js';
-import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, documentTitle, hasActions, INDEX_MODEL, INDEX_TEMPLATE_NAME, isCaseIndex, LEGACY_INDEX_NAME, reviewCategory } from '../shared.js';
+import { classificationColumn, classifyColumn, DEFAULT_MODEL, DEFAULT_PROVIDER, documentTitle, hasActions, INDEX_MODEL, INDEX_TEMPLATE_NAME, isCaseIndex, LEGACY_INDEX_NAMES, reviewCategory } from '../shared.js';
 import { addClassification, proposeClassification, readClassification, readClassificationProposal } from './classification.js';
 import { listMarkdownDocuments } from './documents.js';
 import { deleteDraft, listDrafts, readDrafts, upsertDraft } from './drafts.js';
@@ -22,8 +22,8 @@ export type AssistantLaunchers = {
 const RESEARCH_POLL_MS = 1000;
 const RESEARCH_RUNNING = new Set(['counting', 'listing', 'downloading']);
 const CONCURRENCY = 3;
-const INDEX_REQUEST = /chronolog|tri des pi[eè]ces|^index$|(index|inventaire) (des pi[eè]ces|du dossier)|inventaire int[eé]gral|(scan|revue|lecture) int[eé]grale?/i;
-const SINGLE_INDEX = 'Une seule analyse lit toutes les pièces du dossier, pour la chronologie et le tri : complétez-la avec pm dossier index, elle s’affiche dans l’onglet Dossier.';
+const INDEX_REQUEST = /chronolog|tri des pi[eè]ces|^(index|case[ -]index)$|(case[ -]index|index|inventaire) (des pi[eè]ces|du dossier)|inventaire int[eé]gral|(scan|revue|lecture) int[eé]grale?/i;
+const SINGLE_INDEX = 'Une seule analyse lit toutes les pièces du dossier, pour la chronologie et le tri : complétez-la avec pm dossier case-index, elle s’affiche dans l’onglet Dossier.';
 
 const text = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
@@ -110,7 +110,7 @@ function findDraft(project: string, id: unknown): Draft {
 async function prepare(project: string, input: Input, launchers: AssistantLaunchers) {
   const previous = input.projet ? findDraft(project, input.projet) : undefined;
   const mode = input.mode === 'recherche' || (input.mode === undefined && previous?.mode === 'recherche') ? 'recherche' : undefined;
-  const template = input.modele ? findTemplate(input.modele === LEGACY_INDEX_NAME ? INDEX_TEMPLATE_NAME : input.modele) : null;
+  const template = input.modele ? findTemplate(LEGACY_INDEX_NAMES.includes(input.modele) ? INDEX_TEMPLATE_NAME : input.modele) : null;
   const indexed = previous && isCaseIndex(previous);
   const wantsIndex = !mode && (template?.name === INDEX_TEMPLATE_NAME || (template && hasActions(template.columns)) || INDEX_REQUEST.test(text(input.nom)));
   if (wantsIndex && !indexed) return { ...await caseIndex(project, launchers), index: true, suite: SINGLE_INDEX };
@@ -217,7 +217,7 @@ function classificationTree(project: string, input: Input) {
     return { dossiers, ...(proposal ? { proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date } } : {}) };
   }
   const proposal = proposeClassification(project, Array.isArray(input.dossiers) ? input.dossiers.map((entry: Input) => ({ name: entry?.nom, explanation: entry?.explication, type: entry?.type })) : input.dossiers, input.motif);
-  return { dossiers, proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date }, message: 'Proposition enregistrée, arborescence inchangée : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Index › Classement.' };
+  return { dossiers, proposition: { dossiers: out(proposal.dossiers), motif: proposal.motif, date: proposal.date }, message: 'Proposition enregistrée, arborescence inchangée : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Case index › Classement.' };
 }
 
 function unindexedDocuments(project: string, review: Review) {

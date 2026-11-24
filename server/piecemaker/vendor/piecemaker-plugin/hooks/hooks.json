@@ -49,7 +49,7 @@
         ]
       },
       {
-        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__features__Feature|mcp__features__OkfWrite",
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|mcp__features__Feature",
         "hooks": [
           {
             "type": "command",

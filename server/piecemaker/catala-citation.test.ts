@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -97,90 +97,6 @@ test('verifies Judilibre and constitutional decisions through the existing sourc
     assert.ok(report.results.every((entry) => 'title' in entry && entry.title === 'Cour fictive, 12 mars 2026'));
     const rejected = await service.verify(home, [{ nom: 'demo.catala_fr', chemin: path.join(home, 'demo.catala_fr'), contenu: contenu.replace('www.courdecassation.fr', 'www.courdecassation.fr.example.test') }]);
     assert.equal(rejected.passed, false);
-  } finally { await rm(home, { recursive: true, force: true }); }
-});
-
-test('a scenario fact justified by a premise is checked against the stated value and flags a lawyer link', async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-fact-'));
-  try {
-    const bundle = path.join(home, '.piecemaker', 'okf');
-    await mkdir(path.join(bundle, 'Pièces'), { recursive: true });
-    await mkdir(path.join(bundle, '_premises'), { recursive: true });
-    await writeFile(path.join(bundle, 'Pièces', 'Contrat.pdf.md'), '---\ntype: Pièces\ntitle: Contrat.pdf\nresource: Pièces/Contrat.pdf\nrelations:\n  states:\n    - target: /_premises/prix.md\n      citation: Le prix est de 1 000 euros.\n      origin: piecemaker/avocat\n      value: 1 000 euros\n---\n');
-    await writeFile(path.join(bundle, '_premises', 'prix.md'), '---\ntype: Premise\ntitle: Prix\n---\n');
-    const service = createCatalaCitation({
-      source: async () => ({ kind: 'piece', title: 'Contrat.pdf', text: 'Le prix est de 1 000 euros.' }),
-      match: (text, quote) => text.includes(quote) ? quote : null,
-    }, createCitationStore(home));
-    const origin = path.join(home, '.piecemaker/catala/prime/test_prime.catala_fr');
-    const scenario = (value: string) => ['```catala', '#[test]', "déclaration champ d'application Essai:", '  résultat cas champ d\'application Prime', '', "champ d'application Essai:", '  ## okf:/_premises/prix.md', `  définition cas.prix égal à ${value}`, '  assertion cas.montant = 0 €', '```'].join('\n');
-    const good = await service.verify(home, [{ nom: 'test_prime.catala_fr', chemin: origin, contenu: scenario('1 000 €') }]);
-    assert.equal(good.passed, true);
-    assert.deepEqual(good.warnings, ['okf:/_premises/prix.md : lien posé par l’avocat, vérification manuelle requise.']);
-    const bad = await service.verify(home, [{ nom: 'test_prime.catala_fr', chemin: origin, contenu: scenario('2 000 €') }]);
-    assert.equal(bad.passed, false);
-    assert.match(bad.results[0].message, /Valeur du scénario \(2 000 €\) différente de la prémisse/);
-  } finally { await rm(home, { recursive: true, force: true }); }
-});
-
-test('develops an OKF premise into its cited pieces and fails without evidence', async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-premise-'));
-  try {
-    const bundle = path.join(home, '.piecemaker', 'okf');
-    await mkdir(path.join(bundle, 'Pièces'), { recursive: true });
-    await mkdir(path.join(bundle, '_premises'), { recursive: true });
-    await writeFile(path.join(bundle, 'Pièces', 'Contrat.pdf.md'), '---\ntype: Pièces\ntitle: Contrat.pdf\nresource: Pièces/Contrat.pdf\nrelations:\n  states:\n    - target: /_premises/prix.md\n      citation: Le prix est de 1 000 euros.\n      origin: piecemaker/agent\n      value: 1 000 euros\n---\n');
-    await writeFile(path.join(bundle, '_premises', 'prix.md'), '---\ntype: Premise\ntitle: Prix\n---\n');
-    await writeFile(path.join(bundle, '_premises', 'delai.md'), '---\ntype: Premise\ntitle: Délai\n---\n');
-    const read: string[] = [];
-    const service = createCatalaCitation({
-      source: async (_cwd, id) => { read.push(id); return { kind: 'piece', title: 'Contrat.pdf', text: 'Le prix est de 1 000 euros.' }; },
-      match: (text, quote) => text.includes(quote) ? quote : null,
-    }, createCitationStore(home));
-    const origin = path.join(home, '.piecemaker/catala/prime/prime.catala_fr');
-    const content = ['[Prix](okf:/_premises/prix.md)', '', '[Délai](okf:/_premises/delai.md)', '', '[Absente](okf:/_premises/absente.md)'].join('\n');
-    const report = await service.verify(home, [{ nom: 'prime.catala_fr', chemin: origin, contenu: content }]);
-    const result = (target: string) => report.results.find((entry) => entry.target === target) as { status: string; title?: string; pieces?: Array<{ target: string; quote: string; verified: boolean }> };
-    assert.equal(report.passed, false);
-    assert.equal(result('okf:/_premises/prix.md').status, 'passed');
-    assert.equal(result('okf:/_premises/prix.md').title, 'Prix');
-    assert.deepEqual(result('okf:/_premises/prix.md').pieces?.map((piece) => [piece.target, piece.quote, piece.verified]), [[encodeURI('../../../Pièces/Contrat.pdf'), 'Le prix est de 1 000 euros.', true]]);
-    assert.deepEqual(read, [path.join(home, 'Pièces/Contrat.pdf')]);
-    assert.equal(result('okf:/_premises/delai.md').status, 'missing');
-    assert.equal(result('okf:/_premises/absente.md').status, 'failed');
-    assert.equal(report.status, 'failed');
-  } finally { await rm(home, { recursive: true, force: true }); }
-});
-
-test('counts the positive rows of a linked tabular review as pieces of the premise, with their author', async () => {
-  const home = await mkdtemp(path.join(os.tmpdir(), 'catala-review-'));
-  try {
-    const bundle = path.join(home, '.piecemaker', 'okf');
-    await mkdir(path.join(bundle, '_premises'), { recursive: true });
-    await mkdir(path.join(home, 'Tabular Review'), { recursive: true });
-    await writeFile(path.join(bundle, '_premises', 'resiliation.md'), '---\ntype: Premise\ntitle: Résiliation\nrevues:\n  - fichier: revue.json\n    colonne: 0\n    by: piecemaker/agent\n    at: 2026-01-01T00:00:00.000Z\n---\n');
-    const review = (checked: boolean) => JSON.stringify({ title: 'Revue', category: 'documents', columns: [{ index: 0, name: 'Résilié', format: 'yes_no' }], rows: [
-      { id: 'a', label: 'Courrier', status: 'done', documents: [{ source: 'Pièces/Courrier.pdf' }] },
-      { id: 'b', label: 'Contrat', status: 'done', documents: [{ source: 'Pièces/Contrat.pdf' }] },
-    ], cells: {
-      a: { 0: { summary: 'Oui', flag: 'red', reasoning: '', citations: [{ document: 'Courrier.pdf', quote: 'Il est résilié.', verified: true }], ...(checked ? { checked: { at: '2026-01-02T00:00:00.000Z' } } : {}) } },
-      b: { 0: { summary: 'Non', flag: 'grey', reasoning: '', citations: [] } },
-    } });
-    await writeFile(path.join(home, 'Tabular Review', 'revue.json'), review(false));
-    const service = createCatalaCitation({
-      source: async () => ({ kind: 'piece', title: 'Courrier.pdf', text: 'Il est résilié.' }),
-      match: (text, quote) => text.includes(quote) ? quote : null,
-    }, createCitationStore(home));
-    const file = { nom: 'prime.catala_fr', chemin: path.join(home, '.piecemaker/catala/prime/prime.catala_fr'), contenu: '[Résiliation](okf:/_premises/resiliation.md)' };
-    const agent = await service.verify(home, [file]);
-    const pieces = (agent.results[0] as { pieces?: Array<{ quote: string; verified: boolean; author?: string; review?: string }> }).pieces;
-    assert.equal(agent.passed, true);
-    assert.deepEqual(pieces?.map((piece) => [piece.quote, piece.verified, piece.author, piece.review]), [['Il est résilié.', true, 'agent', 'revue.json']]);
-    assert.deepEqual(agent.warnings, ['okf:/_premises/resiliation.md : 1 ligne(s) de revue tabulaire d’auteur agent, à faire vérifier par l’avocat dans la revue.']);
-    await writeFile(path.join(home, 'Tabular Review', 'revue.json'), review(true));
-    const human = await service.verify(home, [file]);
-    assert.equal((human.results[0] as { pieces?: Array<{ author?: string }> }).pieces?.[0].author, 'human');
-    assert.deepEqual(human.warnings, []);
   } finally { await rm(home, { recursive: true, force: true }); }
 });
 

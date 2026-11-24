@@ -1,12 +1,13 @@
 import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { etapesApi, knowledgeApi } from '../api.js';
+import { classificationApi, etapesApi, knowledgeApi } from '../api.js';
 import { mount, unmount } from '../client.js';
-import { mountGraph, okfApi } from '../okf.js';
+import { okfApi } from '../okf.js';
+import { mountGraph } from '../okf-graph.js';
 import { mountIndexAnalysis } from '../index-analysis.js';
 
 vi.mock('../index-analysis.js', () => ({ mountIndexAnalysis: vi.fn(async () => vi.fn()) }));
-vi.mock('../okf.js', async (importOriginal) => ({ ...await importOriginal<typeof import('../okf.js')>(), mountGraph: vi.fn() }));
+vi.mock('../okf-graph.js', () => ({ mountGraph: vi.fn() }));
 import type { KnowledgeSnapshot } from '../types.js';
 
 let dom: JSDOM;
@@ -34,7 +35,7 @@ beforeEach(() => {
 
 afterEach(() => { unmount(container); dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-describe('Index', () => {
+describe('Case index', () => {
   it('affiche la revue de l’Index dans l’onglet même, sans tableau à part ni fenêtre', async () => {
     vi.mocked(mountIndexAnalysis).mockClear();
     const shown = vi.fn();
@@ -137,16 +138,16 @@ describe('Graphe', () => {
 
 describe('Liens des légendes', () => {
   it.each([
-    ['chronology', 'edit-document-types', 'types', '[data-type-name]'],
-    ['graph', 'edit-ontology', 'relations', '[data-ontology-form]'],
-  ])('ouvre directement l’éditeur depuis %s', async (tab, action, pane, field) => {
-    vi.spyOn(okfApi, 'ontology').mockResolvedValue({ relations: [], systeme: [], personnalisee: false, types: [], documentTypes: [{ name: 'contrat', icon: 'file' }] });
+    ['chronology', 'edit-tree', '[data-tree-name]'],
+    ['graph', 'edit-tree', '[data-tree-name]'],
+  ])('ouvre directement l’éditeur depuis %s', async (tab, action, field) => {
+    vi.spyOn(classificationApi, 'read').mockResolvedValue({ folders: [{ name: 'Documents', explanation: 'Documents du dossier', type: 'Pièces' }] });
     mount(container, { context: { theme: 'light', project: { name: graph.projectId, path: '/dossier-exemple' }, session: null }, onContextChange: () => () => {}, openFileInEditor: vi.fn() });
     container.querySelector<HTMLButtonElement>(`[data-tab="${tab}"]`)!.click();
     const selector = `.pmd-okf-legend a[data-action="${action}"]`;
     await vi.waitFor(() => expect(container.querySelector(selector)).not.toBeNull());
     container.querySelector<HTMLAnchorElement>(selector)!.click();
-    await vi.waitFor(() => expect(container.querySelector(`[data-settings-pane="${pane}"]:not([hidden]) ${field}`)).not.toBeNull());
+    await vi.waitFor(() => expect(container.querySelector(field)).not.toBeNull());
   });
 });
 
@@ -187,7 +188,7 @@ describe('Index : classement', () => {
     container.querySelector<HTMLButtonElement>('[data-tree-remove="2"]')!.click();
     const submit = () => container.querySelector('form[data-tree-form]')!.dispatchEvent(new dom.window.Event('submit', { bubbles: true, cancelable: true }));
     submit();
-    await vi.waitFor(() => expect(container.querySelector('[data-settings-error]')!.textContent).toContain('Nom de dossier invalide'));
+    await vi.waitFor(() => expect(container.querySelector('[data-tree-error]')!.textContent).toContain('Nom de dossier invalide'));
     expect(container.querySelector<HTMLInputElement>('[data-tree-name]')!.value).toBe('Contrats/Signés');
     rejectSave = false;
     submit();

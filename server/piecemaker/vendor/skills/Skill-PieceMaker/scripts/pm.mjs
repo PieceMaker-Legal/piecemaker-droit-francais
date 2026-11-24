@@ -5,21 +5,23 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { CATALA_COMMANDS, listPrograms, premiseLinks, runCatala } from './catala.mjs';
+import { CATALA_COMMANDS, listPrograms, runCatala } from './catala.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
 const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'artifacts', 'fichier'];
-const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
+// `index` : ancien nom de `case-index`, gardé comme alias.
+const CASE_INDEX_COMMAND = 'case-index';
+const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', CASE_INDEX_COMMAND, 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
 const SUIVI_COMMANDS = ['verifier', 'lire', 'ecrire'];
-const OKF_COMMANDS = ['verify', 'ontologie', 'types', 'link', 'unlink', 'examinee', 'revue', 'revues'];
+const OKF_COMMANDS = ['verify', 'ontologie'];
 const CONVERSION_WAIT_MS = 90000;
 const DATA_DIRS = ['.piecemaker-droit-francais-dev', '.piecemaker-droit-francais', '.piecemaker'];
-const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'single', 'retirer', 'noms']);
+const BOOLEAN_FLAGS = new Set(['force', 'whole_program', 'retirer', 'noms']);
 const NODE_WRITE = /\b(?:update|insert(?:\s+or\s+\w+)?\s+into|replace\s+into|delete\s+from)\s+(?:main\.)?piecemaker_nodes\b/i;
 const DOCUMENT_COLUMNS = /\bdoc_date\b|'document'/i;
 const PIECE_STATES = { 'awaiting-scan': 'à convertir', 'not-converted': 'à convertir', 'conversion-failed': 'échec' };
@@ -47,9 +49,8 @@ function suivisOf(folder) {
 function memoiresOf(folder) {
   const target = brainCase(folder);
   if (target) {
-    let text = '';
-    try { text = fs.readFileSync(target.about, 'utf8'); } catch {}
-    return { lieu: target.about, notes: Object.fromEntries(brainLib.sections(text).map((section) => [section.name, section.body])) };
+    const notes = brainLib.goalNames(target.directory).flatMap((goal) => { try { return [[goal, fs.readFileSync(brainLib.goalFile(target.directory, goal, 'Memory.md'), 'utf8')]]; } catch { return []; } });
+    return { lieu: target.directory, notes: Object.fromEntries(notes) };
   }
   const directory = path.join(folder, MEMOIRES_DIR);
   let noms = [];
@@ -61,7 +62,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
 
   check
       bilan numéroté du dossier, dans l'ordre du travail : conversion, anonymisation,
-      mapping, index, puis chaque raisonnement (programme Catala, prémisses, actes,
+      mapping, index, puis chaque raisonnement (programme Catala, actes,
       suivi) et les revues de recherche ; chaque défaut donne la commande ou le
       sous-agent qui le corrige
 
@@ -80,10 +81,10 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       lit l’arborescence ; avec --dossiers, propose une arborescence que l’avocat accepte, refuse ou modifie
   dossier classer <document> <dossier>
       range le document dans un dossier de l’arborescence : il prend le type de ce dossier
-  dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
-      crée l’index s’il manque ; sinon analyse les pièces absentes de l’index
-  dossier index lire
-  dossier index colonnes --questions JSON
+  dossier case-index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
+      crée le Case index s’il manque ; sinon analyse les pièces absentes du Case index
+  dossier case-index lire
+  dossier case-index colonnes --questions JSON
 
   tabular_review ${REVIEW_ACTIONS.join('|')}
       [--fichier FILE] [--projet ID] [--mode analyse|recherche]
@@ -106,41 +107,13 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       nommée comme son acte ; sans --memoire : toutes ; rien si tout est conforme
 
   okf verify
-      index du dossier au format OKF (.piecemaker/okf/, une fiche par document) :
-      reconstruit les fiches sans IA, puis liste les erreurs (type, document, lien, citation)
-      et les contradictions (une prémisse à valeur unique, plusieurs valeurs selon les pièces),
-      puis les éléments manquants du graphe : pièce sans prémisse ni lien, prémisse sans pièce,
-      sans valeur ou sans partie, partie isolée ; enfin, en information, les pièces examinées sans lien
-  okf types --json '[{"name":"contrat","icon":"pen"}]' [--motif "raison"]
-      propose à l'avocat le catalogue complet des types (clés name et icon) ; rien ne change avant sa décision
+      bundle OKF du dossier (.piecemaker/okf/, format Context-OKF) : lance le validateur
+      en mode strict et liste chaque ERROR et chaque LINT (frontmatter, lien cassé, concept orphelin)
   okf ontologie
-      relations admises entre documents (~/.piecemaker/ontologie.json, commune à tous les dossiers, réglée par l'avocat dans l'onglet Index) :
-      nom, sens, types de la source et de la cible ; lecture seule
-  okf ontologie proposer --json '{"relations":[...],"documentTypes":[...]}' [--motif "raison"]
-      propose à l'avocat les relations (clés name, label, inverse, description, source, target) et/ou
-      les types de documents, listes complètes ; clés absentes, inconnues ou hors règles refusées ; rien ne change
-      avant sa décision : l'onglet Index › Ontologie montre chaque changement à accepter, refuser ou modifier ;
-      une nouvelle proposition remplace la précédente pour chaque liste fournie
-  okf link <source> <relation> <target> --citation "phrase du document source"
-      entre documents : une relation de l'ontologie (pm okf ontologie), entre les types qu'elle admet ;
-      source et cible : chemins ; la citation doit figurer mot pour mot dans le document source
-  okf link <pièce> states "<titre de la prémisse>" --citation "phrase de la pièce" [--value "valeur"] [--single]
-      la pièce établit une prémisse (fait, ou clause d'un contrat) ; sa fiche Premise est créée si elle manque ;
-      --single : la prémisse n'a qu'une valeur, un écart entre pièces est une contradiction
-  okf link "<titre de la prémisse>" involves <CODE_PARTIE>
-      la prémisse concerne une partie du dossier ; pas de citation
-  okf unlink <source> <relation> <target>
-  okf examinee <pièce> --motif "raison"
-      la pièce a été lue et aucun passage ne justifie un lien ni une prémisse : verify la liste
-      en information, plus en manque ; le manque revient si le document change
-  okf examinee <pièce> --retirer
-      retire cette marque : la pièce redevient à examiner
-  okf revues
-      revues tabulaires des pièces du dossier et leurs colonnes, à lier à une prémisse
-  okf revue "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index> [--retirer]
-      les lignes positives de la colonne (réponse trouvée, « Oui » pour une question Oui / Non) établissent
-      la prémisse, créée si elle manque ; chaque ligne est une pièce d'auteur agent, humain une fois vérifiée
-      par l'avocat dans la revue ; lues dans la revue à chaque lecture : une revue relancée remonte aussitôt
+      socle Legal Ontologies Foundry (David Koepsell, CC BY 4.0) : les six patterns ODP-001 à 006
+      qui qualifient les concepts du bundle ; lecture seule
+  okf ontologie proposer --json '{"arborescence":[...]}' [--motif "raison"]
+      propose à l'avocat l'arborescence complète ; rien ne change avant sa décision (onglet Case index › Classement)
 
   catala verifier [--au today|AAAA-MM-JJ] [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
@@ -438,7 +411,7 @@ function panelNoticeLabel(target) {
     if (target.review) return `Analyse tabulaire (${target.review})`;
     return 'Analyse tabulaire';
   }
-  if (target.view === 'index-analysis') return 'Dossier (analyse tabulaire de l’index)';
+  if (target.view === 'index-analysis') return 'Dossier (analyse tabulaire du Case index)';
   return target.view === 'chronology' ? 'Dossier (index)' : 'Dossier (vue générale)';
 }
 
@@ -547,7 +520,7 @@ function progress(job) {
 
 const EN_ARRIERE_PLAN = 'Le travail continue en arrière-plan dans PieceMaker. Ne relancez pas cette commande en boucle.\n'
   + 'Traitez maintenant les points qui ne lisent pas les pièces : programme Catala et suivi.\n'
-  + 'L’index et les prémisses attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
+  + 'L’index et ses liens attendent la fin du scan : il écrit les fiches OKF et pseudonymise les pièces.\n'
   + 'Revenez à la fin avec pm dossier conversion.';
 
 const EN_COURS_CHECK = 'Ne bouclez pas sur pm dossier conversion : traitez d’abord Catala et suivi, qui ne lisent pas les pièces.';
@@ -595,12 +568,12 @@ async function dossierState(api, project) {
   const mappingOk = state.lifted || Boolean(api.mappingValidated?.(project));
   const mapping = state.lifted ? 'sans objet (anonymisation levée)' : mappingOk ? 'validé par l’avocat' : 'à valider par l’avocat (onglet Dossier, Mapping)';
   const { analyses = [], projets = [] } = await api.tabularFn({ action: 'lister', project });
-  let index = projets.some((entry) => entry.index) ? 'préparé, pas lancé : pm dossier index lancer' : 'absent : pm dossier index lancer';
+  let index = projets.some((entry) => entry.index) ? 'préparé, pas lancé : pm dossier case-index lancer' : 'absent : pm dossier case-index lancer';
   let indexOk = false;
   if (analyses.some((entry) => entry.index)) {
     const { absentes = 0 } = await api.tabularFn({ action: 'index', project });
     indexOk = !absentes;
-    index = absentes ? `${absentes} pièce(s) absente(s) de l’index : pm dossier index lancer` : 'à jour';
+    index = absentes ? `${absentes} pièce(s) absente(s) du Case index : pm dossier case-index lancer` : 'à jour';
   }
   const { pieces = [] } = await api.piecesFn({ folder: project });
   const pending = pieces.filter((piece) => piece.protected && piece.status !== 'ready');
@@ -623,18 +596,10 @@ const point = (numero, nom, defauts, detail, depth = 0) => ({ numero, depth, ok:
 const titre = (numero, texte, depth = 0) => ({ numero, depth, texte, titre: true });
 const letter = (index) => String.fromCharCode(65 + index);
 
-function indexPoint({ erreurs = [], contradictions = [], manques = [] }) {
-  const orphans = manques.filter((entry) => !entry.programmes?.length);
-  const forAgent = orphans.filter((entry) => !entry.avocat);
-  const forLawyer = orphans.length - forAgent.length;
-  const untyped = erreurs.filter((entry) => /^type « Non classé »/.test(entry.erreur)).map((entry) => String(entry.fiche).replace(/^\//, '').replace(/\.md$/, ''));
-  const faults = erreurs.length - untyped.length;
+function indexPoint({ erreurs = [], lints = [] }) {
   const defauts = [
-    untyped.length ? `attribuer un type à ${untyped.join(', ')} : pm dossier classer <document> <dossier> (dossiers : pm dossier arborescence)` : '',
-    faults ? `${faults} erreur(s)` : '',
-    forAgent.length ? `${forAgent.length} manque(s)` : '',
-    forLawyer ? `${forLawyer} manque(s) en attente de l’avocat (parties à qualifier, onglet Dossier)` : '',
-    contradictions.length ? `${contradictions.length} contradiction(s) à présenter à l’avocat` : '',
+    erreurs.length ? `${erreurs.length} erreur(s)` : '',
+    lints.length ? `${lints.length} lint(s)` : '',
   ].filter(Boolean).join(', ');
   return point('4°', 'Index', defauts, 'pm okf verify');
 }
@@ -677,7 +642,7 @@ function documentState(folder, document) {
   return fs.existsSync(path.resolve(folder, document.chemin)) ? 'en cours de rédaction' : 'à rédiger';
 }
 
-async function reasoningPoints(api, folder, manques) {
+async function reasoningPoints(api, folder) {
   const etapes = etapesOf(folder);
   const suites = Object.fromEntries(Object.entries(etapes.raisonnements ?? {}).filter(([, suite]) => !suite.remplacePar));
   const superseded = new Set(Object.keys(etapes.raisonnements ?? {}).filter((nom) => !suites[nom]));
@@ -697,14 +662,6 @@ async function reasoningPoints(api, folder, manques) {
     const add = (nomPoint, defauts, detail) => children.push(point(`${numero}.${children.length + 1}`, nomPoint, defauts, detail, 2));
     if (programs.includes(nom)) {
       add(`Programme Catala (.piecemaker/catala/${nom}/)`, catalaState(folder, nom), `pm catala verifier --programme ${nom}`);
-      const gaps = manques.filter((entry) => entry.programmes?.includes(nom)).length;
-      const links = premiseLinks(folder, nom);
-      const missing = [...new Set(links.errors.map((error) => error.match(/\[ERROR\] input "([^"]+)"/)?.[1]).filter(Boolean))];
-      const defauts = [gaps ? `${gaps} manque(s)` : '', missing.length ? `${missing.length} entrée(s) sans prémisse : ${missing.join(', ')}` : ''].filter(Boolean).join(', ');
-      const detail = gaps ? 'pm okf verify' : missing.length ? `pm catala verifier --programme ${nom}` : 'skill okf';
-      if (defauts) add('Prémisses OKF du programme', defauts, detail);
-      else if (!links.inputs && !links.mentions) add('Prémisses OKF du programme', 'aucune', 'skill okf');
-      else children.push({ ...point(`${numero}.${children.length + 1}`, 'Prémisses OKF du programme', '', '', 2), ...(links.unlinked.length ? { texte: `Prémisses OKF du programme : valide, ${links.unlinked.length} prémisse(s) de l’index sans entrée (alerte) → pm catala verifier --programme ${nom}` } : {}) });
     } else add('Programme Catala', 'à écrire', 'skill catala');
     for (const document of suite?.documents ?? []) {
       const state = documentState(folder, document);
@@ -733,7 +690,7 @@ async function check(api, folder) {
   });
   if (enCours) preparation[0].texte += ` ${EN_COURS_CHECK}`;
   const okfResult = await api.okfFn({ action: 'verify', folder });
-  const { points, others } = await reasoningPoints(api, folder, okfResult.manques ?? []);
+  const { points, others } = await reasoningPoints(api, folder);
   const research = await researchPoints(api, folder);
   const suivis = await Promise.all(others.map(async (suivi) => point('', `Suivi ${suivi}`, await suiviState(api, folder, suivi), `pm suivi_dossiers verifier --suivi ${suivi}`)));
   const tail = [...research, ...suivis].map((entry, index) => ({ ...entry, numero: `${6 + index}°`, depth: 0 }));
@@ -750,7 +707,7 @@ async function check(api, folder) {
 
 function pairLines(folder) {
   const target = brainCase(folder);
-  return target ? [`Suivis : ${target.roadmap} (clé suivis) ; mémoires et stratégie : ${target.about} (sections « ## ${brainLib.MEMOIRE_PREFIX}<nom> ») ; synthèse : ${path.join(target.directory, brainLib.SYNTHESE)}.`] : [];
+  return target ? [`Dossier : ${target.about} ; goals : ${target.goals}/<goal>/ (Goal.md, Memory.md, Archive.md, Timeline.json) ; synthèse : ${path.join(target.directory, brainLib.SYNTHESE)}.`] : [];
 }
 
 async function synthese(api, folder, points) {
@@ -799,7 +756,7 @@ async function dossier(api, positional, flags, resolved) {
     return withNotice(`Classé : ${moved.previous} → ${moved.current}`, await followPanel(api, panelRequest(project, target), target));
   }
   const action = positional[2];
-  if (!INDEX_ACTIONS.includes(action)) usage(`dossier index attend ${INDEX_ACTIONS.join(', ')}.`);
+  if (!INDEX_ACTIONS.includes(action)) usage(`dossier ${CASE_INDEX_COMMAND} attend ${INDEX_ACTIONS.join(', ')}.`);
   const result = await api.tabularIndex(api.tabularFn, { ...reviewInput(flags), action, project });
   const analysis = { ...target, view: 'index-analysis' };
   return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, analysis), analysis));
@@ -831,72 +788,28 @@ async function okf(api, positional, flags, resolved) {
   if (!OKF_COMMANDS.includes(action)) usage(`okf attend ${OKF_COMMANDS.join(', ')}.`);
   const folder = path.resolve(resolved);
   if (action === 'verify') {
-    const { erreurs, contradictions = [], manques, examinees = [] } = await api.okfFn({ action, folder });
+    const { erreurs, lints, resume } = await api.okfFn({ action, folder });
     return [
-      erreurs.length ? `Index OKF : ${erreurs.length} erreur(s).` : 'Index OKF : aucune erreur.',
-      ...erreurs.map((entry) => `- ${entry.fiche} : ${entry.erreur}`),
-      ...(contradictions.length ? [`Contradictions : ${contradictions.length}.`] : []),
-      ...contradictions.map((entry) => `- ${entry.titre} : ${entry.valeurs.map((item) => `${item.piece} → ${item.valeur}`).join(' ; ')}`),
-      ...(manques ? [manques.length ? `Graphe : ${manques.length} élément(s) manquant(s).` : 'Graphe : aucun élément manquant.'] : []),
-      ...(manques || []).map((entry) => `- ${entry.element} : ${entry.manque}${entry.programmes?.length ? ` (programme ${entry.programmes.join(', ')})` : ''}`),
-      ...(examinees.length ? [`Examinées sans lien (information, pas un manque) : ${examinees.length}.`] : []),
-      ...examinees.map((entry) => `- ${entry.element} : ${entry.motif}`),
+      ...erreurs.map((entry) => `ERROR  ${entry.fiche}: ${entry.erreur}`),
+      ...lints.map((entry) => `LINT   ${entry.fiche}: ${entry.erreur}`),
+      resume || `${erreurs.length} error(s), ${lints.length} lint(s)`,
     ].join('\n');
   }
-  if (action === 'types' || (action === 'ontologie' && positional[2] === 'proposer')) {
-    if (!value(flags.json)) usage(action === 'types' ? 'okf types attend --json : liste complète des types {name, icon}.' : 'okf ontologie proposer attend --json \'{"relations":[...],"documentTypes":[...]}\'.');
+  if (action === 'ontologie' && positional[2] === 'proposer') {
+    if (!value(flags.json)) usage('okf ontologie proposer attend --json \'{"arborescence":[...]}\'.');
     let proposee;
     try { proposee = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
-    const ontologie = { ...(action === 'types' ? { documentTypes: proposee } : Array.isArray(proposee) ? { relations: proposee } : proposee), ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) };
-    const proposition = await api.okfFn({ action: 'proposer', folder, ontologie });
-    const parts = [...(proposition.relations ? [`${proposition.relations.length} relation(s)`] : []), ...(proposition.documentTypes ? [`${proposition.documentTypes.length} type(s) de documents`] : [])];
-    return parts.length ? `Proposition enregistrée (${parts.join(', ')}) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Ontologie.` : 'Aucun changement par rapport à l’ontologie actuelle : aucune proposition en attente.';
+    const proposition = await api.okfFn({ action: 'proposer', folder, ontologie: { ...proposee, ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) } });
+    return proposition.arborescence ? `Proposition enregistrée (${proposition.arborescence.length} dossier(s)) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Case index › Classement.` : 'Aucun changement par rapport à l’arborescence actuelle : aucune proposition en attente.';
   }
-  if (action === 'ontologie') {
-    const { relations, systeme, erreur, proposition, documentTypes = [], types = [], icones = [] } = await api.okfFn({ action, folder });
-    // Noms des relations de l'ontologie scellée, plus les relations système : le schéma de l'outil OkfWrite.
-    if (flags.noms) return JSON.stringify([...new Set([...relations, ...systeme].map((entry) => entry.name).filter((name) => name !== 'mentions'))]);
-    return [
-      ...(erreur ? [`Attention : ${erreur}`] : []),
-      ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}) : ${[...(proposition.relations || []), ...(proposition.documentTypes || [])].map((entry) => entry.name).join(', ')}.`] : []),
-      'Relations entre documents (ontologie commune à tous les dossiers, modifiable par l’avocat seul ; l’assistant propose en modifiant ~/.piecemaker/ontologie.json avec Edit ou Write) :',
-      ...relations.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source.join(', ')} → ${entry.target.join(', ')}${entry.description ? ` — ${entry.description}` : ''}`),
-      `Types principaux du dossier : ${types.join(', ')}. Classement : pm dossier arborescence.`,
-      `Icônes disponibles : ${icones.join(', ')}.`,
-      'Types de documents (pm okf types --json pour proposer la liste complète) :',
-      ...documentTypes.map((entry) => `- ${entry.name} : ${entry.icon}`),
-      'Relations système :',
-      ...systeme.map((entry) => `- ${entry.name} (${entry.label}) : ${entry.source} → ${entry.target}`),
-    ].join('\n');
-  }
-  if (action === 'examinee') {
-    const piece = positional[2];
-    if (!piece) usage('okf examinee attend <pièce>.');
-    if (!flags.retirer && !value(flags.motif)) usage('okf examinee attend --motif "raison", ou --retirer.');
-    const examen = await api.okfFn({ action, folder, source: piece, ...(flags.retirer ? { retirer: true } : { motif: String(flags.motif) }) });
-    return flags.retirer ? `Examen retiré : ${examen.source} redevient à examiner.` : `Examinée sans lien : ${examen.source} — ${examen.motif}\nLe manque revient si le document change. Annuler : pm okf examinee ${piece} --retirer`;
-  }
-  if (action === 'revues') {
-    const revues = await api.okfFn({ action, folder });
-    if (!revues.length) return 'Aucune revue tabulaire des pièces dans ce dossier.';
-    return revues.map((entry) => [`${entry.fichier} — ${entry.titre}`, ...entry.colonnes.map((column) => `  ${column.index} « ${column.nom} » (${column.format})`)].join('\n')).join('\n');
-  }
-  if (action === 'revue') {
-    const premise = positional[2];
-    if (!premise || !value(flags.fichier) || flags.colonne === undefined || flags.colonne === true) usage('okf revue attend "<titre de la prémisse>" --fichier <revue.json> --colonne <nom|index>.');
-    const lien = await api.okfFn({ action, folder, premise, fichier: String(flags.fichier), colonne: String(flags.colonne), ...(flags.retirer ? { retirer: true } : {}) });
-    return flags.retirer ? `Revue déliée : ${lien.fichier} › colonne ${lien.colonne} de ${lien.premise}.` : `Revue liée : ${lien.fichier} › colonne ${lien.colonne} établit ${lien.premise}. Ses lignes positives sont des pièces de la prémisse ; l’avocat les vérifie dans la revue.`;
-  }
-  const [source, relation, target] = positional.slice(2);
-  if (!source || !relation || !target) usage(`okf ${action} attend <source> <relation> <target>.`);
-  if (action === 'link' && relation !== 'involves' && !value(flags.citation)) usage('okf link attend --citation.');
-  const detail = action === 'link' ? {
-    ...(value(flags.citation) ? { citation: String(flags.citation) } : {}),
-    ...(value(flags.value) ? { value: String(flags.value) } : {}),
-    ...(flags.single ? { single: true } : {}),
-  } : {};
-  const lien = await api.okfFn({ action, folder, source, relation, target, ...detail });
-  return `${action === 'link' ? 'Lien enregistré' : 'Lien retiré'} : ${lien.source} ${lien.relation} ${lien.target}`;
+  const { patterns = [], erreur, proposition, types = [] } = await api.okfFn({ action, folder });
+  return [
+    ...(erreur ? [`Attention : ${erreur}`] : []),
+    ...(proposition ? [`Proposition en attente de l’avocat (${proposition.date}).`] : []),
+    'Socle : Legal Ontologies Foundry, David R. Koepsell, CC BY 4.0. Patterns :',
+    ...patterns.map((pattern) => `- ${pattern.id} — ${pattern.title} : ${pattern.description}`),
+    `Types principaux du dossier : ${types.join(', ')}. Classement : pm dossier arborescence.`,
+  ].join('\n');
 }
 
 async function suiviDossiers(api, positional, flags, resolved) {
@@ -930,11 +843,16 @@ function memoire(positional, flags, resolved) {
   const suivis = new Set(suivisOf(folder));
   const acte = (nom) => Boolean(etapes.raisonnements?.[nom]) || suivis.has(`${nom}-suivi.json`) || fs.existsSync(path.join(folder, '.piecemaker', 'catala', nom));
   return noms.flatMap((nom) => {
-    const fichier = lieu ? `${lieu}, section « ## ${brainLib.MEMOIRE_PREFIX}${nom} »` : `${MEMOIRES_DIR}/${nom}.md`;
+    const fichier = lieu ? brainLib.goalFile(lieu, nom, 'Memory.md') : `${MEMOIRES_DIR}/${nom}.md`;
     const texte = notes[nom];
     if (texte === undefined) return [`${fichier} : introuvable.`];
+    const lignes = texte.replace(/\n$/, '').split('\n').length;
+    if (lieu) return [
+      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter.`] : []),
+      ...(lignes > brainLib.GOAL_LIMIT ? [`${fichier} : erreur : ${lignes} lignes, limite ${brainLib.GOAL_LIMIT}. Déplacez ce qui ne sert plus dans Archive.md.`] : []),
+    ];
     return [
-      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans ${lieu ? `le suivi ${nom}-suivi.json de Roadmap.json` : `.piecemaker/${nom}-suivi.json`} ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
+      ...(/^---\r?\n/.test(texte) ? [`${fichier}:1: erreur : pas de frontmatter. Les échéances vont dans .piecemaker/${nom}-suivi.json ; l’étape en cours et le document à produire sont sur le tableau de l’onglet Suivi des dossiers (pm check). Reportez-y ses données, puis retirez le frontmatter.`] : []),
       ...(acte(nom) ? [] : [`${fichier} : manque : aucun programme Catala, suivi ni carte du tableau ne s’appelle ${nom}. Nommez la mémoire comme son acte.`]),
     ];
   }).join('\n');

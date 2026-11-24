@@ -26,9 +26,9 @@ export type App = {
   updateResearch(project: string, file: string): void;
   takeResearchUpdate(): { project: string; file: string } | null;
   takeTargetProject(): string | null;
-  /** Colonne ajoutée par l'hôte qui affiche la revue (l'Index dans l'onglet Dossier : liens OKF de chaque pièce). */
+  /** Colonne ajoutée par l'hôte qui affiche la revue (le Case index dans l'onglet Dossier : liens OKF de chaque pièce). */
   rowColumn?: RowColumn;
-  /** Mode chronologie de l'Index : l'hôte dit s'il est actif et quelles lignes sont des pièces. */
+  /** Mode chronologie du Case index : l'hôte dit s'il est actif et quelles lignes sont des pièces. */
   chronology?: Chronology;
 };
 

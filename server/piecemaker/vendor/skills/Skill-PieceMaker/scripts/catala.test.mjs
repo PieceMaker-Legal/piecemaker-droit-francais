@@ -4,8 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, premiseLinks, runCatala, selectProgram, sharedPython, toolCommand, typecheckErrors } from './catala.mjs';
-import { catalaDocumentation, clauseHeading, premiseCoverage } from './catala-documentation.mjs';
+import { catalaHomes, compilerErrors, findCatalaPack, listPrograms, pisteCredentials, runCatala, selectProgram, sharedPython, toolCommand, typecheckErrors } from './catala.mjs';
+import { catalaDocumentation, clauseHeading } from './catala-documentation.mjs';
 import { run } from './pm.mjs';
 
 const MODULE = '> Module Prime\n\n```catala-metadata\ndéclaration champ d\'application Prime:\n  résultat montant contenu argent\n```\n';
@@ -217,7 +217,7 @@ test('verifier runs every check inside the pack environment and writes the resul
     assert.equal(explanation.passed, true);
     assert.equal(explanation.sources_sha256, report.sources_sha256);
     assert.equal(explanation.scope, 'JeanDupont');
-    assert.deepEqual(report.checks.map((entry) => entry.name), ['documentation', 'premisses', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
+    assert.deepEqual(report.checks.map((entry) => entry.name), ['documentation', 'typecheck', 'format', 'tests', 'tests-python', 'preuve', 'catleg', 'citations', 'explication']);
     const proof = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'preuve.json')));
     assert.deepEqual(proof.scopes.map((entry) => entry.scope), ['Prime', 'AutrePrime']);
     assert.equal(proof.obligations, 2);
@@ -542,7 +542,7 @@ test('independent checks finish despite compilation failure and stale reports ar
     };
     await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run, python: null, credentials: null, citations: async () => { release(); return { passed: false, status: 'failed', message: 'Citation introuvable', results: [] }; } } });
     const report = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json')));
-    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['documentation', 'passed'], ['premisses', 'passed'], ['typecheck', 'failed'], ['format', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
+    assert.deepEqual(report.checks.map((entry) => [entry.name, entry.status]), [['documentation', 'passed'], ['typecheck', 'failed'], ['format', 'blocked'], ['tests', 'blocked'], ['tests-python', 'blocked'], ['preuve', 'blocked'], ['catleg', 'missing'], ['citations', 'failed'], ['explication', 'blocked']]);
     assert.equal(report.passed, false);
     assert.ok(!calls.some((call) => ['proof', 'explain', 'runtest'].includes(call.args[0])));
     for (const file of ['preuve.json', 'tests.json', 'explication.json']) assert.equal(fs.existsSync(path.join(directory, 'resultats', file)), false);
@@ -655,7 +655,7 @@ const FACTS = [
   '```',
   '',
 ].join('\n');
-const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  ## okf:/_premises/demande.md\n  définition calcul.demande égal à 0 €\n  assertion calcul.montant = 0 €\n```\n";
+const FACT_TESTS = "> Usage de Prime\n\n```catala\n#[test]\ndéclaration champ d'application JeanDupont:\n  résultat calcul champ d'application Prime.Prime\n\nchamp d'application JeanDupont:\n  ## [Demande de Jean Dupont](../../../pieces/demande.md) « La prime demandée est nulle. »\n  définition calcul.demande égal à 0 €\n  assertion calcul.montant = 0 €\n```\n";
 
 test('verifier requires a title, a legal anchor and a complete task', async () => {
   const { home, dossier, cleanup } = scratch();
@@ -671,7 +671,7 @@ test('verifier requires a title, a legal anchor and a complete task', async () =
       [FACTS.replace('  ## Montant demandé\n', ''), 'prime.catala_fr:5: titre manquant pour cette entrée. Écrivez ## texte court au-dessus.'],
       [FACTS.replace('## Montant demandé', '## Montant ?'), 'prime.catala_fr:5: titre « Montant ? » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
       [FACTS.replace('## Montant demandé', '## montant_demande de Jean'), 'prime.catala_fr:5: titre « montant_demande de Jean » : écrivez 2 à 7 mots, sans identifiant de variable ni « ? ».'],
-      [FACTS.replace('  ## Montant demandé\n', '  ## Montant demandé\n  #[doc="source: okf:/_premises/montant-demande.md"]\n'), 'prime.catala_fr:6: #[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section.'],
+      [FACTS.replace('  ## Montant demandé\n', '  ## Montant demandé\n  #[doc="source: Pièce 1"]\n'), 'prime.catala_fr:6: #[doc] contient « source: » : le titre va dans ## texte court, la source juridique dans le titre de section.'],
       [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Article 1'), "prime.catala_fr:16: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."],
       [FACTS.replace('« Passage exact. »\n\n', ''), ["prime.catala_fr:10: LEGIARTI000000000001 cité sans section propre : écrivez ## Article N | LEGIARTI000000000001 suivi de l'extrait entre « ».", "prime.catala_fr:14: règle sans source juridique : placez-la sous un titre ## Article N | LEGIARTI… (JORFARTI) ou ## Décision | JURITEXT… (CETATEXT, CONSTEXT), suivi de l'extrait exact entre « »."]],
       [FACTS.replace('## Article 1 | LEGIARTI000000000001', '## Décision fictive | JURITEXT000000000001'), null],
@@ -730,6 +730,23 @@ test('verifier fails a test without assertion, a typecheck warning, and a misspe
   } finally { cleanup(); }
 });
 
+test('a fact fixed in the dossier scenario cites one or several pieces; a hypothesis scenario stays free', () => {
+  const scenario = (name, body) => `#[test]\ndéclaration champ d'application ${name}:\n  résultat cas champ d'application Prime.Prime\nchamp d'application ${name}:\n${body}`;
+  const content = ['```catala', scenario('Dossier', [
+    '  ## [Contrat](../../../pieces/contrat.md) « Le prix est de 1 000 €. »',
+    '  ## [Facture](../../../pieces/facture.md) « Montant : 1 000 €. »',
+    '  définition cas.prix égal à 1 000 €',
+    '  règle cas.paiement_reçu rempli',
+    '  règle cas.mise_en_demeure non rempli',
+    '  définition cas.lecture égal à Inconnu',
+    '  assertion cas.dû = 1 000 €',
+  ].join('\n')), scenario('Hypothèse', '  règle cas.paiement_reçu rempli\n  assertion cas.dû = 0 €'), '```', ''].join('\n');
+  const { entries, errors } = catalaDocumentation(content, { test: true });
+  assert.deepEqual(errors.map((error) => [error.line, error.message.split(' :')[0]]), [[9, 'fait sans pièce']]);
+  assert.deepEqual(entries.find((entry) => entry.startLine === 6), { startLine: 6, endLine: 8, doc: '[Contrat](../../../pieces/contrat.md)\n« Le prix est de 1 000 €. »\n[Facture](../../../pieces/facture.md)\n« Montant : 1 000 €. »', hasDoc: true, title: '' });
+  assert.deepEqual(catalaDocumentation(content, { test: true, contract: true }).errors, []);
+});
+
 test('the indemnity fixture passes documentation and each rule rejects its fault', async () => {
   const { home, dossier, cleanup } = scratch();
   try {
@@ -747,7 +764,6 @@ test('the indemnity fixture passes documentation and each rule rejects its fault
     assert.equal(await errors(source), '');
     assert.match(await errors(source.replace('## Article 2224 | LEGIARTI000019017112', '## Article 2224')), /règle sans source juridique/);
     assert.match(await errors(source.replace('## Société cotée', '## société_cotée')), /titre « société_cotée » : écrivez 2 à 7 mots/);
-    assert.match(await errors(source.replace('  ## okf:/_premises/societe-cotee.md\n', '')), /fait du scénario sans justification : écrivez ## okf:\/_premises\/<fiche>\.md juste au-dessus de cas\.société_cotée\./);
     assert.match(await errors(source, { ...task, type: 'contentieux' }), /type de tâche inconnu : écrivez litigation, transactional\./);
   } finally { cleanup(); }
 });
@@ -936,108 +952,6 @@ test('typecheckErrors compiles a copy with the written content and keeps only re
     assert.deepEqual(seen[0], { tool: 'clerk', args: ['typecheck', '--color=never', '--catala-opts=--check-invariants', '--catala-opts=--message-format=gnu'], copied: ['clerk.toml', 'prime.catala_fr', 'tache.json', 'test_prime.catala_fr'], content: 'nouveau', timeout: 5 });
     assert.deepEqual(await typecheckErrors(directory, file, 'crash', options), []);
     assert.equal(fs.readFileSync(file, 'utf8'), MODULE);
-  } finally { cleanup(); }
-});
-
-const RESOLUTION = [
-  '```catala-metadata',                                                  // 1
-  'déclaration énumération État:',                                       // 2
-  '  -- Établi',                                                         // 3
-  '  -- Inconnu',                                                        // 4
-  'déclaration structure ExamenCadre:',                                  // 5
-  '  donnée régime contenu État',                                        // 6
-  '  donnée éléments contenu liste de booléen',                          // 7
-  "déclaration champ d'application Resolution:",                         // 8
-  '  ## Régime applicable',                                              // 9
-  '  entrée régime_applicable contenu État',                             // 10
-  '  ## Notification reçue',                                             // 11
-  '  entrée notification_reçue contenu État',                            // 12
-  '  ## Urgence',                                                        // 13
-  '  entrée urgence contenu État',                                       // 14
-  '  résultat état contenu État',                                        // 15
-  "déclaration champ d'application Dossier:",                            // 16
-  '  résultat calcul contenu Resolution',                                // 17
-  "champ d'application Dossier:",                                        // 18
-  '  ## Réception documentée',                                           // 19
-  '  ## okf:/_premises/reception.md',                                    // 20
-  '  définition réception égal à vrai',                                  // 21
-  '  ## Ouverture documentée',                                           // 22
-  '  ## okf:/_premises/ouverture.md',                                    // 23
-  '  définition ouverture égal à vrai',                                  // 24
-  '  ## Examiner le cadre',                                              // 25
-  '  définition examen égal à',                                          // 26
-  '    ExamenCadre { -- régime: Inconnu -- éléments: [ ouverture ] }',   // 27
-  '  ## Examiner le dossier',                                            // 28
-  '  définition calcul égal à',                                          // 29
-  '    résultat de Resolution avec {',                                   // 30
-  '      -- régime_applicable: examen.régime',                           // 31
-  '      -- notification_reçue: si réception alors Établi sinon Inconnu', // 32
-  '      -- urgence: Inconnu',                                           // 33
-  '    }',                                                               // 34
-  '```',                                                                 // 35
-  '',
-  '- Pièce listée : okf:/_premises/listee.md',                            // 37
-  '',
-].join('\n');
-
-const HYPOTHESIS = [
-  '```catala',
-  '#[test]',
-  "déclaration champ d'application Hypothèse:",
-  '  résultat calcul contenu Resolution.Resolution',
-  "champ d'application Hypothèse:",
-  '  définition calcul égal à',
-  '    résultat de Resolution.Resolution avec { -- régime_applicable: Établi -- notification_reçue: Établi -- urgence: Établi }',
-  '  assertion calcul.état = Établi',
-  '```',
-  '',
-].join('\n');
-
-test('premiseCoverage follows each input of the dossier scenario to the constant that sets it', () => {
-  const { errors, warnings, used } = premiseCoverage([{ name: 'resolution.catala_fr', content: RESOLUTION }, { name: 'test_resolution.catala_fr', content: HYPOTHESIS }]);
-  assert.deepEqual(errors.map((error) => `${error.file}:${error.line}: ${error.message}`), [
-    'resolution.catala_fr:31: input "régime_applicable" is set to "examen.régime", which comes from "Inconnu" at resolution.catala_fr:27, not derived from any OKF premise. Compute it from facts set under "## okf:/_premises/<file>.md", or write "## Sans prémisse : <reason>" above line 31.',
-    'resolution.catala_fr:33: input "urgence" is set to "Inconnu", not derived from any OKF premise. Compute it from facts set under "## okf:/_premises/<file>.md", or write "## Sans prémisse : <reason>" above line 33.',
-  ]);
-  assert.deepEqual(warnings, []);
-  assert.deepEqual(used, ['okf:/_premises/reception.md']);
-});
-
-test('premiseCoverage accepts a motivated constant as a warning and reports an input never set', () => {
-  const motivated = RESOLUTION.replace('      -- urgence: Inconnu', '      ## Sans prémisse : aucune pièce ne décrit l’urgence\n      -- urgence: Inconnu');
-  const { errors, warnings } = premiseCoverage([{ name: 'resolution.catala_fr', content: motivated }]);
-  assert.deepEqual(errors.map((error) => error.input), ['régime_applicable']);
-  assert.deepEqual(warnings.map((warning) => `${warning.file}:${warning.line}: ${warning.message}`), ['resolution.catala_fr:34: input "urgence" is set to "Inconnu" without OKF premise: aucune pièce ne décrit l’urgence']);
-  assert.deepEqual(catalaDocumentation(motivated).errors.filter((error) => /Sans prémisse/.test(error.message)), []);
-  const unset = premiseCoverage([{ name: 'resolution.catala_fr', content: RESOLUTION.replace('      -- urgence: Inconnu\n', '') }]).errors;
-  assert.equal(unset.find((error) => error.input === 'urgence').line, 14);
-  assert.match(unset.find((error) => error.input === 'urgence').message, /^input "urgence" is never set in a dossier scenario\./);
-  const missing = premiseCoverage([{ name: 'resolution.catala_fr', content: RESOLUTION }], { exists: (source) => source !== 'okf:/_premises/reception.md' }).errors;
-  assert.ok(missing.some((error) => error.input === 'notification_reçue' && error.line === 32));
-});
-
-test('verifier fails on underived inputs and warns on premises that set no input', async () => {
-  const { home, dossier, cleanup } = scratch();
-  try {
-    const directory = program(dossier, 'resolution', { 'resolution.catala_fr': RESOLUTION, 'test_resolution.catala_fr': HYPOTHESIS });
-    for (const file of ['reception.md', 'ouverture.md', 'listee.md', 'orpheline.md']) {
-      fs.mkdirSync(path.join(dossier, '.piecemaker', 'okf', '_premises'), { recursive: true });
-      fs.writeFileSync(path.join(dossier, '.piecemaker', 'okf', '_premises', file), '');
-    }
-    const { runner } = fakeRun();
-    const output = await runCatala({ commande: 'verifier', cwd: dossier, flags: { au: '2026-01-02' }, deps: { env: { PIECEMAKER_HOME: home }, homeDir: home, run: runner, python: null, credentials: null } });
-    const check = JSON.parse(fs.readFileSync(path.join(directory, 'resultats', 'verification.json'), 'utf8')).checks.find((entry) => entry.name === 'premisses');
-    assert.equal(check.passed, false);
-    assert.equal(check.message, '1/3 input(s) derived from OKF premises; 1/4 premise(s) of the case index set an input.');
-    assert.deepEqual(check.errors.map((error) => error.split(': [ERROR]')[0]), ['resolution.catala_fr:31', 'resolution.catala_fr:33']);
-    assert.deepEqual(check.warnings, [
-      'resolution.catala_fr:23: [WARNING] premise okf:/_premises/ouverture.md is cited here, but its fact sets no input of a Catala program. Use it to compute the input it establishes.',
-      'resolution.catala_fr:37: [WARNING] premise okf:/_premises/listee.md is cited here, but its fact sets no input of a Catala program. Use it to compute the input it establishes.',
-      '.piecemaker/okf/_premises/orpheline.md:1: [WARNING] premise okf:/_premises/orpheline.md is not used by any Catala program.',
-    ]);
-    assert.match(output, /- premisses : échec — 1\/3 input\(s\)[^\n]*\n  resolution\.catala_fr:31: \[ERROR\] input "régime_applicable"/);
-    assert.match(output, /\n  resolution\.catala_fr:37: \[WARNING\] premise okf:\/_premises\/listee\.md/);
-    assert.deepEqual(premiseLinks(dossier, 'resolution').unlinked, ['listee.md', 'orpheline.md', 'ouverture.md']);
   } finally { cleanup(); }
 });
 

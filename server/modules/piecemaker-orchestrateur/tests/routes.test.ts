@@ -72,13 +72,15 @@ test('L’agent central est accepté hors des dossiers et sa session renvoie l�
   assert.deepEqual(centralSession.mock.calls[0].arguments, [7]);
 });
 
-test('L’agent central lit et modifie la paire About.md et Roadmap.json d’un dossier, sous le contrôle du Hérisson', async t => {
+test('L’agent central lit et modifie About.md et les goals d’un dossier, sous le contrôle du Hérisson', async t => {
   const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'pm-paire-')));
   const central = path.join(base, 'PieceMaker Agent');
   const dupont = path.join(base, 'Dossier Dupont');
   mkdirSync(path.join(base, 'home'), { recursive: true });
   mkdirSync(dupont, { recursive: true });
   writeFileSync(path.join(base, 'home', 'brain.json'), JSON.stringify({ path: central }));
+  mkdirSync(path.join(central, '.piecemaker'), { recursive: true });
+  writeFileSync(path.join(central, '.piecemaker', 'dossiers.json'), JSON.stringify({ [dupont]: 'Dossier Dupont' }));
   const previous = process.env.PIECEMAKER_HOME;
   process.env.PIECEMAKER_HOME = path.join(base, 'home');
   t.after(() => { if (previous === undefined) delete process.env.PIECEMAKER_HOME; else process.env.PIECEMAKER_HOME = previous; rmSync(base, { recursive: true, force: true }); });
@@ -93,7 +95,8 @@ test('L’agent central lit et modifie la paire About.md et Roadmap.json d’un 
   const pair = await call('GET', '/case', { project: central, folder: dupont });
   assert.equal(pair.status, 200);
   assert.deepEqual([pair.value.name, pair.value.about, pair.value.roadmap], ['Dossier Dupont', '', {}]);
-  assert.equal((await call('GET', '/case', { project: dupont, folder: dupont })).status, 403);
+  assert.equal((await call('GET', '/case', { project: dupont, folder: dupont })).status, 200);
+  assert.equal((await call('GET', '/case', { project: dupont, folder: path.join(base, 'Societe Exemple') })).status, 403);
   assert.equal((await call('GET', '/case', { project: central, folder: path.join(base, 'Societe Exemple') })).status, 404);
   assert.equal((await call('PUT', '/case/about', { project: central, folder: dupont, text: '# Dossier Dupont\n\nStatut : en cours' })).status, 200);
   assert.equal(readFileSync(path.join(central, 'projects', 'Dossier Dupont', 'About.md'), 'utf8'), '# Dossier Dupont\n\nStatut : en cours\n');
@@ -101,6 +104,11 @@ test('L’agent central lit et modifie la paire About.md et Roadmap.json d’un 
   const suivis = { 'appel-suivi.json': { echeances: { audience: { intitule: 'Audience de plaidoirie', kind: 'hearing', date: '2026-12-01' } } } };
   const saved = await call('PUT', '/case/roadmap', { project: central, folder: dupont, roadmap: { suivis } });
   assert.deepEqual(saved.value.roadmap, { suivis });
+  assert.equal(readFileSync(path.join(central, 'projects', 'Dossier Dupont', 'goals', 'appel', 'Timeline.json'), 'utf8').includes('Audience de plaidoirie'), true);
+  const goal = await call('PUT', '/case/goal', { project: central, folder: dupont, goal: 'appel', file: 'Goal.md', text: 'Faire infirmer le jugement.' });
+  assert.deepEqual((goal.value.goals as unknown[])[0], { name: 'appel', goal: 'Faire infirmer le jugement.\n', memory: '', archive: '' });
+  assert.equal((await call('PUT', '/case/goal', { project: central, folder: dupont, goal: 'appel', file: 'Memory.md', text: Array.from({ length: 201 }, () => 'x').join('\n') })).status, 400);
+  assert.equal((await call('PUT', '/case/goal', { project: central, folder: dupont, goal: '../appel', file: 'Goal.md', text: 'x' })).status, 400);
   const refused = await call('PUT', '/case/roadmap', { project: central, folder: dupont, roadmap: { suivis, etapes: { mappingValide: '2026-01-01' } } });
   assert.equal(refused.status, 400);
   assert.match(String(refused.value.error), /"etapes" cannot be changed/);

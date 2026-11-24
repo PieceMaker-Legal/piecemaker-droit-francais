@@ -1,10 +1,11 @@
 import { isPieceRow, mountIndexAnalysis } from './index-analysis.js';
 import type { IndexChronology } from './index-analysis.js';
-import { editOntology } from './ontology.js';
+import { editClassification } from './classification.js';
 import { pendingProposals } from './pending-proposals.js';
 import { etapesApi, knowledgeApi } from './api.js';
-import { PARTY_TYPE, mountGraph, okfApi } from './okf.js';
-import type { OkfGraph } from './okf.js';
+import { isParty, okfApi } from './okf.js';
+import { mountGraph } from './okf-graph.js';
+import type { OkfGraph } from './okf-graph.js';
 import { ficheCardMarkup } from './okf-card.js';
 import type { PendingProposals } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
@@ -67,7 +68,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const requestedView = takeRequestedView();
   let active: Tab = requestedView === 'index-analysis' ? 'chronology' : requestedView ?? 'general';
   let data: ViewData | null = null;
-  // L'Index : la revue tabulaire de l'Index, montée une fois par dossier et rattachée à l'onglet à chaque affichage.
+  // Le Case index : la revue tabulaire du Case index, montée une fois par dossier et rattachée à l'onglet à chaque affichage.
   let indexHost: HTMLElement | null = null;
   let indexProject = '';
   let disposeIndex: (() => void) | null = null;
@@ -87,20 +88,6 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   };
   let proposals: PendingProposals | undefined;
   let showPremises = (() => { try { return localStorage.getItem('pmd-okf-premises') !== '0'; } catch { return true; } })();
-  const okfHandle = () => {
-    const projectId = context.project?.name || '';
-    return {
-      projectId,
-      refresh: () => void okfApi.read(projectId).then((okf) => {
-        if (!data || context.project?.name !== projectId) return;
-        data = { ...data, okf };
-        viewCache.set(projectId, data);
-        if (active === 'graph') paintContent();
-        else root.querySelectorAll<HTMLElement>('[data-okf-links]').forEach((cell) => { cell.innerHTML = linksMarkup(okf, cell.dataset.okfLinks || ''); });
-        if (indexChronology) notifyChronology();
-      }, () => undefined),
-    };
-  };
   let destroyGraph: (() => void) | null = null;
   let okfDetail: string | null = null;
   let loadSequence = 0;
@@ -249,7 +236,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         mappingValidated = etapes.mappingValide ?? null;
         paintScanStatus();
       }, () => undefined);
-      void pendingProposals(projectId, context.project.path).then((pending) => {
+      void pendingProposals(context.project.path).then((pending) => {
         if (sequence !== loadSequence) return;
         proposals = pending;
         const host = root.querySelector<HTMLElement>('[data-proposals]');
@@ -482,40 +469,15 @@ export function mount(container: HTMLElement, api: PluginApi): void {
       card.querySelector('[data-detail-close]')?.addEventListener('click', closeDetail);
       card.querySelectorAll<HTMLElement>('[data-open-file]').forEach((button) => button.addEventListener('click', () => api.openFileInEditor(button.dataset.openFile || '')));
       card.querySelectorAll<HTMLElement>('[data-open-fiche]').forEach((button) => button.addEventListener('click', () => showFiche(button.dataset.openFiche || '')));
-      const projectId = context.project?.name || '';
-      const reloadOkf = () => okfApi.read(projectId).then((okf) => {
-        if (!data || context.project?.name !== projectId) return;
-        data = { ...data, okf };
-        viewCache.set(projectId, data);
-        paintContent();
-      });
-      card.querySelectorAll<HTMLElement>('[data-unlink-review]').forEach((button) => button.addEventListener('click', () => {
-        void okfApi.linkReview(projectId, fiche.title, button.dataset.unlinkReview || '', Number(button.dataset.reviewColumn), true).then(reloadOkf).catch(showError);
-      }));
-      card.querySelector('[data-link-review]')?.addEventListener('click', () => {
-        const picker = card.querySelector<HTMLElement>('[data-review-picker]');
-        if (!picker) return;
-        picker.hidden = false;
-        picker.innerHTML = '<span class="pmd-fact-meta">Chargement des revues…</span>';
-        void okfApi.reviews(projectId).then(({ revues }) => {
-          if (!revues.length) { picker.innerHTML = '<span class="pmd-fact-meta">Aucune revue tabulaire des pièces dans ce dossier.</span>'; return; }
-          const options = revues.flatMap((review) => review.colonnes.map((column) => `<option value="${escapeHtml(JSON.stringify([review.fichier, column.index]))}">${escapeHtml(`${review.titre} › ${column.nom}`)}</option>`)).join('');
-          picker.innerHTML = `<select class="pmd-input" data-review-choice aria-label="Revue et colonne">${options}</select><button type="button" class="pmd-button piecemaker-button piecemaker-button--black piecemaker-button--sm" data-review-confirm>Lier</button><small class="pmd-fact-meta">Les lignes positives de la colonne établissent la prémisse ; celles que vous marquez vérifiées dans la revue comptent comme pièces d’auteur humain.</small>`;
-          picker.querySelector('[data-review-confirm]')?.addEventListener('click', () => {
-            const [fichier, colonne] = JSON.parse(picker.querySelector<HTMLSelectElement>('[data-review-choice]')?.value || '[]') as [string, number];
-            void okfApi.linkReview(projectId, fiche.title, fichier, colonne).then(reloadOkf).catch(showError);
-          });
-        }).catch(showError);
-      });
       card.querySelector('[data-edit-fiche]')?.addEventListener('click', () => {
         if (!data) return;
-        if (fiche.type === PARTY_TYPE) {
+        if (isParty(fiche)) {
           const node = data.graph.nodes.find((entry) => entry.id === `entity:${fiche.title}`);
           if (node) nodeEditor(root, data, node, save);
           return;
         }
         const node = data.graph.nodes.find((entry) => entry.kind === 'document' && documentResource(entry, projectPath).normalize('NFC') === fiche.resource);
-        if (node) documentEditor(root, data, node, projectPath, save, renamePiece, okfHandle());
+        if (node) documentEditor(root, data, node, projectPath, save, renamePiece);
       });
     };
     wrap.addEventListener('keydown', (event) => { if (event.key === 'Escape' && wrap.querySelector('[data-okf-detail]')) closeDetail(); });
@@ -564,12 +526,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         notifyChronology();
         return;
       }
-      if (action === 'edit-ontology' && context.project) {
-        void editOntology(root, context.project.name, () => { void load(); }, context.project.path).catch(showError);
-        return;
-      }
-      if ((action === 'edit-tree' || action === 'edit-document-types') && context.project) {
-        void editOntology(root, context.project.name, () => { void load(); }, context.project.path, action === 'edit-tree' ? 'tree' : 'types').catch(showError);
+      if (action === 'edit-tree' && context.project) {
+        void editClassification(root, context.project.path, () => { void load(); }).catch(showError);
         return;
       }
       if (action === 'company-search') {
@@ -817,7 +775,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const showRequestedView = () => {
     const view = takeRequestedView();
     if (!view) return;
-    // « index-analysis » (ancien nom de la revue de l'Index) ouvre l'Index : c'est la même vue.
+    // « index-analysis » (ancien nom de la revue du Case index) ouvre le Case index : c'est la même vue.
     active = view === 'index-analysis' ? 'chronology' : view;
     render();
   };

@@ -72,7 +72,7 @@ function copyDocument(project: string, source: string, copies: Map<string, Revie
   return document;
 }
 
-/** L'Index du dossier tenu par l'hôte (SQLite), s'il porte ce nom de fichier. */
+/** Le Case index tenu par l'hôte (SQLite), s'il porte ce nom de fichier. */
 async function hostIndexOf(project: string, file: string): Promise<HostIndex | null> {
   const stored = await readHostIndex(project);
   return stored && stored.fichier === file ? stored : null;
@@ -84,7 +84,7 @@ export function writeNewReviewFile(project: string, review: Review): string {
   return path.basename(target);
 }
 
-/** Une nouvelle revue : l'Index du dossier va dans SQLite (l'hôte en régénère le .json), les autres revues restent des .json. */
+/** Une nouvelle revue : le Case index va dans SQLite (l'hôte en régénère le .json), les autres revues restent des .json. */
 export async function writeNewReview(project: string, review: Review): Promise<string> {
   const target = uniquePath(reviewDirectory(project), reviewBasename(new Date(review.createdAt), review.templateName, review.title), '.json');
   if (isCaseIndex(review) && hostIndexOrigin()) {
@@ -158,7 +158,7 @@ export async function createReview(project: string, template: Template, title: s
   return { file: await writeNewReview(project, review), review, created: true };
 }
 
-/** Une revue : l'Index du dossier est lu dans SQLite (via l'hôte), les autres dans leur .json. */
+/** Une revue : le Case index est lu dans SQLite (via l'hôte), les autres dans leur .json. */
 export async function readReview(project: string, file: string): Promise<Review> {
   const stored = await hostIndexOf(project, file);
   if (stored) return withIndexName(stored.review);

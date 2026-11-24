@@ -20,6 +20,7 @@ import { findApplicationRoot, getApplicationDataRoot, getModuleDirectory, readOb
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
 import { reconcileClaudeHooks, reconcileCodexHooks, reconcileVibeHooks } from './claude-hooks.js';
 import { createBrain } from './brain.js';
+import { createLegalOkfRouter } from './legal-okf/index.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
@@ -46,7 +47,7 @@ import { createCompanySearchRouter } from './company-search.js';
 import { isLoopback } from './knowledge/local-routes.js';
 import { createSourceConnectors } from './source-connectors.js';
 import { createCatalaCitation } from './catala-citation.js';
-import { premiseDate } from './okf/premise-date.js';
+import { premiseDate } from './okf/index.js';
 import { catalaScriptPath, createCatalaCitationCheck, createCatalaRouter, createCatalaUpdatedRouter } from './catala.js';
 import { createSessionDossierRouter } from './session-dossier/session-dossier-routes.js';
 import { createBodaccSearchRouter } from './bodacc-search.js';
@@ -334,6 +335,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(timesheet);
   router.use('/catala', createCatalaRouter(catalaScriptPath(applicationRoot), {}, catalaCitations));
   router.use('/orchestrateur', createOrchestratorRouter(orchestrator, projectsDb, brain));
+  router.use('/legal-okf', express.json({ limit: '2mb' }), createLegalOkfRouter({ home: piecemakerHome(), brainRoot: brain.root }));
   router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));

@@ -13,7 +13,7 @@ type AnalysisApi = {
   openFileInEditor(filePath: string): void;
 };
 
-/** Ligne de l'Index telle que la revue tabulaire la décrit : la pièce est `piece`, ou à défaut le premier document. */
+/** Ligne du Case index telle que la revue tabulaire la décrit : la pièce est `piece`, ou à défaut le premier document. */
 export type IndexRow = { id: string; piece?: string; documents: Array<{ source: string }> };
 
 type RowColumn = { title: string; cell(row: IndexRow): string };
@@ -45,7 +45,7 @@ let analysisModule: Promise<AnalysisModule> | null = null;
 function loadAnalysis(): Promise<AnalysisModule> {
   analysisModule ??= (async () => {
     const response = await authenticatedFetch('/api/plugins/piecemaker-tabular-review/assets/dist/index.js');
-    if (!response.ok) throw new Error(`Index indisponible : activez le plugin « Analyse Tabulaire » (${response.status}).`);
+    if (!response.ok) throw new Error(`Case index indisponible : activez le plugin « Analyse Tabulaire » (${response.status}).`);
     const url = URL.createObjectURL(new Blob([await response.text()], { type: 'application/javascript' }));
     try { return await import(url) as AnalysisModule; }
     finally { URL.revokeObjectURL(url); }
@@ -54,7 +54,7 @@ function loadAnalysis(): Promise<AnalysisModule> {
   return analysisModule;
 }
 
-/** L'Index du dossier, affiché dans l'onglet même : c'est la revue tabulaire de l'Index (SQLite), avec une colonne de liens OKF par pièce. */
+/** Le Case index, affiché dans l'onglet même : c'est la revue tabulaire du Case index (SQLite), avec une colonne de liens OKF par pièce. */
 export async function mountIndexAnalysis(container: HTMLElement, api: AnalysisApi, links: (resource: string) => string, chronology?: IndexChronology): Promise<() => void> {
   const project = api.context.project?.path;
   if (!project) return () => {};

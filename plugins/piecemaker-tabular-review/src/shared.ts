@@ -392,20 +392,25 @@ export type RunRequest = {
   proxyOrigin: string;
 };
 
-export const INDEX_TEMPLATE_NAME = 'Index';
-export const LEGACY_INDEX_NAME = 'Chronologie';
+/** Nom affiché du Case index du dossier (la revue tabulaire de toutes les pièces) : seul endroit à changer pour le renommer. */
+export const CASE_INDEX_NAME = 'Case index';
+/** Forme courte, pour les onglets et boutons. */
+export const CASE_INDEX_SHORT = 'Case index';
+export const INDEX_TEMPLATE_NAME = CASE_INDEX_NAME;
+/** Anciens noms du Case index, encore reconnus dans les fichiers existants. */
+export const LEGACY_INDEX_NAMES: readonly string[] = ['Index', 'Chronologie'];
 
 export function withIndexName<T extends { title: string; templateName: string }>(entry: T): T {
   return {
     ...entry,
-    title: entry.title === LEGACY_INDEX_NAME ? INDEX_TEMPLATE_NAME : entry.title,
-    templateName: entry.templateName === LEGACY_INDEX_NAME ? INDEX_TEMPLATE_NAME : entry.templateName,
+    title: LEGACY_INDEX_NAMES.includes(entry.title) ? CASE_INDEX_NAME : entry.title,
+    templateName: LEGACY_INDEX_NAMES.includes(entry.templateName) ? CASE_INDEX_NAME : entry.templateName,
   };
 }
 
 export function isCaseIndex(entry: { title: string; templateName: string; category?: unknown; mode?: unknown }): boolean {
   if (entry.category === 'recherche-juridique' || entry.mode === 'recherche') return false;
-  return [entry.templateName, entry.title].some((name) => name === INDEX_TEMPLATE_NAME || name === LEGACY_INDEX_NAME);
+  return [entry.templateName, entry.title].some((name) => name === CASE_INDEX_NAME || LEGACY_INDEX_NAMES.includes(name));
 }
 
 export const OPEN_EVENT = 'piecemaker:tabular-review-open';

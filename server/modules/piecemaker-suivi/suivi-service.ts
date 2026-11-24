@@ -17,7 +17,7 @@ import type { SuiviMark } from './suivi.js';
 
 const empty = (): SuiviSnapshot => ({ revision: 0, updatedAt: null, code: '', hash: null, evenements: [], echeances: [], issues: [] });
 const hashOf = (code: string) => createHash('sha256').update(code).digest('hex');
-const MISSING = 'Aucun suivi : écris .piecemaker/<nom>-suivi.json (matter, evenements et echeances), puis relance verifier.';
+const MISSING = 'Aucun suivi : écris goals/<goal>/Timeline.json (matter, evenements et echeances) dans le brain, ou .piecemaker/<nom>-suivi.json sans brain, puis relance verifier.';
 const SUIVI_FILES = /^((?:.+-)?suivi\.json)(\.supprime)?$/;
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS pm_suivi (

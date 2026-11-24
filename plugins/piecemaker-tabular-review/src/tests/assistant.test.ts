@@ -38,7 +38,7 @@ describe('outil tabular_review', () => {
     const first = await assistant({ action: 'index', project }, run) as { projet: string };
     const listed = await assistant({ action: 'lister', project }, run) as { projets: { projet: string; nom: string; documents: string[]; questions: string[] }[] };
     const draft = listed.projets.find((entry) => entry.projet === first.projet);
-    expect(draft).toMatchObject({ nom: 'Index', ia: 'mistral', modele_ia: 'mistral-medium-3.5', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel', 'Mentions', 'Classement'] });
+    expect(draft).toMatchObject({ nom: 'Case index', ia: 'mistral', modele_ia: 'mistral-medium-3.5', questions: ['Date', 'Événement', 'Importance', 'Secret professionnel', 'Mentions', 'Classement'] });
     expect(draft?.documents).toContain('Pièces/courrier.md');
     expect(await assistant({ action: 'index', project }, run)).toEqual({ projet: first.projet });
     const { deleteDraft } = await import('../server/drafts.js');

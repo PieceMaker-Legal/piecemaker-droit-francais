@@ -29,7 +29,7 @@ function buildPluginEnv(name) {
     HOME: process.env.HOME,
     NODE_ENV: process.env.NODE_ENV || 'production',
     PLUGIN_NAME: name,
-    // Origine locale de l'hôte : la Tabular Review y lit et écrit l'Index du dossier (SQLite).
+    // Origine locale de l'hôte : la Tabular Review y lit et écrit le Case index (SQLite).
     PIECEMAKER_HOST_ORIGIN: `http://127.0.0.1:${process.env.SERVER_PORT || '3001'}`,
   };
 

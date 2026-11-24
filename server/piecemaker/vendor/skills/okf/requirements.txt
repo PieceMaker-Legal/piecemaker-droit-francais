@@ -1,0 +1,7 @@
+# Runtime dependency for okf/scripts/validate.py
+PyYAML>=5.1
+
+# --- Dev / test dependencies (not required at runtime) ---
+# Install with: pip install -r requirements.txt
+# Test suite lives in okf/scripts/tests/ and is run with `pytest`.
+pytest>=7  # dev-only

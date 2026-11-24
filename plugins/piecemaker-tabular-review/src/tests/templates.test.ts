@@ -19,10 +19,7 @@ describe('normalizeColumn', () => {
   it('aligne les anciens modèles de nature sur les familles livrées sans modifier les autres questions', () => {
     upsertTemplate({ id: 'inventaire-fictif', name: 'Inventaire fictif', columns: [{ name: 'Nature', prompt: 'Identifier le document.', format: 'tags', tags: ['Autre', 'Jugement'] }, { name: 'Importance', prompt: 'Importance ?', format: 'tags', tags: ['Haute', 'Basse'] }] });
     const current = readTemplates().find((entry) => entry.id === 'inventaire-fictif')!;
-    expect(current.columns[0].tags).toContain('acte de procédure');
-    expect(current.columns[0].tags).toContain('décision judiciaire');
-    expect(current.columns[0].tags).toContain('indéterminé');
-    expect(current.columns[0].tags).toHaveLength(18);
+    expect(current.columns[0].tags).toEqual(['legal document', 'material entity', 'indéterminé']);
     expect(current.columns[0].tags).not.toContain('Autre');
     expect(current.columns[1]).toEqual({ name: 'Importance', prompt: 'Importance ?', format: 'tags', tags: ['Haute', 'Basse'] });
   });

@@ -5,7 +5,7 @@
       "cible": "^ontologie(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "okf",
-      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: relations, document types and the folder tree under the key arborescence), in the Index › Ontologie and Index › Classement tabs. Read it with pm okf ontologie and pm dossier arborescence. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
+      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: the folder tree under the key arborescence), in the Case index › Classement tab. The OKF bundle of the case follows Context-OKF on the Legal Ontologies Foundry, fixed: read its six patterns with pm okf ontologie. Read the tree with pm dossier arborescence. To propose a change to the tree, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
     },
     {
       "nom": "okf",
@@ -13,8 +13,7 @@
       "ecriture": "agent",
       "skill": "okf",
       "verifier": ["okf", "verify"],
-      "commande": "\\bpm okf (link|unlink|examinee|revue)\\b",
-      "erreur": "Index OKF : \\d+ erreur|Contradictions : \\d|Graphe : \\d+ élément",
+      "erreur": "[1-9]\\d* error\\(s\\)|[1-9]\\d* lint\\(s\\)|bundle OKF du dossier absent",
       "delai": 30
     },
     {
@@ -65,24 +64,33 @@
       "format": "memoire"
     },
     {
-      "nom": "roadmap",
+      "nom": "timeline",
       "cible": "^(?!)",
-      "brain": "Roadmap.json",
+      "brain": "^goals/(?<nom>[^/]+)/Timeline\\.json$",
       "ecriture": "agent",
       "skill": "piecemaker",
-      "verifier": ["suivi_dossiers", "verifier"],
+      "verifier": ["suivi_dossiers", "verifier", "--suivi", "{suivi}"],
       "erreur": "\\d+ erreur\\(s\\), \\d+ manque\\(s\\)\\.",
-      "delai": 120,
-      "format": "roadmap"
+      "delai": 60,
+      "format": "timeline"
     },
     {
-      "nom": "about",
+      "nom": "goal",
       "cible": "^(?!)",
-      "brain": "About.md",
+      "brain": "^goals/(?<nom>[^/]+)/(?:Goal|Memory)\\.md$",
       "ecriture": "agent",
       "skill": "piecemaker",
-      "verifier": ["memoire", "verifier"],
-      "delai": 10
+      "verifier": ["memoire", "verifier", "--memoire", "{nom}"],
+      "delai": 10,
+      "format": "goal"
+    },
+    {
+      "nom": "case-timeline",
+      "cible": "^(?!)",
+      "brain": "^Timeline\\.json$",
+      "ecriture": "serveur",
+      "skill": "piecemaker",
+      "motif": "PieceMaker writes the case Timeline.json: the lawyer sets the step on the board of the Suivi des dossiers tab, and pm check writes the synthesis with synthese.mjs. Write deadlines in goals/<goal>/Timeline.json."
     },
     {
       "nom": "catala",
@@ -90,8 +98,6 @@
       "ecriture": "agent",
       "skill": "catala",
       "verifier": ["catala", "verifier", "--programme", "{nom}"],
-      "commande": "\\bpm okf (link|unlink)\\b.*\\b(states|involves)\\b",
-      "cite": "okf:/_premises/",
       "format": "catala",
       "erreur": ": à corriger\\.",
       "delai": 60
@@ -225,7 +231,7 @@
       "nom": "index",
       "titre": "Index",
       "volet": "index",
-      "description": "OKF index of the case documents: cited links between documents, premises, parties and the link ontology.",
+      "description": "OKF bundle of the case (Context-OKF, OKF 0.3 on the Legal Ontologies Foundry, David Koepsell, CC BY 4.0): Markdown concepts written with Write and Edit, each fact qualified by a LOF pattern and quoted from a piece.",
       "skills": [
         {
           "chemin": "vendor/skills/okf"
@@ -242,7 +248,7 @@
             "okf",
             "verify"
           ],
-          "role": "Rebuild the OKF records and list errors, contradictions and missing elements."
+          "role": "Run the Context-OKF validator in strict mode on the case bundle: errors and lints."
         },
         {
           "nom": "read_ontology",
@@ -250,7 +256,7 @@
             "okf",
             "ontologie"
           ],
-          "role": "Relations allowed between documents (read-only)."
+          "role": "The six Legal Ontologies Foundry patterns (ODP-001 to 006, David Koepsell, CC BY 4.0) and the folder tree (read-only)."
         },
         {
           "nom": "propose_ontology",
@@ -259,87 +265,10 @@
             "ontologie",
             "proposer"
           ],
-          "role": "Propose relations and/or document types to the lawyer.",
+          "role": "Propose the folder tree to the lawyer.",
           "parametres": {
             "ontology": "--json",
             "reason": "--motif"
-          }
-        },
-        {
-          "nom": "propose_document_types",
-          "pm": [
-            "okf",
-            "types"
-          ],
-          "role": "Propose the full catalogue of document types to the lawyer.",
-          "parametres": {
-            "types": "--json",
-            "reason": "--motif"
-          }
-        },
-        {
-          "nom": "link",
-          "pm": [
-            "okf",
-            "link"
-          ],
-          "role": "Cited link: document relation document, document states \"premise\", or \"premise\" involves PARTY.",
-          "parametres": {
-            "source": "#",
-            "relation": "#",
-            "target": "#",
-            "citation": "--citation",
-            "value": "--value",
-            "single": "--single"
-          }
-        },
-        {
-          "nom": "unlink",
-          "pm": [
-            "okf",
-            "unlink"
-          ],
-          "role": "Remove a link.",
-          "parametres": {
-            "source": "#",
-            "relation": "#",
-            "target": "#"
-          }
-        },
-        {
-          "nom": "mark_examined",
-          "pm": [
-            "okf",
-            "examinee"
-          ],
-          "role": "Mark a document as read with nothing to link (remove = undo).",
-          "parametres": {
-            "document": "#",
-            "reason": "--motif",
-            "remove": "--retirer"
-          }
-        },
-        {
-          "nom": "list_linkable_reviews",
-          "pm": [
-            "okf",
-            "revues"
-          ],
-          "role": "Tabular reviews of the case documents and their columns, to link to a premise.",
-          "parametres": {}
-        },
-        {
-          "nom": "link_review",
-          "pm": [
-            "okf",
-            "revue"
-          ],
-          "role": "Link a tabular review column to \"premise\" (created if missing): its positive rows are pieces stating it, author agent until the lawyer checks them in the review (remove = unlink).",
-          "parametres": {
-            "premise": "#",
-            "file": "--fichier",
-            "column": "--colonne",
-            "remove": "--retirer"
           }
         }
       ]

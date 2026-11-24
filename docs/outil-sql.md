@@ -90,6 +90,7 @@ dans la base) complètent ce que l'IA n'a pas à savoir :
 | `DELETE` d'une entité | chaque nom et alias entre dans les valeurs du nœud « Exclusions GLiNER » du dossier |
 | `DELETE` d'une mention | exclusion de lien `{piece, entite, relation}` pour le dossier |
 | `INSERT` d'une personne ou d'une société | code libre attribué (logique de `party-codes.ts`), masque créé, nœud renommé `entity:CODE` ; nouvel identifiant ajouté au résultat. Masquer davantage est sans risque. |
+| `INSERT`/`UPDATE` d'une entité (hors pièce et `system:`) ou d'un lien | `data_json.auteur` forcé à `agent` ; l'onglet Dossier écrit `human` (route `update`), le scan laisse `gliner` par défaut |
 | `UPDATE` du `label` d'une pièce | renommage par `pipeline.rename` à partir de l'ancien chemin (fichier, Markdown, état, nœud, citations) ; nouvel identifiant ajouté au résultat |
 
 Un renommage refusé (nom hors `AAAA-MM-JJ_titre`, doublon, conversion en cours)

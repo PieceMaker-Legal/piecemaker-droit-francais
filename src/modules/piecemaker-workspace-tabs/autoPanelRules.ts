@@ -194,7 +194,7 @@ function pieceMakerCliTarget(command: string): AutoPanelTarget | null {
   const { flags, rest } = flagMap(argv.slice(script + 1));
   const [tool, action] = rest;
   if (tool === 'tab') return action === 'afficher' ? tabTarget(rest.slice(2)) : null;
-  if (tool === 'dossier' && action === 'index') return { kind: 'dossier', view: 'index-analysis' };
+  if (tool === 'dossier' && (action === 'index' || action === 'case-index')) return { kind: 'dossier', view: 'index-analysis' };
   if (tool === 'dossier' && action === 'sql') return sqlTarget(rest.slice(2).join(' '));
   if (tool === 'tabular_review') return tabularReviewTarget({ ...flags, action });
   return null;

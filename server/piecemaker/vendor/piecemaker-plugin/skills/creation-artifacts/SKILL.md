@@ -11,7 +11,7 @@ Un artifact est une page HTML ou un document Word présenté dans l'onglet **Art
 
 - Oui : quelque chose à **regarder ou utiliser** : synthèse visuelle d'un dossier, chronologie, tableau de bord des échéances, suivi à cocher, comparatif, présentation au client, schéma d'un raisonnement, calculateur.
 - Non : un acte, un courrier, des conclusions, tout ce qui se dépose ou s'envoie signé → `.docx` (skills style-redaction-cabinet et docx-cli). Une réponse courte → le chat.
-- Un artifact ne remplace pas les onglets existants (Dossier, Index, Analyse tabulaire, Catala) : il les complète.
+- Un artifact ne remplace pas les onglets existants (Dossier, Case index, Analyse tabulaire, Catala) : il les complète.
 
 ## Déroulé
 

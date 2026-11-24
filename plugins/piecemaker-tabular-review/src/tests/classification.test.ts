@@ -75,7 +75,7 @@ describe('arborescence du dossier', () => {
     const folders = [{ name: 'Documents', explanation: 'Pièces reçues', type: 'Pièces' }];
     await saveClassification(project, folders);
     expect(readClassification(project)).toEqual(folders);
-    await expect(saveClassification(project, [{ ...folders[0], type: 'Partie' }])).rejects.toThrow('Type principal invalide');
+    await expect(saveClassification(project, [{ ...folders[0], type: 'Non classé' }])).rejects.toThrow('Type principal invalide');
     await saveClassification(project, DEFAULT_CLASSIFICATION);
   });
 
@@ -229,7 +229,7 @@ describe('un seul index par dossier', () => {
 
   it.each([
     [{ modele: 'Chronologie' }],
-    [{ modele: 'Index' }],
+    [{ modele: 'Case index' }],
     [{ nom: 'Scan intégral du dossier', documents: ['Notes'], questions: [{ nom: 'Date', consigne: 'Date ?' }] }],
     [{ modele: 'Tri des pièces' }],
     [{ nom: 'Chronologie des faits', documents: ['Notes'], questions: [{ nom: 'Date', consigne: 'Date ?' }] }],
@@ -248,7 +248,7 @@ describe('un seul index par dossier', () => {
     const run = launchers();
     const unique = await assistant({ action: 'index', project: dossier }, run) as { projet: string };
     const complete = await assistant({ action: 'preparer', project: dossier, projet: unique.projet, nom: 'Autre', questions: [{ nom: 'Montant', consigne: 'Quel montant ?' }] }, run) as { nom: string; questions: string[]; chronologie: boolean };
-    expect(complete).toMatchObject({ nom: 'Index', questions: ['Montant', 'Classement'], index: true });
+    expect(complete).toMatchObject({ nom: 'Case index', questions: ['Montant', 'Classement'], index: true });
     deleteDraft(unique.projet);
   });
 
@@ -273,7 +273,7 @@ describe('un seul index par dossier', () => {
     expect(await assistant({ action: 'index', project: dossier }, run)).toMatchObject({ fichier: premiere.file, absentes: expect.any(Number) });
     expect(await assistant({ action: 'preparer', project: dossier, modele: 'Chronologie' }, run)).toMatchObject({ fichier: premiere.file });
     const listed = await assistant({ action: 'lister', project: dossier }, run) as { analyses: { fichier: string; index?: boolean }[] };
-    expect(listed.analyses).toEqual([expect.objectContaining({ fichier: premiere.file, nom: 'Index', index: true })]);
+    expect(listed.analyses).toEqual([expect.objectContaining({ fichier: premiere.file, nom: 'Case index', index: true })]);
   });
 
   it('crée une analyse classique à côté de la chronologie', async () => {

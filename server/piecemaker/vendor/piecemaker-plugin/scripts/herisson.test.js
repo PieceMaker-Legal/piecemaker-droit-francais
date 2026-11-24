@@ -7,7 +7,10 @@ const load = () => import(pathToFileURL(path.join(__dirname, 'herisson.mjs')).hr
 const loadFeatures = () => import(pathToFileURL(path.join(__dirname, 'lib', 'herisson.mjs')).href);
 const root = path.resolve('/dossiers/dossier-exemple');
 process.env.PIECEMAKER_HERISSON_ETAT = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-etat-'));
-test.after(() => require('node:fs').rmSync(process.env.PIECEMAKER_HERISSON_ETAT, { recursive: true, force: true }));
+process.env.PIECEMAKER_HOME = require('node:fs').mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-home-'));
+const TEST_BRAIN = path.join(process.env.PIECEMAKER_HOME, 'brain');
+require('node:fs').writeFileSync(path.join(process.env.PIECEMAKER_HOME, 'brain.json'), JSON.stringify({ path: TEST_BRAIN }));
+test.after(() => { require('node:fs').rmSync(process.env.PIECEMAKER_HERISSON_ETAT, { recursive: true, force: true }); require('node:fs').rmSync(process.env.PIECEMAKER_HOME, { recursive: true, force: true }); });
 
 function fakePm(stdout = '') {
   const calls = [];
@@ -131,7 +134,7 @@ test('la garde refuse un nouveau programme Catala dont le nom n’est pas un rai
   const fs = require('node:fs');
   const os = require('node:os');
   const { hookDecision } = await import(pathToFileURL(path.join(__dirname, 'guard-ontologie.mjs')).href);
-  const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-nom-'));
+  const dossier = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-nom-')));
   const previous = process.env.PIECEMAKER_COMPONENTS_HOME;
   t.after(() => {
     if (previous === undefined) delete process.env.PIECEMAKER_COMPONENTS_HOME;
@@ -143,27 +146,28 @@ test('la garde refuse un nouveau programme Catala dont le nom n’est pas un rai
   fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', 'vieux', 'vieux.catala_fr'), '> Module Vieux\n');
   const reason = async (nom) => (await hookDecision({ cwd: dossier, tool_name: 'Write', tool_input: { file_path: `.piecemaker/catala/${nom}/clerk.toml`, content: `[project]\nname = "${nom}"\n` } }, async () => ({ code: 0, stdout: '', stderr: '' })))?.hookSpecificOutput.permissionDecisionReason ?? null;
   assert.equal(await reason('indem'), null);
-  fs.writeFileSync(path.join(dossier, '.piecemaker', 'etapes.json'), JSON.stringify({ raisonnements: { 'indemnite-licenciement': { etape: 'raisonnement' }, ancien: { etape: 'raisonnement', remplacePar: 'indemnite-licenciement' } } }));
+  const { caseDirectory } = await import(pathToFileURL(path.join(__dirname, 'lib', 'brain-case.mjs')).href);
+  const goal = path.join(caseDirectory(dossier, { create: true }).goals, 'licenciement');
+  fs.mkdirSync(goal, { recursive: true });
+  fs.writeFileSync(path.join(goal, 'Timeline.json'), JSON.stringify({ actes: { 'indemnite-licenciement': { etape: 'raisonnement' }, ancien: { etape: 'raisonnement', remplacePar: 'indemnite-licenciement' } } }));
   assert.match(await reason('indem'), /clerk\.toml:1: program name "indem" is not a reasoning of the case\. Use the exact name given by pm check: \.piecemaker\/catala\/indemnite-licenciement\/\./);
   assert.match(await reason('ancien'), /program name "ancien"/);
   assert.equal(await reason('indemnite-licenciement'), null);
   assert.equal(await reason('vieux'), null);
 });
 
-test('une commande pm okf link vérifie l’index, et les programmes Catala qui citent une prémisse', async (t) => {
+test('une écriture dans le bundle OKF lance le validateur Context-OKF ; les commandes pm okf ne relancent rien', async (t) => {
   const fs = require('node:fs');
   const os = require('node:os');
   const { featureReport } = await load();
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-'));
   t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
-  for (const [nom, contenu] of [['cite', '## okf:/_premises/date-de-depart.md\n'], ['autre', '## Article 1 | LEGIARTI000000000001\n']]) {
-    fs.mkdirSync(path.join(dossier, '.piecemaker', 'catala', nom), { recursive: true });
-    fs.writeFileSync(path.join(dossier, '.piecemaker', 'catala', nom, `${nom}.catala_fr`), contenu);
-  }
-  const link = (command) => { const pm = fakePm('Index OKF : 0 erreur(s).'); return featureReport({ tool_name: 'Bash', cwd: dossier, tool_input: { command } }, { run: pm.run }).then(() => pm.calls.map((call) => call.args)); };
-  assert.deepEqual(await link('pm okf link pieces/a.md states "Date de départ" --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`, `catala verifier --programme cite --dossier ${dossier}`]);
-  assert.deepEqual(await link('pm okf link pieces/a.md amends pieces/b.md --citation "Texte fictif."'), [`okf verify --dossier ${dossier}`]);
-  assert.deepEqual(await link('pm okf verify'), []);
+  const call = (tool_name, tool_input) => { const pm = fakePm('ERROR  positions/a.md: missing required field: type\n3 file(s), 1 error(s), 0 lint(s)'); return featureReport({ tool_name, cwd: dossier, tool_input }, { run: pm.run }).then(() => pm.calls.map((entry) => entry.args)); };
+  assert.deepEqual(await call('Write', { file_path: '.piecemaker/okf/positions/a.md' }), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await call('Bash', { command: 'pm okf verify' }), []);
+  assert.deepEqual(await call('Bash', { command: 'pm okf ontologie' }), []);
+  const erreur = new RegExp(JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'herisson.json'), 'utf8')).features.find((feature) => feature.nom === 'okf').erreur);
+  assert.deepEqual(['3 file(s), 1 error(s), 0 lint(s)', '3 file(s), 0 error(s), 2 lint(s)', '3 file(s), 0 error(s), 0 lint(s)'].map((output) => erreur.test(output)), [true, true, false]);
 });
 
 test('un appel MCP Feature run déclenche le même contrôle que la commande pm', async (t) => {
@@ -173,14 +177,12 @@ test('un appel MCP Feature run déclenche le même contrôle que la commande pm'
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'herisson-'));
   t.after(() => fs.rmSync(dossier, { recursive: true, force: true }));
   fs.mkdirSync(path.join(dossier, '.piecemaker'));
-  const call = (tool_input, tool_name = 'mcp__features__Feature') => { const pm = fakePm('Index OKF : 0 erreur(s).'); return featureReport({ tool_name, cwd: dossier, tool_input }, { run: pm.run }).then(() => pm.calls.map((entry) => entry.args)); };
-  const link = { action: 'run', name: 'index', command: 'link', args: { source: 'pieces/a.md', relation: 'amends', target: 'pieces/b.md', citation: 'Texte fictif.' } };
-  assert.deepEqual(await call(link), [`okf verify --dossier ${dossier}`]);
-  assert.deepEqual(await call({ ...link, action: 'read' }), []);
+  const call = (tool_input, tool_name = 'mcp__features__Feature') => { const pm = fakePm('Revue : 0 erreur(s).'); return featureReport({ tool_name, cwd: dossier, tool_input }, { run: pm.run }).then(() => pm.calls.map((entry) => entry.args)); };
+  const prepare = { action: 'run', name: 'tabular_review', command: 'prepare_review' };
+  assert.deepEqual(await call(prepare), [`tabular_review verifier --dossier ${dossier}`]);
+  assert.deepEqual(await call({ ...prepare, action: 'read' }), []);
   assert.deepEqual(await call({ action: 'run', name: 'index', command: 'verify_index' }), []);
-  assert.deepEqual(await call(link, 'mcp__autre__Feature'), []);
-  assert.deepEqual(await call({ writes: [{ action: 'link', ...link.args }, { action: 'mark_examined', source: 'pieces/a.md', reason: 'Aucun lien' }] }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
-  assert.deepEqual(await call({ writes: [{ action: 'mark_examined', source: 'pieces/a.md', reason: 'Aucun lien' }] }, 'mcp__features__OkfWrite'), [`okf verify --dossier ${dossier}`]);
+  assert.deepEqual(await call(prepare, 'mcp__autre__Feature'), []);
 });
 
 test('une commande pm tabular_review preparer ou lancer vérifie le brouillon', async () => {
@@ -282,33 +284,37 @@ test('la garde refuse d’écrire les étapes, la protection et une proposition 
   assert.equal(await reason('Bash', { command: 'cat .piecemaker/etapes.json' }), null);
 });
 
-test('Roadmap.json et About.md du brain se vérifient dans leur dossier, et l’agent ne touche ni aux étapes ni à la synthèse', async () => {
+test('les fichiers goals/<goal>/ du brain se vérifient dans leur dossier, et l’agent ne touche ni aux actes ni au Timeline.json du dossier', async () => {
   const fs = require('node:fs');
   const base = fs.realpathSync(fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'herisson-brain-')));
   const home = path.join(base, 'home');
   const brain = path.join(base, 'brain');
   const dossier = path.join(base, 'Dossier Dupont');
+  const goal = path.join(brain, 'projects', 'Dossier Dupont', 'goals', 'appel');
   fs.mkdirSync(path.join(brain, '.piecemaker'), { recursive: true });
-  fs.mkdirSync(path.join(brain, 'projects', 'Dossier Dupont'), { recursive: true });
+  fs.mkdirSync(goal, { recursive: true });
   fs.mkdirSync(home, { recursive: true });
   fs.writeFileSync(path.join(home, 'brain.json'), JSON.stringify({ path: brain }));
   fs.writeFileSync(path.join(brain, '.piecemaker', 'dossiers.json'), JSON.stringify({ [dossier]: 'Dossier Dupont' }));
-  const roadmap = path.join(brain, 'projects', 'Dossier Dupont', 'Roadmap.json');
-  fs.writeFileSync(roadmap, JSON.stringify({ synthese: { okf: { etat: 'valide' } }, etapes: { mappingValide: '2026-01-01' } }, null, 2));
+  const timeline = path.join(goal, 'Timeline.json');
+  fs.writeFileSync(timeline, JSON.stringify({ actes: { appel: { etape: 'redaction' } } }, null, 2));
   const previous = process.env.PIECEMAKER_HOME;
   process.env.PIECEMAKER_HOME = home;
   try {
-    const { featureOf, formatErrors } = await loadFeatures();
-    assert.deepEqual([featureOf(roadmap).feature.nom, featureOf(roadmap).root], ['roadmap', dossier]);
-    assert.equal(featureOf(path.join(brain, 'projects', 'Dossier Dupont', 'About.md')).feature.nom, 'about');
+    const { featureOf, formatErrors, verifierArgs } = await loadFeatures();
+    assert.deepEqual([featureOf(timeline).feature.nom, featureOf(timeline).root], ['timeline', dossier]);
+    assert.deepEqual(verifierArgs(featureOf(timeline)), ['suivi_dossiers', 'verifier', '--suivi', 'appel-suivi.json']);
+    assert.equal(featureOf(path.join(goal, 'Memory.md')).feature.nom, 'goal');
+    assert.match(featureOf(path.join(brain, 'projects', 'Dossier Dupont', 'Timeline.json')).feature.motif, /goals\/<goal>\/Timeline\.json/);
+    assert.equal(featureOf(path.join(goal, 'Archive.md')), null);
     assert.equal(featureOf(path.join(brain, 'AGENTS.md')), null);
-    const write = (value) => formatErrors('Write', { file_path: roadmap, content: JSON.stringify(value, null, 2) }, dossier);
-    const kept = { synthese: { okf: { etat: 'valide' } }, etapes: { mappingValide: '2026-01-01' } };
-    assert.equal(await write({ ...kept, suivis: { 'appel-suivi.json': { echeances: {} } } }), null);
-    assert.match(await write({ ...kept, etapes: {} }), /"etapes" cannot be changed by the agent/);
-    assert.match(await write({ ...kept, synthese: { okf: { etat: 'à exécuter' } } }), /synthese\.mjs/);
+    const write = (value) => formatErrors('Write', { file_path: timeline, content: JSON.stringify(value, null, 2) }, dossier);
+    const kept = { actes: { appel: { etape: 'redaction' } } };
+    assert.equal(await write({ ...kept, echeances: {} }), null);
+    assert.equal(await write({ actes: { ...kept.actes, 'conclusions': {} }, echeances: {} }), null);
+    assert.match(await write({ actes: { appel: { etape: 'clos' } } }), /act "appel" cannot be changed by the agent/);
     assert.match(await write({ ...kept, notes: 'x' }), /unknown key "notes"/);
-    assert.match(await write({ ...kept, suivis: { 'appel.json': {}, 'bail-suivi.json': { faits: {} } } }), /appel\.json[\s\S]*unknown key "faits"/);
+    assert.match(await formatErrors('Write', { file_path: path.join(goal, 'Goal.md'), content: 'x\n'.repeat(201) }, dossier), /the limit is 200[\s\S]*Archive\.md/);
   } finally {
     if (previous === undefined) delete process.env.PIECEMAKER_HOME; else process.env.PIECEMAKER_HOME = previous;
     fs.rmSync(base, { recursive: true, force: true });

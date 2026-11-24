@@ -658,6 +658,7 @@ export class KnowledgeStore {
     const masked = toNodeId.startsWith('entity:') ? toNodeId.slice('entity:'.length) : '';
     const data = parseJson<JsonData>(source.data_json, {});
     if (masked) data.code = masked;
+    if (masked && fromNodeId.startsWith('entity:')) data.codes_retires = [...new Set([...(Array.isArray(data.codes_retires) ? data.codes_retires : []), fromNodeId.slice('entity:'.length)])];
     this.database.prepare('INSERT INTO piecemaker_nodes(project_id,id,kind,label,search_text,aliases_json,data_json,doc_date,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,id) DO UPDATE SET kind=excluded.kind,label=excluded.label,search_text=excluded.search_text,aliases_json=excluded.aliases_json,data_json=excluded.data_json,doc_date=excluded.doc_date,updated_at=excluded.updated_at')
       .run(projectId, toNodeId, source.kind, source.label, searchable([source.label, ...parseJson<string[]>(source.aliases_json, [])]), source.aliases_json, JSON.stringify(data), source.doc_date, source.created_at, timestamp);
     const mappings = this.database.prepare('SELECT * FROM piecemaker_mappings WHERE project_id=? AND node_id=?').all(projectId, fromNodeId) as MappingRow[];

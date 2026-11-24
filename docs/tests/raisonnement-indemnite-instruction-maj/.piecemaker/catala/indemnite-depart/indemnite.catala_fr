@@ -356,38 +356,38 @@ champ d'application AnalyseIndemnité:
 déclaration champ d'application DossierEnÉtat:
   résultat cas champ d'application AnalyseIndemnité
 champ d'application DossierEnÉtat:
-  ## okf:/_premises/societe-cotee.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Les actions ordinaires de Société Exemple SA sont admises, depuis le 15 juin 2015 et sans interruption pendant les exercices 2022 et 2023, aux négociations sur le marché réglementé Euronext Paris. »
   règle cas.société_cotée rempli
-  ## okf:/_premises/mandat-de-directeur-general.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Jean Dupont exerce uniquement un mandat de directeur général, sans contrat de travail avec la société. »
   règle cas.mandat_de_directeur_général rempli
-  ## okf:/_premises/engagement-decide.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ. »
   règle cas.engagement_décidé rempli
-  ## okf:/_premises/politique-approuvee.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « approuve la politique de rémunération applicable à Jean Dupont en qualité de directeur général pour l'exercice 2022. »
   règle cas.politique_approuvée rempli
-  ## okf:/_premises/revocation-decidee.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « a décidé de mettre fin à vos fonctions de directeur général »
   règle cas.révocation_décidée rempli
-  ## okf:/_premises/indemnite-impayee.md
+  ## [06_ag_2023_refus_approbation_ex_post](../../../pieces/06_ag_2023_refus_approbation_ex_post.md) « Le rapport présenté à l'assemblée précise que l'indemnité n'a pas été versée. »
   règle cas.indemnité_impayée rempli
   définition cas.non_participation_au_conseil égal à Inconnu
   définition cas.absence_effet_dissuasif égal à Inconnu
   définition cas.vote_ex_post_initial égal à Inconnu
-  ## okf:/_premises/marge-constatee.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « la moyenne de la marge opérationnelle des exercices 2020 et 2021 s'établit à 8,6 % »
   définition cas.marge_constatée égal à 8,6
-  ## okf:/_premises/seuil-de-performance.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « doit être au moins égale à 8 %. »
   définition cas.seuil_de_performance égal à 8,0
-  ## okf:/_premises/remuneration-mensuelle.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts. »
   définition cas.rémunération_mensuelle égal à 20 000 €
-  ## okf:/_premises/mois-contractuels.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts. »
   définition cas.mois_contractuels égal à 24,0
-  ## okf:/_premises/montant-stipule.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Son montant est fixé à 480 000 euros bruts. »
   définition cas.montant_stipulé égal à 480 000 €
-  ## okf:/_premises/montant-reclame.md
+  ## [04_demande_paiement_dirigeant](../../../pieces/04_demande_paiement_dirigeant.md) « Je vous demande le paiement de l'indemnité de départ de 480 000 euros bruts »
   définition cas.montant_réclamé égal à 480 000 €
-  ## okf:/_premises/capital-social.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Capital social : 40 000 000 euros, divisé en 4 000 000 actions ordinaires. »
   définition cas.capital_social égal à 40 000 000 €
-  ## okf:/_premises/date-engagement.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ. »
   définition cas.date_engagement égal à |2022-03-15|
-  ## okf:/_premises/date-cessation.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « avec effet le 19 décembre 2022 à l'issue de la réunion. »
   définition cas.date_cessation égal à |2022-12-19|
   définition cas.lecture_du_vote égal à NonTranchée
   assertion cas.paiement_de_l_indemnité = Inconnu
@@ -403,38 +403,38 @@ champ d'application DossierEnÉtat:
 déclaration champ d'application ThèseContractuelleSansPrémisses:
   résultat cas champ d'application AnalyseIndemnité
 champ d'application ThèseContractuelleSansPrémisses:
-  ## okf:/_premises/societe-cotee.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Les actions ordinaires de Société Exemple SA sont admises, depuis le 15 juin 2015 et sans interruption pendant les exercices 2022 et 2023, aux négociations sur le marché réglementé Euronext Paris. »
   règle cas.société_cotée rempli
-  ## okf:/_premises/mandat-de-directeur-general.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Jean Dupont exerce uniquement un mandat de directeur général, sans contrat de travail avec la société. »
   règle cas.mandat_de_directeur_général rempli
-  ## okf:/_premises/engagement-decide.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ. »
   règle cas.engagement_décidé rempli
-  ## okf:/_premises/politique-approuvee.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « approuve la politique de rémunération applicable à Jean Dupont en qualité de directeur général pour l'exercice 2022. »
   règle cas.politique_approuvée rempli
-  ## okf:/_premises/revocation-decidee.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « a décidé de mettre fin à vos fonctions de directeur général »
   règle cas.révocation_décidée rempli
-  ## okf:/_premises/indemnite-impayee.md
+  ## [06_ag_2023_refus_approbation_ex_post](../../../pieces/06_ag_2023_refus_approbation_ex_post.md) « Le rapport présenté à l'assemblée précise que l'indemnité n'a pas été versée. »
   règle cas.indemnité_impayée rempli
   définition cas.non_participation_au_conseil égal à Inconnu
   définition cas.absence_effet_dissuasif égal à Inconnu
   définition cas.vote_ex_post_initial égal à Inconnu
-  ## okf:/_premises/marge-constatee.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « la moyenne de la marge opérationnelle des exercices 2020 et 2021 s'établit à 8,6 % »
   définition cas.marge_constatée égal à 8,6
-  ## okf:/_premises/seuil-de-performance.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « doit être au moins égale à 8 %. »
   définition cas.seuil_de_performance égal à 8,0
-  ## okf:/_premises/remuneration-mensuelle.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts. »
   définition cas.rémunération_mensuelle égal à 20 000 €
-  ## okf:/_premises/mois-contractuels.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts. »
   définition cas.mois_contractuels égal à 24,0
-  ## okf:/_premises/montant-stipule.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Son montant est fixé à 480 000 euros bruts. »
   définition cas.montant_stipulé égal à 480 000 €
-  ## okf:/_premises/montant-reclame.md
+  ## [04_demande_paiement_dirigeant](../../../pieces/04_demande_paiement_dirigeant.md) « Je vous demande le paiement de l'indemnité de départ de 480 000 euros bruts »
   définition cas.montant_réclamé égal à 480 000 €
-  ## okf:/_premises/capital-social.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Capital social : 40 000 000 euros, divisé en 4 000 000 actions ordinaires. »
   définition cas.capital_social égal à 40 000 000 €
-  ## okf:/_premises/date-engagement.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ. »
   définition cas.date_engagement égal à |2022-03-15|
-  ## okf:/_premises/date-cessation.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « avec effet le 19 décembre 2022 à l'issue de la réunion. »
   définition cas.date_cessation égal à |2022-12-19|
   définition cas.lecture_du_vote égal à ThèseContractuelle
   assertion cas.paiement_de_l_indemnité = Inconnu
@@ -450,40 +450,40 @@ champ d'application ThèseContractuelleSansPrémisses:
 déclaration champ d'application VoteAprèsDépartRefusé:
   résultat cas champ d'application AnalyseIndemnité
 champ d'application VoteAprèsDépartRefusé:
-  ## okf:/_premises/societe-cotee.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Les actions ordinaires de Société Exemple SA sont admises, depuis le 15 juin 2015 et sans interruption pendant les exercices 2022 et 2023, aux négociations sur le marché réglementé Euronext Paris. »
   règle cas.société_cotée rempli
-  ## okf:/_premises/mandat-de-directeur-general.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Jean Dupont exerce uniquement un mandat de directeur général, sans contrat de travail avec la société. »
   règle cas.mandat_de_directeur_général rempli
-  ## okf:/_premises/engagement-decide.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ. »
   règle cas.engagement_décidé rempli
-  ## okf:/_premises/politique-approuvee.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « approuve la politique de rémunération applicable à Jean Dupont en qualité de directeur général pour l'exercice 2022. »
   règle cas.politique_approuvée rempli
-  ## okf:/_premises/revocation-decidee.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « a décidé de mettre fin à vos fonctions de directeur général »
   règle cas.révocation_décidée rempli
-  ## okf:/_premises/vote-apres-depart-refuse.md
+  ## [06_ag_2023_refus_approbation_ex_post](../../../pieces/06_ag_2023_refus_approbation_ex_post.md) « La quinzième résolution n'est pas adoptée. »
   règle cas.vote_après_départ_refusé rempli
-  ## okf:/_premises/indemnite-impayee.md
+  ## [06_ag_2023_refus_approbation_ex_post](../../../pieces/06_ag_2023_refus_approbation_ex_post.md) « Le rapport présenté à l'assemblée précise que l'indemnité n'a pas été versée. »
   règle cas.indemnité_impayée rempli
   définition cas.non_participation_au_conseil égal à Inconnu
   définition cas.absence_effet_dissuasif égal à Inconnu
   définition cas.vote_ex_post_initial égal à Inconnu
-  ## okf:/_premises/marge-constatee.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « la moyenne de la marge opérationnelle des exercices 2020 et 2021 s'établit à 8,6 % »
   définition cas.marge_constatée égal à 8,6
-  ## okf:/_premises/seuil-de-performance.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « doit être au moins égale à 8 %. »
   définition cas.seuil_de_performance égal à 8,0
-  ## okf:/_premises/remuneration-mensuelle.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts. »
   définition cas.rémunération_mensuelle égal à 20 000 €
-  ## okf:/_premises/mois-contractuels.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Elle correspond à vingt-quatre mois de rémunération fixe mensuelle de 20 000 euros bruts. »
   définition cas.mois_contractuels égal à 24,0
-  ## okf:/_premises/montant-stipule.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Son montant est fixé à 480 000 euros bruts. »
   définition cas.montant_stipulé égal à 480 000 €
-  ## okf:/_premises/montant-reclame.md
+  ## [04_demande_paiement_dirigeant](../../../pieces/04_demande_paiement_dirigeant.md) « Je vous demande le paiement de l'indemnité de départ de 480 000 euros bruts »
   définition cas.montant_réclamé égal à 480 000 €
-  ## okf:/_premises/capital-social.md
+  ## [01_extrait_kbis_et_identification_emetteur](../../../pieces/01_extrait_kbis_et_identification_emetteur.md) « Capital social : 40 000 000 euros, divisé en 4 000 000 actions ordinaires. »
   définition cas.capital_social égal à 40 000 000 €
-  ## okf:/_premises/date-engagement.md
+  ## [02_ag_2022_approbation_indemnite](../../../pieces/02_ag_2022_approbation_indemnite.md) « Le conseil d'administration a décidé le 15 mars 2022 d'accorder à Jean Dupont un engagement d'indemnité de départ. »
   définition cas.date_engagement égal à |2022-03-15|
-  ## okf:/_premises/date-cessation.md
+  ## [03_lettre_revocation_decembre_2022](../../../pieces/03_lettre_revocation_decembre_2022.md) « avec effet le 19 décembre 2022 à l'issue de la réunion. »
   définition cas.date_cessation égal à |2022-12-19|
   définition cas.lecture_du_vote égal à VoteAprèsDépart
   assertion cas.paiement_de_l_indemnité = Réfuté
