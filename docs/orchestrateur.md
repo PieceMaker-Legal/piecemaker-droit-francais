@@ -37,6 +37,7 @@ Un agent placé au-dessus des dossiers, sur le modèle exact de Claude Projects 
 - **Un fil, un dossier** : `start_thread` exige `folder` (pris dans `list_devices`, qui liste les dossiers avec `allowed`). La session du fil est créée dans ce dossier, donc rangée dans son panneau à côté des sessions de l'avocat. Le premier message du fil fixe son dossier et lui interdit les autres. Le blocage technique est le hook `cloisonnement` (voir ci-dessous), pour Claude, Codex, Mistral et Vibe ; Claude reçoit en plus des règles `Read(//<autre dossier>/**)` et `Edit(//<autre dossier>/**)` dans `disallowedTools`. Les livrables sont relatifs au dossier du fil.
 - **Cloisonnement** (`vendor/piecemaker-plugin/scripts/cloisonnement.mjs`, PreToolUse) : toute session dont le répertoire de travail est dans un dossier (publié dans `~/.piecemaker/projects.json`) se voit refuser lecture, écriture, recherche et commande shell visant un autre dossier. Seule exception : le dossier partagé de l'agent central (`.piecemaker/orchestrateur/fichiers` du dossier marqué `.piecemaker/agent-central`). L'agent central lui-même ne lit aucun dossier : il passe par un fil. Branché dans `hooks.json` (Claude), `codex-skills.mjs` (Codex, `Bash` et `apply_patch`), `vibe-hooks.mjs` (Vibe) et `mistral-sdk/tools.ts` (chat Mistral). Limite : pour le shell, seuls les chemins écrits dans la commande sont vus ; un chemin construit à l'exécution (variable, sous-commande) échappe au hook.
 - **Wakes** : un événement de fil porte `folder`. Le préambule ajoute `CENTRAL_RULES` (`prompt.ts`) et la liste des dossiers choisis.
+- **Démarrage** : PieceMaker s'ouvre sur l'agent central quand l'adresse ne vise ni session ni dossier (`useOpenCentralAtStartup`, une fois par chargement).
 - **Routes** : `GET /central` → `{ project, projectId, sessionId }` ; `POST /central/session` → crée la session si besoin et renvoie aussi `provider`. Les autres routes acceptent `project` = dossier propre de l'agent central.
 - **Volet** : `state.central` et `state.dossiers` ; l'onglet Fils regroupe les fils par dossier.
 
@@ -52,6 +53,10 @@ L’agent central s’ouvre dans le brain (`server/piecemaker/brain.ts`). L’av
 - les skills `grill-me`, `connect-tool`, `skill-manager` et `setup-brain` (`vendor/brain/skills`, adaptés d’ai-maxxing-skills, MIT) dans `.agents/skills`, lus par Claude via le lien `.claude/skills`. Ils ne sont installés nulle part ailleurs ; un skill modifié par l’utilisateur n’est jamais écrasé.
 - Limites : 200 lignes pour `AGENTS.md`, `About.md`, `Goal.md` et `Memory.md` ; `Timeline.json` est contrôlée par le Hérisson, pas par un nombre de lignes. Le hook `cloisonnement` refuse un `Write`, `Edit` ou `MultiEdit` qui les dépasserait (limite : un `apply_patch` Codex ou une commande shell n’est pas mesuré).
 - Mémoire native : `autoMemoryEnabled: false` dans `.claude/settings.local.json` du brain et de chaque dossier suivi. Codex n’est pas encore couvert.
+
+### Library
+
+Réservée à l’agent central : onglet Library de son volet, sur le clone local de Legal-OKF complété par les bundles générés `clients/` et `projects/`. Voir [library.md](library.md).
 
 ### Dream
 

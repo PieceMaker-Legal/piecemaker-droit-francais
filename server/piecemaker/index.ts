@@ -20,6 +20,7 @@ import { findApplicationRoot, getApplicationDataRoot, getModuleDirectory, readOb
 import { createAgentInstructionsRouter, startAgentInstructionsMigration } from './agent-instructions.js';
 import { reconcileClaudeHooks, reconcileCodexHooks, reconcileVibeHooks } from './claude-hooks.js';
 import { createBrain } from './brain.js';
+import { createLegalOkfRouter } from './legal-okf/index.js';
 import { installCustomFiles } from './custom-files.js';
 import { startRequiredAnonymizer } from './anonymizer/lifecycle.js';
 import { installSessionProxyRuntime } from './anonymizer/session-runtime.js';
@@ -334,6 +335,7 @@ export function createPieceMakerRouter(options: { getRuntimeStatus?: () => Piece
   router.use(timesheet);
   router.use('/catala', createCatalaRouter(catalaScriptPath(applicationRoot), {}, catalaCitations));
   router.use('/orchestrateur', createOrchestratorRouter(orchestrator, projectsDb, brain));
+  router.use('/legal-okf', express.json({ limit: '2mb' }), createLegalOkfRouter({ home: piecemakerHome(), brainRoot: brain.root }));
   router.use('/etapes', createEtapesRouter(etapes, taches));
   router.use('/suivi/board', createBoardRouter(board));
   router.use('/suivi', createSuiviRouter(suivi));
