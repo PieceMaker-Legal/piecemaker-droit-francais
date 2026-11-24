@@ -9,6 +9,7 @@ import type { KnowledgeSnapshot } from '../../../plugins/piecemaker-dossier/src/
 import { REVIEW_FOLDER } from '../../../plugins/piecemaker-tabular-review/src/shared.js';
 
 import { DOCUMENT, bundleRoot, linksOf, parseConcept, pieceOf, readBundle, readTypes, resourceError, resourceOf, text, typeOf } from './bundle.js';
+import { writeDocuments } from './documents.js';
 import { PERSONS, writePersons } from './persons.js';
 import { readArborescence } from './sealed.js';
 import { graphTypesOf, ontologyFile, readOntology, saveOntology } from './ontology.js';
@@ -60,9 +61,15 @@ export function createOkfBackend(options: OkfOptions) {
     return fs.realpathSync(project.project_path);
   };
 
+  /** persons/ et documents/ sont régénérés à chaque lecture : la base et l'Index du dossier font foi. */
+  const regenerate = (projectId: string, projectPath: string, snapshot: KnowledgeSnapshot): void => {
+    writePersons(projectPath, snapshot);
+    writeDocuments(projectPath, options.indexStore ? loadIndex(options.indexStore, projectId, projectPath)?.review : null, graphTypesOf(projectPath));
+  };
+
   const verify = (projectId: string): Promise<OkfReport> => {
     const projectPath = projectPathOf(projectId);
-    writePersons(projectPath, options.snapshot(projectId));
+    regenerate(projectId, projectPath, options.snapshot(projectId));
     const root = bundleRoot(projectPath);
     if (!fs.existsSync(path.join(root, 'index.md'))) return Promise.resolve({ erreurs: [{ fiche: 'index.md', erreur: 'bundle OKF du dossier absent : créez .piecemaker/okf/index.md (skill okf)' }], lints: [], resume: '' });
     return new Promise((resolve, reject) => {
@@ -106,7 +113,7 @@ export function createOkfBackend(options: OkfOptions) {
     const projectPath = projectPathOf(projectId);
     const types = readTypes(projectPath);
     const snapshot = options.snapshot(projectId);
-    writePersons(projectPath, snapshot);
+    regenerate(projectId, projectPath, snapshot);
     const nodes = new Map(snapshot.nodes.filter((node) => node.kind === 'document' && text(node.data.path)).map((node) => [resourceOf(projectPath, text(node.data.path)), node]));
     const concepts = readBundle(projectPath).filter((concept) => !concept.error);
     const kindOf = new Map(concepts.map((concept) => [concept.id, text(concept.frontmatter.type)]));
@@ -120,7 +127,7 @@ export function createOkfBackend(options: OkfOptions) {
         const kind = text(concept.frontmatter.type);
         const resource = pieceOf(concept.frontmatter.resource);
         const document = kind === DOCUMENT;
-        const nature = text(nodes.get(resource)?.data.nature);
+        const nature = text(nodes.get(resource)?.data.nature) || (document ? text(concept.frontmatter.nature) : '');
         return {
           id: concept.id,
           type: document ? typeOf(resource, types) : kind,

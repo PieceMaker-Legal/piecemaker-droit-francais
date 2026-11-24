@@ -4,7 +4,7 @@ Le bundle OKF du dossier suit Context-OKF : Open Knowledge Format 0.3 sur le soc
 
 ## Autorité
 
-Le bundle Markdown `.piecemaker/okf/` fait foi. L'agent l'écrit lui-même, avec Write ou Edit (Codex : apply_patch), en suivant le skill `okf` (`server/piecemaker/vendor/skills/okf/`). Le serveur ne régénère aucun concept : il lit le bundle pour l'onglet Index.
+Le bundle Markdown `.piecemaker/okf/` fait foi. L'agent l'écrit lui-même, avec Write ou Edit (Codex : apply_patch), en suivant le skill `okf` (`server/piecemaker/vendor/skills/okf/`). Le serveur ne génère que `documents/` (depuis l'Index) et `persons/` (depuis la base) ; il lit le bundle pour l'onglet Index.
 
 L'Index du dossier (la revue tabulaire de l'Index) reste dans SQLite (`server/piecemaker/okf/index-store.ts`) ; son `.json` dans `Tabular Review/` est une vue réécrite après chaque écriture.
 
@@ -12,7 +12,7 @@ L'Index du dossier (la revue tabulaire de l'Index) reste dans SQLite (`server/pi
 
 | Dossier | `type` | Contenu |
 | --- | --- | --- |
-| `documents/` | `Document` | une pièce analysée |
+| `documents/` | `Document` | une pièce de l'Index, générée |
 | `actes/` | `Acte` | signature, modification, notification |
 | `contenus/` | `Contenu` | clause, obligation établie par l'acte |
 | `roles/` | `Rôle` | partie et rôle conféré (ODP-002) |
@@ -51,6 +51,10 @@ Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA2
 - Le hook `guard-ontologie` refuse à l'agent toute écriture directe dans `~/.piecemaker/ontologie.json`, et tout accès à `ontologie.cle`. Il est branché sous Claude (`Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob`), sous Codex (`Bash|apply_patch`, patch lu dans `tool_input.command`) et dans le chat Mistral (`mistral-sdk/tools.ts`, avec `protect-originals`).
 - Une commande shell qui nomme l'un de ces fichiers n'est admise que si chacun de ses segments est une lecture (`cat`, `grep`, `jq` sans `-i`, `find` sans `-delete` ni `-exec`, `pm`…), sans redirection vers un fichier ni substitution de commande.
 
+## Documents (`documents/`)
+
+`documents.ts` génère `okf/documents/` depuis l'Index du dossier (SQLite, `loadIndex`) à chaque `read` et `verify`, sans appel au modèle. Une fiche par ligne dont la pièce existe dans un dossier d'un type du graphe (par défaut `Pièces`, contrôle `resourceError`) : `type: Document`, `title` (titre de l'Index, sinon libellé de la ligne), `description` (colonne Résumé, Synthèse, Objet ou Événement, sinon nature et date), `resource`, `date` (colonne Date, en `AAAA-MM-JJ`), `nature` (colonne Nature, Type de pièce ou Type de document), `generated: {by: index, at}` (fin d'analyse de la ligne). Le corps liste les colonnes remplies. Le nom suit le chemin de la pièce sans extension (`Pièces/Contrats/Contrat.pdf` → `pieces-contrats-contrat.md`, empreinte ajoutée au-delà de 80 caractères ou en cas de collision). `documents/index.md` les liste par date ; le `index.md` racine reçoit un lien vers lui s'il en manque. Une fiche générée dont la pièce a quitté l'Index disparaît ; une fiche Document écrite à la main pour une pièce de l'Index est remplacée, et les liens du bundle qui la visaient sont réécrits. Sans Index ou sans `index.md` racine, rien n'est écrit. L'avocat corrige l'Index dans l'onglet Index, l'agent par `pm dossier index`.
+
 ## Personnes et organisations (`persons/`)
 
 `persons.ts` génère `okf/persons/` depuis la base du dossier à chaque `read` et `verify` : une fiche par personne (`cco: Person`) ou organisation (`cco: Organization`), nommée d'après son code, avec désignation, liens, citations et pièces qui la mentionnent. `persons/index.md` classe les fiches par auteur (`gliner` À trier, `agent` À vérifier, `human` Validé) et liste les éléments non rattachés. L'agent complète la base par l'outil `sql`, jamais les fichiers ; un Rôle lie sa fiche `/persons/<code>.md` et en prend le côté.
@@ -74,6 +78,8 @@ Un événement du suivi renvoie à un concept daté par son titre : `evenements.
 | Rôle | Fichier |
 | --- | --- |
 | Lecture du bundle | `server/piecemaker/okf/bundle.ts` |
+| Documents générés depuis l'Index | `server/piecemaker/okf/documents.ts` |
+| Fiches `persons/` | `server/piecemaker/okf/persons.ts` |
 | Routes, validateur, `premiseDate` | `server/piecemaker/okf/index.ts` |
 | Skill, validateur, contexte LOF | `server/piecemaker/vendor/skills/okf/` |
 | Index du dossier (SQLite, vue `.json`) | `server/piecemaker/okf/index-store.ts` |
