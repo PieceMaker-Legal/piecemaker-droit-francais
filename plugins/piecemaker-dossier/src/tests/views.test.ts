@@ -23,7 +23,7 @@ const snapshot: KnowledgeSnapshot = {
   citations: [],
 };
 
-describe('Index du dossier', () => {
+describe('Case index', () => {
   it('est une seule vue : la revue de l’Index montée dans l’onglet, sans tableau à part ni fenêtre d’analyse', () => {
     const html = chronologyView();
     expect(html.match(/data-index-analysis/g)).toHaveLength(1);

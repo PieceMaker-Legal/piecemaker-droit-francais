@@ -46,7 +46,7 @@ function takeShowRequest(): ShowRequest | null {
   return { project: text(request.project), review: text(request.review), draft: text(request.draft) };
 }
 
-/** `index` : l'Index du dossier affiché par l'onglet Dossier. Sans `onBack`, il y est la vue même de l'onglet (pas de retour). */
+/** `index` : le Case index affiché par l'onglet Dossier. Sans `onBack`, il y est la vue même de l'onglet (pas de retour). */
 export type IndexMount = { project: string; onBack?(): void; draft?: string; rowColumn?: RowColumn; chronology?: Chronology };
 
 export function mount(container: HTMLElement, api: PluginApi, index?: IndexMount): void {
@@ -279,7 +279,7 @@ export function mount(container: HTMLElement, api: PluginApi, index?: IndexMount
       const { drafts } = await app.rpc<{ drafts: Draft[] }>('POST', '/drafts/list', { projects: [project] });
       const draft = drafts.find((entry) => entry.id === id);
       if (draft) app.openDraft(draft);
-      else if (index) toast(root, 'Le projet d’Index est introuvable.', 'error');
+      else if (index) toast(root, 'Le projet de Case index est introuvable.', 'error');
       else showTab('history');
     } catch (error) {
       toast(root, errorMessage(error), 'error');

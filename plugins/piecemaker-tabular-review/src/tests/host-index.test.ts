@@ -12,7 +12,7 @@ const directories: string[] = [];
 
 function review(overrides: Partial<Review> = {}): Review {
   return {
-    version: 1, title: 'Index', templateName: 'Index', category: 'documents', projectPath: '', createdAt: '2026-11-18T10:00:00.000Z', updatedAt: '2026-11-18T10:00:00.000Z',
+    version: 1, title: 'Case index', templateName: 'Case index', category: 'documents', projectPath: '', createdAt: '2026-11-18T10:00:00.000Z', updatedAt: '2026-11-18T10:00:00.000Z',
     provider: 'claude', model: 'm', concurrency: 1,
     columns: [{ index: 0, name: 'Date', prompt: 'Date du document', format: 'date' }],
     rows: [{ id: 'r1', label: 'Contrat', documents: [{ source: 'Contrat.md', copy: 'docs/Contrat.md', chars: 1 }], status: 'done' }],
@@ -57,7 +57,7 @@ function project(): string {
   return created;
 }
 
-describe('Index du dossier tenu par l’hôte (SQLite)', () => {
+describe('Case index tenu par l’hôte (SQLite)', () => {
   it('crée l’Index dans SQLite et le relit de là, pas de sa vue .json', async () => {
     const dossier = project();
     const { state, calls } = host(dossier);
@@ -65,8 +65,8 @@ describe('Index du dossier tenu par l’hôte (SQLite)', () => {
     expect(state.fichier).toBe(file);
     expect(calls).toEqual([{ method: 'PUT', revision: undefined }]);
     fs.writeFileSync(path.join(dossier, 'Tabular Review', file), JSON.stringify(review({ title: 'Vue modifiée à la main' })));
-    expect((await readReview(dossier, file)).title).toBe('Index');
-    expect((await listReviews([dossier], () => false)).map((entry) => [entry.file, entry.title])).toEqual([[file, 'Index']]);
+    expect((await readReview(dossier, file)).title).toBe('Case index');
+    expect((await listReviews([dossier], () => false)).map((entry) => [entry.file, entry.title])).toEqual([[file, 'Case index']]);
   });
 
   it('écrit chaque modification dans SQLite avec la révision lue, et relit après un conflit', async () => {

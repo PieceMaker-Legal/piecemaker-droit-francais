@@ -66,7 +66,7 @@ const preparation = (carte: Carte): Colonne => {
       : !ok('mapping') ? bouton('data-mapping', 'Valider le mapping', true)
         : !ok('index') ? bouton('data-launch="index"', 'Lancer l’index', true) : '';
   return {
-    etat: vide(`Anonymisation ${pieces && ok('mapping') ? 'faite' : 'à faire'} · Index ${ok('index') ? 'fait' : 'à faire'}`),
+    etat: vide(`Anonymisation ${pieces && ok('mapping') ? 'faite' : 'à faire'} · Case index ${ok('index') ? 'fait' : 'à faire'}`),
     principal,
     secondaires: [bouton('data-volet="plugin:piecemaker-dossier"', 'Ouvrir les pièces'), ok('index') ? bouton('data-volet="plugin:piecemaker-tabular-review"', 'Ouvrir l’index') : '', carte.raisonnement ? '' : bouton('data-launch="raisonnement"', 'Démarrer le raisonnement')],
   };
@@ -237,7 +237,7 @@ export function createTableau(root: HTMLElement, currentProject: () => string | 
   const sujet = (carte: Carte) => `<p>${escape(carte.dossier)}${carte.raisonnement ? ` — ${escape(carte.raisonnement.titre)}` : ''}</p>`;
 
   const ajouterTache = async (carte: Carte, type: string, extra: { document?: number } = {}) => {
-    const titres: Record<string, string> = { index: 'Lancer l’index du dossier', conversion: 'Lancer le mapping (conversion et anonymisation)', raisonnement: 'Démarrer le raisonnement', lever: 'Lever manques et erreurs', redaction: 'Lancer la rédaction' };
+    const titres: Record<string, string> = { index: 'Lancer le Case index', conversion: 'Lancer le mapping (conversion et anonymisation)', raisonnement: 'Démarrer le raisonnement', lever: 'Lever manques et erreurs', redaction: 'Lancer la rédaction' };
     const choix = await lancer(root, {
       titre: titres[type] ?? 'Lancer',
       ...(type === 'raisonnement' ? { consignes: 'Objectif(s) du raisonnement', placeholder: OBJECTIFS } : {}),

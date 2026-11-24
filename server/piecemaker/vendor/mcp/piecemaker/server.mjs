@@ -244,7 +244,7 @@ export function createServer({ execFn, sqlFn = runSql, suiviFn = runSuivi, tabul
 
   server.registerTool('afficher', {
     description: 'Affiche à l’avocat, dans un volet de PieceMaker à côté du chat, un fichier du dossier '
-      + '(fichier), la vue générale ou l’index du dossier, ou une tabular review. '
+      + '(fichier), la vue générale ou le Case index, ou une tabular review. '
       + 'Sans cible, liste les volets ouverts. Une cible déjà affichée est un succès et est signalée comme telle.',
     outputSchema: {
       success: z.boolean(),
@@ -300,7 +300,7 @@ export function createServer({ execFn, sqlFn = runSql, suiviFn = runSuivi, tabul
       + 'documents : documents analysables. modeles : liste, ou questions d’un modele. enregistrer_modele : crée, ou modifie modele. '
       + 'preparer : crée ou complète (projet) un projet, que l’avocat vérifie et lance. '
       + 'lancer : seulement sur accord explicite de l’avocat dans le chat. '
-      + 'L’index du dossier a son propre outil, tabular_review_index : les actions sur son fichier ou son projet sont refusées ici, et preparer le renvoie si on lui demande un index, une lecture intégrale, une chronologie ou un tri. '
+      + 'Le Case index a son propre outil, tabular_review_index : les actions sur son fichier ou son projet sont refusées ici, et preparer le renvoie si on lui demande un index, une lecture intégrale, une chronologie ou un tri. '
       + 'lire : colonnes, lignes et réponses de fichier. '
       + 'colonnes : ajoute (sans colonne), modifie ou supprime (colonne, supprimer) les colonnes de fichier. '
       + 'relancer : seulement sur accord explicite de l’avocat ; analyse les nouveaux documents Markdown de fichier.',
@@ -369,13 +369,13 @@ export function createServer({ execFn, sqlFn = runSql, suiviFn = runSuivi, tabul
   });
 
   server.registerTool('tabular_review_index', {
-    description: 'Index du dossier : la tabular review unique qui lit toutes les pièces, une ligne par pièce (date, événement, importance, secret professionnel, classement), pour la chronologie et le tri. '
+    description: 'Case index : la tabular review unique qui lit toutes les pièces, une ligne par pièce (date, événement, importance, secret professionnel, classement), pour la chronologie et le tri. '
       + 'Elle reprend les actions de tabular_review, mais s’affiche toujours dans l’onglet Dossier, jamais dans le volet Tabular Review ; fichier et projet sont déduits ; ne jamais en créer une autre. '
       + 'ouvrir : retrouve et affiche l’index, préparé si besoin. preparer : complète le projet (questions, documents). '
       + 'lancer et relancer : seulement sur accord explicite de l’avocat dans le chat ; relancer analyse les nouveaux documents Markdown. '
       + 'lire : colonnes, lignes et réponses. colonnes : ajoute (sans colonne), modifie ou supprime (colonne, supprimer). '
       + 'classement : ajoute la colonne qui classe chaque document dans l’arborescence du dossier. '
-      + 'arborescence : lit l’arborescence et la proposition en attente ; avec dossiers (et motif), propose une arborescence sans la changer : l’avocat décide dans l’onglet Index › Classement ; aucun fichier n’est déplacé. '
+      + 'arborescence : lit l’arborescence et la proposition en attente ; avec dossiers (et motif), propose une arborescence sans la changer : l’avocat décide dans l’onglet Case index › Classement ; aucun fichier n’est déplacé. '
       + 'lister : id, date, libellé et nature de chaque pièce en base, par date ; ne lit pas les pièces. '
       + 'modifier : change la date (AAAA-MM-JJ, vide pour l’effacer) ou le libellé d’une pièce ; changer le libellé (AAAA-MM-JJ_titre) renomme aussi le fichier.',
     inputSchema: {
@@ -392,7 +392,7 @@ export function createServer({ execFn, sqlFn = runSql, suiviFn = runSuivi, tabul
       modele_ia: z.string().optional(),
     },
     annotations: {
-      title: 'Index du dossier',
+      title: 'Case index',
       readOnlyHint: false,
       destructiveHint: false,
       idempotentHint: false,

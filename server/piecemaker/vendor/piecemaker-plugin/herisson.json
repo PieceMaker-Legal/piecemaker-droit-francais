@@ -5,7 +5,7 @@
       "cible": "^ontologie(\\.proposition)?\\.json$",
       "ecriture": "proposition",
       "skill": "okf",
-      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: the folder tree under the key arborescence), in the Index › Classement tab. The OKF bundle of the case follows Context-OKF on the Legal Ontologies Foundry, fixed: read its six patterns with pm okf ontologie. Read the tree with pm dossier arborescence. To propose a change to the tree, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
+      "motif": "Only the lawyer sets the ontology (~/.piecemaker/ontologie.json, common to all cases: the folder tree under the key arborescence), in the Case index › Classement tab. The OKF bundle of the case follows Context-OKF on the Legal Ontologies Foundry, fixed: read its six patterns with pm okf ontologie. Read the tree with pm dossier arborescence. To propose a change to the tree, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides."
     },
     {
       "nom": "okf",

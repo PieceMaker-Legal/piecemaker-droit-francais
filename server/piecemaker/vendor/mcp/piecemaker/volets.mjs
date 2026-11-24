@@ -44,7 +44,7 @@ export async function tabularIndex(tabularFn, { action, project, ...input }) {
     if (!found.projet) throw new Error('L’index est déjà lancé : utilisez colonnes pour ses questions, ou lancer pour les nouvelles pièces.');
     return tabularFn({ ...input, action, project, projet: found.projet });
   }
-  if (!found.fichier) throw new Error('L’index n’est pas encore lancé : lancez-le avec pm dossier index lancer, sur accord de l’avocat.');
+  if (!found.fichier) throw new Error('L’index n’est pas encore lancé : lancez-le avec pm dossier case-index lancer, sur accord de l’avocat.');
   return tabularFn({ ...input, action, project, fichier: found.fichier });
 }
 
@@ -54,7 +54,7 @@ export async function refuseIndex(tabularFn, project, { fichier, projet }) {
   if (!name && !draft) return;
   const { analyses = [], projets = [] } = await tabularFn({ action: 'lister', project });
   const isIndex = [...analyses, ...projets].some((entry) => entry.index && ((name && entry.fichier === name) || (draft && entry.projet === draft)));
-  if (isIndex) throw new Error('L’index du dossier s’affiche toujours dans l’onglet Dossier : utilisez pm dossier index.');
+  if (isIndex) throw new Error('Le Case index s’affiche toujours dans l’onglet Dossier : utilisez pm dossier case-index.');
 }
 
 export function reviewFile(dossier, fichier) {

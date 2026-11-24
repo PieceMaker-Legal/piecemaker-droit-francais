@@ -4,15 +4,15 @@ Le bundle OKF du dossier suit Context-OKF : Open Knowledge Format 0.3 sur le soc
 
 ## Autorité
 
-Le bundle Markdown `.piecemaker/okf/` fait foi. L'agent l'écrit lui-même, avec Write ou Edit (Codex : apply_patch), en suivant le skill `okf` (`server/piecemaker/vendor/skills/okf/`). Le serveur ne génère que `documents/` (depuis l'Index) et `persons/` (depuis la base) ; il lit le bundle pour l'onglet Index.
+Le bundle Markdown `.piecemaker/okf/` fait foi. L'agent l'écrit lui-même, avec Write ou Edit (Codex : apply_patch), en suivant le skill `okf` (`server/piecemaker/vendor/skills/okf/`). Le serveur ne génère que `documents/` (depuis le Case index) et `persons/` (depuis la base) ; il lit le bundle pour l'onglet Case index.
 
-L'Index du dossier (la revue tabulaire de l'Index) reste dans SQLite (`server/piecemaker/okf/index-store.ts`) ; son `.json` dans `Tabular Review/` est une vue réécrite après chaque écriture.
+Le Case index (la revue tabulaire de toutes les pièces) reste dans SQLite (`server/piecemaker/okf/index-store.ts`) ; son `.json` dans `Tabular Review/` est une vue réécrite après chaque écriture.
 
 ## Périmètre
 
 | Dossier | `type` | Contenu |
 | --- | --- | --- |
-| `documents/` | `Document` | une pièce de l'Index, générée |
+| `documents/` | `Document` | une pièce du Case index, générée |
 | `actes/` | `Acte` | signature, modification, notification |
 | `contenus/` | `Contenu` | clause, obligation établie par l'acte |
 | `roles/` | `Rôle` | partie et rôle conféré (ODP-002) |
@@ -25,13 +25,13 @@ L'Index du dossier (la revue tabulaire de l'Index) reste dans SQLite (`server/pi
 
 ## Vérification
 
-`pm okf verify`, ou le bouton Vérifier de l'onglet Index, lance `validate.py --strict` du skill `okf` sur le bundle. Chaque ligne `ERROR` (frontmatter, lien cassé) ou `LINT` (concept orphelin, champ recommandé absent) est rendue, puis le résumé. Le Hérisson le lance après chaque écriture sous `okf/`. Sans `index.md`, `verify` demande de créer le bundle.
+`pm okf verify`, ou le bouton Vérifier de l'onglet Case index, lance `validate.py --strict` du skill `okf` sur le bundle. Chaque ligne `ERROR` (frontmatter, lien cassé) ou `LINT` (concept orphelin, champ recommandé absent) est rendue, puis le résumé. Le Hérisson le lance après chaque écriture sous `okf/`. Sans `index.md`, `verify` demande de créer le bundle.
 
 ## Lecture par l'interface
 
 `GET /api/piecemaker/okf` lit les concepts valides. Pour chacun : identifiant (chemin dans le bundle), `type` (pour un Document, le type principal d'après l'arborescence), `lof` (le `type` du concept), titre, description, pièce, date et relations. Une relation suit chaque lien Markdown vers un autre concept ; elle porte le type de la cible, le Document de la même pièce et la citation du concept.
 
-L'onglet Index garde le tableau, le graphe, la fiche et la visionneuse. Le graphe se manipule librement (glisser un nœud, déplacer le fond, zoom à la molette) ; il ne montre que les pièces (dossiers de type `Pièces`) et les concepts liés. Le lien « Arborescence » de la légende ouvre le Classement ; l'ontologie n'est plus affichée. Dans la visionneuse, « Lien OKF » sur un passage le met en pastille dans le chat, avec une demande à l'assistant : l'avocat ne pose plus de lien à la main.
+L'onglet Case index garde le tableau, le graphe, la fiche et la visionneuse. Le graphe se manipule librement (glisser un nœud, déplacer le fond, zoom à la molette) ; il ne montre que les pièces (dossiers de type `Pièces`) et les concepts liés. Le lien « Arborescence » de la légende ouvre le Classement ; l'ontologie n'est plus affichée. Dans la visionneuse, « Lien OKF » sur un passage le met en pastille dans le chat, avec une demande à l'assistant : l'avocat ne pose plus de lien à la main.
 
 ## Types
 
@@ -39,13 +39,13 @@ Le type principal d’un document suit le champ `type` du dossier, hérité du p
 
 Le graphe montre les documents des types du graphe (par défaut `Pièces`), les rôles, et les autres concepts sur demande.
 
-L'avocat seul fixe l'arborescence, donc les types de documents. Elle est commune à tous les dossiers : c'est la clé `arborescence` de `~/.piecemaker/ontologie.json`, scellée. Au premier démarrage, la plus récente des anciennes `.piecemaker/arborescence.json` des dossiers devient l'arborescence commune ; ces fichiers ne sont plus lus. L'agent la lit avec `pm dossier arborescence` et modifie la clé `arborescence` de `ontologie.json` avec Edit, Write ou apply_patch : le hook `guard-ontologie` refuse l'écriture, applique la modification à la proposition en attente (ou au fichier actuel), la fait valider par `pm okf ontologie proposer` et répond à l'agent ce qui a changé. Sans hook, l'agent propose une arborescence complète avec `pm dossier arborescence --dossiers JSON --motif "…"` ou `pm okf ontologie proposer --json '{"arborescence":[…],"motif":"…"}'`. La proposition est écrite dans `ontologie.proposition.json` ; elle ne s'applique pas. Le Classement (lien « Arborescence ») la montre en suivi des modifications : l'avocat accepte, refuse ou modifie chaque changement, puis enregistre, ce qui supprime la proposition (`DELETE /classification/proposition` du plugin Tabular review pour « Tout refuser »). L'enregistrement met à jour la colonne Classement des revues de tous les dossiers. Un bandeau de l'onglet Index signale une proposition en attente.
+L'avocat seul fixe l'arborescence, donc les types de documents. Elle est commune à tous les dossiers : c'est la clé `arborescence` de `~/.piecemaker/ontologie.json`, scellée. Au premier démarrage, la plus récente des anciennes `.piecemaker/arborescence.json` des dossiers devient l'arborescence commune ; ces fichiers ne sont plus lus. L'agent la lit avec `pm dossier arborescence` et modifie la clé `arborescence` de `ontologie.json` avec Edit, Write ou apply_patch : le hook `guard-ontologie` refuse l'écriture, applique la modification à la proposition en attente (ou au fichier actuel), la fait valider par `pm okf ontologie proposer` et répond à l'agent ce qui a changé. Sans hook, l'agent propose une arborescence complète avec `pm dossier arborescence --dossiers JSON --motif "…"` ou `pm okf ontologie proposer --json '{"arborescence":[…],"motif":"…"}'`. La proposition est écrite dans `ontologie.proposition.json` ; elle ne s'applique pas. Le Classement (lien « Arborescence ») la montre en suivi des modifications : l'avocat accepte, refuse ou modifie chaque changement, puis enregistre, ce qui supprime la proposition (`DELETE /classification/proposition` du plugin Tabular review pour « Tout refuser »). L'enregistrement met à jour la colonne Classement des revues de tous les dossiers. Un bandeau de l'onglet Case index signale une proposition en attente.
 
 ## Fichier commun
 
 `~/.piecemaker/ontologie.json` (ou `$PIECEMAKER_HOME/ontologie.json`), un seul fichier commun à tous les dossiers : `{ "arborescence": [{ name, explanation, type? }], "sceau" }`. Les clés `relations` et `documentTypes` d'un fichier antérieur sont ignorées et disparaissent au prochain enregistrement. Un fichier illisible fait appliquer l'arborescence par défaut, avec un message.
 
-Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA256 de l'arborescence, calculé avec la clé `ontologie.cle` du même répertoire (créée au premier enregistrement, mode 600). Un fichier dont le sceau ne correspond pas a été modifié hors de l'onglet Index : l'arborescence par défaut s'applique, `verify` et l'onglet Index le signalent, et l'avocat l'enregistre de nouveau.
+Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA256 de l'arborescence, calculé avec la clé `ontologie.cle` du même répertoire (créée au premier enregistrement, mode 600). Un fichier dont le sceau ne correspond pas a été modifié hors de l'onglet Case index : l'arborescence par défaut s'applique, `verify` et l'onglet Case index le signalent, et l'avocat l'enregistre de nouveau.
 
 - `verify` contrôle `ontologie.json` et `ontologie.proposition.json` : clés de premier niveau (`arborescence`, `motif`, `sceau`, `date`), sans clé inconnue, puis valeurs conformes aux règles.
 - Le hook `guard-ontologie` refuse à l'agent toute écriture directe dans `~/.piecemaker/ontologie.json`, et tout accès à `ontologie.cle`. Il est branché sous Claude (`Write|Edit|MultiEdit|NotebookEdit|Bash|Read|Grep|Glob`), sous Codex (`Bash|apply_patch`, patch lu dans `tool_input.command`) et dans le chat Mistral (`mistral-sdk/tools.ts`, avec `protect-originals`).
@@ -53,7 +53,7 @@ Le serveur scelle le fichier à chaque enregistrement : `sceau` est un HMAC-SHA2
 
 ## Documents (`documents/`)
 
-`documents.ts` génère `okf/documents/` depuis l'Index du dossier (SQLite, `loadIndex`) à chaque `read` et `verify`, sans appel au modèle. Une fiche par ligne dont la pièce existe dans un dossier d'un type du graphe (par défaut `Pièces`, contrôle `resourceError`) : `type: Document`, `title` (titre de l'Index, sinon libellé de la ligne), `description` (colonne Résumé, Synthèse, Objet ou Événement, sinon nature et date), `resource`, `date` (colonne Date, en `AAAA-MM-JJ`), `nature` (colonne Nature, Type de pièce ou Type de document), `generated: {by: index, at}` (fin d'analyse de la ligne). Le corps liste les colonnes remplies. Le nom suit le chemin de la pièce sans extension (`Pièces/Contrats/Contrat.pdf` → `pieces-contrats-contrat.md`, empreinte ajoutée au-delà de 80 caractères ou en cas de collision). `documents/index.md` les liste par date ; le `index.md` racine reçoit un lien vers lui s'il en manque. Une fiche générée dont la pièce a quitté l'Index disparaît ; une fiche Document écrite à la main pour une pièce de l'Index est remplacée, et les liens du bundle qui la visaient sont réécrits. Sans Index ou sans `index.md` racine, rien n'est écrit. L'avocat corrige l'Index dans l'onglet Index, l'agent par `pm dossier index`.
+`documents.ts` génère `okf/documents/` depuis le Case index du dossier (SQLite, `loadIndex`) à chaque `read` et `verify`, sans appel au modèle. Une fiche par ligne dont la pièce existe dans un dossier d'un type du graphe (par défaut `Pièces`, contrôle `resourceError`) : `type: Document`, `title` (titre de l'Index, sinon libellé de la ligne), `description` (colonne Résumé, Synthèse, Objet ou Événement, sinon nature et date), `resource`, `date` (colonne Date, en `AAAA-MM-JJ`), `nature` (colonne Nature, Type de pièce ou Type de document), `generated: {by: index, at}` (fin d'analyse de la ligne). Le corps liste les colonnes remplies. Le nom suit le chemin de la pièce sans extension (`Pièces/Contrats/Contrat.pdf` → `pieces-contrats-contrat.md`, empreinte ajoutée au-delà de 80 caractères ou en cas de collision). `documents/index.md` les liste par date ; le `index.md` racine reçoit un lien vers lui s'il en manque. Une fiche générée dont la pièce a quitté l'Index disparaît ; une fiche Document écrite à la main pour une pièce du Case index est remplacée, et les liens du bundle qui la visaient sont réécrits. Sans Index ou sans `index.md` racine, rien n'est écrit. L'avocat corrige l'Index dans l'onglet Case index, l'agent par `pm dossier case-index`.
 
 ## Personnes et organisations (`persons/`)
 
@@ -78,11 +78,11 @@ Un événement du suivi renvoie à un concept daté par son titre : `evenements.
 | Rôle | Fichier |
 | --- | --- |
 | Lecture du bundle | `server/piecemaker/okf/bundle.ts` |
-| Documents générés depuis l'Index | `server/piecemaker/okf/documents.ts` |
+| Documents générés depuis le Case index | `server/piecemaker/okf/documents.ts` |
 | Fiches `persons/` | `server/piecemaker/okf/persons.ts` |
 | Routes, validateur, `premiseDate` | `server/piecemaker/okf/index.ts` |
 | Skill, validateur, contexte LOF | `server/piecemaker/vendor/skills/okf/` |
-| Index du dossier (SQLite, vue `.json`) | `server/piecemaker/okf/index-store.ts` |
+| Case index (SQLite, vue `.json`) | `server/piecemaker/okf/index-store.ts` |
 | Arborescence commune, sceau | `server/piecemaker/okf/ontology.ts`, `server/piecemaker/okf/sealed.ts` |
 | Proposition de l'assistant | `server/piecemaker/okf/ontology-proposal.ts` |
 | Garde d'écriture | `server/piecemaker/vendor/piecemaker-plugin/scripts/guard-ontologie.mjs` |

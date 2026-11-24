@@ -30,7 +30,7 @@ function dossier() {
 
 function review(): Review {
   return {
-    version: 1, title: 'Index', templateName: 'Index', category: 'documents', projectPath: '/dossier', createdAt: '2026-11-18T10:00:00.000Z', updatedAt: '2026-11-18T10:00:00.000Z',
+    version: 1, title: 'Case index', templateName: 'Case index', category: 'documents', projectPath: '/dossier', createdAt: '2026-11-18T10:00:00.000Z', updatedAt: '2026-11-18T10:00:00.000Z',
     provider: 'codex', model: 'exemple', concurrency: 3,
     columns: [{ index: 0, name: 'Date', prompt: 'Date du document', format: 'date' }, { index: 1, name: 'Nature', prompt: 'Nature', format: 'text', tags: ['contrat', 'courrier'] }],
     rows: [

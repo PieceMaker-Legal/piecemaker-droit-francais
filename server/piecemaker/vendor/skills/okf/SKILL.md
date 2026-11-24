@@ -26,7 +26,7 @@ Ne copiez ni les patterns ni les fondations dans le bundle du dossier.
 .piecemaker/okf/
 ├── index.md          okf_version: "0.3", liste des dossiers
 ├── log.md            un acte de maintenance daté par entrée
-├── documents/        type: Document — une pièce de l'Index, générée par le serveur
+├── documents/        type: Document — une pièce du Case index, générée par le serveur
 ├── actes/            type: Acte — signature, modification, notification
 ├── contenus/         type: Contenu — clause, obligation établie par l'acte
 ├── roles/            type: Rôle — partie et rôle conféré (ODP-002)
@@ -77,9 +77,9 @@ Corrélatif : [devoir de payer](devoir-de-payer.md). Titulaire : [prestataire](.
 1. Écrivez les concepts directement avec Write et Edit dans `.piecemaker/okf/`.
 2. Après chaque écriture, le Hérisson lance le validateur en mode strict. Corrigez chaque `ERROR` et chaque `LINT` qu'il rend : lien cassé, concept orphelin, frontmatter incomplet.
 3. Pour vérifier tout le bundle, lancez `pm okf verify`.
-4. Partez de l'Index du dossier : `pm dossier index lire` rend la revue tabulaire, une ligne par pièce avec ses informations principales et son classement. Le serveur en tire `documents/` : une fiche Document par pièce d'un dossier de type `Pièces`. Pour corriger un Document, corrigez l'Index (`pm dossier index`), jamais la fiche.
+4. Partez du Case index : `pm dossier case-index lire` rend la revue tabulaire, une ligne par pièce avec ses informations principales et son classement. Le serveur en tire `documents/` : une fiche Document par pièce d'un dossier de type `Pièces`. Pour corriger un Document, corrigez le Case index (`pm dossier case-index`), jamais la fiche.
 5. Liez une pièce par sa fiche : `../documents/<nom>.md`, nom listé dans `documents/index.md`, tiré du chemin de la pièce (`Pièces/Contrat de prestation.pdf` → `pieces-contrat-de-prestation.md`).
-6. Lisez la pièce entière seulement pour ce que l'Index ne donne pas : actes, contenus, rôles, positions, chaînes, versions, conflits, dans l'ordre de la méthode de lecture. Ne réécrivez pas ce que l'Index donne déjà (date, nature, résumé, classement). L'Index oriente ; il ne remplace pas la citation.
+6. Lisez la pièce entière seulement pour ce que le Case index ne donne pas : actes, contenus, rôles, positions, chaînes, versions, conflits, dans l'ordre de la méthode de lecture. Ne réécrivez pas ce que le Case index donne déjà (date, nature, résumé, classement). Le Case index oriente ; il ne remplace pas la citation.
 7. Ajoutez une entrée datée à `log.md` à chaque création, modification ou extinction.
 8. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json`, qui porte l'arborescence commune à tous les dossiers. Proposez un changement par `pm okf ontologie proposer`.
 

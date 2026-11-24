@@ -31,7 +31,7 @@ const row = (id: string, source: string, label: string) => ({ id, label, documen
 
 function review(rows = [row('r1', CONTRACT, 'Contrat'), row('r2', LETTER, 'Courrier'), row('r3', NOTE, 'Note'), row('r4', 'Pièces/Absent.pdf', 'Absent')]): Review {
   return {
-    version: 1, title: 'Index', templateName: 'Index', category: 'documents', projectPath: '/dossier', createdAt: '2026-11-18T10:00:00.000Z', updatedAt: '2026-11-20T10:00:00.000Z',
+    version: 1, title: 'Case index', templateName: 'Case index', category: 'documents', projectPath: '/dossier', createdAt: '2026-11-18T10:00:00.000Z', updatedAt: '2026-11-20T10:00:00.000Z',
     provider: 'codex', model: 'exemple', concurrency: 1,
     columns: [
       { index: 0, name: 'Date', prompt: '', format: 'date' },

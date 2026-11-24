@@ -37,7 +37,7 @@ Lancez `research-maker` au premier plan, jamais en arrière-plan. Attendez son c
 
 ## Volets
 
-Le geste ouvre le volet tout seul : `pm dossier sql` (écriture), `pm dossier index`, `pm tabular_review` (lister, preparer, lancer), `pm bordereau`, un `.docx` écrit ou édité. Une ligne `Visible : …` le confirme. N'appelez pas `pm tab afficher` après ces commandes. La conversion n'ouvre aucun volet.
+Le geste ouvre le volet tout seul : `pm dossier sql` (écriture), `pm dossier case-index`, `pm tabular_review` (lister, preparer, lancer), `pm bordereau`, un `.docx` écrit ou édité. Une ligne `Visible : …` le confirme. N'appelez pas `pm tab afficher` après ces commandes. La conversion n'ouvre aucun volet.
 
 ## Historique du dossier
 

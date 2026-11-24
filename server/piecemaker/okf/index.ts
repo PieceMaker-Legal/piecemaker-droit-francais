@@ -61,7 +61,7 @@ export function createOkfBackend(options: OkfOptions) {
     return fs.realpathSync(project.project_path);
   };
 
-  /** persons/ et documents/ sont régénérés à chaque lecture : la base et l'Index du dossier font foi. */
+  /** persons/ et documents/ sont régénérés à chaque lecture : la base et le Case index font foi. */
   const regenerate = (projectId: string, projectPath: string, snapshot: KnowledgeSnapshot): void => {
     writePersons(projectPath, snapshot);
     writeDocuments(projectPath, options.indexStore ? loadIndex(options.indexStore, projectId, projectPath)?.review : null, graphTypesOf(projectPath));
@@ -176,7 +176,7 @@ export function createOkfBackend(options: OkfOptions) {
   });
 
   const indexStoreOf = (): IndexStore => {
-    if (!options.indexStore) throw new Error('Index indisponible.');
+    if (!options.indexStore) throw new Error('Case index indisponible.');
     return options.indexStore;
   };
   const indexProject = (folder: unknown) => {
@@ -205,11 +205,11 @@ export function createOkfBackend(options: OkfOptions) {
   };
   const loopbackOnly = (request: express.Request, response: express.Response, next: express.NextFunction) => {
     if (options.isLoopback(request)) return next();
-    response.status(403).json({ error: 'L’Index est réservé aux appels locaux.' });
+    response.status(403).json({ error: 'Le Case index est réservé aux appels locaux.' });
   };
   const respondIndex = (operation: () => unknown, response: express.Response) => {
     Promise.resolve().then(operation).then((result) => response.json(result)).catch((error: unknown) => {
-      response.status(error instanceof IndexConflictError ? 409 : statusFor(error)).json({ error: error instanceof Error ? error.message : 'Index indisponible.' });
+      response.status(error instanceof IndexConflictError ? 409 : statusFor(error)).json({ error: error instanceof Error ? error.message : 'Case index indisponible.' });
     });
   };
   localRouter.get('/index-review', loopbackOnly, (request, response) => respondIndex(() => readIndex(request.query.folder), response));

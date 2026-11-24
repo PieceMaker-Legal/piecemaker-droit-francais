@@ -6,7 +6,7 @@ import { DEFAULT_DOCUMENT_TYPES, documentTypeNames } from '../../../piecemaker-d
 import type { DocumentType } from '../../../piecemaker-dossier/src/document-types.js';
 
 import type { ColumnAction, ColumnFormat, Template, TemplateColumn } from '../shared.js';
-import { COLUMN_ACTIONS, COLUMN_FORMATS, INDEX_TEMPLATE_NAME, LEGACY_INDEX_NAME, isDocumentTypeColumn } from '../shared.js';
+import { COLUMN_ACTIONS, COLUMN_FORMATS, INDEX_TEMPLATE_NAME, LEGACY_INDEX_NAMES, isDocumentTypeColumn } from '../shared.js';
 import { PLUGIN_HOME, UserError, writeFileAtomic } from './paths.js';
 
 const TEMPLATES_FILE = path.join(PLUGIN_HOME, 'templates.json');
@@ -111,7 +111,7 @@ function libraryTemplates(own: Template[]): Template[] {
 
 export function readTemplates(): Template[] {
   const own = readOwnTemplates();
-  return [...own, ...libraryTemplates(own)].map((template) => ({ ...(template.name === LEGACY_INDEX_NAME ? { ...template, name: INDEX_TEMPLATE_NAME, description: INDEX_TEMPLATE.description } : template), columns: alignDocumentTypes(template.columns) }));
+  return [...own, ...libraryTemplates(own)].map((template) => ({ ...(LEGACY_INDEX_NAMES.includes(template.name) ? { ...template, name: INDEX_TEMPLATE_NAME, description: INDEX_TEMPLATE.description } : template), columns: alignDocumentTypes(template.columns) }));
 }
 
 function readOwnTemplates(): Template[] {

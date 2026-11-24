@@ -18,7 +18,7 @@ afterEach(() => {
 
 const template: Template = {
   id: 'index',
-  name: 'Index',
+  name: 'Case index',
   description: '',
   updatedAt: '',
   columns: [{ name: 'Classement', prompt: 'Dossier ?', format: 'tags', tags: ['Pièces/Contrats'], action: 'classify' }],
@@ -50,7 +50,7 @@ describe('classement côté serveur', () => {
     cleanup.push(() => fs.rmSync(project, { recursive: true, force: true }));
     fs.mkdirSync(path.join(project, 'Fichiers convertis PieceMaker'));
     fs.writeFileSync(path.join(project, 'Fichiers convertis PieceMaker', 'contrat.md'), '# Contrat Société Exemple SAS');
-    const { file, review } = await createReview(project, template, 'Index', [{ label: 'contrat', documents: ['Fichiers convertis PieceMaker/contrat.md'], piece: 'contrat.pdf' }], { provider: 'claude', model: 'haiku', concurrency: 1 });
+    const { file, review } = await createReview(project, template, 'Case index', [{ label: 'contrat', documents: ['Fichiers convertis PieceMaker/contrat.md'], piece: 'contrat.pdf' }], { provider: 'claude', model: 'haiku', concurrency: 1 });
     const rowId = review.rows[0].id;
     await updateReview(project, file, (current) => {
       current.cells[rowId] = { 0: { summary: 'Contrats', flag: 'green', reasoning: '' } };

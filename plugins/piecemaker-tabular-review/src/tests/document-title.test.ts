@@ -19,7 +19,7 @@ function fixture() {
   vi.stubEnv('PIECEMAKER_HOME', path.join(project, 'config'));
   fs.mkdirSync(path.join(project, 'Tabular Review', 'docs'), { recursive: true });
   fs.writeFileSync(path.join(project, 'Tabular Review', 'docs', 'piece.md'), 'Contrat de prestation. Le prix est fixé à 100 euros.');
-  const review: Review = { version: 1, title: 'Index', templateName: 'Index', category: 'documents', projectPath: project, createdAt: '', updatedAt: '', provider: 'claude', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Nature', prompt: 'Nature du document ?', format: 'text' }], rows: [{ id: 'r1', label: 'source.pdf', piece: 'source.pdf', documents: [{ source: 'piece.md', copy: 'docs/piece.md', chars: 52 }], status: 'pending' }], cells: {} };
+  const review: Review = { version: 1, title: 'Case index', templateName: 'Case index', category: 'documents', projectPath: project, createdAt: '', updatedAt: '', provider: 'claude', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Nature', prompt: 'Nature du document ?', format: 'text' }], rows: [{ id: 'r1', label: 'source.pdf', piece: 'source.pdf', documents: [{ source: 'piece.md', copy: 'docs/piece.md', chars: 52 }], status: 'pending' }], cells: {} };
   fs.writeFileSync(path.join(project, 'Tabular Review', 'index.json'), JSON.stringify(review));
   return { project, review };
 }

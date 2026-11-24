@@ -35,7 +35,7 @@ beforeEach(() => {
 
 afterEach(() => { unmount(container); dom.window.close(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-describe('Index', () => {
+describe('Case index', () => {
   it('affiche la revue de l’Index dans l’onglet même, sans tableau à part ni fenêtre', async () => {
     vi.mocked(mountIndexAnalysis).mockClear();
     const shown = vi.fn();

@@ -127,7 +127,7 @@ test('un segment pm okf ne couvre pas le reste de la commande', async () => {
 
 test('explique la voie autorisée', async () => {
   const { ontologyDecision } = await load();
-  assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /Index › Classement tab\. The OKF bundle of the case follows Context-OKF on the Legal Ontologies Foundry/);
+  assert.match(ontologyDecision({ tool_name: 'Write', tool_input: { file_path: '.piecemaker/ontologie.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /Case index › Classement tab\. The OKF bundle of the case follows Context-OKF on the Legal Ontologies Foundry/);
   assert.match(ontologyDecision({ tool_name: 'Bash', tool_input: { command: 'cp a.md .piecemaker/etapes.json' }, cwd }).hookSpecificOutput.permissionDecisionReason, /case steps/);
 });
 
@@ -144,7 +144,7 @@ function caseFolder(tree, proposal) {
 }
 const treeFile = (root) => path.join(root, '.piecemaker', 'ontologie.json');
 
-const recorder = (answer = { ok: true, output: 'Visible dans Index › Classement.' }) => {
+const recorder = (answer = { ok: true, output: 'Visible dans Case index › Classement.' }) => {
   const calls = [];
   const run = async (args, where) => { calls.push({ args, where }); return answer; };
   return { calls, run };
@@ -160,7 +160,7 @@ test('transforme un Edit de l’arborescence en proposition et avertit l’agent
   const reason = result.hookSpecificOutput.permissionDecisionReason;
   assert.match(reason, /saved as a proposal in ontologie\.proposition\.json/);
   assert.match(reason, /folder tree — added: Correspondance; removed: Procédure/);
-  assert.match(reason, /Visible dans Index › Classement/);
+  assert.match(reason, /Visible dans Case index › Classement/);
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0].args.slice(0, 3), ['okf', 'ontologie', 'proposer']);
   assert.deepEqual(JSON.parse(calls[0].args[6]).arborescence, [{ name: 'Pièces', explanation: 'Pièces du dossier' }, { name: 'Correspondance', explanation: '' }]);

@@ -68,7 +68,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const requestedView = takeRequestedView();
   let active: Tab = requestedView === 'index-analysis' ? 'chronology' : requestedView ?? 'general';
   let data: ViewData | null = null;
-  // L'Index : la revue tabulaire de l'Index, montée une fois par dossier et rattachée à l'onglet à chaque affichage.
+  // Le Case index : la revue tabulaire du Case index, montée une fois par dossier et rattachée à l'onglet à chaque affichage.
   let indexHost: HTMLElement | null = null;
   let indexProject = '';
   let disposeIndex: (() => void) | null = null;
@@ -775,7 +775,7 @@ export function mount(container: HTMLElement, api: PluginApi): void {
   const showRequestedView = () => {
     const view = takeRequestedView();
     if (!view) return;
-    // « index-analysis » (ancien nom de la revue de l'Index) ouvre l'Index : c'est la même vue.
+    // « index-analysis » (ancien nom de la revue du Case index) ouvre le Case index : c'est la même vue.
     active = view === 'index-analysis' ? 'chronology' : view;
     render();
   };

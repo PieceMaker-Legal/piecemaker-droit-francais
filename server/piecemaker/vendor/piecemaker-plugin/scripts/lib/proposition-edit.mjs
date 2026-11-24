@@ -15,7 +15,7 @@ const KINDS = {
   ontologie: {
     pattern: /(^|[\\/])\.piecemaker[\\/]ontologie\.json$/,
     label: 'ontology',
-    place: 'Index › Ontologie',
+    place: 'Case index › Ontologie',
     list: (value) => value?.arborescence,
     stored: (proposal, current) => (PARTS.some((part) => proposal?.[part]) ? {
       ...Object.fromEntries(PARTS.map((part) => [part, proposal[part] ?? current?.[part]]).filter(([, entries]) => entries)),

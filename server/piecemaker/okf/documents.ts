@@ -34,7 +34,7 @@ const validDay = (year: number, month: number, day: number): boolean => {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 };
 
-/** Date AAAA-MM-JJ d'une cellule Date de l'Index : « 2021-03-12 », « 12/03/2021 » ou « 12 mars 2021 ». */
+/** Date AAAA-MM-JJ d'une cellule Date du Case index : « 2021-03-12 », « 12/03/2021 » ou « 12 mars 2021 ». */
 export function indexDate(value: string): string {
   const trimmed = value.trim();
   const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
@@ -56,7 +56,7 @@ export function documentSlug(resource: string): string {
 const named = (review: Review, names: string[]): ReviewColumn | undefined => review.columns.find((column) => names.includes(text(column?.name).toLocaleLowerCase('fr').normalize('NFC')));
 const isoAt = (...values: Array<string | undefined>): string => values.map((value) => text(value)).find((value) => value && !Number.isNaN(Date.parse(value))) || '';
 
-/** Les pièces de l'Index rangées dans un dossier d'un type de pièces : une fiche par pièce, au nom stable. */
+/** Les pièces du Case index rangées dans un dossier d'un type de pièces : une fiche par pièce, au nom stable. */
 export function documentsFromIndex(projectPath: string, review: Review | null | undefined, folders: Folder[] = readArborescence(), pieceTypes: string[] = DEFAULT_GRAPH_TYPES): IndexDocument[] {
   if (!review || !Array.isArray(review.rows)) return [];
   const dateColumn = named(review, ['date']) ?? review.columns.find((column) => column.format === 'date');
@@ -106,8 +106,8 @@ export function renderDocument(document: IndexDocument): string {
   return [
     `---\n${stringify(frontmatter).trim()}\n---`,
     `# ${document.title}`,
-    'Fiche générée depuis l’Index du dossier. Ne la modifiez pas ici : corrigez l’Index.',
-    `## Index\n\n${fields.join('\n')}`,
+    'Fiche générée depuis le Case index. Ne la modifiez pas ici : corrigez le Case index.',
+    `## Case index\n\n${fields.join('\n')}`,
   ].join('\n\n') + '\n';
 }
 
@@ -115,7 +115,7 @@ export function renderDocuments(documents: IndexDocument[]): Map<string, string>
   const line = (document: IndexDocument): string => `- [${document.title.replace(/[[\]]/g, '')}](${encodeURI(document.file)})${[document.date, document.nature].filter(Boolean).length ? ` — ${[document.date, document.nature].filter(Boolean).join(' · ')}` : ''}`;
   const index = [
     '# Documents',
-    'Fiches générées depuis l’Index du dossier, une par pièce d’un dossier de type pièces. Ne les modifiez pas ici : corrigez l’Index (`pm dossier index`).',
+    'Fiches générées depuis le Case index, une par pièce d’un dossier de type pièces. Ne les modifiez pas ici : corrigez le Case index (`pm dossier case-index`).',
     documents.length ? documents.map(line).join('\n') : 'Aucune pièce.',
   ].join('\n\n') + '\n';
   return new Map([['index.md', index], ...documents.map((document): [string, string] => [document.file, renderDocument(document)])]);
@@ -150,13 +150,13 @@ function linkFromRoot(root: string): void {
   const file = path.join(root, 'index.md');
   const content = fs.readFileSync(file, 'utf8');
   if (LINKED.test(content)) return;
-  fs.writeFileSync(file, `${content.replace(/\s*$/, '')}\n\n- [Documents](${DOCUMENTS}/index.md) — générés depuis l’Index du dossier\n`);
+  fs.writeFileSync(file, `${content.replace(/\s*$/, '')}\n\n- [Documents](${DOCUMENTS}/index.md) — générés depuis le Case index\n`);
 }
 
 /**
- * Régénère documents/ depuis l'Index du dossier, comme persons/ depuis la base : sans Index, rien ne change.
- * Une fiche générée dont la pièce a quitté l'Index disparaît ; une fiche Document écrite à la main pour une pièce
- * de l'Index cède la place à la fiche générée, et les liens qui la visaient sont réécrits.
+ * Régénère documents/ depuis le Case index, comme persons/ depuis la base : sans Case index, rien ne change.
+ * Une fiche générée dont la pièce a quitté le Case index disparaît ; une fiche Document écrite à la main pour une pièce
+ * du Case index cède la place à la fiche générée, et les liens qui la visaient sont réécrits.
  */
 export function writeDocuments(projectPath: string, review: Review | null | undefined, pieceTypes: string[] = DEFAULT_GRAPH_TYPES): void {
   const root = bundleRoot(projectPath);

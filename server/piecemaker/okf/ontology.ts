@@ -10,7 +10,7 @@ export { normalizeArborescence, ontologyFile };
 
 export type Ontology = { personnalisee: boolean; erreur?: string; arborescence?: ClassificationFolder[] };
 
-const TAMPERED = 'arborescence modifiée hors de l’onglet Index : enregistrez-la de nouveau dans l’onglet Index › Classement.';
+const TAMPERED = 'arborescence modifiée hors de l’onglet Case index : enregistrez-la de nouveau dans l’onglet Case index › Classement.';
 const TOP_KEYS = ['arborescence', 'motif', 'sceau', 'date'];
 const LEGACY_KEYS = ['relations', 'documentTypes'];
 const FOLDER_KEYS = ['name', 'explanation', 'type'];

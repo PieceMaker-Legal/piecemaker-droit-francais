@@ -11,7 +11,9 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = ['check', 'tab', 'dossier', 'tabular_review', 'bordereau', 'suivi_dossiers', 'memoire', 'catala', 'okf'];
 const TAB_COMMANDS = ['lister', 'afficher', 'fermer'];
 const TAB_TARGETS = ['dossier', 'index', 'tabular_review', 'bordereau', 'suivi_dossiers', 'catala', 'artifacts', 'fichier'];
-const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', 'index'];
+// `index` : ancien nom de `case-index`, gardé comme alias.
+const CASE_INDEX_COMMAND = 'case-index';
+const DOSSIER_COMMANDS = ['sql', 'conversion', 'arborescence', 'classer', CASE_INDEX_COMMAND, 'index'];
 const INDEX_ACTIONS = ['lancer', 'lire', 'colonnes'];
 const REVIEW_ACTIONS = ['lister', 'modeles', 'create_template', 'preparer', 'lancer', 'lire', 'colonnes', 'relancer', 'verifier'];
 const REVIEW_FOLLOWED = ['colonnes', 'relancer'];
@@ -79,10 +81,10 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       lit l’arborescence ; avec --dossiers, propose une arborescence que l’avocat accepte, refuse ou modifie
   dossier classer <document> <dossier>
       range le document dans un dossier de l’arborescence : il prend le type de ce dossier
-  dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
-      crée l’index s’il manque ; sinon analyse les pièces absentes de l’index
-  dossier index lire
-  dossier index colonnes --questions JSON
+  dossier case-index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
+      crée le Case index s’il manque ; sinon analyse les pièces absentes du Case index
+  dossier case-index lire
+  dossier case-index colonnes --questions JSON
 
   tabular_review ${REVIEW_ACTIONS.join('|')}
       [--fichier FILE] [--projet ID] [--mode analyse|recherche]
@@ -111,7 +113,7 @@ export const HELP = `Usage: pm <outil> <commande> [options]   (toutes : [--dossi
       socle Legal Ontologies Foundry (David Koepsell, CC BY 4.0) : les six patterns ODP-001 à 006
       qui qualifient les concepts du bundle ; lecture seule
   okf ontologie proposer --json '{"arborescence":[...]}' [--motif "raison"]
-      propose à l'avocat l'arborescence complète ; rien ne change avant sa décision (onglet Index › Classement)
+      propose à l'avocat l'arborescence complète ; rien ne change avant sa décision (onglet Case index › Classement)
 
   catala verifier [--au today|AAAA-MM-JJ] [--programme NOM]
       programme Catala : .piecemaker/catala/NOM/ (clerk.toml, *.catala_fr) ;
@@ -409,7 +411,7 @@ function panelNoticeLabel(target) {
     if (target.review) return `Analyse tabulaire (${target.review})`;
     return 'Analyse tabulaire';
   }
-  if (target.view === 'index-analysis') return 'Dossier (analyse tabulaire de l’index)';
+  if (target.view === 'index-analysis') return 'Dossier (analyse tabulaire du Case index)';
   return target.view === 'chronology' ? 'Dossier (index)' : 'Dossier (vue générale)';
 }
 
@@ -566,12 +568,12 @@ async function dossierState(api, project) {
   const mappingOk = state.lifted || Boolean(api.mappingValidated?.(project));
   const mapping = state.lifted ? 'sans objet (anonymisation levée)' : mappingOk ? 'validé par l’avocat' : 'à valider par l’avocat (onglet Dossier, Mapping)';
   const { analyses = [], projets = [] } = await api.tabularFn({ action: 'lister', project });
-  let index = projets.some((entry) => entry.index) ? 'préparé, pas lancé : pm dossier index lancer' : 'absent : pm dossier index lancer';
+  let index = projets.some((entry) => entry.index) ? 'préparé, pas lancé : pm dossier case-index lancer' : 'absent : pm dossier case-index lancer';
   let indexOk = false;
   if (analyses.some((entry) => entry.index)) {
     const { absentes = 0 } = await api.tabularFn({ action: 'index', project });
     indexOk = !absentes;
-    index = absentes ? `${absentes} pièce(s) absente(s) de l’index : pm dossier index lancer` : 'à jour';
+    index = absentes ? `${absentes} pièce(s) absente(s) du Case index : pm dossier case-index lancer` : 'à jour';
   }
   const { pieces = [] } = await api.piecesFn({ folder: project });
   const pending = pieces.filter((piece) => piece.protected && piece.status !== 'ready');
@@ -754,7 +756,7 @@ async function dossier(api, positional, flags, resolved) {
     return withNotice(`Classé : ${moved.previous} → ${moved.current}`, await followPanel(api, panelRequest(project, target), target));
   }
   const action = positional[2];
-  if (!INDEX_ACTIONS.includes(action)) usage(`dossier index attend ${INDEX_ACTIONS.join(', ')}.`);
+  if (!INDEX_ACTIONS.includes(action)) usage(`dossier ${CASE_INDEX_COMMAND} attend ${INDEX_ACTIONS.join(', ')}.`);
   const result = await api.tabularIndex(api.tabularFn, { ...reviewInput(flags), action, project });
   const analysis = { ...target, view: 'index-analysis' };
   return withNotice(JSON.stringify(result), await followPanel(api, panelRequest(project, analysis), analysis));
@@ -798,7 +800,7 @@ async function okf(api, positional, flags, resolved) {
     let proposee;
     try { proposee = JSON.parse(String(flags.json)); } catch { usage('--json : JSON illisible.'); }
     const proposition = await api.okfFn({ action: 'proposer', folder, ontologie: { ...proposee, ...(value(flags.motif) ? { motif: String(flags.motif) } : {}) } });
-    return proposition.arborescence ? `Proposition enregistrée (${proposition.arborescence.length} dossier(s)) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Index › Classement.` : 'Aucun changement par rapport à l’arborescence actuelle : aucune proposition en attente.';
+    return proposition.arborescence ? `Proposition enregistrée (${proposition.arborescence.length} dossier(s)) : l’avocat l’accepte, la refuse ou la modifie dans l’onglet Case index › Classement.` : 'Aucun changement par rapport à l’arborescence actuelle : aucune proposition en attente.';
   }
   const { patterns = [], erreur, proposition, types = [] } = await api.okfFn({ action, folder });
   return [

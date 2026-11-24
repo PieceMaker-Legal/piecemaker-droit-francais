@@ -183,7 +183,7 @@ test('tabular_review transmet les actions et refuse les actions retirées', asyn
   fs.rmSync(dossier, { recursive: true, force: true });
 });
 
-test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', async () => {
+test('dossier case-index garde le Case index dans l’onglet Dossier, crée ou relance', async () => {
   const dossier = fs.mkdtempSync(path.join(os.tmpdir(), 'pm-skill-index-'));
   const calls = [];
   const opened = [];
@@ -204,21 +204,21 @@ test('dossier index garde l’index dans l’onglet Dossier, crée ou relance', 
       return { ok: true };
     },
   };
-  await assert.rejects(() => run(['dossier', 'index', 'lire', '--dossier', dossier], { deps }), /pm dossier index lancer/);
+  await assert.rejects(() => run(['dossier', 'case-index', 'lire', '--dossier', dossier], { deps }), /pm dossier case-index lancer/);
   await run(['dossier', 'index', 'lancer', '--ia', 'mistral', '--dossier', dossier], { deps });
   assert.deepEqual(calls.filter((call) => call.action !== 'index').map((call) => [call.action, call.projet, call.ia]), [['preparer', 'p-index', 'mistral'], ['lancer', 'p-index', 'mistral']]);
   found = { fichier: 'index.json', absentes: 2 };
   await run(['dossier', 'index', 'lancer', '--dossier', dossier], { deps });
   assert.deepEqual([calls.at(-1).action, calls.at(-1).fichier], ['relancer', 'index.json']);
-  const read = await run(['dossier', 'index', 'lire', '--dossier', dossier], { deps });
+  const read = await run(['dossier', 'case-index', 'lire', '--dossier', dossier], { deps });
   assert.equal(calls.at(-1).fichier, 'index.json');
   assert.equal(opened[0].tab, 'plugin:piecemaker-dossier');
   assert.equal(opened[0].view, 'index-analysis');
-  assert.match(read, /visible : Dossier \(analyse tabulaire de l’index\)\./i);
+  assert.match(read, /visible : Dossier \(analyse tabulaire du Case index\)\./i);
   for (const action of ['preparer', 'relancer', 'ouvrir', 'classement', 'lister', 'modifier']) {
     await assert.rejects(() => run(['dossier', 'index', action, '--dossier', dossier], { deps }), (error) => error.exitCode === 2);
   }
-  await assert.rejects(() => run(['tabular_review', 'relancer', '--fichier', 'Tabular Review/index.json', '--dossier', dossier], { deps }), /pm dossier index/);
+  await assert.rejects(() => run(['tabular_review', 'relancer', '--fichier', 'Tabular Review/index.json', '--dossier', dossier], { deps }), /pm dossier case-index/);
   await run(['dossier', 'arborescence', '--dossiers', '[{"nom":"Contrats","explication":"Baux"}]', '--dossier', dossier], { deps });
   assert.deepEqual(calls.at(-1), { action: 'arborescence', project: dossier, dossiers: [{ nom: 'Contrats', explication: 'Baux' }] });
   await run(['dossier', 'arborescence', '--dossiers', '[{"nom":"Contrats"}]', '--motif', 'Regrouper les baux', '--dossier', dossier], { deps });

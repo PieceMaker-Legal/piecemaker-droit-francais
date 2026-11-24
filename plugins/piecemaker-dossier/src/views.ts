@@ -301,7 +301,7 @@ export function linksMarkup(okf: OkfIndex | null, resource: string): string {
 
 export function graphView(okf: OkfIndex | null, showPremises = true): string {
   const hasDocuments = okf?.fiches.some((fiche) => okf.typesGraphe.includes(fiche.type));
-  const emptyMessage = okf ? `Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.` : 'Index indisponible.';
+  const emptyMessage = okf ? `Aucune pièce de type ${escapeHtml(okf.typesGraphe.join(', '))} dans l’index.` : 'Case index indisponible.';
   const key = (kind: string, label: string) => `<span class="pmd-okf-key">${iconSvg(kind)}${label}</span>`;
   return `<div class="pmd-okf-graph-wrap"${hasDocuments ? ' data-chat-pick="Graphe de l’index" data-chat-kind="Index" data-chat-file=".piecemaker/okf/index.md" data-chat-note="Graphe des pièces, fiches LOF et parties : fiches dans .piecemaker/okf/"' : ''}>
     ${hasDocuments ? '<div class="pmd-okf-graph" data-okf-graph role="img" aria-label="Graphe de l’index : pièces, fiches LOF et parties reliées entre elles"></div>' : `<div class="pmd-empty">${emptyMessage}</div>`}
@@ -321,7 +321,7 @@ export function proposalBanner(proposals?: PendingProposals): string {
   return `<div class="pmd-proposals" data-proposals role="status"${entries.length ? '' : ' hidden'}><span>L’assistant propose des modifications à examiner.</span>${entries.join('')}</div>`;
 }
 
-/** L'onglet Index : une seule vue, la revue tabulaire de l'Index (SQLite), montée dans `[data-index-analysis]` avec les liens OKF de chaque pièce. */
+/** L'onglet Case index : une seule vue, la revue tabulaire du Case index (SQLite), montée dans `[data-index-analysis]` avec les liens OKF de chaque pièce. */
 export function chronologyView(proposals?: PendingProposals, chronology = false): string {
   return `
     ${proposalBanner(proposals)}

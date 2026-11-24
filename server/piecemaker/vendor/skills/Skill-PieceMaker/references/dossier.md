@@ -4,9 +4,9 @@
 pm dossier sql "REQUÊTE"
 pm dossier conversion [--force] [pièce…]
 pm dossier arborescence [--dossiers JSON] [--motif "raison"]
-pm dossier index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
-pm dossier index lire
-pm dossier index colonnes --questions JSON
+pm dossier case-index lancer [--ia claude|codex|mistral] [--modele-ia TEXT]
+pm dossier case-index lire
+pm dossier case-index colonnes --questions JSON
 ```
 
 ## conversion
@@ -19,17 +19,17 @@ Sans MinerU, le Markdown d’un scan est vide ou presque : signalez-le, n’en c
 
 ## index
 
-**L’index du dossier est une tabular review : une seule par dossier lit toutes les pièces, une ligne par pièce, pour la chronologie et le tri.** `lancer`, `lire` et `colonnes` l’ouvrent dans la fenêtre « Analyse tabulaire » de l’onglet Dossier. Le fichier et le projet sont déduits.
+**Le Case index est une tabular review : une seule par dossier lit toutes les pièces, une ligne par pièce, pour la chronologie et le tri.** `lancer`, `lire` et `colonnes` l’ouvrent dans la fenêtre « Analyse tabulaire » de l’onglet Dossier. Le fichier et le projet sont déduits.
 
 - `lancer` crée l’index s’il manque, puis l’analyse. S’il existe, analyse les pièces converties absentes de l’index. Lancez-le sur accord de l’avocat.
 - `lire` résume l’index : statut, questions, puis une ligne par pièce avec sa réponse courte à chaque question.
 - `colonnes` ajoute, modifie ou retire une question : format dans `tabular.md`.
 
-La colonne de classement range chaque pièce dans l’arborescence, sans confirmation. Après `pm dossier index lancer`, le serveur range chaque pièce dès que sa ligne est analysée, même si l’index n’est pas affiché. Un lancement fait depuis l’interface la range quand le volet affiche la réponse. Pour corriger, l’avocat change la valeur dans le tableau.
+La colonne de classement range chaque pièce dans l’arborescence, sans confirmation. Après `pm dossier case-index lancer`, le serveur range chaque pièce dès que sa ligne est analysée, même si l’index n’est pas affiché. Un lancement fait depuis l’interface la range quand le volet affiche la réponse. Pour corriger, l’avocat change la valeur dans le tableau.
 
 ## arborescence
 
-`pm dossier arborescence` lit l’arborescence et la proposition en attente. L’arborescence est commune à tous les dossiers : c’est la clé `arborescence` de `~/.piecemaker/ontologie.json`. Pour proposer un changement, modifiez cette clé avec l’outil Edit ou Write (Codex : apply_patch), jamais par le shell : le hook `guard-ontologie` refuse l’écriture, fusionne la modification dans la proposition en attente (`ontologie.proposition.json`) et vous répond ce qui a changé. Chaque modification s’ajoute à la proposition en attente. `--dossiers JSON` propose aussi une arborescence complète : `[{nom, explication, type}]`, un « / » crée un sous-dossier ; `--motif` dit pourquoi. La proposition ne change rien : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Index › Classement, puis enregistre. Une nouvelle proposition remplace la précédente. Sans arborescence, la base est Projets, Pièces, Archives, Notes et recherches. Les dossiers de premier niveau sont les types de documents. Aucun fichier n’est déplacé.
+`pm dossier arborescence` lit l’arborescence et la proposition en attente. L’arborescence est commune à tous les dossiers : c’est la clé `arborescence` de `~/.piecemaker/ontologie.json`. Pour proposer un changement, modifiez cette clé avec l’outil Edit ou Write (Codex : apply_patch), jamais par le shell : le hook `guard-ontologie` refuse l’écriture, fusionne la modification dans la proposition en attente (`ontologie.proposition.json`) et vous répond ce qui a changé. Chaque modification s’ajoute à la proposition en attente. `--dossiers JSON` propose aussi une arborescence complète : `[{nom, explication, type}]`, un « / » crée un sous-dossier ; `--motif` dit pourquoi. La proposition ne change rien : l’avocat accepte, refuse ou modifie chaque changement dans l’onglet Case index › Classement, puis enregistre. Une nouvelle proposition remplace la précédente. Sans arborescence, la base est Projets, Pièces, Archives, Notes et recherches. Les dossiers de premier niveau sont les types de documents. Aucun fichier n’est déplacé.
 
 ## classer
 

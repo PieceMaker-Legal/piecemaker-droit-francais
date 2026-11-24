@@ -14,7 +14,7 @@ describe('analyse de l’Index dans Dossier', () => {
   it('reprend l’analyse enregistrée et permet d’y ajouter une colonne', async () => {
     const project = '/dossier-exemple';
     const file = 'Index exemple.json';
-    const review: Review = { version: 1, title: 'Index', templateName: 'Index', category: 'documents', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'gpt-6-luna', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date du document', format: 'date' }], rows: [], cells: {} };
+    const review: Review = { version: 1, title: 'Case index', templateName: 'Case index', category: 'documents', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'gpt-6-luna', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date du document', format: 'date' }], rows: [], cells: {} };
     const detail = { project, file, status: 'done', review };
     const rpc = vi.fn(async (_method: string, path: string, body?: unknown) => {
       if (path === '/assistant') return { fichier: file };
@@ -42,7 +42,7 @@ describe('analyse de l’Index dans Dossier', () => {
   it('affiche le titre dans la première cellule, avec le nom source comme secours', async () => {
     const project = '/dossier-exemple';
     const title = { summary: 'Convention de prestation', flag: 'grey' as const, reasoning: '', citations: [{ document: 'piece.md', quote: 'Convention de prestation', verified: true }] };
-    const review: Review = { version: 1, title: 'Index', templateName: 'Index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [{ id: 'r1', label: 'source.pdf', title, documents: [], status: 'done' }, { id: 'r2', label: 'annexe.pdf', documents: [], status: 'done' }], cells: {} };
+    const review: Review = { version: 1, title: 'Case index', templateName: 'Case index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [{ id: 'r1', label: 'source.pdf', title, documents: [], status: 'done' }, { id: 'r2', label: 'annexe.pdf', documents: [], status: 'done' }], cells: {} };
     const rpc = vi.fn(async (_method: string, path: string) => path === '/assistant' ? { fichier: 'index.json' } : { project, file: 'index.json', status: 'done', review });
     mount(root, { context: { theme: 'light', project: { name: 'Exemple', path: project }, session: null }, rpc, onContextChange: () => () => {} }, { project, onBack: vi.fn() });
     await vi.waitFor(() => expect(root.querySelectorAll('[data-title-row]')).toHaveLength(2));
@@ -54,7 +54,7 @@ describe('analyse de l’Index dans Dossier', () => {
 
   it('s’affiche comme l’Index même de l’onglet Dossier : sans retour, avec la colonne de liens de l’hôte', async () => {
     const project = '/dossier-exemple';
-    const review: Review = { version: 1, title: 'Index', templateName: 'Index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [{ id: 'r1', label: 'Contrat', piece: 'Pièces/Contrat.pdf', documents: [], status: 'done' }], cells: {} };
+    const review: Review = { version: 1, title: 'Case index', templateName: 'Case index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [{ id: 'r1', label: 'Contrat', piece: 'Pièces/Contrat.pdf', documents: [], status: 'done' }], cells: {} };
     const rpc = vi.fn(async (_method: string, path: string) => path === '/assistant' ? { fichier: 'index.json' } : { project, file: 'index.json', status: 'done', review });
     const cell = vi.fn((row: { piece?: string }) => `<span data-liens>${row.piece}</span>`);
     mount(root, { context: { theme: 'light', project: { name: 'Exemple', path: project }, session: null }, rpc, onContextChange: () => () => {} }, { project, rowColumn: { title: 'Liens', cell } });
@@ -68,7 +68,7 @@ describe('analyse de l’Index dans Dossier', () => {
     const project = '/dossier-exemple';
     const row = (id: string, piece: string) => ({ id, label: id, piece, documents: [], status: 'done' as const });
     const cell = (summary: string) => ({ summary, flag: 'grey' as const, reasoning: '', citations: [{ document: 'x.md', quote: summary, verified: true }] });
-    const review: Review = { version: 1, title: 'Index', templateName: 'Index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [row('recent', 'Pièces/b.pdf'), row('note', 'Notes/n.md'), row('sans-date', 'Pièces/c.pdf'), row('ancien', 'Pièces/a.pdf')], cells: { recent: { 0: cell('12/03/2024') }, note: { 0: cell('01/01/2020') }, ancien: { 0: cell('2021-05-01') } } };
+    const review: Review = { version: 1, title: 'Case index', templateName: 'Case index', projectPath: project, createdAt: '', updatedAt: '', provider: 'codex', model: 'exemple', concurrency: 1, columns: [{ index: 0, name: 'Date', prompt: 'Date ?', format: 'date' }], rows: [row('recent', 'Pièces/b.pdf'), row('note', 'Notes/n.md'), row('sans-date', 'Pièces/c.pdf'), row('ancien', 'Pièces/a.pdf')], cells: { recent: { 0: cell('12/03/2024') }, note: { 0: cell('01/01/2020') }, ancien: { 0: cell('2021-05-01') } } };
     const rpc = vi.fn(async (_method: string, path: string) => path === '/assistant' ? { fichier: 'index.json' } : { project, file: 'index.json', status: 'done', review });
     let active = true;
     const listeners = new Set<() => void>();
@@ -88,7 +88,7 @@ describe('analyse de l’Index dans Dossier', () => {
     const back = vi.fn();
     const focus = vi.fn();
     window.addEventListener('piecemaker:panel-focus', focus);
-    const draft = { id: 'index-exemple', project: '/dossier-exemple', title: 'Index', templateName: 'Index', provider: 'codex', model: 'gpt-6-luna', rows: [{ label: 'Contrat', documents: ['Contrat.md'] }], columns: [{ name: 'Date', prompt: 'Date du document', format: 'date' }] };
+    const draft = { id: 'index-exemple', project: '/dossier-exemple', title: 'Case index', templateName: 'Case index', provider: 'codex', model: 'gpt-6-luna', rows: [{ label: 'Contrat', documents: ['Contrat.md'] }], columns: [{ name: 'Date', prompt: 'Date du document', format: 'date' }] };
     const rpc = vi.fn(async (_method: string, path: string) => {
       if (path === '/assistant') return { projet: draft.id };
       if (path === '/drafts/list') return { drafts: [draft] };
@@ -99,7 +99,7 @@ describe('analyse de l’Index dans Dossier', () => {
     });
     mount(root, { context: { theme: 'light', project: { name: 'Dossier exemple', path: draft.project }, session: null }, rpc, onContextChange: () => () => {} }, { project: draft.project, onBack: back });
     await vi.waitFor(() => expect(root.querySelector('[data-launch]')).not.toBeNull());
-    expect(root.querySelector('.ptr-launch')!.textContent).toContain('Index');
+    expect(root.querySelector('.ptr-launch')!.textContent).toContain('Case index');
     expect(rpc).toHaveBeenCalledWith('POST', '/assistant', { action: 'index', project: draft.project });
     expect(focus).toHaveBeenLastCalledWith(expect.objectContaining({ detail: { tab: 'plugin:piecemaker-dossier', view: 'chronology' } }));
     root.querySelector<HTMLButtonElement>('[data-add-questions]')!.click();

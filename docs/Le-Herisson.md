@@ -64,7 +64,7 @@ flowchart LR
 
 | Feature | Fichiers (sous `.piecemaker/`) | Écriture | Avant (PreToolUse) | Après (PostToolUse) | Skill | Délai |
 |---|---|---|---|---|---|---|
-| `ontologie` | `ontologie.json` (dans `~/.piecemaker`), `ontologie.proposition.json` | proposition | devient une proposition (onglet Index › Ontologie) | — | `okf` | — |
+| `ontologie` | `ontologie.json` (dans `~/.piecemaker`), `ontologie.proposition.json` | proposition | devient une proposition (onglet Case index › Ontologie) | — | `okf` | — |
 | `okf` | `okf/**` | agent | Write ou Edit | après une écriture d'un concept : `pm okf verify` (validateur Context-OKF strict : erreurs et lints) | `okf` | 30 s |
 | `etapes` | `etapes.json` | serveur | refusée : l'avocat règle les étapes sur le tableau | — | `piecemaker` | — |
 | `protection` | `protection.json` | serveur | refusée : l'avocat lève la protection par le bouclier | — | `piecemaker` | — |
@@ -86,11 +86,11 @@ vérificateurs `pm`, reprise telle quelle, reste en français.
 
 | Feature | Moment | Cas | Texte exact |
 |---|---|---|---|
-| `ontologie` | PreToolUse | Edit, Write ou apply_patch accepté | `Edit saved as a proposal in ontologie.proposition.json. ontologie.json does not change, this is normal: the lawyer accepts, refuses or modifies each change in the Index › Ontologie tab.⏎Compared with the current ontology: relations — <changes>; document types — <changes>.⏎To add to it, edit ontologie.json again: each edit is added to the pending proposal.` |
+| `ontologie` | PreToolUse | Edit, Write ou apply_patch accepté | `Edit saved as a proposal in ontologie.proposition.json. ontologie.json does not change, this is normal: the lawyer accepts, refuses or modifies each change in the Case index › Ontologie tab.⏎Compared with the current ontology: relations — <changes>; document types — <changes>.⏎To add to it, edit ontologie.json again: each edit is added to the pending proposal.` |
 | `ontologie` | PreToolUse | proposition partie du fichier actuel (3e ligne remplacée) | `The pending proposal did not contain the replaced text: the new proposal starts from the current file and replaces the old proposal.` |
 | `ontologie` | PreToolUse | proposition invalide | `Proposal not saved, nothing changed: <reason>. Correct the cause, then edit <file> again.` |
 | `ontologie` | PreToolUse | serveur arrêté (raison) | `PieceMaker is not running, the proposal cannot be checked; ask the lawyer to start PieceMaker` |
-| `ontologie` | PreToolUse | écriture par le shell | `Only the lawyer sets the link ontology (~/.piecemaker/ontologie.json, common to all cases), in the Index › Ontologie tab. Read it with pm okf ontologie. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides.` |
+| `ontologie` | PreToolUse | écriture par le shell | `Only the lawyer sets the link ontology (~/.piecemaker/ontologie.json, common to all cases), in the Case index › Ontologie tab. Read it with pm okf ontologie. To propose a change, edit ontologie.json with the Edit or Write tool (or apply_patch), never with the shell: the edit becomes a proposal and the lawyer decides.` |
 | `ontologie` | PreToolUse | accès à la clé de sceau `ontologie.cle` | `Only the PieceMaker server can access the seal key of the ontology (~/.piecemaker/ontologie.cle).` |
 | `ontologie` | PreToolUse | écriture d'une proposition en attente (`*.proposition.json`) | le texte « écriture par le shell » de la feature |
 | `etapes` | PreToolUse | toute écriture | `Only the lawyer sets the case steps (.piecemaker/etapes.json), on the board of the Suivi des dossiers tab. Read the current step and the document to produce with pm check. Never write this file. To change a step, ask the lawyer.` |
