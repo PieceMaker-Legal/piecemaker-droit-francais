@@ -22,12 +22,13 @@ export const resourceOf = (projectPath: string, filePath: string): string => pos
 export const text = (value: unknown): string => typeof value === 'string' ? value.trim() : '';
 export const pieceOf = (resource: unknown): string => text(resource).replace(/^\/+/, '').normalize('NFC');
 
-export function resourceError(projectPath: string, resource: string, folders: Array<{ name?: unknown }>): string | null {
+export function resourceError(projectPath: string, resource: string, folders: Array<{ name?: unknown; type?: unknown }>, pieceTypes: string[] = DEFAULT_GRAPH_TYPES): string | null {
   const value = text(resource).normalize('NFC');
   const normalized = path.posix.normalize(value);
   const outside = `resource hors des pièces de l'arborescence : ${value}`;
   if (!value.startsWith('/') || normalized.split('/').includes('..') || normalized.startsWith('/.piecemaker/') || normalized.endsWith('/')) return outside;
   if (!folders.some((folder) => normalized.startsWith(`/${text(folder.name).normalize('NFC')}/`))) return outside;
+  if (!pieceTypes.includes(folderType(normalized.slice(1), folders))) return `resource hors d'un dossier de type ${pieceTypes.join(', ')} : ${value}`;
   return fs.existsSync(path.join(projectPath, ...normalized.slice(1).split('/'))) ? null : `resource introuvable dans le dossier : ${value}`;
 }
 

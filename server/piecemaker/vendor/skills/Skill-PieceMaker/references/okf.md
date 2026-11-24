@@ -16,7 +16,7 @@ Le bundle OKF du dossier suit Context-OKF : Open Knowledge Format 0.3 sur le soc
 
 ## Arborescence
 
-L'avocat règle seul l'arborescence commune à tous les dossiers (onglet Index › Classement). Pour la modifier, édite `~/.piecemaker/ontologie.json` (clé `arborescence`) avec Edit ou Write, jamais par le shell, ou lance `pm okf ontologie proposer`. Le hook `guard-ontologie` en fait une proposition ; l'avocat l'accepte, la refuse ou la modifie.
+L'avocat règle seul l'arborescence commune à tous les dossiers (onglet Index, lien « Arborescence » de la légende). Pour la modifier, édite `~/.piecemaker/ontologie.json` (clé `arborescence`) avec Edit ou Write, jamais par le shell, ou lance `pm okf ontologie proposer`. Le hook `guard-ontologie` en fait une proposition ; l'avocat l'accepte, la refuse ou la modifie.
 
 ## Suivi
 

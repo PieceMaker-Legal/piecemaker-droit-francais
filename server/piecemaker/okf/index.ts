@@ -69,9 +69,10 @@ export function createOkfBackend(options: OkfOptions) {
       execFile(options.python(), ['-E', '-s', path.join(options.skillRoot, 'scripts', 'validate.py'), root, '--strict'], { timeout: 25_000, maxBuffer: 8 * 1024 * 1024 }, (error, stdout, stderr) => {
         const report = parseValidation(stdout);
         const folders = readArborescence();
+        const pieceTypes = graphTypesOf(projectPath);
         for (const concept of readBundle(projectPath)) {
           const resource = text(concept.frontmatter.resource);
-          const message = resource ? resourceError(projectPath, resource, folders) : null;
+          const message = resource ? resourceError(projectPath, resource, folders, pieceTypes) : null;
           if (message) report.erreurs.push({ fiche: concept.id.slice(1), erreur: message });
         }
         if (error && !report.resume) reject(new Error(`validateur OKF indisponible : ${(stderr || error.message).trim()}`));

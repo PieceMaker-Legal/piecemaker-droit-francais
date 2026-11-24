@@ -107,12 +107,14 @@ test('verify lance le validateur Context-OKF en mode strict', async () => {
 test('verify refuse une resource hors des pièces de l\'arborescence', async () => {
   const { projectPath, root } = dossier();
   const okf = backend(projectPath);
-  const resources = ['/../secret.pdf', '/.piecemaker/okf/index.md', '/Autre/Contrat.pdf', '/Pièces/Absent.pdf', 'Pièces/Contrat.pdf'];
+  const resources = ['/../secret.pdf', '/.piecemaker/okf/index.md', '/Autre/Contrat.pdf', '/Pièces/Absent.pdf', 'Pièces/Contrat.pdf', '/Projets/Note.pdf'];
+  write(projectPath, 'Projets/Note.pdf', 'Note de travail.');
   resources.forEach((resource, index) => write(root, `positions/p${index}.md`, `---\ntype: Position\ntitle: P${index}\ndescription: Test.\nresource: "${resource}"\n---\n\n# P${index}\n\nVoir [créance](creance.md).\n`));
   const erreurs = (await okf.verify('p')).erreurs.filter((finding) => finding.fiche.startsWith('positions/p'));
   assert.deepEqual(erreurs.map((finding) => finding.fiche), resources.map((_, index) => `positions/p${index}.md`));
   assert.match(erreurs[0].erreur, /hors des pièces de l'arborescence/);
   assert.match(erreurs[3].erreur, /introuvable/);
+  assert.match(erreurs[5].erreur, /hors d'un dossier de type Pièces/);
 });
 
 test('persons rend une fiche par personne ou organisation, classée par auteur', () => {
