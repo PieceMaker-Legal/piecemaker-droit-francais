@@ -122,7 +122,7 @@ test('une modification manuelle est écrasée et une pièce sortie de l\'Index p
   assert.match(fs.readFileSync(path.join(root, 'documents', 'pieces-courrier.md'), 'utf8'), /title: Courrier/);
   store.write('p', FILE, review([row('r1', CONTRACT, 'Contrat')]));
   okf.read('p');
-  assert.deepEqual(fs.readdirSync(path.join(root, 'documents')).sort(), ['autre.md', CONTRACT_FILE, 'index.md'].sort());
+  assert.deepEqual(fs.readdirSync(path.join(root, 'documents')).sort(), [CONTRACT_FILE, 'index.md'].sort());
   const before = fs.readFileSync(path.join(root, 'index.md'), 'utf8');
   okf.read('p');
   assert.equal(fs.readFileSync(path.join(root, 'index.md'), 'utf8'), before);

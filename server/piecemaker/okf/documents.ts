@@ -155,7 +155,7 @@ function linkFromRoot(root: string): void {
 
 /**
  * Régénère documents/ depuis le Case index, comme persons/ depuis la base : sans Case index, rien ne change.
- * Une fiche générée dont la pièce a quitté le Case index disparaît ; une fiche Document écrite à la main pour une pièce
+ * Toute fiche que le Case index ne génère pas disparaît ; une fiche Document écrite à la main pour une pièce
  * du Case index cède la place à la fiche générée, et les liens qui la visaient sont réécrits.
  */
 export function writeDocuments(projectPath: string, review: Review | null | undefined, pieceTypes: string[] = DEFAULT_GRAPH_TYPES): void {
@@ -170,9 +170,7 @@ export function writeDocuments(projectPath: string, review: Review | null | unde
   for (const name of fs.readdirSync(folder)) {
     if (!name.endsWith('.md') || files.has(name)) continue;
     const frontmatter = readConcept(path.join(folder, name));
-    const generated = (frontmatter?.generated as { by?: unknown } | undefined)?.by === GENERATED_BY;
     const replacement = text(frontmatter?.type) === DOCUMENT ? fileOf.get(pieceOf(frontmatter?.resource)) : undefined;
-    if (!generated && !replacement) continue;
     if (replacement) renames.set(name.normalize('NFC'), replacement);
     fs.rmSync(path.join(folder, name), { force: true });
   }
