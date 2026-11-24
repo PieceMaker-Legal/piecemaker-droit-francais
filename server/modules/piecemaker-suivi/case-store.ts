@@ -55,7 +55,7 @@ export function brainSuiviWrite(root: string, fichier: string, op: 'set' | 'upda
 
 export function brainSuiviOfActe(root: string, nom: string): string | null {
   const roadmap = roadmapOf(root);
-  const goal = roadmap ? goalOwners(path.dirname(roadmap))[nom] : undefined;
+  const goal = roadmap ? (goalOwners(path.dirname(roadmap)) as Record<string, string>)[nom] : undefined;
   return goal ? suiviOfGoal(goal) : null;
 }
 
