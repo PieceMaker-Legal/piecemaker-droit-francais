@@ -75,9 +75,10 @@ Corrélatif : [devoir de payer](devoir-de-payer.md). Titulaire : [prestataire](.
 1. Écrivez les concepts directement avec Write et Edit dans `.piecemaker/okf/`.
 2. Après chaque écriture, le Hérisson lance le validateur en mode strict. Corrigez chaque `ERROR` et chaque `LINT` qu'il rend : lien cassé, concept orphelin, frontmatter incomplet.
 3. Pour vérifier tout le bundle, lancez `pm okf verify`.
-4. Pour une pièce, lisez la pièce entière. Suivez la méthode de lecture dans l'ordre : document, actes, rôles, positions, chaîne, versions, conflits.
-5. Ajoutez une entrée datée à `log.md` à chaque création, modification ou extinction.
-6. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json`, qui porte l'arborescence commune à tous les dossiers. Proposez un changement par `pm okf ontologie proposer`.
+4. Partez de l'Index du dossier : `pm dossier index lire` rend la revue tabulaire, une ligne par pièce avec ses informations principales et son classement. Seules les pièces de type `Pièces` entrent dans le bundle. L'Index oriente ; il ne remplace pas la citation.
+5. Pour une pièce, lisez la pièce entière. Suivez la méthode de lecture dans l'ordre : document, actes, rôles, positions, chaîne, versions, conflits.
+6. Ajoutez une entrée datée à `log.md` à chaque création, modification ou extinction.
+7. Un hook refuse toute écriture directe dans `~/.piecemaker/ontologie.json`, qui porte l'arborescence commune à tous les dossiers. Proposez un changement par `pm okf ontologie proposer`.
 
 ## Parties
 
