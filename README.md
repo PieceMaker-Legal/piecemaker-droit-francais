@@ -23,16 +23,16 @@
 **Windows** (PowerShell) :
 
 ```powershell
-$ProgressPreference = 'SilentlyContinue'; $r = Invoke-RestMethod https://api.github.com/repos/PieceMaker-Legal/piecemaker-droit-francais/releases/latest; $a = $r.assets | Where-Object name -like 'piecemaker-droit-francais-desktop-*-win-x64.exe' | Select-Object -First 1; $f = Join-Path $env:TEMP $a.name; Invoke-WebRequest $a.browser_download_url -OutFile $f -UseBasicParsing; Start-Process $f
+irm https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/desktop-bootstrap/install.ps1 | iex
 ```
 
 **macOS** (Terminal) :
 
 ```sh
-url=$(curl -fsSL https://api.github.com/repos/PieceMaker-Legal/piecemaker-droit-francais/releases/latest | grep -o '"browser_download_url": *"[^"]*\.dmg"' | sed 's/.*"\(https[^"]*\)"/\1/' | head -n 1) && curl -fL "$url" -o /tmp/PieceMaker.dmg && open /tmp/PieceMaker.dmg
+curl -fsSL https://raw.githubusercontent.com/PieceMaker-Legal/piecemaker-droit-francais/main/desktop-bootstrap/install.sh | sh
 ```
 
-Ou téléchargez l'installeur depuis la [page Releases](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/releases/latest).
+Les deux commandes installent la dernière version publiée. Sous Windows, l'installeur `.exe` est aussi téléchargeable depuis la [page Releases](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/releases/latest).
 
 ## Licence et attribution
 
