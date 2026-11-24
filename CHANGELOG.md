@@ -3,6 +3,40 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.4.0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.3.4...v2.4.0) (2026-11-24)
+
+### New Features
+
+* **brain:** goals par dossier (Goal.md, Memory.md, Archive.md, Timeline.json) ([c301442](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/c3014426f2b805b59ae0cd9596bef5f778be6153))
+* **catala:** faits du dossier reliés directement aux pièces citées ([03ae6ff](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/03ae6ff2d202b0a39da154a049d70d6f0be051cf))
+* **library:** library de l'agent central sur Legal-OKF, clients et projets générés ([66d21c2](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/66d21c24bf133085bedca40b29ecf9275583b815))
+* **okf:** bundle Context-OKF 0.3 validé par le Hérisson, frontend adapté ([4ba760a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/4ba760a9ec2e9769aa26b9ff899282a14f49b058))
+* **okf:** bundle persons généré depuis la base, auteur gliner/agent/human ([b5957cd](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b5957cd9d92afb903b29c56ff26351f5e3a9718b))
+* **okf:** bundle restreint aux dossiers de type Pièces ([a8500ec](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/a8500ece997c05b05444d2496b5271b073da106e))
+* **okf:** documents/ généré depuis l'Index du dossier ([7cd5dfb](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7cd5dfb415465a615208cde16791a1b43b152528))
+* **okf:** documents/ ne garde que les fiches générées par le Case index ([ed98b0a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/ed98b0adae22b71b69b430fe31f5bd790f44c31b))
+* **okf:** fichiers du bundle limités à 500 lignes, concision dans le skill ([7c96f68](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7c96f685d5681604a53bbaa417d34fbb6e6bff11))
+* **okf:** graphe libre à la souris et suppression de l'affichage de l'ontologie ([328fa9f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/328fa9f835db995b7df936a2f3dbd0b7c37098e9))
+* **okf:** liens persons réécrits dans tout le bundle quand un code change ([419072f](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/419072ff0153448f69cdf8708d289450451c6a10))
+* **okf:** ontologie Legal Ontologies Foundry à la place des prémisses ([be5b382](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/be5b38200dced2c3186d8fec3216f90102bf305a))
+* **okf:** verify refuse une resource hors des pièces de l'arborescence ([b8debc8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b8debc8f7ad2cb9e02572029c70663d4ae69f2fa))
+
+### Bug Fixes
+
+* **brain:** un dossier n'entre dans le brain que sur choix ; noms Catala lus dans les goals ([181ea18](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/181ea18b517c235ab68f8326067dd5754847e0cd))
+* **build:** typer les propriétaires de goals pour la compilation du serveur ([b0b492a](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/b0b492ab5540d2d9d69538f6f925f8013975e871))
+* **okf:** erreur d'arborescence et roundRect du graphe ([7b7eea6](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/7b7eea68f8493c64a4b6543c33423d2c2731540f))
+
+### Refactoring
+
+* **catala:** détacher Catala des prémisses OKF ([03b11f3](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/03b11f3767dfbedbf3230cf56d88292b20e93813))
+* **dossier:** renomme l'Index du dossier en Case index ([e595b9d](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/e595b9d201bf9900e6b237e2ac1d90a82f7b0c3c))
+
+### Documentation
+
+* **carte-outils:** ancre default_provider recalée, instantané régénéré ([1ae5ed8](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/1ae5ed80e016ab14ca693ee045e42499b64dc5b1))
+* **okf:** le skill part de l'Index du dossier pour chaque pièce ([84004b7](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/84004b7605af268428806edad278c55b922b94a8))
+
 ## [2.3.4](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.3.3...v2.3.4) (2026-11-23)
 
 ### Bug Fixes
