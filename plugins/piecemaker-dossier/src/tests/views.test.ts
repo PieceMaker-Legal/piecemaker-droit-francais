@@ -37,7 +37,7 @@ describe('Index du dossier', () => {
     const legend = view.querySelector('.pmd-okf-legend')!;
     expect(legend.querySelector('button[data-action="index-chronology"][aria-pressed="false"]')?.textContent).toBe('Chronologie');
     expect(Array.from(legend.querySelectorAll('a[href]'), (link) => link.textContent)).toEqual(['Arborescence']);
-    expect(view.querySelector('.pmd-toolbar, .pmd-subtitle, [data-action="okf-verify"], [data-action="refresh"], [data-action="edit-ontology"]')).toBeNull();
+    expect(view.querySelector('.pmd-toolbar, .pmd-subtitle, [data-action="okf-verify"], [data-action="refresh"]')).toBeNull();
     expect(view.querySelectorAll('button')).toHaveLength(1);
   });
 
@@ -59,7 +59,7 @@ describe('Graphe du dossier', () => {
     expect(wrap.querySelector('[data-okf-graph]')).not.toBeNull();
     const legend = wrap.querySelector('.pmd-okf-legend')!;
     expect(Array.from(legend.querySelectorAll('.pmd-okf-key'), (key) => key.textContent)).toEqual(['Type du document', 'Fiche LOF', 'Partie']);
-    expect(legend.querySelector('a[href][data-action="edit-ontology"]')?.textContent).toBe('Ontologie');
+    expect(legend.querySelector('a[href][data-action="edit-tree"]')?.textContent).toBe('Arborescence');
     const toggle = legend.querySelector('button[data-action="okf-premises"]');
     expect(toggle?.textContent).toBe('Fiches LOF');
     expect(toggle?.getAttribute('aria-pressed')).toBe(String(pressed));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { entities, entityEvidence, ficheLinks, graphElements, linkedEntities, partyEntities, pieceStatements, spreadBoxes } from '../okf.js';
+import { entities, entityEvidence, ficheLinks, graphElements, linkedEntities, partyEntities, pieceStatements } from '../okf.js';
 import { ficheCardMarkup } from '../okf-card.js';
 import type { OkfIndex } from '../okf.js';
 import { documentTitle, linksMarkup, shell } from '../views.js';
@@ -176,24 +176,5 @@ describe('fiches LOF de l’index OKF', () => {
     const html = ficheCardMarkup(lofIndex, '/_parties/Jean Dupont.md');
     expect(html).toContain('Concepts');
     expect(html).toContain('data-open-fiche="/_lof/creance.md"');
-  });
-});
-
-describe('écartement du graphe', () => {
-  it('spreadBoxes sépare les nœuds superposés d’au moins l’écart demandé', () => {
-    const boxes = [{ x: 0, y: 0, w: 100, h: 36 }, { x: 10, y: 5, w: 100, h: 36 }, { x: 20, y: 0, w: 60, h: 36 }];
-    spreadBoxes(boxes, 20);
-    for (let i = 0; i < boxes.length; i += 1) for (let j = i + 1; j < boxes.length; j += 1) {
-      const [a, b] = [boxes[i], boxes[j]];
-      const apart = Math.abs(a.x - b.x) >= (a.w + b.w) / 2 + 19.9 || Math.abs(a.y - b.y) >= (a.h + b.h) / 2 + 19.9;
-      expect(apart).toBe(true);
-    }
-  });
-
-  it('spreadBoxes écarte une rangée de nœuds sans l’étirer en ligne', () => {
-    const boxes = Array.from({ length: 6 }, (_, at) => ({ x: at * 40, y: 0, w: 120, h: 36 }));
-    spreadBoxes(boxes, 24, 12);
-    expect(Math.max(...boxes.map((box) => box.x)) - Math.min(...boxes.map((box) => box.x))).toBeLessThan(6 * 144);
-    expect(new Set(boxes.map((box) => Math.round(box.y))).size).toBeGreaterThan(1);
   });
 });

@@ -1,10 +1,11 @@
 import { isPieceRow, mountIndexAnalysis } from './index-analysis.js';
 import type { IndexChronology } from './index-analysis.js';
-import { editOntology } from './ontology.js';
+import { editClassification } from './classification.js';
 import { pendingProposals } from './pending-proposals.js';
 import { etapesApi, knowledgeApi } from './api.js';
-import { isParty, mountGraph, okfApi } from './okf.js';
-import type { OkfGraph } from './okf.js';
+import { isParty, okfApi } from './okf.js';
+import { mountGraph } from './okf-graph.js';
+import type { OkfGraph } from './okf-graph.js';
 import { ficheCardMarkup } from './okf-card.js';
 import type { PendingProposals } from './okf.js';
 import { buildCompanyValidationOperations } from './company-search.js';
@@ -525,12 +526,8 @@ export function mount(container: HTMLElement, api: PluginApi): void {
         notifyChronology();
         return;
       }
-      if (action === 'edit-ontology' && context.project) {
-        void editOntology(root, context.project.name, () => { void load(); }, context.project.path).catch(showError);
-        return;
-      }
       if (action === 'edit-tree' && context.project) {
-        void editOntology(root, context.project.name, () => { void load(); }, context.project.path, 'tree').catch(showError);
+        void editClassification(root, context.project.path, () => { void load(); }).catch(showError);
         return;
       }
       if (action === 'company-search') {

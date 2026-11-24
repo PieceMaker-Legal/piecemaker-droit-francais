@@ -308,7 +308,7 @@ export function graphView(okf: OkfIndex | null, showPremises = true): string {
     <div class="pmd-okf-legend" role="group" aria-label="Légende du graphe">
       ${key('file', 'Type du document')}${key('diamond', 'Fiche LOF')}${key('users', 'Partie')}
       <button type="button" class="pmd-button piecemaker-button piecemaker-button--sm ${showPremises ? 'piecemaker-button--black' : 'piecemaker-button--glass'}" data-action="okf-premises" aria-pressed="${showPremises}">Concepts</button>
-      <a href="#" data-action="edit-ontology" title="Ontologie Legal Ontologies Foundry : classes et propriétés">Ontologie</a>
+      <a href="#" data-action="edit-tree" title="Organiser l’arborescence du dossier (colonne Classement)">Arborescence</a>
     </div>
   </div>`;
 }
