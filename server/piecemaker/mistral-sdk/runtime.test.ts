@@ -5,9 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 
 import type { ProviderRuntimeContext, NormalizedMessage } from '@/shared/types.js';
+import { closeConnection } from '@/modules/database/connection.js';
+import { initializeDatabase } from '@/modules/database/init-db.js';
+import { credentialsDb, userDb } from '@/modules/database/index.js';
 
 import { createMistralHistory } from './history.js';
-import { createMistralSdkFork, createMistralSdkRuntime, installMistralTokenUsage } from './runtime.js';
+import { createMistralSdkFork, createMistralSdkRuntime, installMistralSdk, installMistralTokenUsage } from './runtime.js';
 import type { createMistralTools } from './tools.js';
 import type { mistralSdkAuth } from './auth.service.js';
 
@@ -298,4 +301,49 @@ test('le compteur Mistral montre le contexte du dernier appel sur la fenêtre du
   installMistralTokenUsage(service, id => ({ 'app-mistral': { provider: 'mistral', provider_session_id: 'mistral-sdk-compteur' }, 'app-claude': { provider: 'claude' } })[id], history);
   assert.deepEqual(await service.getSessionTokenUsage('app-mistral'), budget);
   assert.deepEqual(await service.getSessionTokenUsage('app-claude'), { used: -1 });
+});
+
+test('le statut du fournisseur suit les identifiants enregistrés, pas une valeur figée', async t => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'mistral-runtime-test-'));
+  const previousDatabasePath = process.env.DATABASE_PATH;
+  const tempDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'mistral-status-'));
+  closeConnection();
+  process.env.DATABASE_PATH = path.join(tempDirectory, 'auth.db');
+  await initializeDatabase();
+  t.after(async () => {
+    closeConnection();
+    if (previousDatabasePath === undefined) {
+      delete process.env.DATABASE_PATH;
+    } else {
+      process.env.DATABASE_PATH = previousDatabasePath;
+    }
+    await fs.rm(tempDirectory, { recursive: true, force: true });
+    await fs.rm(home, { recursive: true, force: true });
+  });
+  const provider = { auth: {}, models: {}, sessions: { fetchHistory: async () => { throw new Error('Sans historique.'); } } } as unknown as Parameters<typeof installMistralSdk>[0];
+  installMistralSdk(provider, home);
+  assert.equal((await provider.auth.getStatus()).authenticated, false);
+  const user = userDb.createUser('compte-fictif', 'empreinte-fictive');
+  credentialsDb.createCredential(Number(user.id), 'Compte Mistral', 'mistral_sdk', 'cle-fictive');
+  assert.equal((await provider.auth.getStatus()).authenticated, true);
+});
+
+test('les outils refusés par le tour ne sont pas proposés au modèle', async t => {
+  const { home, history } = await setup(t);
+  const requests: unknown[] = [];
+  const definition = (name: string) => ({ type: 'function' as const, function: { name, parameters: { type: 'object' } } });
+  const tools = (async () => ({
+    instructions: 'Skills disponibles : fictitious-skill', close: async () => {}, turnEnd: async () => '',
+    tools: new Map([
+      ['probe', { name: 'probe', readOnly: true, execute: async () => '', definition: definition('probe') }],
+      ['interdit-shell', { name: 'interdit-shell', readOnly: false, execute: async () => '', definition: definition('interdit-shell') }],
+      ['mcp__excl__outil', { name: 'mcp__excl__outil', readOnly: true, execute: async () => '', definition: definition('mcp__excl__outil') }],
+    ]),
+  })) satisfies typeof createMistralTools;
+  const auth = fixtureClient([[{ content: 'Réponse sans outils refusés.' }]], requests);
+  await createMistralSdkRuntime(history, async () => [], home, auth, tools).run('Bonjour', { sessionId: 'mistral-sdk-outils-refuses', toolsSettings: { disallowedTools: ['interdit-shell', 'mcp__excl', 'hors-table'] } }, { userId: 1, send() {} } as never, context);
+  const offered = ((requests[0] as { tools?: Array<{ function: { name: string } }> }).tools ?? []).map(tool => tool.function.name);
+  assert.ok(offered.includes('probe'));
+  assert.ok(!offered.includes('interdit-shell'));
+  assert.ok(!offered.includes('mcp__excl__outil'));
 });
