@@ -215,6 +215,7 @@ export type OrchestratorDependencies = {
   chatChanged(sessionId: string): void;
   changeChatProvider(sessionId: string, provider: RunnableProvider): void;
   sessionModel(sessionId: string): string | null;
+  sessionExists?(sessionId: string): boolean;
   providers(userId: number | null): Promise<ProviderStatus[]>;
   permissions(provider: RunnableProvider, userId: number | null): Promise<Pick<TurnOptions, 'allowedTools' | 'disallowedTools'>>;
   defaultModel(provider: RunnableProvider, purpose?: 'lookup'): Promise<string>;

@@ -189,6 +189,7 @@ const orchestrator = createOrchestratorService({
     void broadcastSessionUpserted(sessionId);
   },
   sessionModel: sessionId => sessionsDb.getSessionById(sessionId)?.model ?? null,
+  sessionExists: sessionId => Boolean(sessionsDb.getSessionById(sessionId)),
   providers: providerStatuses,
   permissions: async (provider, userId) => {
     const { allowedTools, disallowedTools } = toolPreferences(provider, userId);

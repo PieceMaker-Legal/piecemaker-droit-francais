@@ -5,7 +5,7 @@ import { browserLogin } from '../../../scripts/piecemaker/mistral-sdk/browser-lo
 
 import { createMistralClient } from './client.js';
 
-const CREDENTIAL_TYPE = 'mistral_sdk';
+export const CREDENTIAL_TYPE = 'mistral_sdk';
 
 type LoginAttempt = {
   state: 'pending' | 'connected' | 'error';

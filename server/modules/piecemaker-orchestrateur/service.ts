@@ -121,12 +121,12 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
   const find = <T extends { id: string }>(list: T[], value: unknown, name: string) =>
     list.find(row => row.id === value) ?? refuse(404, name + ' introuvable.');
   const message = (id: unknown) => find(state.messages, id, 'Message');
+  const validSession = (id: string | null): string | null => id && (deps.sessionExists?.(id) ?? true) ? id : null;
   const thread = (id: unknown) => find(state.threads, id, 'Fil');
   const decision = (id: unknown) => find(state.decisions, id, 'Décision');
   const active = (t: Thread) => t.state === 'working' || t.state === 'blocked';
   const runs = new Map<string, { reply?: ThreadReply; startedAt?: string }>();
   let manualRecycle = false;
-  let initializing = false;
   let currentBatch: WakeEvent[] = [];
   let generation = 0;
   let retryAt = 0;
@@ -192,6 +192,10 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     Object.assign(orch, { key: randomUUID(), sessionId: null, turns: 0, provider: null, running: false, needsRecap: true, recaps: orch.recaps + 1 });
   }
   function ensureChat(p: TurnOptions['provider']) {
+    if (!validSession(orch.chatSessionId)) {
+      orch.chatSessionId = null;
+      orch.chatProvider = null;
+    }
     if (!orch.chatSessionId) {
       orch.chatSessionId = deps.openSession(p, root, SESSION_TITLE);
       deps.chatChanged(orch.chatSessionId);
@@ -200,16 +204,15 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     orch.chatProvider = p;
     return orch.chatSessionId;
   }
-  function pump(startRecap = false) {
-    if (!orch.running && (orch.pending.length || (orch.needsRecap && (startRecap || retryAt > 0))) && deps.now().getTime() >= retryAt) void orchestrate();
+  function pump() {
+    if (!orch.running && orch.pending.length && deps.now().getTime() >= retryAt) void orchestrate();
   }
   async function orchestrate() {
     generation++;
     const initialProvider = state.settings.orchestratorProvider;
     const recap = orch.needsRecap;
-    const batch = recap ? [] : orch.pending.splice(0);
+    const batch = orch.pending.splice(0);
     currentBatch = batch;
-    initializing = recap;
     const userMessages = batch.filter(e => e.type === 'message').map(e => message(e.messageId));
     orch.running = true;
     for (const row of userMessages) reaction(row, 'system', '👀', true);
@@ -224,10 +227,10 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       const permissions = await deps.permissions(p, orch.userId);
       const fresh = !orch.sessionId;
       orch.provider = p;
-      orch.sessionId ??= deps.openSession(p, root, 'Coordination interne', true);
+      orch.sessionId = validSession(orch.sessionId) ?? deps.openSession(p, root, 'Coordination interne', true);
       save();
       const preamble = fresh || recap ? formatPreamble({ state, projectPath: root, memory: store.memory(), sharedFolder: store.sharedFolder, recycled: recap, dossiers: central ? state.settings.folders : undefined }) : '';
-      const content = recap ? preamble : [preamble, formatWake({ ...orch, events: batch, now: deps.now() })].filter(Boolean).join('\n');
+      const content = [preamble, formatWake({ ...orch, events: batch, now: deps.now() })].filter(Boolean).join('\n');
       launched = true;
       const result = await deps.runTurn(orch.sessionId, orch.userId, content, {
         attachments: userMessages.flatMap(row => row.uploads ?? []),
@@ -240,27 +243,24 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
         retryAt = deps.now().getTime() + 10000;
       }
       if (result.error || !result.started) throw new Error(result.error ?? 'Tour non démarré.');
-      if (recap) orch.needsRecap = false;
-      else {
-        orch.turns++;
-        const ratio = await deps.contextRatio(orch.sessionId, p).catch(() => null);
-        rotate = orch.turns >= state.settings.recycleAfter || (ratio !== null && ratio > 0.7);
-      }
+      orch.needsRecap = false;
+      orch.turns++;
+      const ratio = await deps.contextRatio(orch.sessionId, p).catch(() => null);
+      rotate = orch.turns >= state.settings.recycleAfter || (ratio !== null && ratio > 0.7);
     } catch (error) {
       rotate = launched;
-      if (!launched || recap) retryAt = deps.now().getTime() + 10000;
+      if (!launched) retryAt = deps.now().getTime() + 10000;
       if (!launched) orch.pending.unshift(...batch);
       const notice = "Échec du coordinateur : " + (error instanceof Error ? error.message : String(error));
       if (state.messages.at(-1)?.text !== notice) add('system', notice, launched ? {} : { connect: { target: initialProvider === 'auto' ? 'claude' : initialProvider, reconnect: false } });
     } finally {
       for (const row of userMessages) reaction(row, 'system', '👀', false);
       orch.running = false;
-      initializing = false;
       currentBatch = [];
       if (rotate || manualRecycle || initialProvider !== state.settings.orchestratorProvider) resetSession();
       manualRecycle = false;
       save();
-      pump(true);
+      pump();
     }
   }
   function userMessage(text: string, userId: number | null) {
@@ -339,7 +339,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     try {
       const permissions = await deps.permissions(t.provider, orch.userId);
       if (runs.get(t.id) !== run) return;
-      t.sessionId ??= deps.openSession(t.provider, t.projectPath, t.title);
+      t.sessionId = validSession(t.sessionId) ?? deps.openSession(t.provider, t.projectPath, t.title);
       const content = t.inbox.splice(0, count).join('\n\n');
       save();
       const options: TurnOptions = {
@@ -439,7 +439,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     Object.assign(settings, { ...patch, concurrency: { ...settings.concurrency, ...patch.concurrency }, defaultModels: { ...settings.defaultModels, ...patch.defaultModels } });
     if (providerChanged && orch.chatSessionId && !orch.running) {
       resetSession();
-      queueMicrotask(() => pump(true));
+      queueMicrotask(() => pump());
     }
     save();
     drain();
@@ -811,9 +811,9 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
         orch.userId = userId;
         save();
       }
-      if (!orch.chatSessionId) {
+      if (!validSession(orch.chatSessionId)) {
         const p = await provider(state.settings.orchestratorProvider);
-        if (!orch.chatSessionId) ensureChat(p);
+        ensureChat(p);
         save();
       }
       return { sessionId: orch.chatSessionId, provider: orch.chatProvider };
@@ -837,7 +837,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       const threadOwner = state.threads.find(t => t.key === key);
       const token = generation;
       const check = () => {
-        if (initializing || orch.key !== key || !orch.running || token !== generation) refuse(403, 'Clé de session invalide ou orchestrateur inactif.');
+        if (orch.key !== key || !orch.running || token !== generation) refuse(403, 'Clé de session invalide ou orchestrateur inactif.');
       };
       if (!threadOwner) check();
       const args = parse(z.record(z.string(), z.unknown()), input);
@@ -926,7 +926,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       else {
         resetSession();
         save();
-        pump(true);
+        pump();
       }
       return { recycled: true };
     },

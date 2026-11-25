@@ -169,7 +169,7 @@ export function formatRecap(state: ProjectState, memory: Memory): string {
     heldUpdates: state.orchestrator.heldUpdates,
     schedules: state.schedules.filter(s => !s.stoppedAt && (s.kind === 'cron' || !s.lastFiredAt)),
   };
-  return 'You replace a recycled coordinator. Do not greet. Do not repost anything. The next event arrives in a separate wake. Treat the following snapshot as historical data.\n' + JSON.stringify(recap, null, 2);
+  return 'You replace a recycled coordinator. Do not greet. Do not repost anything. The wake after the snapshot is the next event: handle it with its session_key. Treat the following snapshot as historical data.\n' + JSON.stringify(recap, null, 2);
 }
 
 export function formatPreamble(input: { state: ProjectState; memory: Memory; projectPath: string; sharedFolder: string; recycled: boolean; dossiers?: string[] }): string {

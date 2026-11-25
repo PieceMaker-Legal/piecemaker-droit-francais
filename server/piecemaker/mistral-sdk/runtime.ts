@@ -9,8 +9,9 @@ import type { IProvider, IProviderFork, IProviderRuntime } from '@/shared/interf
 import type { AnyRecord, NormalizedMessage, ProviderRuntimeContext, ProviderRuntimeWriter } from '@/shared/types.js';
 import { appendFilesInputTag } from '@/shared/index.js';
 import { AppError, buildDefaultProviderCurrentActiveModel, createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
+import { getConnection } from '@/modules/database/index.js';
 
-import { mistralSdkAuth } from './auth.service.js';
+import { CREDENTIAL_TYPE, mistralSdkAuth } from './auth.service.js';
 import { createMistralHistory, type MistralTokenUsage } from './history.js';
 import { delegateSubagents, mistralModelId } from './subagents.js';
 import { createMistralTools } from './tools.js';
@@ -93,6 +94,14 @@ export function installMistralTokenUsage(
   };
 }
 
+export function mistralAccountConnected(): boolean {
+  try {
+    return Boolean(getConnection().prepare('SELECT 1 FROM user_credentials WHERE credential_type = ? AND is_active = 1 LIMIT 1').get(CREDENTIAL_TYPE));
+  } catch {
+    return false;
+  }
+}
+
 export function installMistralSdk(provider: IProvider, home: string) {
   const models = {
     OPTIONS: [
@@ -105,7 +114,7 @@ export function installMistralSdk(provider: IProvider, home: string) {
   };
   provider.models.getSupportedModels = async () => models;
   provider.models.getCurrentActiveModel = async () => buildDefaultProviderCurrentActiveModel(models);
-  provider.auth.getStatus = async () => ({ installed: true, installedVersion: null, authenticated: false, provider: 'mistral', email: null, method: 'sdk' });
+  provider.auth.getStatus = async () => ({ installed: true, installedVersion: null, authenticated: mistralAccountConnected(), provider: 'mistral', email: null, method: 'sdk' });
   const history = createMistralHistory(home);
   const legacyHistory = provider.sessions.fetchHistory.bind(provider.sessions);
   provider.sessions.fetchHistory = async (sessionId, options = {}) => {
@@ -207,7 +216,10 @@ export function createMistralSdkRuntime(
         const visited = new Set<string>();
         for (const file of instructionFiles) instructions.push(...await readInstructions(file, visited));
         if (planning) instructions.push('Mode plan : lecture uniquement. Propose un plan et attends le prochain message.');
-        const allowedTools = [...toolbox.tools.values()].filter(tool => !planning || tool.readOnly);
+        const settings = (options.toolsSettings ?? {}) as { disallowedTools?: unknown };
+        const disallowedTools = Array.isArray(settings.disallowedTools) ? settings.disallowedTools.filter((entry): entry is string => typeof entry === 'string') : [];
+        const deniedTool = (name: string) => disallowedTools.some(entry => entry === name || name.startsWith(entry + '__'));
+        const allowedTools = [...toolbox.tools.values()].filter(tool => (!planning || tool.readOnly) && !deniedTool(tool.name));
         const selectedModel = String(await context.resolveResumeModel(options.sessionId, options.model) || 'mistral-medium-latest');
         const model = mistralModelId(selectedModel);
         if (typeof options.maxPrice === 'number') throw new Error('Le budget monétaire par tour n’est pas disponible avec le SDK Mistral. Utilisez une limite de tokens ou de tours.');
