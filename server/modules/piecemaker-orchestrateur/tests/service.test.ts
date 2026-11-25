@@ -453,6 +453,24 @@ test('Le chat conserve les posts et les sorties, et fournit le modèle du tour p
   assert.equal(await f.service.chatHistory(f.root, f.turns[0].session), null);
 });
 
+test('Une session de chat disparue de la base locale se recrée au lieu d’être servie', async ctx => {
+  const f = fixture(ctx);
+  const first = await f.service.session(f.root);
+  assert.equal(first.sessionId, 'session-1');
+  assert.equal(f.service.sessionId(f.root), 'session-1');
+  f.deps.sessionExists = () => false;
+  const healed = await f.service.session(f.root);
+  assert.notEqual(healed.sessionId, 'session-1');
+  assert.equal(f.service.sessionId(f.root), healed.sessionId);
+  f.user('Prépare le document');
+  await flush();
+  assert.equal(f.turns.length, 1);
+  assert.notEqual(f.turns[0].session, 'session-1');
+  assert.notEqual(f.turns[0].session, healed.sessionId);
+  f.turns[0].end();
+  await flush();
+});
+
 test('Un ancien dossier conserve son chat et attend le prochain événement pour reprendre', async ctx => {
   const f = fixture(ctx);
   await f.service.session(f.root);

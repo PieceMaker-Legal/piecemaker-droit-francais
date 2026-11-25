@@ -121,6 +121,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
   const find = <T extends { id: string }>(list: T[], value: unknown, name: string) =>
     list.find(row => row.id === value) ?? refuse(404, name + ' introuvable.');
   const message = (id: unknown) => find(state.messages, id, 'Message');
+  const validSession = (id: string | null): string | null => id && (deps.sessionExists?.(id) ?? true) ? id : null;
   const thread = (id: unknown) => find(state.threads, id, 'Fil');
   const decision = (id: unknown) => find(state.decisions, id, 'Décision');
   const active = (t: Thread) => t.state === 'working' || t.state === 'blocked';
@@ -191,6 +192,10 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     Object.assign(orch, { key: randomUUID(), sessionId: null, turns: 0, provider: null, running: false, needsRecap: true, recaps: orch.recaps + 1 });
   }
   function ensureChat(p: TurnOptions['provider']) {
+    if (!validSession(orch.chatSessionId)) {
+      orch.chatSessionId = null;
+      orch.chatProvider = null;
+    }
     if (!orch.chatSessionId) {
       orch.chatSessionId = deps.openSession(p, root, SESSION_TITLE);
       deps.chatChanged(orch.chatSessionId);
@@ -222,7 +227,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       const permissions = await deps.permissions(p, orch.userId);
       const fresh = !orch.sessionId;
       orch.provider = p;
-      orch.sessionId ??= deps.openSession(p, root, 'Coordination interne', true);
+      orch.sessionId = validSession(orch.sessionId) ?? deps.openSession(p, root, 'Coordination interne', true);
       save();
       const preamble = fresh || recap ? formatPreamble({ state, projectPath: root, memory: store.memory(), sharedFolder: store.sharedFolder, recycled: recap, dossiers: central ? state.settings.folders : undefined }) : '';
       const content = [preamble, formatWake({ ...orch, events: batch, now: deps.now() })].filter(Boolean).join('\n');
@@ -334,7 +339,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     try {
       const permissions = await deps.permissions(t.provider, orch.userId);
       if (runs.get(t.id) !== run) return;
-      t.sessionId ??= deps.openSession(t.provider, t.projectPath, t.title);
+      t.sessionId = validSession(t.sessionId) ?? deps.openSession(t.provider, t.projectPath, t.title);
       const content = t.inbox.splice(0, count).join('\n\n');
       save();
       const options: TurnOptions = {
@@ -806,9 +811,9 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
         orch.userId = userId;
         save();
       }
-      if (!orch.chatSessionId) {
+      if (!validSession(orch.chatSessionId)) {
         const p = await provider(state.settings.orchestratorProvider);
-        if (!orch.chatSessionId) ensureChat(p);
+        ensureChat(p);
         save();
       }
       return { sessionId: orch.chatSessionId, provider: orch.chatProvider };
