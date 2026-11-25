@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
 
+import { openProjectStore } from '../store.js';
 import { createOrchestratorService } from '../service.js';
 import type { OrchestratorDependencies, TurnOptions, TurnResult } from '../types.js';
 
@@ -106,28 +107,76 @@ test('Un dossier non choisi exige l’accord de l’avocat avant que le fil part
   assert.equal(f.opened.at(-1)!.root, f.autre);
 });
 
-test('Le dream de l’agent central passe une fois par nuit à l’heure choisie et rend compte dans le chat', async ctx => {
+test('Le dream sans activité de dossier ne rêve rien et reste réservé à l’agent central', async ctx => {
   const f = fixture(ctx);
   await f.state();
-  f.service.updateSettings(f.central, { dream: { enabled: true, hour: 12 } });
-  assert.deepEqual((await f.state()).settings.dream, { enabled: true, provider: 'auto', model: '', hour: 12 });
+  f.service.updateSettings(f.central, { dream: { enabled: true, cron: '0 12 * * *' } });
+  assert.deepEqual((await f.state()).settings.dream, { enabled: true, provider: 'auto', model: '', cron: '0 12 * * *' });
   ctx.mock.timers.tick(3000);
   for (let i = 0; i < 5; i++) await flush();
-  const run = f.turns.at(-1)!;
-  assert.ok(run.content.startsWith('# Dream'));
-  assert.equal(run.options.permissionMode, 'acceptEdits');
-  assert.ok(run.options.disallowedTools.includes('Bash'));
-  assert.deepEqual(f.opened.at(-1), { title: 'Dream', root: f.central, hidden: true });
-  run.end();
+  assert.equal(f.turns.length, 0);
+  assert.equal(f.opened.length, 0);
+  const s = await f.state();
+  assert.ok(s.dream?.lastResult?.includes('rien à rêver'));
+  assert.ok(s.messages.some(m => m.text.startsWith('Dream du ') && m.text.includes('rien à rêver')));
+  assert.throws(() => f.service.updateSettings(f.dupont, { dream: { enabled: true } }), /réservé/);
+});
+
+test('Le dream rêve chaque dossier actif par un tour analyze puis un tour organize sur son bundle OKF', async ctx => {
+  const f = fixture(ctx);
+  await f.state();
+  f.service.updateSettings(f.central, { folders: [f.dupont] });
+  f.service.postUserMessage(f.central, 'Mets à jour le suivi Dupont', 1);
+  await flush();
+  await f.call('start_thread', { title: 'Suivi Dupont', instructions: 'Suivi', ack_project: 'Je lance', ack_thread: 'Je m’en occupe', folder: f.dupont });
+  await flush();
+  f.turns.at(-1)!.end();
+  for (let i = 0; i < 5; i++) await flush();
+  f.turns[0].end();
+  for (let i = 0; i < 5; i++) await flush();
+  f.service.updateSettings(f.central, { dream: { enabled: true, cron: '0 12 * * *' } });
+  ctx.mock.timers.tick(3000);
+  for (let i = 0; i < 5; i++) await flush();
+  const dream = f.opened.find(o => o.title === 'Dream')!;
+  assert.deepEqual(dream, { title: 'Dream', root: f.dupont, hidden: true });
+  const sessionId = 'session-' + (f.opened.indexOf(dream) + 1);
+  const analyze = f.turns.at(-1)!;
+  assert.equal(analyze.session, sessionId);
+  assert.ok(analyze.content.startsWith('# Dream — analyze'));
+  assert.ok(analyze.content.includes(`Case folder: ${f.dupont}`));
+  assert.ok(analyze.content.includes('Suivi Dupont'));
+  assert.equal(analyze.options.permissionMode, 'acceptEdits');
+  assert.ok(analyze.options.allowedTools.includes('Skill'));
+  assert.ok(analyze.options.disallowedTools.includes('Bash'));
+  analyze.end();
+  for (let i = 0; i < 5; i++) await flush();
+  const organize = f.turns.at(-1)!;
+  assert.equal(organize.session, sessionId);
+  assert.ok(organize.content.startsWith('# Dream — organize'));
+  organize.end();
   for (let i = 0; i < 5; i++) await flush();
   const s = await f.state();
-  assert.equal(s.dream?.lastResult, 'Réponse');
-  assert.ok(s.messages.some(m => m.text.startsWith('Dream du ') && m.text.endsWith('Réponse')));
+  assert.equal(s.dream?.lastError, null);
+  assert.ok(s.dream?.lastResult?.includes('Réponse'));
+  assert.ok(s.messages.some(m => m.text.startsWith('Dream du ') && m.text.includes('Réponse')));
   const count = f.turns.length;
   ctx.mock.timers.tick(3000);
   for (let i = 0; i < 5; i++) await flush();
   assert.equal(f.turns.length, count);
-  assert.throws(() => f.service.updateSettings(f.dupont, { dream: { enabled: true } }), /réservé/);
+});
+
+test('Un réglage dream à heure fixe devient un cron à l’ouverture du dossier', () => {
+  const base = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'pm-dream-')));
+  const dir = path.join(base, '.piecemaker', 'orchestrateur');
+  mkdirSync(path.join(dir, 'fichiers'), { recursive: true });
+  writeFileSync(path.join(dir, 'etat.json'), JSON.stringify({
+    version: 1, revision: 1, threads: [], messages: [], decisions: [], schedules: [], deliverables: [], lookups: [],
+    orchestrator: { chatSessionId: null, chatProvider: null, needsRecap: false, heldUpdates: [], sessionId: null, key: 'k', provider: null, turns: 0, running: false, pending: [], holdingUntil: null, quietAt: null, lastUserAt: null, postsSinceUser: 0, userId: null, recaps: 0 },
+    settings: { instructions: '', defaultProvider: 'chat', orchestratorProvider: 'auto', orchestratorModel: '', defaultModels: {}, concurrency: { claude: 3, codex: 3, mistral: 3 }, folders: [], recycleAfter: 60, dream: { enabled: true, provider: 'auto', model: '', hour: 20 } },
+  }));
+  const store = openProjectStore(base);
+  assert.deepEqual(store.state.settings.dream, { enabled: true, provider: 'auto', model: '', cron: '0 20 * * *' });
+  rmSync(base, { recursive: true, force: true });
 });
 
 test('La réponse d’un fil revient à l’agent central avec le rapport du Hérisson sur son travail', async ctx => {

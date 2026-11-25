@@ -37,6 +37,13 @@ export function openProjectStore(root: string) {
     state.revision = revision;
   }
   if ((state.settings.defaultProvider as string) === 'auto') state.settings.defaultProvider = 'chat';
+  const legacyDream = state.settings.dream as { hour?: number } | undefined;
+  if (typeof legacyDream?.hour === 'number') {
+    const dream = state.settings.dream!;
+    const { hour } = legacyDream;
+    delete (dream as { hour?: number }).hour;
+    dream.cron = `0 ${hour} * * *`;
+  }
   const orch = state.orchestrator;
   const legacy = orch.chatSessionId === undefined;
   if (legacy) {

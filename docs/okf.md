@@ -4,7 +4,7 @@ Le bundle OKF du dossier suit Context-OKF : Open Knowledge Format 0.3 sur le soc
 
 ## Autorité
 
-Le bundle Markdown `.piecemaker/okf/` fait foi. L'agent l'écrit lui-même, avec Write ou Edit (Codex : apply_patch), en suivant le skill `okf` (`server/piecemaker/vendor/skills/okf/`). Le serveur ne génère que `documents/` (depuis le Case index) et `persons/` (depuis la base) ; il lit le bundle pour l'onglet Case index.
+Le bundle Markdown `.piecemaker/okf/` fait foi. L'agent l'écrit lui-même, avec Write ou Edit (Codex : apply_patch), en suivant le skill `okf` (`server/piecemaker/vendor/skills/okf/`). La nuit, le dream de l'agent central l'entretient : un passage analyze puis organize par dossier actif (voir [orchestrateur.md](orchestrateur.md)). Le serveur ne génère que `documents/` (depuis le Case index) et `persons/` (depuis la base) ; il lit le bundle pour l'onglet Case index.
 
 Le Case index (la revue tabulaire de toutes les pièces) reste dans SQLite (`server/piecemaker/okf/index-store.ts`) ; son `.json` dans `Tabular Review/` est une vue réécrite après chaque écriture.
 

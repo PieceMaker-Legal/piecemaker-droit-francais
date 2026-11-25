@@ -73,7 +73,7 @@ export type AgentSettings = {
   recycleAfter: number;
   dream?: AgentDreamSettings;
 };
-export type AgentDreamSettings = { enabled: boolean; provider: AgentProviderChoice; model: string; hour: number };
+export type AgentDreamSettings = { enabled: boolean; provider: AgentProviderChoice; model: string; cron: string };
 export type AgentState = {
   revision: number;
   settings: AgentSettings;

@@ -6,7 +6,7 @@ import { z } from 'zod/v4';
 
 import { isImageAttachmentDescriptor } from '@/shared/image-attachments.js';
 
-import { formatDream, formatPreamble, formatThreadKickoff, formatThreadMessage, formatWake, isChatMessage } from './prompt.js';
+import { formatDreamAnalyzer, formatDreamOrganizer, formatPreamble, formatThreadKickoff, formatThreadMessage, formatWake, isChatMessage } from './prompt.js';
 import { openProjectStore } from './store.js';
 import { RUNNABLE_PROVIDERS, THREAD_STATES } from './types.js';
 import type {
@@ -43,9 +43,9 @@ const settingsInput = z.strictObject({
   defaultModels: z.partialRecord(z.enum(RUNNABLE_PROVIDERS), string),
   concurrency: z.partialRecord(z.enum(RUNNABLE_PROVIDERS), z.number().int().positive()),
   folders: z.array(string), recycleAfter: z.number().int().positive(),
-  dream: z.strictObject({ enabled: z.boolean(), provider: choice, model: z.string().trim(), hour: z.number().int().min(0).max(23) }).partial(),
+  dream: z.strictObject({ enabled: z.boolean(), provider: choice, model: z.string().trim(), cron: z.string().trim().min(1) }).partial(),
 }).partial();
-const DREAM_DEFAULTS = { enabled: false, provider: 'auto' as const, model: '', hour: 3 };
+const DREAM_DEFAULTS = { enabled: false, provider: 'auto' as const, model: '', cron: '0 3 * * *' };
 const DREAM_DENIED = ['Bash', 'WebFetch', 'WebSearch', 'mcp__fil', 'mcp__orchestrateur', 'AskUserQuestion', 'ExitPlanMode'];
 const deliverableInput = z.object({
   deliverable_id: string.optional(), thread_id: string.optional(), title: string.optional(),
@@ -433,6 +433,7 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
       if (central) for (const folder of patch.folders) deps.prepareDossier?.(root, folder);
     }
     if (patch.dream && !central) refuse(400, 'Le dream est réservé à l’agent central.');
+    if (patch.dream?.cron) parseCron(patch.dream.cron);
     const settings = state.settings;
     if (patch.dream) patch.dream = { ...DREAM_DEFAULTS, ...settings.dream, ...patch.dream };
     const providerChanged = patch.orchestratorProvider && settings.orchestratorProvider !== patch.orchestratorProvider;
@@ -497,9 +498,12 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
   }
   function dreamDue(date: Date) {
     const settings = state.settings.dream;
+    if (!settings?.enabled || !settings.cron || state.dream?.running) return false;
+    try {
+      if (!parseCron(settings.cron).matches(date)) return false;
+    } catch { return false; }
     const last = state.dream?.lastRunAt;
-    return Boolean(settings?.enabled && !state.dream?.running && date.getHours() === settings.hour
-      && (!last || new Date(last).toDateString() !== date.toDateString()));
+    return !last || last.slice(0, 16) !== date.toISOString().slice(0, 16);
   }
   async function dream() {
     if (!central) refuse(400, 'Le dream est réservé à l’agent central.');
@@ -511,20 +515,40 @@ function projectService(root: string, deps: OrchestratorDependencies, central: b
     run.lastError = null;
     save();
     try {
-      const p = await provider(settings.provider);
-      const model = settings.model ? await knownModel(p, settings.model) : await deps.defaultModel(p);
-      const permissions = await deps.permissions(p, orch.userId);
-      const sessionId = deps.openSession(p, root, 'Dream', true);
       const since = state.messages.filter(m => m.author === 'orchestrator' && m.text.startsWith('Dream du ')).at(-1)?.at ?? null;
-      const result = await deps.runTurn(sessionId, orch.userId, formatDream({ state, since, now: deps.now() }), {
-        provider: p, model, effort: null, permissionMode: 'acceptEdits',
-        allowedTools: ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'MultiEdit', 'Skill'],
-        disallowedTools: [...new Set([...permissions.disallowedTools, ...DREAM_DENIED])],
-      });
-      if (!result.started || result.error) throw new Error(result.error || 'Tour non démarré.');
-      const answer = (await deps.lastAnswer(sessionId)).trim() || 'Rien à mettre à jour.';
-      run.lastResult = answer;
-      add('orchestrator', `Dream du ${deps.now().toLocaleDateString('fr-FR')} :\n\n${answer}`, { posted: true });
+      const folders = dossiers().filter(folder => state.threads.some(t => t.projectPath === folder && (!since || t.updatedAt > since)));
+      let report = 'rien à rêver : aucune activité de dossier depuis le dernier dream.';
+      if (folders.length) {
+        const p = await provider(settings.provider);
+        const model = settings.model ? await knownModel(p, settings.model) : await deps.defaultModel(p);
+        const permissions = await deps.permissions(p, orch.userId);
+        const options: TurnOptions = {
+          provider: p, model, effort: null, permissionMode: 'acceptEdits',
+          allowedTools: ['Read', 'Glob', 'Grep', 'Edit', 'Write', 'MultiEdit', 'Skill'],
+          disallowedTools: [...new Set([...permissions.disallowedTools, ...DREAM_DENIED])],
+        };
+        const parts: string[] = [];
+        const failed: string[] = [];
+        for (const folder of folders) {
+          const name = path.basename(folder);
+          try {
+            const sessionId = deps.openSession(p, folder, 'Dream', true);
+            const analyze = await deps.runTurn(sessionId, orch.userId, formatDreamAnalyzer({ state, folder, since, now: deps.now() }), options);
+            if (!analyze.started || analyze.error) throw new Error(analyze.error || 'Tour non démarré.');
+            const analysis = (await deps.lastAnswer(sessionId)).trim();
+            const organize = await deps.runTurn(sessionId, orch.userId, formatDreamOrganizer(), options);
+            if (!organize.started || organize.error) throw new Error(organize.error || 'Tour non démarré.');
+            const organization = (await deps.lastAnswer(sessionId)).trim();
+            parts.push([`${name} :`, analysis, organization].join('\n'));
+          } catch (error) {
+            failed.push(`${name} : échec (${error instanceof Error ? error.message : String(error)})`);
+          }
+        }
+        run.lastError = failed.length ? failed.join('\n') : null;
+        report = [...parts, ...failed].join('\n\n') || 'rien à rêver : aucune activité de dossier depuis le dernier dream.';
+      }
+      run.lastResult = report;
+      add('orchestrator', `Dream du ${deps.now().toLocaleDateString('fr-FR')} :\n\n${report}`, { posted: true });
       if (orch.chatSessionId) deps.chatChanged(orch.chatSessionId);
     } catch (error) {
       run.lastError = error instanceof Error ? error.message : String(error);

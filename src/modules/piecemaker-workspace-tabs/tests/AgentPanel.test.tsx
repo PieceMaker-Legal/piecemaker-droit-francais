@@ -289,11 +289,13 @@ it('règle le dream de l’agent central dans un onglet des paramètres et le la
   fireEvent.click(await screen.findByRole('tab', { name: 'Dream' }));
   expect(screen.getByText('Dossier Dupont : feuille de route à jour.')).toBeTruthy();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Activer le dream' }));
-  fireEvent.change(screen.getByRole('combobox', { name: 'Heure' }), { target: { value: '4' } });
+  const cron = screen.getByRole('textbox', { name: /Cron/ });
+  fireEvent.change(cron, { target: { value: '0 4 * * *' } });
+  fireEvent.blur(cron);
   fireEvent.click(screen.getByRole('button', { name: 'Lancer maintenant' }));
   await act(async () => undefined);
   expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, dream: { enabled: true } }, method: 'PUT' });
-  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, dream: { hour: 4 } }, method: 'PUT' });
+  expect(calls.list).toContainEqual({ url: '/api/piecemaker/orchestrateur/settings', body: { project: CENTRAL, dream: { cron: '0 4 * * *' } }, method: 'PUT' });
   expect(calls.list.some((call) => call.url.endsWith('/dream'))).toBe(true);
 });
 

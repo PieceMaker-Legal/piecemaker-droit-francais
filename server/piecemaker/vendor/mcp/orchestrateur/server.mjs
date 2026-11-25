@@ -100,6 +100,10 @@ export function createServer() {
     get_project_settings: ['Lit les réglages du projet.', {}],
     update_project_settings: ['Modifie les réglages fournis pour le projet.', {
       instructions: z.string().optional(), orchestrator_provider: provider, orchestrator_model: z.string().optional(),
+      dream: z.strictObject({
+        enabled: z.boolean().optional().describe('Active ou désactive le dream nocturne de l’agent central.'),
+        cron: optionalText.describe('Cinq champs minute, heure, jour du mois, mois et jour de la semaine, par exemple « 0 3 * * * » chaque nuit à 3 h.'),
+      }).optional().describe('Réglage du dream nocturne (agent central seul) : activation et cron.'),
       default_provider: z.enum(['chat', 'claude', 'codex', 'mistral']).optional().describe('Fournisseur par défaut des nouveaux fils ; chat : le même que le chat principal.'),
       default_models: perProvider(text).describe('Modèle des nouveaux fils pour chaque fournisseur.'),
       concurrency: perProvider(positiveInteger).describe('Nombre maximal de fils simultanés par fournisseur.'),

@@ -238,7 +238,7 @@ function ActiveFolders({ state, act }: { state: AgentState; act: AgentActions })
   </fieldset>;
 }
 
-const DREAM_DEFAULTS: AgentDreamSettings = { enabled: false, provider: 'auto', model: '', hour: 3 };
+const DREAM_DEFAULTS: AgentDreamSettings = { enabled: false, provider: 'auto', model: '', cron: '0 3 * * *' };
 
 function Dream({ state, act }: { state: AgentState; act: AgentActions }) {
   const dream = { ...DREAM_DEFAULTS, ...state.settings.dream };
@@ -246,15 +246,13 @@ function Dream({ state, act }: { state: AgentState; act: AgentActions }) {
   const save = (patch: Partial<AgentDreamSettings>) => void act('settings', { dream: patch }, 'PUT');
   const run = state.dream;
   return <div className="space-y-5 overflow-y-auto px-5 py-4 text-sm">
-    <p className="text-muted-foreground">Chaque nuit, l’agent central relit l’activité des fils et met à jour l’About.md et la Roadmap.json de chaque dossier dans le brain, sous leurs limites de lignes. Il ne touche pas à votre AGENTS.md : il vous propose les ajouts dans le chat.</p>
+    <p className="text-muted-foreground">Selon le cron réglé, l’agent central relit l’activité des fils de chaque dossier suivi et entretient son bundle OKF : un passage analyze, un passage organize, rien d’autre. Le compte rendu arrive dans le chat.</p>
     <label className="flex items-center gap-2 text-foreground"><input type="checkbox" checked={dream.enabled} onChange={(event) => save({ enabled: event.target.checked })} />Activer le dream</label>
     <label className="block text-muted-foreground">Fournisseur<select className={`${inputClass} mt-1`} value={dream.provider} onChange={(event) => save({ provider: event.target.value as AgentDreamSettings['provider'] })}>
       {['auto', ...PROVIDERS].map((value) => <option key={value} value={value} disabled={value !== 'auto' && !connected.has(value as AgentProvider)}>{PROVIDER_LABELS[value]}</option>)}
     </select></label>
     <label className="block text-muted-foreground">Modèle (vide = modèle par défaut)<input className={`${inputClass} mt-1`} defaultValue={dream.model} onBlur={(event) => event.target.value.trim() !== dream.model && save({ model: event.target.value.trim() })} /></label>
-    <label className="block text-muted-foreground">Heure<select className={`${inputClass} mt-1`} value={dream.hour} onChange={(event) => save({ hour: Number(event.target.value) })}>
-      {Array.from({ length: 24 }, (_, hour) => <option key={hour} value={hour}>{String(hour).padStart(2, '0')} h</option>)}
-    </select></label>
+    <label className="block text-muted-foreground">Cron (minute, heure, jour du mois, mois, jour de la semaine)<input className={`${inputClass} mt-1`} defaultValue={dream.cron} onBlur={(event) => event.target.value.trim() !== dream.cron && save({ cron: event.target.value.trim() })} /></label>
     <button type="button" className={buttonClass} disabled={run?.running} onClick={() => void act('dream')}>{run?.running ? 'Dream en cours…' : 'Lancer maintenant'}</button>
     {run?.lastRunAt && <p className="text-muted-foreground">Dernier passage : <time dateTime={run.lastRunAt}>{new Date(run.lastRunAt).toLocaleString('fr-FR')}</time>{run.lastError ? ` · échec : ${run.lastError}` : ''}</p>}
     {run?.lastResult && !run.lastError && <p className="whitespace-pre-wrap text-foreground/80">{run.lastResult}</p>}

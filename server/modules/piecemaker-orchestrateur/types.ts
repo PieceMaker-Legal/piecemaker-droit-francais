@@ -135,7 +135,7 @@ export type Settings = {
   dream?: DreamSettings;
 };
 
-export type DreamSettings = { enabled: boolean; provider: ProviderChoice; model: string; hour: number };
+export type DreamSettings = { enabled: boolean; provider: ProviderChoice; model: string; cron: string };
 
 export type DreamRun = { running: boolean; lastRunAt: string | null; lastResult: string | null; lastError: string | null };
 
