@@ -276,7 +276,10 @@ for (const trigger of ['tours', 'usage', 'échec', 'manuel', 'fournisseur']) {
     assert.match(f.turns[1].content, /Do not repost anything[\s\S]*Mémoire fictive/);
     assert.ok(f.turns[1].content.includes(original));
     assert.ok(f.turns[1].content.includes('Consigne du projet'));
-    assert.doesNotMatch(f.turns[1].content, /<wake reason=/);
+    assert.match(f.turns[1].content, /<wake reason=[\s\S]*En attente/);
+    await f.call('no_reply_needed', { reason: 'nothing_to_add' });
+    f.service.updateSettings(f.root, { recycleAfter: 60 });
+    f.deps.contextRatio = async () => 0.7;
     f.user('Pendant la reprise');
     await flush();
     assert.equal(f.turns.length, 2);
@@ -284,7 +287,7 @@ for (const trigger of ['tours', 'usage', 'échec', 'manuel', 'fournisseur']) {
     f.turns[1].end();
     await flush();
     assert.equal(f.turns[2].session, f.turns[1].session);
-    assert.match(f.turns[2].content, /En attente[\s\S]*Pendant la reprise/);
+    assert.match(f.turns[2].content, /Pendant la reprise/);
     assert.doesNotMatch(f.turns[2].content, /# Your role/);
     assert.equal((await f.service.session(f.root)).sessionId, chat.sessionId);
   });
@@ -304,6 +307,8 @@ test('La reprise conserve les travaux, les attentes et les livrables du dossier'
   await f.call('no_reply_needed', { reason: 'holding_updates' });
   f.service.recycle(f.root);
   f.turns[0].end();
+  await flush();
+  f.user('Suite');
   await flush();
   const recap = f.turns.at(-1)!.content;
   for (const value of [thread.title, 'working', 'classement.docx', 'Vérifier la réponse', 'Quel format ?', (await f.state()).threads[0].reminderAt!]) {
@@ -470,10 +475,8 @@ test('Un ancien dossier conserve son chat et attend le prochain événement pour
   restarted.postUserMessage(f.root, 'Suite');
   await flush();
   assert.notEqual(f.turns[0].session, 'ancien-chat');
-  assert.match(f.turns[0].content, /separate wake/);
-  f.turns[0].end();
-  await flush();
-  assert.equal(wakeDisplay(f.turns[1].content), 'Suite');
+  assert.match(f.turns[0].content, /You replace a recycled coordinator[\s\S]*Suite/);
+  assert.equal(wakeDisplay(f.turns[0].content), 'Suite');
 });
 
 test('Un wake sans message de l’avocat s’affiche comme une ligne lisible', () => {
