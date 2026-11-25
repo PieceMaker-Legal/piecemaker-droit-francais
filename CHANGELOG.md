@@ -3,6 +3,14 @@
 All notable changes to PieceMaker will be documented in this file.
 
 
+## [2.4.1](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.4.0...v2.4.1) (2026-11-25)
+
+### Bug Fixes
+
+* **mistral-sdk:** statut réel du compte et outils refusés appliqués au runtime ([5865a7b](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5865a7b3f4eb3a991225408f602b67c322f1e3ac))
+* **orchestrateur:** la reprise après recyclage part avec l'événement suivant ([0129127](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/012912799e77eb0f0e275023ca6cda5b114377fd))
+* **orchestrateur:** recréer une session de chat disparue de la base locale ([5944b09](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/commit/5944b090705cb1e7575de53922e929d93bbeff8e))
+
 ## [2.4.0](https://github.com/PieceMaker-Legal/piecemaker-droit-francais/compare/v2.3.4...v2.4.0) (2026-11-24)
 
 ### New Features
