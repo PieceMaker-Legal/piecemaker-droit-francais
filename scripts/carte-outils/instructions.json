@@ -65,13 +65,6 @@
       "col": 0
     },
     {
-      "id": "hook:cloisonnement",
-      "label": "Cloisonnement",
-      "type": "hook",
-      "sub": "cloisonnement.mjs",
-      "col": 1
-    },
-    {
       "id": "hook:protect-originals",
       "label": "Protection des originaux",
       "type": "hook",
@@ -1156,26 +1149,6 @@
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/vibe-hook.mjs",
       "guillemet": "'",
       "ancre": "Refusé par PieceMaker."
-    },
-    {
-      "id": "hook-cloisonnement--refus-ecriture-d-un-brain-au-dela-de-sa-limite-d",
-      "titre": "Refus : écriture d'un brain au-delà de sa limite de lignes",
-      "quand": "Avant un Write ou un Edit sur AGENTS.md ou About.md du brain qui dépasserait 200 lignes ; le même texte part aussi en systemMessage.",
-      "de": "hook:cloisonnement",
-      "vers": "agent",
-      "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/cloisonnement.mjs",
-      "guillemet": "`",
-      "ancre": "[PieceMaker] ${path.relative(brain, file)} ferait"
-    },
-    {
-      "id": "hook-cloisonnement--refus-acces-a-un-fichier-d-un-autre-dossier-cloi",
-      "titre": "Refus : accès à un fichier d'un autre dossier (cloisonnement)",
-      "quand": "Quand un outil (Read, Write, Edit, Grep, Glob, Bash) vise un fichier situé dans un autre dossier que celui de la session ; le même texte part aussi en systemMessage.",
-      "de": "hook:cloisonnement",
-      "vers": "agent",
-      "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/cloisonnement.mjs",
-      "guillemet": "`",
-      "ancre": "[PieceMaker] Cette session travaille dans le dossier"
     },
     {
       "id": "hook-protect-originals--refus-piece-protegee-contenu-original-inaccessib",

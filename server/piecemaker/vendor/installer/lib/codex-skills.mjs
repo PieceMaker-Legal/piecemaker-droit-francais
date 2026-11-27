@@ -133,33 +133,6 @@ export function installCodexLegalSearchHook(repoRoot, userHome = os.homedir()) {
   return installCodexHookGroup(userHome, codexLegalSearchGroup(repoRoot), isPieceMakerLegalSearch);
 }
 
-function isPieceMakerCloisonnement(handler) {
-  const command = typeof handler?.command === 'string' ? handler.command : '';
-  return command.includes('cloisonnement.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
-}
-
-function codexCloisonnementGroup(repoRoot) {
-  const script = path.join(pluginRoot(repoRoot), 'scripts', 'cloisonnement.mjs');
-  return {
-    matcher: '^(Bash|apply_patch)$',
-    hooks: [{
-      type: 'command',
-      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
-      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
-      timeout: 5,
-      statusMessage: 'Une session ne touche qu’à son propre dossier',
-    }],
-  };
-}
-
-export function installCodexCloisonnementHook(repoRoot, userHome = os.homedir()) {
-  return installCodexHookGroup(userHome, codexCloisonnementGroup(repoRoot), isPieceMakerCloisonnement);
-}
-
-export function codexCloisonnementHookStatus(repoRoot, userHome = os.homedir()) {
-  return codexHookGroupStatus(userHome, codexCloisonnementGroup(repoRoot), isPieceMakerCloisonnement);
-}
-
 function isPieceMakerCuaGuard(handler) {
   const command = typeof handler?.command === 'string' ? handler.command : '';
   return command.includes('guard-cua.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
@@ -316,7 +289,7 @@ function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') 
   }
 }
 
-const PIECEMAKER_HOOKS = [isPieceMakerCloisonnement, isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerCuaGuard, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerHerisson];
+const PIECEMAKER_HOOKS = [isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerCuaGuard, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerHerisson];
 const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use', SubagentStop: 'subagent_stop', Stop: 'stop' };
 
 function sortedKeys(value) {

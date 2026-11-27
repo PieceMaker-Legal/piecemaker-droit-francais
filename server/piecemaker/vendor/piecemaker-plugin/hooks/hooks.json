@@ -2,15 +2,6 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Read|Write|Edit|MultiEdit|NotebookEdit|Grep|Glob|Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/cloisonnement.mjs\""
-          }
-        ]
-      },
-      {
         "matcher": "Read|Grep|Glob|Bash",
         "hooks": [
           {

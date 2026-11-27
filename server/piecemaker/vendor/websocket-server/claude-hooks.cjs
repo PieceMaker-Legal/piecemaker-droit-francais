@@ -21,6 +21,7 @@ const DEPRECATED_HOOKS = new Set([
   'session-commit.mjs',
   'track-legifrance-reads.mjs',
   'compile-recherche.mjs',
+  'cloisonnement.mjs',
 ]);
 
 function settingsPath(userHome) {
