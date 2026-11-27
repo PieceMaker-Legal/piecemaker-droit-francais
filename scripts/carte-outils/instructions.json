@@ -93,6 +93,13 @@
       "col": 1
     },
     {
+      "id": "hook:guard-cua",
+      "label": "Garde écran",
+      "type": "hook",
+      "sub": "guard-cua.mjs",
+      "col": 1
+    },
+    {
       "id": "hook:classify-ai-documents",
       "label": "Classement IA",
       "type": "hook",
@@ -1049,6 +1056,16 @@
       "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/guard-legal-search.mjs",
       "guillemet": "'",
       "ancre": "Recherche Légifrance réservée au sous-agent resear"
+    },
+    {
+      "id": "hook-guard-cua--refus-lecture-ecran-cua-repl",
+      "titre": "Refus : lecture et pilotage de l'écran (cua_repl)",
+      "quand": "PreToolUse sur l'outil js ou js_reset de cua_repl, refusé sans condition (permissionDecisionReason et systemMessage).",
+      "de": "hook:guard-cua",
+      "vers": "agent",
+      "fichier": "server/piecemaker/vendor/piecemaker-plugin/scripts/guard-cua.mjs",
+      "guillemet": "'",
+      "ancre": "sont interdits : ils gonflent le contexte avec l"
     },
     {
       "id": "hook-verify-subagent--verification-decisions-citees-jamais-lues",

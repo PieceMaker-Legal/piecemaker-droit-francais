@@ -46,6 +46,9 @@ test('registers the Légifrance search guard and the sub-agent check in Codex ho
     const guards = groups.filter((group) => group.matcher === 'mcp__.*legifrance.*__Search_.*');
     assert.equal(guards.length, 1);
     assert.ok(guards[0].hooks[0].command.includes('PIECEMAKER_HOOK_CLIENT=codex'));
+    const cuaGuards = groups.filter((group) => group.matcher === '^(js|js_reset|mcp__cua_repl__js|mcp__cua_repl__js_reset)$');
+    assert.equal(cuaGuards.length, 1);
+    assert.ok(cuaGuards[0].hooks[0].command.includes('guard-cua.mjs'));
     assert.equal(groups.filter((group) => group.hooks[0].command.includes('guard-ontologie.mjs')).length, 1);
     assert.ok(groups.some((group) => group.hooks[0].command === 'echo perso'));
     const checks = JSON.parse(fs.readFileSync(file, 'utf8')).hooks.SubagentStop as Array<{ matcher: string; hooks: Array<{ command: string }> }>;
@@ -82,7 +85,7 @@ test('approves only the PieceMaker hooks in the Codex config, keeping the other 
         assert.equal(state[`${hooksFile}:${label}:${index}:0`].trusted_hash, codexHookTrustedHash(event, group.matcher, group.hooks[0]));
       });
     }
-    assert.equal(Object.keys(state).length, 7);
+    assert.equal(Object.keys(state).length, 8);
     const settled = fs.readFileSync(configFile, 'utf8');
     assert.equal((await reconcileCodexHooks(applicationRoot, home)).ok, true);
     assert.equal(fs.readFileSync(configFile, 'utf8'), settled);

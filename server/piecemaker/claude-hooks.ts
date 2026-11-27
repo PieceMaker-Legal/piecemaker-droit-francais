@@ -20,7 +20,7 @@ export function reconcileClaudeHooks(applicationRoot: string, userHome = os.home
 
 type CodexHookResult = { ok: boolean; reason?: string | null };
 type CodexHook = (repoRoot: string, userHome: string) => CodexHookResult;
-type CodexHooksModule = Record<'installCodexCloisonnementHook' | 'codexCloisonnementHookStatus' | 'installCodexLegalSearchHook' | 'codexLegalSearchHookStatus' | 'installCodexSubagentCheckHook' | 'codexSubagentCheckHookStatus' | 'installCodexOntologyGuardHook' | 'codexOntologyGuardHookStatus' | 'installCodexHerissonHook' | 'codexHerissonHookStatus' | 'installCodexHerissonTurnEndHook' | 'codexHerissonTurnEndHookStatus', CodexHook> & { trustCodexHooks(userHome: string): CodexHookResult };
+type CodexHooksModule = Record<'installCodexCloisonnementHook' | 'codexCloisonnementHookStatus' | 'installCodexLegalSearchHook' | 'codexLegalSearchHookStatus' | 'installCodexCuaGuardHook' | 'codexCuaGuardHookStatus' | 'installCodexSubagentCheckHook' | 'codexSubagentCheckHookStatus' | 'installCodexOntologyGuardHook' | 'codexOntologyGuardHookStatus' | 'installCodexHerissonHook' | 'codexHerissonHookStatus' | 'installCodexHerissonTurnEndHook' | 'codexHerissonTurnEndHookStatus', CodexHook> & { trustCodexHooks(userHome: string): CodexHookResult };
 
 export async function reconcileCodexHooks(applicationRoot: string, userHome = os.homedir()): Promise<{ ok: boolean; skipped?: boolean; reason?: string | null }> {
   if (!fs.existsSync(path.join(userHome, '.codex'))) return { ok: true, skipped: true };
@@ -29,6 +29,7 @@ export async function reconcileCodexHooks(applicationRoot: string, userHome = os
   for (const [install, status] of [
     [hooks.installCodexCloisonnementHook, hooks.codexCloisonnementHookStatus],
     [hooks.installCodexLegalSearchHook, hooks.codexLegalSearchHookStatus],
+    [hooks.installCodexCuaGuardHook, hooks.codexCuaGuardHookStatus],
     [hooks.installCodexSubagentCheckHook, hooks.codexSubagentCheckHookStatus],
     [hooks.installCodexOntologyGuardHook, hooks.codexOntologyGuardHookStatus],
     [hooks.installCodexHerissonHook, hooks.codexHerissonHookStatus],

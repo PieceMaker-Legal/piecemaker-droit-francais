@@ -160,6 +160,33 @@ export function codexCloisonnementHookStatus(repoRoot, userHome = os.homedir()) 
   return codexHookGroupStatus(userHome, codexCloisonnementGroup(repoRoot), isPieceMakerCloisonnement);
 }
 
+function isPieceMakerCuaGuard(handler) {
+  const command = typeof handler?.command === 'string' ? handler.command : '';
+  return command.includes('guard-cua.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
+}
+
+function codexCuaGuardGroup(repoRoot) {
+  const script = path.join(pluginRoot(repoRoot), 'scripts', 'guard-cua.mjs');
+  return {
+    matcher: '^(js|js_reset|mcp__cua_repl__js|mcp__cua_repl__js_reset)$',
+    hooks: [{
+      type: 'command',
+      command: `PIECEMAKER_HOOK_CLIENT=codex node ${JSON.stringify(script)}`,
+      commandWindows: `set "PIECEMAKER_HOOK_CLIENT=codex" && node ${JSON.stringify(script)}`,
+      timeout: 5,
+      statusMessage: 'Lecture d’écran interdite : vérification par les outils texte',
+    }],
+  };
+}
+
+export function installCodexCuaGuardHook(repoRoot, userHome = os.homedir()) {
+  return installCodexHookGroup(userHome, codexCuaGuardGroup(repoRoot), isPieceMakerCuaGuard);
+}
+
+export function codexCuaGuardHookStatus(repoRoot, userHome = os.homedir()) {
+  return codexHookGroupStatus(userHome, codexCuaGuardGroup(repoRoot), isPieceMakerCuaGuard);
+}
+
 function isPieceMakerOntologyGuard(handler) {
   const command = typeof handler?.command === 'string' ? handler.command : '';
   return command.includes('guard-ontologie.mjs') && command.includes('PIECEMAKER_HOOK_CLIENT=codex');
@@ -289,7 +316,7 @@ function installCodexHookGroup(userHome, expected, owned, event = 'PreToolUse') 
   }
 }
 
-const PIECEMAKER_HOOKS = [isPieceMakerCloisonnement, isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerHerisson];
+const PIECEMAKER_HOOKS = [isPieceMakerCloisonnement, isPieceMakerProtection, isPieceMakerLegalSearch, isPieceMakerCuaGuard, isPieceMakerOntologyGuard, isPieceMakerSubagentCheck, isPieceMakerHerisson];
 const CODEX_EVENT_KEYS = { PreToolUse: 'pre_tool_use', PostToolUse: 'post_tool_use', SubagentStop: 'subagent_stop', Stop: 'stop' };
 
 function sortedKeys(value) {
